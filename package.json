@@ -1,0 +1,24 @@
+{
+  "name": "aide-v0",
+  "version": "0.1.0",
+  "description": "AIDE V0 - local project-aware AI REPL",
+  "main": "dist/cli/index.js",
+  "bin": {
+    "aide": "dist/cli/index.js"
+  },
+  "scripts": {
+    "dev": "ts-node src/cli/index.ts",
+    "build": "tsc",
+    "start": "node dist/cli/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "chalk": "^5.3.0",
+    "fast-glob": "^3.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}
