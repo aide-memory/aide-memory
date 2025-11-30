@@ -1,10 +1,12 @@
+/**
+ * @deprecated Legacy chunk-based indexer for reference.
+ * This has been replaced by the symbol-based parser in analysis/parser.ts
+ */
+
 import fs from 'fs';
 import path from 'path';
-import { FileChunk, ModelRuntime, ProjectConfig } from '../core/types';
-import { findProjectFiles } from './fileWalker';
-import { InMemoryVectorStore } from '../memory/vectorStore';
-import { saveProjectIndex } from '../memory/projectStore';
-import { logInfo } from '../core/logger';
+import fg from 'fast-glob';
+import { FileChunk, Embedding } from './vectorStore';
 
 const MAX_CHARS_PER_CHUNK = 1200;
 
@@ -52,36 +54,53 @@ function chunkFile(
   return chunks;
 }
 
-export async function buildProjectIndex(
-  config: ProjectConfig,
-  model: ModelRuntime
-): Promise<{ store: InMemoryVectorStore; chunks: FileChunk[] }> {
-  const files = await findProjectFiles(config.rootPath);
-  logInfo(`Found ${files.length} files to index.`);
+export interface EmbedFunction {
+  (texts: string[]): Promise<Embedding[]>;
+}
+
+export async function buildChunkIndex(
+  rootPath: string,
+  projectId: string,
+  embedFn: EmbedFunction
+): Promise<FileChunk[]> {
+  const patterns = [
+    '**/*.ts',
+    '**/*.tsx',
+    '**/*.js',
+    '**/*.jsx',
+    '**/*.json',
+    '**/*.md',
+  ];
+
+  const ignore = [
+    '**/node_modules/**',
+    '**/.git/**',
+    '**/dist/**',
+    '**/build/**',
+  ];
+
+  const files = await fg(patterns, {
+    cwd: rootPath,
+    ignore,
+    absolute: true,
+  });
 
   const allChunks: FileChunk[] = [];
 
   for (const absPath of files) {
     const content = fs.readFileSync(absPath, 'utf8');
-    const rel = path.relative(config.rootPath, absPath);
-    const chunks = chunkFile(config.id, rel, content);
+    const rel = path.relative(rootPath, absPath);
+    const chunks = chunkFile(projectId, rel, content);
     allChunks.push(...chunks);
   }
 
-  logInfo(`Created ${allChunks.length} chunks. Embedding...`);
-
+  // Embed all chunks
   const texts = allChunks.map((c) => c.content);
-  const embeddings = await model.embed(texts);
+  const embeddings = await embedFn(texts);
 
   for (let i = 0; i < allChunks.length; i++) {
     allChunks[i].embedding = embeddings[i];
   }
 
-  const store = new InMemoryVectorStore();
-  await store.upsert(allChunks);
-
-  await saveProjectIndex(config.id, allChunks);
-  logInfo(`Saved index with ${allChunks.length} chunks.`);
-
-  return { store, chunks: allChunks };
+  return allChunks;
 }

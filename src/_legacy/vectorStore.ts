@@ -1,4 +1,24 @@
-import { Embedding, FileChunk, VectorStore } from '../core/types';
+/**
+ * @deprecated Legacy in-memory vector store for reference.
+ * Kept for potential future use as optional/secondary retrieval method.
+ */
+
+export type Embedding = number[];
+
+export interface FileChunk {
+  id: string;
+  projectId: string;
+  filePath: string;
+  startLine: number;
+  endLine: number;
+  content: string;
+  embedding?: Embedding;
+}
+
+export interface VectorStore {
+  upsert(chunks: FileChunk[]): Promise<void>;
+  query(embedding: Embedding, k: number): Promise<FileChunk[]>;
+}
 
 function cosineSimilarity(a: Embedding, b: Embedding): number {
   let dot = 0;

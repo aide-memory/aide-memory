@@ -1,13 +1,22 @@
+/**
+ * Local Model Client - Ollama Integration
+ */
+
 import axios from 'axios';
 import {
   ChatMessage,
   ChatResponse,
-  Embedding,
   ModelRuntime,
   ProjectConfig,
-} from '../core/types';
+} from '../brain/types';
 
-export class OllamaRuntime implements ModelRuntime {
+export type Embedding = number[];
+
+export interface EmbeddingRuntime {
+  embed(texts: string[]): Promise<Embedding[]>;
+}
+
+export class OllamaRuntime implements ModelRuntime, EmbeddingRuntime {
   private baseUrl: string;
   private model: string;
   private embeddingModel: string;
@@ -18,8 +27,12 @@ export class OllamaRuntime implements ModelRuntime {
     this.embeddingModel = config.embeddingModel;
   }
 
+  /**
+   * Generate embeddings for texts
+   * @deprecated Embeddings are optional in V0, graph traversal is primary
+   */
   async embed(texts: string[]): Promise<Embedding[]> {
-    const url = `${this.baseUrl}/embed`; // http://localhost:11434/api/embed
+    const url = `${this.baseUrl}/embed`;
 
     const embeddings: Embedding[] = [];
 
@@ -27,7 +40,7 @@ export class OllamaRuntime implements ModelRuntime {
       try {
         const resp = await axios.post(url, {
           model: this.embeddingModel,
-          input: text, // single string
+          input: text,
         });
 
         const vec = resp.data?.embeddings?.[0] as Embedding | undefined;
@@ -38,7 +51,6 @@ export class OllamaRuntime implements ModelRuntime {
 
         embeddings.push(vec);
       } catch (err: any) {
-        // Log the actual Ollama error body so we can debug if needed
         const status = err.response?.status;
         const data = err.response?.data;
         console.error(
@@ -59,16 +71,33 @@ export class OllamaRuntime implements ModelRuntime {
     return embeddings;
   }
 
+  /**
+   * Chat with the model
+   */
   async chat(messages: ChatMessage[]): Promise<ChatResponse> {
     const url = `${this.baseUrl}/chat`;
 
-    const resp = await axios.post(url, {
-      model: this.model,
-      messages,
-      stream: false, // disable streaming for simpler handling
-    });
+    try {
+      const resp = await axios.post(url, {
+        model: this.model,
+        messages,
+        stream: false,
+      });
 
-    const content = resp.data?.message?.content ?? '(no content from model)';
-    return { content };
+      const content = resp.data?.message?.content ?? '(no content from model)';
+      return { content };
+    } catch (err: any) {
+      const status = err.response?.status;
+      const data = err.response?.data;
+
+      if (status === 404) {
+        throw new Error(
+          `Model '${this.model}' not found. Run 'ollama pull ${this.model}' first.`
+        );
+      }
+
+      console.error('[aide:chat] Ollama error:', status, JSON.stringify(data));
+      throw err;
+    }
   }
 }
