@@ -158,8 +158,10 @@ aide reindex
 
 ## Future Improvements
 
-- [ ] **File summaries** - LLM-generated descriptions for each file and tags
+- [ ] **File summaries** - LLM-generated descriptions for each file and tags (i.e TagRecord entries)
 - [ ] **Embeddings** - Semantic search as fallback when symbol matching fails
 - [ ] **Multi-language support** - Go, Python, Rust parsers
-- [ ] **Smarter notes** - Auto-extract insights from LLM responses
+- [ ] **Smarter notes** - Auto-extract insights from LLM responses (model-suggested notes/tags)
+- [ ] **Configurable traversal depth/fanout** exposed in CLI or config
+- [ ] Options to ask with a -s or --session my-session
 - [ ] **Project-level memory** - Cross-session learnings about the codebase
