@@ -158,7 +158,7 @@ aide reindex
 
 ## Future Improvements
 
-- [ ] **File summaries** - LLM-generated descriptions for each file
+- [ ] **File summaries** - LLM-generated descriptions for each file and tags
 - [ ] **Embeddings** - Semantic search as fallback when symbol matching fails
 - [ ] **Multi-language support** - Go, Python, Rust parsers
 - [ ] **Smarter notes** - Auto-extract insights from LLM responses
