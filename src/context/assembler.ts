@@ -539,21 +539,50 @@ export class ContextAssembler {
       const content = fs.readFileSync(fullPath, 'utf8');
       const lines = content.split('\n');
 
-      // Extract the symbol's lines (1-indexed in our data)
+      // Include a few lines before the symbol to capture comments, TODOs, decorators
+      const contextLinesBefore = 5;
+      const contextStartIdx = Math.max(
+        0,
+        sym.startLine - 1 - contextLinesBefore
+      );
       const startIdx = Math.max(0, sym.startLine - 1);
       const endIdx = Math.min(lines.length, sym.endLine);
+
+      // Get preceding context (comments, TODOs, decorators)
+      const precedingLines = lines.slice(contextStartIdx, startIdx);
       const symbolLines = lines.slice(startIdx, endIdx);
 
-      // Limit to reasonable size (max 50 lines per symbol)
-      if (symbolLines.length > 50) {
+      // Filter preceding lines to only include relevant context
+      // (comments, TODOs, decorators, docstrings)
+      const relevantPreceding = precedingLines.filter((line) => {
+        const trimmed = line.trim();
         return (
-          symbolLines.slice(0, 25).join('\n') +
+          trimmed.startsWith('#') || // Python/shell comments
+          trimmed.startsWith('//') || // JS/TS comments
+          trimmed.startsWith('/*') || // Block comments
+          trimmed.startsWith('*') || // Block comment continuation
+          trimmed.startsWith('@') || // Decorators
+          trimmed.startsWith('"""') || // Python docstrings
+          trimmed.startsWith("'''") || // Python docstrings
+          trimmed.includes('TODO') || // TODO markers
+          trimmed.includes('FIXME') || // FIXME markers
+          trimmed === '' // Empty lines between comment and function
+        );
+      });
+
+      // Combine preceding context with symbol code
+      const allLines = [...relevantPreceding, ...symbolLines];
+
+      // Limit to reasonable size (max 60 lines per symbol including context)
+      if (allLines.length > 60) {
+        return (
+          allLines.slice(0, 30).join('\n') +
           '\n// ... truncated ...\n' +
-          symbolLines.slice(-10).join('\n')
+          allLines.slice(-10).join('\n')
         );
       }
 
-      return symbolLines.join('\n');
+      return allLines.join('\n');
     } catch {
       return sym.signature || null;
     }

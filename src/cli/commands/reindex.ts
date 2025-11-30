@@ -13,13 +13,18 @@ import {
   analyzeFile,
   generateFileId,
   isTypeScriptOrJavaScript,
+  isProgrammingLanguage,
 } from '../../analysis/fileAnalyzer';
 import {
   createProject,
   parseFile,
   generateSymbolId,
 } from '../../analysis/parser';
-import { resolveAllRelations } from '../../analysis/relationResolver';
+import {
+  resolveAllRelations,
+  resolveCtagsRelations,
+} from '../../analysis/relationResolver';
+import { isCtagsAvailable, parseWithCtags } from '../../analysis/ctagsParser';
 import { logInfo, logError } from '../../core/logger';
 import { getProjectDbPath } from '../../storage/paths';
 
@@ -29,30 +34,85 @@ export interface ReindexOptions {
 }
 
 const FILE_PATTERNS = [
+  // TypeScript/JavaScript (ts-morph)
   '**/*.ts',
   '**/*.tsx',
   '**/*.js',
   '**/*.jsx',
+  // Python (ctags)
+  '**/*.py',
+  // Go (ctags)
+  '**/*.go',
+  // Rust (ctags)
+  '**/*.rs',
+  // Java (ctags)
+  '**/*.java',
+  // Ruby (ctags)
+  '**/*.rb',
+  // PHP (ctags)
+  '**/*.php',
+  // C/C++ (ctags)
+  '**/*.c',
+  '**/*.cpp',
+  '**/*.cc',
+  '**/*.cxx',
+  '**/*.h',
+  '**/*.hpp',
+  // Other languages (ctags)
+  '**/*.cs',
+  '**/*.swift',
+  '**/*.kt',
+  '**/*.scala',
+  '**/*.lua',
+  '**/*.r',
+  '**/*.R',
+  '**/*.pl',
+  '**/*.pm',
+  '**/*.sh',
+  '**/*.bash',
+  // Config/Doc files (file-only)
   '**/*.json',
   '**/*.md',
+  '**/*.yaml',
+  '**/*.yml',
+  '**/*.toml',
 ];
 
 const IGNORE_PATTERNS = [
+  // Node.js
   '**/node_modules/**',
-  '**/.git/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/.turbo/**',
-  '**/.next/**',
   '**/package-lock.json',
   '**/pnpm-lock.yaml',
   '**/yarn.lock',
+  // Git
+  '**/.git/**',
+  // Build outputs
+  '**/dist/**',
+  '**/build/**',
+  '**/out/**',
+  '**/.turbo/**',
+  '**/.next/**',
+  // Python
+  '**/__pycache__/**',
+  '**/.venv/**',
+  '**/venv/**',
+  '**/*.pyc',
+  '**/*.egg-info/**',
+  // Go
+  '**/vendor/**',
+  // Rust
+  '**/target/**',
+  // Java
+  '**/*.class',
+  '**/target/**',
+  // General
   '**/*.lock',
   '**/*.log',
   '**/*.min.js',
   '**/*.min.css',
   '**/coverage/**',
   '**/tmp/**',
+  '**/.cache/**',
 ];
 
 export async function reindexProject(
@@ -68,6 +128,9 @@ export async function reindexProject(
   }
 
   logInfo(`Reindexing project: ${config.rootPath}`);
+
+  // Check ctags availability
+  const hasCtagsSupport = isCtagsAvailable();
 
   // Open store
   const store = new SQLiteBrainStore(dbPath);
@@ -115,6 +178,7 @@ export async function reindexProject(
     fileId: string;
     relativePath: string;
     content: string;
+    language: string;
     isTest: boolean;
     isConfig: boolean;
   }> = [];
@@ -153,8 +217,9 @@ export async function reindexProject(
 
     store.upsertFile(fileRecord);
 
-    // Parse TypeScript/JavaScript files for symbols
+    // Parse files for symbols
     if (isTypeScriptOrJavaScript(fileInfo.language)) {
+      // Use ts-morph for TypeScript/JavaScript
       try {
         const parsed = parseFile(project, absPath, fileInfo.content);
 
@@ -183,11 +248,53 @@ export async function reindexProject(
           fileId,
           relativePath: fileInfo.relativePath,
           content: fileInfo.content,
+          language: fileInfo.language,
           isTest: fileInfo.isTest,
           isConfig: fileInfo.isConfig,
         });
       } catch (err) {
         logError(`Failed to parse ${fileInfo.relativePath}`, err);
+      }
+    } else if (hasCtagsSupport && isProgrammingLanguage(fileInfo.language)) {
+      // Use ctags for other programming languages
+      try {
+        const ctagsResult = await parseWithCtags(
+          config.rootPath,
+          fileInfo.relativePath,
+          fileInfo.content
+        );
+
+        for (const sym of ctagsResult.symbols) {
+          const symbolId = generateSymbolId(
+            fileId,
+            sym.name,
+            sym.kind,
+            sym.startLine
+          );
+
+          store.upsertSymbol({
+            id: symbolId,
+            fileId,
+            name: sym.name,
+            kind: sym.kind,
+            startLine: sym.startLine,
+            endLine: sym.endLine,
+            signature: sym.signature,
+            docComment: sym.docComment,
+          });
+        }
+
+        // Queue for relation resolution
+        filesToResolve.push({
+          fileId,
+          relativePath: fileInfo.relativePath,
+          content: fileInfo.content,
+          language: fileInfo.language,
+          isTest: fileInfo.isTest,
+          isConfig: fileInfo.isConfig,
+        });
+      } catch (err) {
+        // Silently skip ctags parsing errors
       }
     }
   }
@@ -208,21 +315,45 @@ export async function reindexProject(
 
     for (const file of filesToResolve) {
       try {
-        const absPath = `${config.rootPath}/${file.relativePath}`;
-        const parsed = parseFile(project, absPath, file.content);
+        if (isTypeScriptOrJavaScript(file.language)) {
+          // Use ts-morph for TypeScript/JavaScript
+          const absPath = `${config.rootPath}/${file.relativePath}`;
+          const parsed = parseFile(project, absPath, file.content);
 
-        const relations = resolveAllRelations(
-          store,
-          file.fileId,
-          file.relativePath,
-          parsed,
-          config.rootPath,
-          file.isTest,
-          file.isConfig
-        );
+          const relations = resolveAllRelations(
+            store,
+            file.fileId,
+            file.relativePath,
+            parsed,
+            config.rootPath,
+            file.isTest,
+            file.isConfig
+          );
 
-        for (const rel of relations) {
-          store.addRelation(rel);
+          for (const rel of relations) {
+            store.addRelation(rel);
+          }
+        } else if (isProgrammingLanguage(file.language)) {
+          // Use ctags-based relation resolution
+          const ctagsResult = await parseWithCtags(
+            config.rootPath,
+            file.relativePath,
+            file.content
+          );
+
+          const relations = resolveCtagsRelations(
+            store,
+            file.fileId,
+            file.relativePath,
+            ctagsResult,
+            file.content,
+            config.rootPath,
+            file.language
+          );
+
+          for (const rel of relations) {
+            store.addRelation(rel);
+          }
         }
       } catch (err) {
         // Silently skip

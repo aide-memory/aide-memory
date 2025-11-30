@@ -12,6 +12,7 @@ import {
 } from '../brain/types';
 import { ProjectBrainStore } from '../brain/store';
 import { ParsedFile, ImportInfo } from './parser';
+import { CtagsParseResult } from './ctagsParser';
 
 export function generateRelationId(
   sourceId: string,
@@ -314,4 +315,166 @@ export function resolveAllRelations(
   }
 
   return relations;
+}
+
+/**
+ * Resolve relations for ctags-parsed files (non-TypeScript languages)
+ * Uses text-based heuristics since ctags doesn't provide call information
+ */
+export function resolveCtagsRelations(
+  store: ProjectBrainStore,
+  fileId: string,
+  filePath: string,
+  ctagsResult: CtagsParseResult,
+  content: string,
+  projectRoot: string,
+  language: string
+): Relation[] {
+  const relations: Relation[] = [];
+
+  // Resolve imports using ctags-extracted import info
+  for (const imp of ctagsResult.imports) {
+    const fileSymbols = store.getSymbolsForFile(fileId);
+
+    // Try to find target file based on import specifier
+    const targetPath = resolveGenericImportPath(
+      filePath,
+      imp.moduleSpecifier,
+      projectRoot,
+      language
+    );
+    if (!targetPath) continue;
+
+    const targetFiles = store.findFiles({ pathPattern: `*${targetPath}*` });
+    if (targetFiles.length === 0) continue;
+
+    const targetFile = targetFiles[0];
+    const targetSymbols = store.getSymbolsForFile(targetFile.id);
+
+    // Create IMPORTS relations
+    for (const importedName of imp.importedNames) {
+      if (importedName === '*') continue;
+
+      const targetSymbol = targetSymbols.find((s) => s.name === importedName);
+      if (!targetSymbol) continue;
+
+      const sourceSymbol = fileSymbols[0];
+      if (!sourceSymbol) continue;
+
+      relations.push({
+        id: generateRelationId(sourceSymbol.id, targetSymbol.id, 'IMPORTS'),
+        sourceSymbolId: sourceSymbol.id,
+        targetSymbolId: targetSymbol.id,
+        kind: 'IMPORTS',
+      });
+    }
+  }
+
+  // Text-based call detection for non-TS files
+  const fileSymbols = store.getSymbolsForFile(fileId);
+  const allSymbols = store.findSymbols();
+  const lines = content.split('\n');
+
+  // Build a map of all symbol names across the project
+  const symbolMap = new Map<string, SymbolRecord>();
+  for (const sym of allSymbols) {
+    // Only track functions and classes (things that can be "called")
+    if (
+      sym.kind === 'function' ||
+      sym.kind === 'class' ||
+      sym.kind === 'method'
+    ) {
+      symbolMap.set(sym.name, sym);
+    }
+  }
+
+  // For each symbol in this file, check if it references other symbols
+  for (const sourceSym of fileSymbols) {
+    if (sourceSym.kind !== 'function' && sourceSym.kind !== 'method') continue;
+
+    // Get the lines within this symbol
+    const startLine = Math.max(0, sourceSym.startLine - 1);
+    const endLine = Math.min(lines.length, sourceSym.endLine);
+    const symbolCode = lines.slice(startLine, endLine).join('\n');
+
+    // Check for references to other symbols
+    for (const [targetName, targetSym] of symbolMap) {
+      // Skip self-references and symbols from the same file (usually local)
+      if (targetSym.id === sourceSym.id) continue;
+      if (targetSym.fileId === fileId) continue;
+
+      // Check if the target symbol name appears in this symbol's code
+      // Use word boundary matching to avoid partial matches
+      const pattern = new RegExp(`\\b${escapeRegExp(targetName)}\\s*\\(`, 'g');
+      if (pattern.test(symbolCode)) {
+        relations.push({
+          id: generateRelationId(sourceSym.id, targetSym.id, 'CALLS'),
+          sourceSymbolId: sourceSym.id,
+          targetSymbolId: targetSym.id,
+          kind: 'CALLS',
+        });
+      }
+    }
+  }
+
+  return relations;
+}
+
+/**
+ * Resolve import path for various languages
+ */
+function resolveGenericImportPath(
+  fromFile: string,
+  importSpec: string,
+  projectRoot: string,
+  language: string
+): string | null {
+  try {
+    const fromDir = path.dirname(fromFile);
+
+    switch (language) {
+      case 'python':
+        // Convert Python imports like 'package.module' to 'package/module.py'
+        if (importSpec.startsWith('.')) {
+          // Relative import
+          const parts = importSpec.replace(/^\.+/, '').split('.');
+          const levels = (importSpec.match(/^\.*/) || [''])[0].length;
+          let baseDir = fromDir;
+          for (let i = 1; i < levels; i++) {
+            baseDir = path.dirname(baseDir);
+          }
+          return parts.join('/');
+        } else {
+          // Absolute import
+          return importSpec.split('.').join('/');
+        }
+
+      case 'go':
+        // Go imports are typically full paths within the module
+        return path.basename(importSpec);
+
+      case 'rust':
+        // Rust uses :: separator
+        return importSpec.split('::').pop() || null;
+
+      case 'java':
+        // Java imports like com.example.Class
+        const parts = importSpec.split('.');
+        return parts[parts.length - 1];
+
+      default:
+        // For other languages, try to match the last component
+        const pathParts = importSpec.split(/[./\\:]/);
+        return pathParts[pathParts.length - 1] || null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Escape special regex characters
+ */
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

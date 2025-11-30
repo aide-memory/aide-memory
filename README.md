@@ -2,6 +2,21 @@
 
 A local, project-aware AI coding assistant that understands your codebase through symbol extraction and graph-based retrieval.
 
+## Supported Languages
+
+| Language                                                 | File Indexing | Symbol Extraction | Relation Detection |
+| -------------------------------------------------------- | ------------- | ----------------- | ------------------ |
+| TypeScript/JavaScript                                    | ✅            | ✅ (ts-morph)     | ✅ Full            |
+| Python                                                   | ✅            | ✅ (ctags)        | ✅ Imports/Calls   |
+| Go                                                       | ✅            | ✅ (ctags)        | ✅ Imports/Calls   |
+| Rust                                                     | ✅            | ✅ (ctags)        | ✅ Imports/Calls   |
+| Java                                                     | ✅            | ✅ (ctags)        | ✅ Imports/Calls   |
+| C/C++                                                    | ✅            | ✅ (ctags)        | ✅ Includes/Calls  |
+| Ruby, PHP, C#, Swift, Kotlin, Scala, Lua, R, Perl, Shell | ✅            | ✅ (ctags)        | Basic              |
+| JSON, YAML, TOML, Markdown                               | ✅            | -                 | -                  |
+
+**Note**: For non-TypeScript/JavaScript languages, [Universal Ctags](https://ctags.io/) is required for symbol extraction.
+
 ## How It Works
 
 ### Core Concept
@@ -66,9 +81,10 @@ src/
 │   ├── store.ts              # ProjectBrainStore interface
 │   └── sqliteStore.ts        # SQLite implementation
 │
-├── analysis/                 # Code parsing (ts-morph)
+├── analysis/                 # Code parsing
 │   ├── fileAnalyzer.ts       # Language detection, content hashing
-│   ├── parser.ts             # Extract symbols from TypeScript/JavaScript
+│   ├── parser.ts             # Extract symbols from TypeScript/JavaScript (ts-morph)
+│   ├── ctagsParser.ts        # Extract symbols from other languages (Universal Ctags)
 │   └── relationResolver.ts   # Discover CALLS, IMPORTS, EXTENDS relations
 │
 ├── retrieval/                # Context retrieval
@@ -108,25 +124,77 @@ src/
 
 ## Usage
 
+### `aide init [path]` - Initialize/index a project
+
 ```bash
-# Index a project
-aide init .
-
-# Start interactive REPL (auto-resumes previous session)
-aide
-
-# Start fresh session
-aide --new
-
-# Single question mode
-aide ask "What does the analysis package do?"
-
-# Watch for file changes
-aide watch
-
-# Incremental reindex
-aide reindex
+aide init                     # Index current directory
+aide init /path/to/project    # Index specific project
+aide init --force             # Force full reindex from scratch
+aide init --clear-sessions    # Clear all session files
+aide init -f --clear-sessions # Both options combined
 ```
+
+| Option             | Description                |
+| ------------------ | -------------------------- |
+| `-f, --force`      | Force reindex from scratch |
+| `--clear-sessions` | Delete all session history |
+
+### `aide [path]` - Start interactive REPL (default)
+
+```bash
+aide                    # Start REPL, auto-resume previous session
+aide --new              # Start fresh session
+aide --clear-history    # Clear chat history before starting
+aide --no-init          # Don't auto-init if project not indexed
+aide /path/to/project   # Start REPL for specific project
+```
+
+| Option            | Description                        |
+| ----------------- | ---------------------------------- |
+| `-n, --new`       | Start new session (don't resume)   |
+| `--clear-history` | Clear chat history before starting |
+| `--no-init`       | Skip auto-init if not indexed      |
+
+### `aide ask <question>` - Single question mode
+
+```bash
+aide ask "What does the analysis package do?"
+aide ask "Where is ContextAssembler used?" --debug
+aide ask "How does parsing work?" -d 3 -f 10
+```
+
+| Option              | Description              | Default |
+| ------------------- | ------------------------ | ------- |
+| `-p, --path <path>` | Project root path        | `.`     |
+| `-d, --depth <n>`   | Graph traversal depth    | `2`     |
+| `-f, --fanout <n>`  | Max symbols per relation | `5`     |
+| `-t, --tokens <n>`  | Token budget for context | `4000`  |
+| `--debug`           | Print debug information  | -       |
+
+### `aide reindex [path]` - Incremental reindex
+
+```bash
+aide reindex                      # Reindex changed files
+aide reindex -f src/cli/index.ts  # Reindex specific files
+aide reindex --files a.ts b.ts    # Reindex multiple files
+```
+
+| Option                   | Description               |
+| ------------------------ | ------------------------- |
+| `-f, --files <files...>` | Specific files to reindex |
+
+### `aide watch [path]` - Watch for file changes
+
+```bash
+aide watch              # Watch current project
+aide watch -d 500       # Custom debounce delay (ms)
+```
+
+| Option                | Description          | Default |
+| --------------------- | -------------------- | ------- |
+| `-d, --debounce <ms>` | Debounce delay in ms | `1000`  |
+
+---
 
 ### REPL Commands
 
@@ -156,12 +224,35 @@ aide reindex
 
 ---
 
+## Requirements
+
+- **Node.js** >= 18.0.0
+- **Ollama** - Local LLM runtime (for chat and embeddings)
+- **Universal Ctags** (optional) - Required for non-TypeScript/JavaScript symbol extraction
+
+### Installing Universal Ctags
+
+```bash
+# macOS
+brew install universal-ctags
+
+# Ubuntu/Debian
+sudo apt install universal-ctags
+
+# Windows (via Chocolatey)
+choco install universal-ctags
+```
+
+If ctags is not installed, AIDE will still index all files but only extract symbols from TypeScript/JavaScript.
+
+---
+
 ## Future Improvements
 
 - [ ] **File summaries** - LLM-generated descriptions for each file and tags (i.e TagRecord entries)
 - [ ] **Embeddings** - Semantic search as fallback when symbol matching fails
-- [ ] **Multi-language support** - Go, Python, Rust parsers
 - [ ] **Smarter notes** - Auto-extract insights from LLM responses (model-suggested notes/tags)
 - [ ] **Configurable traversal depth/fanout** exposed in CLI or config
 - [ ] Options to ask with a -s or --session my-session
 - [ ] **Project-level memory** - Cross-session learnings about the codebase
+- [x] **Multi-language support** - Python, Go, Rust, Java, C/C++ via Universal Ctags

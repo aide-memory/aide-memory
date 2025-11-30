@@ -7,32 +7,93 @@ import path from 'path';
 import fs from 'fs';
 
 const LANGUAGE_MAP: Record<string, string> = {
+  // TypeScript/JavaScript
   '.ts': 'typescript',
   '.tsx': 'typescript',
   '.js': 'javascript',
   '.jsx': 'javascript',
   '.mjs': 'javascript',
   '.cjs': 'javascript',
-  '.json': 'json',
-  '.md': 'markdown',
+  // Python
   '.py': 'python',
-  '.rs': 'rust',
+  '.pyw': 'python',
+  '.pyi': 'python',
+  // Go
   '.go': 'go',
+  // Rust
+  '.rs': 'rust',
+  // Java
   '.java': 'java',
+  // Ruby
   '.rb': 'ruby',
+  '.rake': 'ruby',
+  // PHP
   '.php': 'php',
-  '.css': 'css',
-  '.scss': 'scss',
-  '.html': 'html',
-  '.xml': 'xml',
-  '.yaml': 'yaml',
-  '.yml': 'yaml',
-  '.toml': 'toml',
-  '.sql': 'sql',
+  // C/C++
+  '.c': 'c',
+  '.h': 'c',
+  '.cpp': 'cpp',
+  '.cc': 'cpp',
+  '.cxx': 'cpp',
+  '.hpp': 'cpp',
+  '.hxx': 'cpp',
+  // C#
+  '.cs': 'csharp',
+  // Swift
+  '.swift': 'swift',
+  // Kotlin
+  '.kt': 'kotlin',
+  '.kts': 'kotlin',
+  // Scala
+  '.scala': 'scala',
+  // Lua
+  '.lua': 'lua',
+  // R
+  '.r': 'r',
+  '.R': 'r',
+  // Perl
+  '.pl': 'perl',
+  '.pm': 'perl',
+  // Shell
   '.sh': 'shell',
   '.bash': 'shell',
   '.zsh': 'shell',
+  // Config/Data
+  '.json': 'json',
+  '.md': 'markdown',
+  '.yaml': 'yaml',
+  '.yml': 'yaml',
+  '.toml': 'toml',
+  '.xml': 'xml',
+  // Web
+  '.css': 'css',
+  '.scss': 'scss',
+  '.html': 'html',
+  // Other
+  '.sql': 'sql',
 };
+
+// Languages that support symbol extraction (via ts-morph or ctags)
+const PROGRAMMING_LANGUAGES = new Set([
+  'typescript',
+  'javascript',
+  'python',
+  'go',
+  'rust',
+  'java',
+  'ruby',
+  'php',
+  'c',
+  'cpp',
+  'csharp',
+  'swift',
+  'kotlin',
+  'scala',
+  'lua',
+  'r',
+  'perl',
+  'shell',
+]);
 
 export function detectLanguage(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -57,6 +118,10 @@ export function generateFileId(
 
 export function isTypeScriptOrJavaScript(language: string): boolean {
   return language === 'typescript' || language === 'javascript';
+}
+
+export function isProgrammingLanguage(language: string): boolean {
+  return PROGRAMMING_LANGUAGES.has(language);
 }
 
 export function isConfigFile(filePath: string): boolean {

@@ -97,6 +97,23 @@ export class GraphTraversalStrategy extends BaseRetrievalStrategy {
   }
 
   /**
+   * Detect if query is asking for "all" of something
+   * (e.g., "complete all TODO", "list all functions", "show all methods")
+   */
+  private isAllQuery(question: string): boolean {
+    const lower = question.toLowerCase();
+    const allPatterns = [
+      /\ball\s+(todo|function|method|class)/i,
+      /\bcomplete\s+all\b/i,
+      /\blist\s+all\b/i,
+      /\bshow\s+all\b/i,
+      /\bevery\s+(function|method|todo)/i,
+      /\ball\s+the\s+(function|method|todo)/i,
+    ];
+    return allPatterns.some((p) => p.test(lower));
+  }
+
+  /**
    * Find seed symbols from question text and focus symbols
    */
   private findSeedSymbols(query: RetrievalQuery): SymbolRecord[] {
@@ -111,6 +128,21 @@ export class GraphTraversalStrategy extends BaseRetrievalStrategy {
     // When question has pronouns and no specific symbols,
     // focus symbols are the PRIMARY seeds (not just additional)
     const focusPriority = hasPronoun && !hasSpecificSymbols;
+
+    // Check for "all" queries - return all functions/methods
+    if (this.isAllQuery(query.question)) {
+      const allFunctions = this.store.findSymbols({
+        kinds: ['function', 'method', 'class'],
+      });
+      // Limit to reasonable amount (max 30 symbols)
+      for (const sym of allFunctions.slice(0, 30)) {
+        if (!seenIds.has(sym.id)) {
+          seeds.push(sym);
+          seenIds.add(sym.id);
+        }
+      }
+      return seeds;
+    }
 
     // Add focus symbols directly
     if (query.focusSymbolIds) {
@@ -188,6 +220,27 @@ export class GraphTraversalStrategy extends BaseRetrievalStrategy {
               seenIds.add(sym.id);
             }
           }
+        }
+      }
+    }
+
+    // Fallback: if still no seeds and question mentions common terms,
+    // include all functions as context
+    if (seeds.length === 0) {
+      const lower = query.question.toLowerCase();
+      const needsFallback =
+        lower.includes('todo') ||
+        lower.includes('implement') ||
+        lower.includes('complete') ||
+        lower.includes('function') ||
+        lower.includes('code');
+
+      if (needsFallback) {
+        const allFunctions = this.store.findSymbols({
+          kinds: ['function', 'method'],
+        });
+        for (const sym of allFunctions.slice(0, 20)) {
+          seeds.push(sym);
         }
       }
     }
