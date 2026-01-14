@@ -16,7 +16,7 @@ import {
   FileRecord,
   ChatMessage,
 } from '../brain/types';
-import { ProjectBrainStore } from '../brain/store';
+import { ProjectGraph as ProjectBrainStore } from '../brain/projectGraph';
 
 export interface SessionConfig {
   /** Maximum number of focus symbols to track */
@@ -478,6 +478,56 @@ export class SessionManager {
     } catch (err) {
       // No latest session found
       return null;
+    }
+  }
+
+  /**
+   * List all sessions in a directory
+   */
+  static listSessions(
+    sessionsDir: string
+  ): Array<{ id: string; name: string; updatedAt: string }> {
+    try {
+      if (!fs.existsSync(sessionsDir)) return [];
+
+      const files = fs.readdirSync(sessionsDir);
+      const sessions: Array<{ id: string; name: string; updatedAt: string }> =
+        [];
+
+      for (const file of files) {
+        if (file.endsWith('.json') && file !== 'latest.txt') {
+          try {
+            const filePath = path.join(sessionsDir, file);
+            const content = fs.readFileSync(filePath, 'utf8');
+            const state = JSON.parse(content) as SessionState;
+            // Use first question as name, or session ID
+            const firstQuestion = state.chatHistory?.find(
+              (m) => m.role === 'user'
+            );
+            const name = firstQuestion
+              ? firstQuestion.content.slice(0, 40) +
+                (firstQuestion.content.length > 40 ? '...' : '')
+              : state.id;
+            sessions.push({
+              id: state.id,
+              name,
+              updatedAt: state.updatedAt,
+            });
+          } catch {
+            // Skip corrupted files
+          }
+        }
+      }
+
+      // Sort by updatedAt descending
+      sessions.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+      return sessions;
+    } catch (err) {
+      console.error('Failed to list sessions:', err);
+      return [];
     }
   }
 

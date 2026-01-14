@@ -1,12 +1,13 @@
 /**
- * ProjectBrainStore Interface
+ * ProjectGraph Interface
  *
- * Defines the contract for all brain storage implementations.
- * V0 uses SQLite, but this interface allows future backends:
- * - Postgres
- * - Graph DB
- * - DuckDB
- * - Custom backends
+ * The central interface for all graph operations.
+ * All layers access the graph through this interface:
+ * - analysis/ writes via ProjectGraph
+ * - retrieval/ reads via ProjectGraph
+ * - brain/sqliteStore.ts implements ProjectGraph
+ *
+ * This allows future backend swaps (Postgres, DuckDB, Graph DB, etc.)
  */
 
 import {
@@ -14,24 +15,34 @@ import {
   FileFilter,
   SymbolRecord,
   SymbolFilter,
+  ContentBlock,
+  BlockFilter,
+  BlockKind,
   Relation,
   RelationFilter,
+  RelationKind,
   Note,
   NoteFilter,
   Tag,
-  TagFilter,
+  GraphStats,
 } from './types';
 
-export interface ProjectBrainStore {
+export interface ProjectGraph {
   // =========================================================================
   // Lifecycle
   // =========================================================================
 
-  /** Initialize the store (create tables, etc.) */
+  /** Initialize the graph store (create tables, indexes, etc.) */
   initialize(): void;
 
   /** Close connections and cleanup */
   close(): void;
+
+  /** Clear all data (for full reindex) */
+  clearAll(): void;
+
+  /** Get statistics about the graph */
+  getStats(): GraphStats;
 
   // =========================================================================
   // File Operations
@@ -40,13 +51,13 @@ export interface ProjectBrainStore {
   /** Insert or update a file record */
   upsertFile(file: FileRecord): void;
 
-  /** Find files matching the filter */
-  findFiles(filter?: FileFilter): FileRecord[];
-
   /** Get a single file by ID */
   getFile(id: string): FileRecord | undefined;
 
-  /** Delete a file and its associated symbols/relations */
+  /** Find files matching the filter */
+  findFiles(filter?: FileFilter): FileRecord[];
+
+  /** Delete a file and all associated data (symbols, blocks, relations) */
   deleteFile(id: string): void;
 
   // =========================================================================
@@ -56,11 +67,11 @@ export interface ProjectBrainStore {
   /** Insert or update a symbol record */
   upsertSymbol(symbol: SymbolRecord): void;
 
-  /** Find symbols matching the filter */
-  findSymbols(filter?: SymbolFilter): SymbolRecord[];
-
   /** Get a single symbol by ID */
   getSymbol(id: string): SymbolRecord | undefined;
+
+  /** Find symbols matching the filter */
+  findSymbols(filter?: SymbolFilter): SymbolRecord[];
 
   /** Get all symbols in a file */
   getSymbolsForFile(fileId: string): SymbolRecord[];
@@ -72,6 +83,40 @@ export interface ProjectBrainStore {
   deleteSymbolsForFile(fileId: string): void;
 
   // =========================================================================
+  // Content Block Operations
+  // =========================================================================
+
+  /** Insert or update a content block */
+  upsertBlock(block: ContentBlock): void;
+
+  /** Get a single block by ID */
+  getBlock(id: string): ContentBlock | undefined;
+
+  /** Find blocks matching the filter */
+  findBlocks(filter?: BlockFilter): ContentBlock[];
+
+  /** Get all blocks for a symbol (including chunks) */
+  getBlocksForSymbol(symbolId: string): ContentBlock[];
+
+  /** Get all blocks for a file */
+  getBlocksForFile(fileId: string): ContentBlock[];
+
+  /** Get all chunks for a full block */
+  getChunksForBlock(fullBlockId: string): ContentBlock[];
+
+  /** Full-text search across block content */
+  searchBlocks(query: string, kinds?: BlockKind[]): ContentBlock[];
+
+  /** Delete a block */
+  deleteBlock(id: string): void;
+
+  /** Delete all blocks for a file */
+  deleteBlocksForFile(fileId: string): void;
+
+  /** Delete all blocks for a symbol */
+  deleteBlocksForSymbol(symbolId: string): void;
+
+  // =========================================================================
   // Relation Operations
   // =========================================================================
 
@@ -81,10 +126,10 @@ export interface ProjectBrainStore {
   /** Find relations matching the filter */
   findRelations(filter?: RelationFilter): Relation[];
 
-  /** Get all relations where symbol is the source */
+  /** Get all relations where symbol is the source (outgoing) */
   getOutgoingRelations(symbolId: string): Relation[];
 
-  /** Get all relations where symbol is the target */
+  /** Get all relations where symbol is the target (incoming) */
   getIncomingRelations(symbolId: string): Relation[];
 
   /** Delete a specific relation */
@@ -132,18 +177,29 @@ export interface ProjectBrainStore {
   deleteTagsForSymbol(symbolId: string): void;
 
   // =========================================================================
-  // Bulk Operations
+  // Graph Traversal
   // =========================================================================
 
-  /** Clear all data (for full reindex) */
-  clearAll(): void;
-
-  /** Get statistics about the store */
-  getStats(): {
-    fileCount: number;
-    symbolCount: number;
-    relationCount: number;
-    noteCount: number;
-    tagCount: number;
-  };
+  /**
+   * Get neighboring nodes (symbols or files) connected by relations.
+   * This is the core graph traversal primitive.
+   */
+  neighbors(
+    id: string,
+    opts?: {
+      /** Filter by relation types */
+      edgeKinds?: RelationKind[];
+      /** Direction: incoming, outgoing, or both */
+      direction?: 'in' | 'out' | 'both';
+      /** Maximum number of neighbors to return */
+      limit?: number;
+    }
+  ): SymbolRecord[];
 }
+
+/**
+ * Legacy compatibility: ProjectBrainStore is an alias for ProjectGraph
+ * @deprecated Use ProjectGraph instead
+ */
+export type ProjectBrainStore = ProjectGraph;
+

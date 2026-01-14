@@ -3,5 +3,9 @@
  */
 
 export * from './types';
-export * from './store';
+export * from './projectGraph';
 export * from './sqliteStore';
+
+// Note: ProjectBrainStore is deprecated, use ProjectGraph
+// This alias is kept for backwards compatibility
+export { ProjectGraph as ProjectBrainStore } from './projectGraph';

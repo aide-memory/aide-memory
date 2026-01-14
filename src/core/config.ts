@@ -8,6 +8,25 @@ import crypto from 'crypto';
 import { ProjectConfig } from '../brain/types';
 import { getProjectConfigPath, ensureProjectDirs } from '../storage/paths';
 
+// ============================================================================
+// Global Defaults - Single source of truth for all configurable values
+// ============================================================================
+
+export const AIDE_DEFAULTS = {
+  /** Token budget for both retrieval and context assembly */
+  tokenBudget: 6000,
+  /** Maximum code blocks to return from retrieval */
+  maxBlocks: 10,
+  /** Maximum graph traversal depth */
+  maxDepth: 2,
+  /** Maximum fanout per node during graph traversal */
+  maxFanout: 5,
+  /** Default retrieval strategy */
+  strategy: 'tools' as const,
+  /** Default hybrid mode */
+  hybridMode: 'code' as const,
+} as const;
+
 /**
  * Generate a unique project ID from the root path
  */
@@ -67,11 +86,63 @@ export async function loadOrCreateProjectConfig(
 export function updateProjectConfig(
   config: ProjectConfig,
   updates: Partial<
-    Pick<ProjectConfig, 'model' | 'embeddingModel' | 'ollamaBaseUrl'>
+    Pick<
+      ProjectConfig,
+      | 'model'
+      | 'embeddingModel'
+      | 'ollamaBaseUrl'
+      | 'tokenBudget'
+      | 'maxBlocks'
+      | 'strategy'
+      | 'hybridMode'
+    >
   >
 ): ProjectConfig {
   const updated = { ...config, ...updates };
   const configPath = getProjectConfigPath(config.id);
   fs.writeFileSync(configPath, JSON.stringify(updated, null, 2), 'utf8');
   return updated;
+}
+
+// ============================================================================
+// Effective Settings - Merges project config with defaults and runtime options
+// ============================================================================
+
+export interface RetrievalSettings {
+  tokenBudget: number;
+  maxBlocks: number;
+  maxDepth: number;
+  maxFanout: number;
+  strategy: 'simple' | 'tools' | 'hybrid';
+  hybridMode: 'code' | 'hints';
+}
+
+/**
+ * Get effective retrieval settings.
+ * Priority: runtime options > project config > AIDE_DEFAULTS
+ */
+export function getEffectiveSettings(
+  projectConfig?: ProjectConfig,
+  runtimeOptions?: Partial<RetrievalSettings>
+): RetrievalSettings {
+  return {
+    tokenBudget:
+      runtimeOptions?.tokenBudget ??
+      projectConfig?.tokenBudget ??
+      AIDE_DEFAULTS.tokenBudget,
+    maxBlocks:
+      runtimeOptions?.maxBlocks ??
+      projectConfig?.maxBlocks ??
+      AIDE_DEFAULTS.maxBlocks,
+    maxDepth: runtimeOptions?.maxDepth ?? AIDE_DEFAULTS.maxDepth,
+    maxFanout: runtimeOptions?.maxFanout ?? AIDE_DEFAULTS.maxFanout,
+    strategy:
+      runtimeOptions?.strategy ??
+      projectConfig?.strategy ??
+      AIDE_DEFAULTS.strategy,
+    hybridMode:
+      runtimeOptions?.hybridMode ??
+      projectConfig?.hybridMode ??
+      AIDE_DEFAULTS.hybridMode,
+  };
 }

@@ -1,15 +1,15 @@
 /**
  * Interactive REPL for AIDE
  *
- * Uses the new graph-based retrieval strategy and session management.
+ * Uses retrieval strategies and context assembly.
  */
 
 import readline from 'readline';
 import fs from 'fs';
-import { ui } from './ui';
+import { ui, renderMarkdown, verbose } from './ui';
 import { ProjectConfig, ChatMessage, Note } from '../brain/types';
 import { SQLiteBrainStore } from '../brain/sqliteStore';
-import { GraphTraversalStrategy } from '../retrieval/graphTraversal';
+import { createRetrievalStrategy, RetrievalConfig } from '../retrieval';
 import { SessionManager } from '../session/sessionManager';
 import {
   ContextAssembler,
@@ -17,8 +17,10 @@ import {
   parseSuggestedNotes,
 } from '../context/assembler';
 import { OllamaRuntime } from '../models/localModelClient';
-import { logInfo, logError } from '../core/logger';
+import { logError } from '../core/logger';
 import { getProjectDbPath, getSessionsDir } from '../storage/paths';
+import { TokenBudgetManager } from '../core/tokenBudget';
+import { AIDE_DEFAULTS, getEffectiveSettings } from '../core/config';
 
 const MAX_HISTORY_MESSAGES = 8;
 
@@ -27,6 +29,64 @@ export interface ReplOptions {
   newSession?: boolean;
   /** Clear chat history before starting (keeps focus) */
   clearHistory?: boolean;
+  /** Retrieval strategy to use */
+  strategy?: RetrievalConfig['strategy'];
+  /** Hybrid mode: 'code' (full code upfront) or 'hints' (entry points only) */
+  hybridMode?: 'code' | 'hints';
+  /** Token budget for context */
+  tokenBudget?: number;
+  /** Maximum number of code blocks to include */
+  maxBlocks?: number;
+  /** Log full context sent to model */
+  verbose?: boolean;
+}
+
+/**
+ * Log verbose details about what's being sent to the model
+ */
+function logVerbose(messages: ChatMessage[], budget: TokenBudgetManager): void {
+  const systemMsg = messages.find((m) => m.role === 'system');
+  // Find the LAST user message (the current question with context)
+  const userMsgs = messages.filter((m) => m.role === 'user');
+  const userMsg = userMsgs[userMsgs.length - 1];
+  const historyMsgs = messages.filter(
+    (m) => m.role !== 'system' && m !== userMsg
+  );
+
+  verbose.header('SENDING TO MODEL');
+
+  if (systemMsg) {
+    const tokens = budget.estimate(systemMsg.content);
+    verbose.label('System prompt', `${tokens} tokens`);
+    verbose.text(systemMsg.content);
+    verbose.separator();
+  }
+
+  if (historyMsgs.length > 0) {
+    const historyTokens = historyMsgs.reduce(
+      (sum, m) => sum + budget.estimate(m.content),
+      0
+    );
+    verbose.label(
+      'History',
+      `${historyMsgs.length} messages, ${historyTokens} tokens`
+    );
+    verbose.separator();
+  }
+
+  if (userMsg) {
+    const tokens = budget.estimate(userMsg.content);
+    verbose.label('User message with context', `${tokens} tokens`);
+    verbose.content(userMsg.content);
+    verbose.separator();
+  }
+
+  const totalTokens = messages.reduce(
+    (sum, m) => sum + budget.estimate(m.content),
+    0
+  );
+  verbose.label('Total tokens', totalTokens);
+  verbose.footer();
 }
 
 export async function startRepl(
@@ -48,11 +108,31 @@ export async function startRepl(
 
   const model = new OllamaRuntime(config);
 
-  const strategy = new GraphTraversalStrategy(store, {
-    maxDepth: 2,
-    maxFanout: 5,
-    tokenBudget: 4000,
+  // Get effective settings (project config + CLI options + defaults)
+  const settings = getEffectiveSettings(config, {
+    strategy: options.strategy,
+    hybridMode: options.hybridMode,
+    tokenBudget: options.tokenBudget,
+    maxBlocks: options.maxBlocks,
   });
+
+  // Create retrieval strategy using effective settings
+  const retrieval = createRetrievalStrategy(
+    {
+      strategy: settings.strategy,
+      hybridMode: settings.hybridMode,
+      maxDepth: settings.maxDepth,
+      maxFanout: settings.maxFanout,
+      tokenBudget: settings.tokenBudget,
+      maxBlocks: settings.maxBlocks,
+    },
+    model, // Pass runtime for tool-based retrieval
+    undefined, // budget
+    { verbose: options.verbose } // Pass verbose for tool logging
+  );
+
+  // Token budget manager for verbose logging
+  const budget = new TokenBudgetManager(8000);
 
   // Try to resume previous session unless --new flag is set
   let session: SessionManager;
@@ -81,16 +161,18 @@ export async function startRepl(
     session.save();
   }
 
+  // Create context assembler using effective settings
   const assembler = new ContextAssembler({
     projectRoot: config.rootPath,
+    maxContextTokens: settings.tokenBudget,
   });
 
   // Print header
   const stats = store.getStats();
-  console.log(ui.heading(`\nAIDE V0 - ${config.rootPath}`));
+  console.log(ui.heading(`\nAIDE - ${config.rootPath}`));
   console.log(
     ui.info(
-      `Index: ${stats.fileCount} files, ${stats.symbolCount} symbols, ${stats.relationCount} relations`
+      `Index: ${stats.fileCount} files, ${stats.symbolCount} symbols, ${stats.blockCount} blocks`
     )
   );
 
@@ -145,6 +227,7 @@ ${ui.heading('Tips:')}
 ${ui.heading('Index Statistics:')}
   Files:     ${s.fileCount}
   Symbols:   ${s.symbolCount}
+  Blocks:    ${s.blockCount}
   Relations: ${s.relationCount}
   Notes:     ${s.noteCount}
   Tags:      ${s.tagCount}
@@ -306,41 +389,58 @@ ${ui.heading('Index Statistics:')}
         // Save immediately after user prompt (preserves question if model crashes)
         session.save();
 
-        // Retrieve context using graph traversal
-        const slice = await strategy.retrieve({
-          question: trimmed,
-          focusSymbolIds: session.getFocusSymbolIds(),
-          focusFileIds: session.getFocusFileIds(),
-        });
+        // Retrieve context using configured strategy
+        const result = await retrieval.retrieve(
+          {
+            question: trimmed,
+            focusSymbolIds: session.getFocusSymbolIds(),
+            focusFileIds: session.getFocusFileIds(),
+          },
+          store
+        );
 
         // Show what we found (debug info)
         const contextInfo = [];
-        if (slice.central.length > 0) {
-          contextInfo.push(`${slice.central.length} central`);
+        if (result.symbols.length > 0) {
+          contextInfo.push(`${result.symbols.length} symbols`);
         }
-        if (slice.callers.length > 0) {
-          contextInfo.push(`${slice.callers.length} callers`);
+        if (result.blocks.length > 0) {
+          contextInfo.push(`${result.blocks.length} blocks`);
         }
-        if (slice.callees.length > 0) {
-          contextInfo.push(`${slice.callees.length} callees`);
-        }
-        if (slice.tests.length > 0) {
-          contextInfo.push(`${slice.tests.length} tests`);
+        if (result.files.length > 0) {
+          contextInfo.push(`${result.files.length} files`);
         }
 
         if (contextInfo.length > 0) {
-          console.log(ui.info(`[context: ${contextInfo.join(', ')}]`));
+          console.log(
+            ui.info(
+              `[context: ${contextInfo.join(', ')} via ${result.strategy}]`
+            )
+          );
         }
 
         // Assemble LLM context
-        const context = assembler.assemble(trimmed, slice, session.getState());
+        const assembled = assembler.assemble(
+          trimmed,
+          result,
+          session.getState()
+        );
 
-        // Build messages for LLM using session history
+        // AssembledContext.messages already includes system prompt
+        // Just add recent history before the user message
         const recentHistory = session.getHistory().slice(-MAX_HISTORY_MESSAGES);
+
+        // Build final messages: system + history + user with context
         const messages: ChatMessage[] = [
-          context.systemMessage,
-          ...recentHistory,
+          { role: 'system', content: assembled.systemPrompt },
+          ...recentHistory.slice(0, -1), // Exclude the last user message (it's in assembled.messages)
+          ...assembled.messages.filter((m) => m.role !== 'system'), // User message with context
         ];
+
+        // Verbose logging if enabled
+        if (options.verbose) {
+          logVerbose(messages, budget);
+        }
 
         // Get response
         const response = await model.chat(messages);
@@ -356,8 +456,8 @@ ${ui.heading('Index Statistics:')}
         session.setLastAnswerSummary(extractAnswerSummary(response.content));
         session.updateFocusFromResponse(response.content);
 
-        // Update focus with central symbols from this query
-        for (const sym of slice.central.slice(0, 3)) {
+        // Update focus with symbols from this query
+        for (const sym of result.symbols.slice(0, 3)) {
           session.addFocusSymbol(sym.id);
         }
 
@@ -381,8 +481,8 @@ ${ui.heading('Index Statistics:')}
           }
         }
 
-        // Print response
-        console.log('\n' + response.content + '\n');
+        // Print response (rendered as markdown via glow)
+        renderMarkdown(response.content);
       } catch (err) {
         logError('Error processing question', err);
       }

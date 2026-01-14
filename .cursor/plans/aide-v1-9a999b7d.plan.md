@@ -1,4 +1,30 @@
-<!-- 9a999b7d-edba-4e1b-8907-31998f79d7cf e12f9379-a1e9-45cb-b6ee-ee7bba9dec77 -->
+---
+name: aide V1 Technical Specification
+overview: ""
+todos:
+  - id: 1efde8c1-1059-4b94-bd32-a82e56d2681e
+    content: Define ProjectGraph interface, update SQLiteBrainStore
+    status: pending
+  - id: 0f971894-b992-49a7-bd29-7970907dffe8
+    content: Set up simple Tree-sitter with vendored queries from nvim-treesitter
+    status: pending
+  - id: a62652b7-981f-45bd-9d3b-e0848bede988
+    content: Implement simple ContentBlock with token-based chunking
+    status: pending
+  - id: da635aac-82dc-4bce-8b62-2a78b44375fb
+    content: Build retrieval strategies (simple/tools/hybrid) with RetrievalResult
+    status: pending
+  - id: 6f01f799-b857-4418-b0f1-ab8c1666d254
+    content: Define AssembledContext, simplify ContextAssembler
+    status: pending
+  - id: bab0c840-78b5-4099-9978-37984ff68b54
+    content: Cross reference all requirements and points of the original spec were met (not just todos and success metrics)
+    status: pending
+  - id: a8c7cb52-0508-4441-81f6-7068d13cb5df
+    content: Simplify overalll
+    status: pending
+---
+
 # aide V1 Technical Specification
 
 ## Executive Summary
@@ -71,13 +97,11 @@ export interface ProjectGraph {
 
 ## 2. Analysis Layer: Tree-sitter with Vendored Queries Implemeting Analysis Interface
 
-
-
 We are using tree-siiter, but should define an interface that does certain things that will eventually output a extraction result, so that if we would like to implement a different mechanism to construct the DB and extraction results we can.
 
 ### Vendored Queries (No Runtime Network Calls)
 
-```
+```javascript
 src/analysis/queries/
 ├── typescript/
 │   ├── tags.scm       # Symbol extraction
@@ -113,6 +137,8 @@ class TreeSitterAnalyzer {
 }
 ```
 
+
+
 ### ExtractionResult (Simplified)
 
 ```typescript
@@ -140,6 +166,8 @@ export type SymbolKind =
   | 'module'
   | 'property';
 ```
+
+
 
 ### BlockKind (Content Types)
 
@@ -173,6 +201,8 @@ export type BlockKind =
   | 'output';     // Cell output
 ```
 
+
+
 ### ContentBlock Interface
 
 ```typescript
@@ -199,6 +229,8 @@ export interface ContentBlock {
   metadata?: Record<string, unknown>;
 }
 ```
+
+
 
 ### Chunking Strategy (Token-Based)
 
@@ -267,6 +299,8 @@ export interface RetrievalStrategy {
 }
 ```
 
+
+
 ### Strategy 1: SimpleGraphRetrieval
 
 **Intent:**
@@ -289,6 +323,8 @@ class SimpleGraphRetrieval implements RetrievalStrategy {
   }
 }
 ```
+
+
 
 
 ### Strategy 2: ToolBasedRetrieval
@@ -314,6 +350,8 @@ class ToolBasedRetrieval implements RetrievalStrategy {
 ```
 
 
+
+
 ### Strategy 3: HybridRetrieval
 
 **Intent:**
@@ -335,9 +373,7 @@ class HybridRetrieval implements RetrievalStrategy {
 ```
 
 
-**Key point:** All three strategies are optional implementations behind the same interface. The rest of the system does not care which one is used.
-
----
+**Key point:** All three strategies are optional implementations behind the same interface. The rest of the system does not care which one is used.---
 
 ## 5. Context Layer: Explicit Contract
 
@@ -351,6 +387,8 @@ export interface AssembledContext {
   tokenEstimate: number;
 }
 ```
+
+
 
 ### ContextAssembler
 
@@ -380,9 +418,7 @@ class ContextAssembler {
 }
 ```
 
-**Explicit contract:** ContextAssembler takes `(question, RetrievalResult, sessionState)` and returns `AssembledContext`, which is the only thing sent to the model. This is where "prep stops" and "model starts".
-
-May help to include a deterministic order that is configurable, for example:
+**Explicit contract:** ContextAssembler takes `(question, RetrievalResult, sessionState)` and returns `AssembledContext`, which is the only thing sent to the model. This is where "prep stops" and "model starts".May help to include a deterministic order that is configurable, for example:
 
 1. Symbol signature
 2. Symbol full block OR chunks
@@ -408,13 +444,11 @@ class TokenBudgetManager {
 }
 ```
 
-Applied uniformly to: system prompt, history, context, tool results.
-
----
+Applied uniformly to: system prompt, history, context, tool results.---
 
 ## 7. Final Architecture
 
-```
+```javascript
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           INDEXING FLOW                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -512,41 +546,7 @@ Applied uniformly to: system prompt, history, context, tool results.
 
 ## 9. Files to Create/Modify
 
-| File | Action |
-
-|------|--------|
-
-| `brain/projectGraph.ts` | **Create** - Graph interface |
-
-| `brain/sqliteStore.ts` | **Update** - Implement ProjectGraph |
-
-| `analysis/treeSitterAnalyzer.ts` | **Create** |
-
-| `analysis/queries/**/*.scm` | **Create** - Vendored from nvim-treesitter |
-
-| `analysis/parser.ts` | **Delete** |
-
-| `analysis/ctagsParser.ts` | **Delete** |
-
-| `core/tokenBudget.ts` | **Create** |
-
-| `brain/types.ts` | **Extend** - BlockKind, ContentBlock |
-
-| `retrieval/types.ts` | **Create** - RetrievalResult |
-
-| `retrieval/simpleGraphRetrieval.ts` | **Create** |
-
-| `retrieval/toolBasedRetrieval.ts` | **Create** |
-
-| `retrieval/hybridRetrieval.ts` | **Create** |
-
-| `retrieval/graphTraversal.ts` | **Delete** |
-
-| `context/types.ts` | **Create** - AssembledContext |
-
-| `context/assembler.ts` | **Simplify** |
-
----
+| File | Action ||------|--------|| `brain/projectGraph.ts` | **Create** - Graph interface || `brain/sqliteStore.ts` | **Update** - Implement ProjectGraph || `analysis/treeSitterAnalyzer.ts` | **Create** || `analysis/queries/**/*.scm` | **Create** - Vendored from nvim-treesitter || `analysis/parser.ts` | **Delete** || `analysis/ctagsParser.ts` | **Delete** || `core/tokenBudget.ts` | **Create** || `brain/types.ts` | **Extend** - BlockKind, ContentBlock || `retrieval/types.ts` | **Create** - RetrievalResult || `retrieval/simpleGraphRetrieval.ts` | **Create** || `retrieval/toolBasedRetrieval.ts` | **Create** || `retrieval/hybridRetrieval.ts` | **Create** || `retrieval/graphTraversal.ts` | **Delete** || `context/types.ts` | **Create** - AssembledContext || `context/assembler.ts` | **Simplify** |---
 
 ## 10. Success Metrics
 
@@ -556,14 +556,3 @@ Applied uniformly to: system prompt, history, context, tool results.
 - Token-based chunking thresholds
 - Unified RetrievalResult from all strategies
 - Explicit AssembledContext contract
-- Model can explore when capable, fallback when not
-
-### To-dos
-
-- [ ] Define ProjectGraph interface, update SQLiteBrainStore
-- [ ] Set up simple Tree-sitter with vendored queries from nvim-treesitter 
-- [ ] Implement simple ContentBlock with token-based chunking
-- [ ] Build retrieval strategies (simple/tools/hybrid) with RetrievalResult
-- [ ] Define AssembledContext, simplify ContextAssembler
-- [ ] Cross reference all requirements and points of the original spec were met (not just todos and success metrics)
-- [ ] Simplify overalll

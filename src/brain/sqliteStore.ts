@@ -1,24 +1,30 @@
 /**
- * SQLite Implementation of ProjectBrainStore
+ * SQLite Implementation of ProjectGraph
  *
  * Uses better-sqlite3 for synchronous, fast operations.
+ * Implements the unified ProjectGraph interface.
  */
 
 import Database from 'better-sqlite3';
-import { ProjectBrainStore } from './store';
+import { ProjectGraph } from './projectGraph';
 import {
   FileRecord,
   FileFilter,
   SymbolRecord,
   SymbolFilter,
+  ContentBlock,
+  BlockFilter,
+  BlockKind,
   Relation,
   RelationFilter,
+  RelationKind,
   Note,
   NoteFilter,
   Tag,
+  GraphStats,
 } from './types';
 
-export class SQLiteBrainStore implements ProjectBrainStore {
+export class SQLiteBrainStore implements ProjectGraph {
   private db: Database.Database;
 
   constructor(dbPath: string) {
@@ -52,6 +58,26 @@ export class SQLiteBrainStore implements ProjectBrainStore {
         signature TEXT,
         doc_comment TEXT,
         FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS content_blocks (
+        id TEXT PRIMARY KEY,
+        file_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        symbol_id TEXT,
+        parent_block_id TEXT,
+        is_chunk INTEGER NOT NULL DEFAULT 0,
+        chunk_index INTEGER,
+        full_block_id TEXT,
+        signature TEXT,
+        metadata TEXT,
+        FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
+        FOREIGN KEY (symbol_id) REFERENCES symbols(id) ON DELETE SET NULL,
+        FOREIGN KEY (parent_block_id) REFERENCES content_blocks(id) ON DELETE SET NULL,
+        FOREIGN KEY (full_block_id) REFERENCES content_blocks(id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS relations (
@@ -88,6 +114,11 @@ export class SQLiteBrainStore implements ProjectBrainStore {
       CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
       CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
       CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
+      CREATE INDEX IF NOT EXISTS idx_blocks_file ON content_blocks(file_id);
+      CREATE INDEX IF NOT EXISTS idx_blocks_symbol ON content_blocks(symbol_id);
+      CREATE INDEX IF NOT EXISTS idx_blocks_kind ON content_blocks(kind);
+      CREATE INDEX IF NOT EXISTS idx_blocks_full_block ON content_blocks(full_block_id);
+      CREATE INDEX IF NOT EXISTS idx_blocks_is_chunk ON content_blocks(is_chunk);
       CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source_symbol_id);
       CREATE INDEX IF NOT EXISTS idx_relations_target ON relations(target_symbol_id);
       CREATE INDEX IF NOT EXISTS idx_relations_kind ON relations(kind);
@@ -95,6 +126,29 @@ export class SQLiteBrainStore implements ProjectBrainStore {
       CREATE INDEX IF NOT EXISTS idx_notes_file ON notes(file_id);
       CREATE INDEX IF NOT EXISTS idx_tags_symbol ON tags(symbol_id);
       CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
+    `);
+
+    // Create FTS virtual table for full-text search on content blocks
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS content_blocks_fts USING fts5(
+        content,
+        content='content_blocks',
+        content_rowid='rowid'
+      );
+
+      -- Triggers to keep FTS index in sync
+      CREATE TRIGGER IF NOT EXISTS content_blocks_ai AFTER INSERT ON content_blocks BEGIN
+        INSERT INTO content_blocks_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS content_blocks_ad AFTER DELETE ON content_blocks BEGIN
+        INSERT INTO content_blocks_fts(content_blocks_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS content_blocks_au AFTER UPDATE ON content_blocks BEGIN
+        INSERT INTO content_blocks_fts(content_blocks_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
+        INSERT INTO content_blocks_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
+      END;
     `);
   }
 
@@ -258,6 +312,165 @@ export class SQLiteBrainStore implements ProjectBrainStore {
 
   deleteSymbolsForFile(fileId: string): void {
     this.db.prepare('DELETE FROM symbols WHERE file_id = ?').run(fileId);
+  }
+
+  // =========================================================================
+  // Content Block Operations
+  // =========================================================================
+
+  upsertBlock(block: ContentBlock): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO content_blocks (
+        id, file_id, kind, start_line, end_line, content,
+        symbol_id, parent_block_id, is_chunk, chunk_index, full_block_id,
+        signature, metadata
+      )
+      VALUES (
+        @id, @fileId, @kind, @startLine, @endLine, @content,
+        @symbolId, @parentBlockId, @isChunk, @chunkIndex, @fullBlockId,
+        @signature, @metadata
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        file_id = @fileId,
+        kind = @kind,
+        start_line = @startLine,
+        end_line = @endLine,
+        content = @content,
+        symbol_id = @symbolId,
+        parent_block_id = @parentBlockId,
+        is_chunk = @isChunk,
+        chunk_index = @chunkIndex,
+        full_block_id = @fullBlockId,
+        signature = @signature,
+        metadata = @metadata
+    `);
+    stmt.run({
+      id: block.id,
+      fileId: block.fileId,
+      kind: block.kind,
+      startLine: block.startLine,
+      endLine: block.endLine,
+      content: block.content,
+      symbolId: block.symbolId ?? null,
+      parentBlockId: block.parentBlockId ?? null,
+      isChunk: block.isChunk ? 1 : 0,
+      chunkIndex: block.chunkIndex ?? null,
+      fullBlockId: block.fullBlockId ?? null,
+      signature: block.signature ?? null,
+      metadata: block.metadata ? JSON.stringify(block.metadata) : null,
+    });
+  }
+
+  getBlock(id: string): ContentBlock | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM content_blocks WHERE id = ?')
+      .get(id);
+    return row ? this.mapBlockRow(row) : undefined;
+  }
+
+  findBlocks(filter?: BlockFilter): ContentBlock[] {
+    if (!filter) {
+      return this.mapBlockRows(
+        this.db.prepare('SELECT * FROM content_blocks').all()
+      );
+    }
+
+    const conditions: string[] = [];
+    const params: Record<string, unknown> = {};
+
+    if (filter.id) {
+      conditions.push('id = @id');
+      params.id = filter.id;
+    }
+    if (filter.fileId) {
+      conditions.push('file_id = @fileId');
+      params.fileId = filter.fileId;
+    }
+    if (filter.symbolId) {
+      conditions.push('symbol_id = @symbolId');
+      params.symbolId = filter.symbolId;
+    }
+    if (filter.kind) {
+      conditions.push('kind = @kind');
+      params.kind = filter.kind;
+    }
+    if (filter.kinds && filter.kinds.length > 0) {
+      const placeholders = filter.kinds.map((_, i) => `@kind${i}`).join(', ');
+      conditions.push(`kind IN (${placeholders})`);
+      filter.kinds.forEach((k, i) => {
+        params[`kind${i}`] = k;
+      });
+    }
+    if (filter.isChunk !== undefined) {
+      conditions.push('is_chunk = @isChunk');
+      params.isChunk = filter.isChunk ? 1 : 0;
+    }
+    if (filter.fullBlockId) {
+      conditions.push('full_block_id = @fullBlockId');
+      params.fullBlockId = filter.fullBlockId;
+    }
+
+    const where =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const rows = this.db
+      .prepare(`SELECT * FROM content_blocks ${where}`)
+      .all(params);
+    return this.mapBlockRows(rows);
+  }
+
+  getBlocksForSymbol(symbolId: string): ContentBlock[] {
+    const rows = this.db
+      .prepare('SELECT * FROM content_blocks WHERE symbol_id = ?')
+      .all(symbolId);
+    return this.mapBlockRows(rows);
+  }
+
+  getBlocksForFile(fileId: string): ContentBlock[] {
+    const rows = this.db
+      .prepare('SELECT * FROM content_blocks WHERE file_id = ?')
+      .all(fileId);
+    return this.mapBlockRows(rows);
+  }
+
+  getChunksForBlock(fullBlockId: string): ContentBlock[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM content_blocks WHERE full_block_id = ? ORDER BY chunk_index'
+      )
+      .all(fullBlockId);
+    return this.mapBlockRows(rows);
+  }
+
+  searchBlocks(query: string, kinds?: BlockKind[]): ContentBlock[] {
+    let sql = `
+      SELECT cb.* FROM content_blocks cb
+      JOIN content_blocks_fts fts ON cb.rowid = fts.rowid
+      WHERE content_blocks_fts MATCH ?
+    `;
+    const params: unknown[] = [query];
+
+    if (kinds && kinds.length > 0) {
+      const placeholders = kinds.map(() => '?').join(', ');
+      sql += ` AND cb.kind IN (${placeholders})`;
+      params.push(...kinds);
+    }
+
+    const rows = this.db.prepare(sql).all(...params);
+    return this.mapBlockRows(rows);
+  }
+
+  deleteBlock(id: string): void {
+    this.db.prepare('DELETE FROM content_blocks WHERE id = ?').run(id);
+  }
+
+  deleteBlocksForFile(fileId: string): void {
+    this.db.prepare('DELETE FROM content_blocks WHERE file_id = ?').run(fileId);
+  }
+
+  deleteBlocksForSymbol(symbolId: string): void {
+    this.db
+      .prepare('DELETE FROM content_blocks WHERE symbol_id = ?')
+      .run(symbolId);
   }
 
   // =========================================================================
@@ -456,6 +669,78 @@ export class SQLiteBrainStore implements ProjectBrainStore {
   }
 
   // =========================================================================
+  // Graph Traversal
+  // =========================================================================
+
+  neighbors(
+    id: string,
+    opts?: {
+      edgeKinds?: RelationKind[];
+      direction?: 'in' | 'out' | 'both';
+      limit?: number;
+    }
+  ): SymbolRecord[] {
+    const direction = opts?.direction ?? 'both';
+    const limit = opts?.limit ?? 50;
+    const edgeKinds = opts?.edgeKinds;
+
+    const neighborIds = new Set<string>();
+
+    // Get outgoing neighbors (this symbol -> others)
+    if (direction === 'out' || direction === 'both') {
+      let outQuery =
+        'SELECT target_symbol_id FROM relations WHERE source_symbol_id = ?';
+      const outParams: unknown[] = [id];
+
+      if (edgeKinds && edgeKinds.length > 0) {
+        const placeholders = edgeKinds.map(() => '?').join(', ');
+        outQuery += ` AND kind IN (${placeholders})`;
+        outParams.push(...edgeKinds);
+      }
+
+      const outRows = this.db.prepare(outQuery).all(...outParams) as Array<{
+        target_symbol_id: string;
+      }>;
+      for (const row of outRows) {
+        neighborIds.add(row.target_symbol_id);
+      }
+    }
+
+    // Get incoming neighbors (others -> this symbol)
+    if (direction === 'in' || direction === 'both') {
+      let inQuery =
+        'SELECT source_symbol_id FROM relations WHERE target_symbol_id = ?';
+      const inParams: unknown[] = [id];
+
+      if (edgeKinds && edgeKinds.length > 0) {
+        const placeholders = edgeKinds.map(() => '?').join(', ');
+        inQuery += ` AND kind IN (${placeholders})`;
+        inParams.push(...edgeKinds);
+      }
+
+      const inRows = this.db.prepare(inQuery).all(...inParams) as Array<{
+        source_symbol_id: string;
+      }>;
+      for (const row of inRows) {
+        neighborIds.add(row.source_symbol_id);
+      }
+    }
+
+    // Fetch the actual symbol records
+    const neighbors: SymbolRecord[] = [];
+    const ids = Array.from(neighborIds).slice(0, limit);
+
+    for (const neighborId of ids) {
+      const symbol = this.getSymbol(neighborId);
+      if (symbol) {
+        neighbors.push(symbol);
+      }
+    }
+
+    return neighbors;
+  }
+
+  // =========================================================================
   // Bulk Operations
   // =========================================================================
 
@@ -464,18 +749,13 @@ export class SQLiteBrainStore implements ProjectBrainStore {
       DELETE FROM tags;
       DELETE FROM notes;
       DELETE FROM relations;
+      DELETE FROM content_blocks;
       DELETE FROM symbols;
       DELETE FROM files;
     `);
   }
 
-  getStats(): {
-    fileCount: number;
-    symbolCount: number;
-    relationCount: number;
-    noteCount: number;
-    tagCount: number;
-  } {
+  getStats(): GraphStats {
     const fileCount = (
       this.db.prepare('SELECT COUNT(*) as count FROM files').get() as {
         count: number;
@@ -483,6 +763,11 @@ export class SQLiteBrainStore implements ProjectBrainStore {
     ).count;
     const symbolCount = (
       this.db.prepare('SELECT COUNT(*) as count FROM symbols').get() as {
+        count: number;
+      }
+    ).count;
+    const blockCount = (
+      this.db.prepare('SELECT COUNT(*) as count FROM content_blocks').get() as {
         count: number;
       }
     ).count;
@@ -502,7 +787,14 @@ export class SQLiteBrainStore implements ProjectBrainStore {
       }
     ).count;
 
-    return { fileCount, symbolCount, relationCount, noteCount, tagCount };
+    return {
+      fileCount,
+      symbolCount,
+      blockCount,
+      relationCount,
+      noteCount,
+      tagCount,
+    };
   }
 
   // =========================================================================
@@ -541,6 +833,32 @@ export class SQLiteBrainStore implements ProjectBrainStore {
 
   private mapSymbolRows(rows: unknown[]): SymbolRecord[] {
     return rows.map((r) => this.mapSymbolRow(r));
+  }
+
+  private mapBlockRow(row: unknown): ContentBlock {
+    const r = row as Record<string, unknown>;
+    return {
+      id: r.id as string,
+      fileId: r.file_id as string,
+      kind: r.kind as BlockKind,
+      startLine: r.start_line as number,
+      endLine: r.end_line as number,
+      content: r.content as string,
+      symbolId: (r.symbol_id as string) || undefined,
+      parentBlockId: (r.parent_block_id as string) || undefined,
+      isChunk: r.is_chunk === 1,
+      chunkIndex:
+        r.chunk_index !== null ? (r.chunk_index as number) : undefined,
+      fullBlockId: (r.full_block_id as string) || undefined,
+      signature: (r.signature as string) || undefined,
+      metadata: r.metadata
+        ? (JSON.parse(r.metadata as string) as Record<string, unknown>)
+        : undefined,
+    };
+  }
+
+  private mapBlockRows(rows: unknown[]): ContentBlock[] {
+    return rows.map((r) => this.mapBlockRow(r));
   }
 
   private mapRelationRow(row: unknown): Relation {

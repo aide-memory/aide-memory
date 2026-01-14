@@ -13,13 +13,14 @@
 
 import { Command } from 'commander';
 import path from 'path';
-import { loadOrCreateProjectConfig } from '../core/config';
+import { loadOrCreateProjectConfig, AIDE_DEFAULTS } from '../core/config';
 import { logInfo, logError } from '../core/logger';
 import { initProject } from './commands/init';
 import { reindexProject } from './commands/reindex';
 import { watchProject } from './commands/watch';
 import { askQuestion } from './commands/ask';
 import { startRepl } from './repl';
+import { startWebServer } from '../web/server';
 
 const program = new Command();
 
@@ -100,8 +101,22 @@ program
   .option('-p, --path <path>', 'Project root path', process.cwd())
   .option('-d, --depth <depth>', 'Graph traversal depth', '2')
   .option('-f, --fanout <fanout>', 'Max symbols per relation', '5')
-  .option('-t, --tokens <tokens>', 'Token budget for context', '4000')
-  .option('--debug', 'Print debug information')
+  .option(
+    '-t, --tokens <tokens>',
+    'Token budget for context (legacy alias)',
+    '6000'
+  )
+  .option('--token-budget <budget>', 'Token budget for context', '6000')
+  .option('--max-blocks <blocks>', 'Max code blocks to include', '10')
+  .option(
+    '-s, --strategy <strategy>',
+    'Retrieval strategy: simple, tools, hybrid'
+  )
+  .option(
+    '--hybrid-mode <mode>',
+    'Hybrid mode: code (full code upfront) or hints (entry points only)'
+  )
+  .option('--debug', 'Print debug information (includes verbose logging)')
   .action(
     async (
       question: string,
@@ -110,6 +125,10 @@ program
         depth?: string;
         fanout?: string;
         tokens?: string;
+        tokenBudget?: string;
+        maxBlocks?: string;
+        strategy?: string;
+        hybridMode?: string;
         debug?: boolean;
       }
     ) => {
@@ -117,14 +136,71 @@ program
         const rootPath = path.resolve(options.path || process.cwd());
         const config = await loadOrCreateProjectConfig(rootPath);
 
+        // Use tokenBudget if specified, fall back to tokens (legacy), then default
+        const tokenBudget = parseInt(
+          options.tokenBudget ||
+            options.tokens ||
+            String(AIDE_DEFAULTS.tokenBudget),
+          10
+        );
+        const maxBlocks = parseInt(
+          options.maxBlocks || String(AIDE_DEFAULTS.maxBlocks),
+          10
+        );
+
         await askQuestion(config, question, {
           depth: parseInt(options.depth || '2', 10),
           fanout: parseInt(options.fanout || '5', 10),
-          tokenBudget: parseInt(options.tokens || '4000', 10),
+          tokenBudget,
+          maxBlocks,
+          strategy: options.strategy as 'simple' | 'tools' | 'hybrid',
+          hybridMode: options.hybridMode as 'code' | 'hints',
           debug: options.debug,
         });
       } catch (err) {
         logError('Ask failed', err);
+        process.exit(1);
+      }
+    }
+  );
+
+// aide web [path] - Start web interface
+program
+  .command('web')
+  .description('Start web interface with markdown rendering')
+  .argument('[path]', 'Project root path', process.cwd())
+  .option('-p, --port <port>', 'Server port', '3000')
+  .option('-o, --open', 'Open browser automatically')
+  .action(
+    async (
+      projectPath: string,
+      options: {
+        port?: string;
+        open?: boolean;
+      }
+    ) => {
+      try {
+        const rootPath = path.resolve(projectPath);
+        logInfo(`Starting AIDE Web for: ${rootPath}`);
+
+        const config = await loadOrCreateProjectConfig(rootPath);
+
+        // Check if init is needed
+        const fs = await import('fs');
+        const { getProjectDbPath } = await import('../storage/paths');
+        const dbPath = getProjectDbPath(config.id);
+
+        if (!fs.existsSync(dbPath)) {
+          logInfo('Project not indexed. Running init...');
+          await initProject(config);
+        }
+
+        await startWebServer(config, {
+          port: parseInt(options.port || '3000', 10),
+          open: options.open,
+        });
+      } catch (err) {
+        logError('Web server failed', err);
         process.exit(1);
       }
     }
@@ -136,10 +212,30 @@ program
   .option('--no-init', 'Skip auto-init if not indexed')
   .option('-n, --new', 'Start a new session instead of resuming')
   .option('--clear-history', 'Clear chat history before starting')
+  .option(
+    '-s, --strategy <strategy>',
+    'Retrieval strategy: simple, tools, hybrid'
+  )
+  .option(
+    '--hybrid-mode <mode>',
+    'Hybrid mode: code (full code upfront) or hints (entry points only)'
+  )
+  .option('--token-budget <budget>', 'Token budget for context', '6000')
+  .option('--max-blocks <blocks>', 'Max code blocks to include', '10')
+  .option('-v, --verbose', 'Log full context sent to model')
   .action(
     async (
       projectPath: string,
-      options: { init?: boolean; new?: boolean; clearHistory?: boolean }
+      options: {
+        init?: boolean;
+        new?: boolean;
+        clearHistory?: boolean;
+        strategy?: string;
+        hybridMode?: string;
+        tokenBudget?: string;
+        maxBlocks?: string;
+        verbose?: boolean;
+      }
     ) => {
       try {
         const rootPath = path.resolve(projectPath);
@@ -165,6 +261,15 @@ program
         await startRepl(config, {
           newSession: options.new,
           clearHistory: options.clearHistory,
+          strategy: options.strategy as 'simple' | 'tools' | 'hybrid',
+          hybridMode: options.hybridMode as 'code' | 'hints',
+          tokenBudget: options.tokenBudget
+            ? parseInt(options.tokenBudget, 10)
+            : undefined,
+          maxBlocks: options.maxBlocks
+            ? parseInt(options.maxBlocks, 10)
+            : undefined,
+          verbose: options.verbose,
         });
       } catch (err) {
         logError('Startup failed', err);

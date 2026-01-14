@@ -121,6 +121,77 @@ export interface TagFilter {
 }
 
 // ============================================================================
+// Content Blocks
+// ============================================================================
+
+export type BlockKind =
+  // Code content
+  | 'code' // Function/class/method body
+  | 'import' // Import statements
+  | 'export' // Export statements
+
+  // Documentation
+  | 'comment' // Standalone comments
+  | 'docstring' // JSDoc, docstring, rustdoc
+  | 'todo' // TODO/FIXME markers
+
+  // Non-code
+  | 'markdown' // Markdown content
+  | 'prose' // Plain text
+  | 'config' // Config files (JSON, YAML)
+  | 'data' // Data structures
+
+  // Notebook
+  | 'cell' // Notebook cell
+  | 'output'; // Cell output
+
+export interface ContentBlock {
+  id: string;
+  fileId: string;
+  kind: BlockKind;
+  startLine: number;
+  endLine: number;
+  content: string;
+
+  // Linkage
+  symbolId?: string; // Associated symbol (if code block)
+  parentBlockId?: string; // Parent block (for nesting)
+
+  // Chunking
+  isChunk: boolean;
+  chunkIndex?: number;
+  fullBlockId?: string; // Reference to full block
+
+  // Quick reference
+  signature?: string;
+
+  metadata?: Record<string, unknown>;
+}
+
+export interface BlockFilter {
+  id?: string;
+  fileId?: string;
+  symbolId?: string;
+  kind?: BlockKind;
+  kinds?: BlockKind[];
+  isChunk?: boolean;
+  fullBlockId?: string;
+}
+
+// ============================================================================
+// Graph Stats
+// ============================================================================
+
+export interface GraphStats {
+  fileCount: number;
+  symbolCount: number;
+  blockCount: number;
+  relationCount: number;
+  noteCount: number;
+  tagCount: number;
+}
+
+// ============================================================================
 // Retrieval Types
 // ============================================================================
 
@@ -169,6 +240,12 @@ export interface ProjectConfig {
   model: string;
   embeddingModel: string;
   ollamaBaseUrl: string;
+
+  // Retrieval settings (optional - falls back to AIDE_DEFAULTS)
+  tokenBudget?: number;
+  maxBlocks?: number;
+  strategy?: 'simple' | 'tools' | 'hybrid';
+  hybridMode?: 'code' | 'hints';
 }
 
 // ============================================================================
@@ -178,6 +255,12 @@ export interface ProjectConfig {
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  metadata?: {
+    strategy?: string;
+    hybridMode?: string;
+    symbolCount?: number;
+    blockCount?: number;
+  };
 }
 
 export interface ChatResponse {

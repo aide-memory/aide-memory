@@ -18,12 +18,22 @@
     "chalk": "^4.1.2",
     "chokidar": "^3.6.0",
     "commander": "^12.0.0",
+    "express": "^5.2.1",
     "fast-glob": "^3.3.3",
-    "ts-morph": "^23.0.0"
+    "marked": "^15.0.12",
+    "marked-terminal": "^7.3.0",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "ts-morph": "^23.0.0",
+    "web-tree-sitter": "^0.25.10",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
+    "@types/express": "^5.0.6",
+    "@types/marked-terminal": "^6.1.1",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.0"
   },
