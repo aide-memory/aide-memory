@@ -443,7 +443,12 @@ function sendMessage(ws: WebSocket, message: WebMessage): void {
 async function handleQuestion(
   ws: WebSocket,
   question: string,
-  options: { strategy?: string; hybridMode?: string; verbose?: boolean },
+  options: {
+    strategy?: string;
+    hybridMode?: string;
+    historyMode?: string;
+    verbose?: boolean;
+  },
   getActiveSession: () => SessionManager | null
 ): Promise<void> {
   const currentSession = getActiveSession();
@@ -468,6 +473,7 @@ async function handleQuestion(
     const settings = getEffectiveSettings(currentConfig, {
       strategy: options.strategy as 'simple' | 'tools' | 'hybrid' | undefined,
       hybridMode: options.hybridMode as 'code' | 'hints' | undefined,
+      historyMode: options.historyMode as 'direct' | 'tools' | undefined,
     });
 
     const retrieval = createRetrievalStrategy(
@@ -481,7 +487,11 @@ async function handleQuestion(
       },
       model,
       undefined,
-      { verbose }
+      {
+        verbose,
+        historyMode: settings.historyMode,
+        historyLimit: settings.historyLimit,
+      }
     );
 
     // Update session
@@ -500,19 +510,56 @@ async function handleQuestion(
       metadata: { logType: 'header' },
     });
 
-    const result = await retrieval.retrieve(
-      {
-        question,
-        focusSymbolIds: currentSession.getFocusSymbolIds(),
-        focusFileIds: currentSession.getFocusFileIds(),
-      },
-      currentStore
-    );
+    // Build retrieval query with conversation history based on mode
+    const sessionHistory = currentSession.getHistory();
 
-    // Log retrieval result
+    // Debug: log session history
+    if (verbose) {
+      sendMessage(ws, {
+        type: 'verbose',
+        content: `Session history: ${sessionHistory.length} messages`,
+        metadata: { logType: 'info' },
+      });
+    }
+
+    const retrievalQuery = {
+      question,
+      focusSymbolIds: currentSession.getFocusSymbolIds(),
+      focusFileIds: currentSession.getFocusFileIds(),
+      // For direct mode: include recent history
+      conversationHistory:
+        settings.historyMode === 'direct'
+          ? sessionHistory.slice(-settings.historyLimit)
+          : sessionHistory, // Tools mode still needs history for the tools
+      // For tools mode: provide session access callbacks
+      listSessions:
+        settings.historyMode === 'tools'
+          ? () => SessionManager.listSessions(sessionsDir)
+          : undefined,
+      loadSessionHistory:
+        settings.historyMode === 'tools'
+          ? (sessionId: string) => {
+              // Load session from disk (currentStore is checked at function start)
+              const session = SessionManager.load(
+                sessionId,
+                sessionsDir,
+                currentStore!,
+                { sessionsDir }
+              );
+              return session ? session.getHistory() : null;
+            }
+          : undefined,
+    };
+
+    const result = await retrieval.retrieve(retrievalQuery, currentStore);
+
+    // Log retrieval result (including conversation context status)
+    const convContextStatus = result.conversationContext
+      ? `${result.conversationContext.messages.length} msgs`
+      : 'NONE';
     sendMessage(ws, {
       type: 'verbose',
-      content: `Found: ${result.symbols.length} symbols, ${result.blocks.length} blocks, ${result.files.length} files`,
+      content: `Found: ${result.symbols.length} symbols, ${result.blocks.length} blocks, ${result.files.length} files | ConversationContext: ${convContextStatus}`,
       metadata: { logType: 'info' },
     });
 
@@ -538,16 +585,66 @@ async function handleQuestion(
       ...assembled.messages.filter((m) => m.role !== 'system'),
     ];
 
-    // Log verbose info
+    // Log verbose info - FINAL PROMPT TO ANSWER MODEL (FULL, NO TRUNCATION)
     if (verbose) {
-      const budget = new TokenBudgetManager(8000);
+      const budget = new TokenBudgetManager(AIDE_DEFAULTS.tokenBudget);
       const totalTokens = messages.reduce(
         (sum, m) => sum + budget.estimate(m.content),
         0
       );
+
+      // Log detailed prompt info
       sendMessage(ws, {
         type: 'verbose',
-        content: `Sending to model: ${totalTokens} tokens`,
+        content: `\n${'='.repeat(
+          60
+        )}\n=== FINAL PROMPT TO ANSWER MODEL ===\n${'='.repeat(60)}`,
+        metadata: { logType: 'header' },
+      });
+
+      // Log FULL system prompt
+      sendMessage(ws, {
+        type: 'verbose',
+        content: `\n--- SYSTEM PROMPT (${budget.estimate(
+          assembled.systemPrompt
+        )} tokens) ---\n${assembled.systemPrompt}\n--- END SYSTEM ---`,
+        metadata: { logType: 'info' },
+      });
+
+      // Log history being sent
+      sendMessage(ws, {
+        type: 'verbose',
+        content: `\n--- HISTORY (${recentHistory.length - 1} messages) ---`,
+        metadata: { logType: 'info' },
+      });
+      for (const msg of recentHistory.slice(0, -1)) {
+        const preview =
+          msg.content.length > 200
+            ? msg.content.slice(0, 200) + '...'
+            : msg.content;
+        sendMessage(ws, {
+          type: 'verbose',
+          content: `[${msg.role}]: ${preview}`,
+          metadata: { logType: 'info' },
+        });
+      }
+
+      // Log FULL user message with context (this is the key one!)
+      const userMsgContent =
+        assembled.messages.find((m) => m.role === 'user')?.content || '';
+      sendMessage(ws, {
+        type: 'verbose',
+        content: `\n--- USER MESSAGE WITH CONTEXT (${budget.estimate(
+          userMsgContent
+        )} tokens) ---\n${userMsgContent}\n--- END USER MESSAGE ---`,
+        metadata: { logType: 'info' },
+      });
+
+      sendMessage(ws, {
+        type: 'verbose',
+        content: `\n${'='.repeat(
+          60
+        )}\nTotal tokens: ${totalTokens}\n${'='.repeat(60)}`,
         metadata: { logType: 'info' },
       });
     }

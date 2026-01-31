@@ -61,20 +61,30 @@ export class ContextAssembler {
     result: RetrievalResult,
     session?: Readonly<SessionState>
   ): AssembledContext {
-    // 1. Get system prompt based on strategy
-    const systemPrompt = this.getSystemPrompt(result.strategy);
+    // Check if we have conversation context from retrieval
+    const hasConversationContext = !!(
+      result.conversationContext &&
+      result.conversationContext.messages.length > 0
+    );
+
+    // 1. Get system prompt based on strategy and context type
+    const systemPrompt = this.getSystemPrompt(result.strategy, hasConversationContext);
     let usedTokens = this.budget.estimate(systemPrompt);
 
-    // 2. Format history (if available)
-    const historyBudget = Math.floor(this.budget.available(usedTokens) * 0.3);
-    const historyMessages = session
-      ? this.formatHistory(session, historyBudget)
-      : [];
-    for (const msg of historyMessages) {
-      usedTokens += this.budget.estimate(msg.content);
+    // 2. Format conversation context (if available from retrieval)
+    // Note: Session history is handled by ask.ts/repl.ts, not here
+    // We only format conversation context when explicitly retrieved by tools
+    let conversationSection = '';
+    if (hasConversationContext) {
+      const convoBudget = Math.floor(this.budget.available(usedTokens) * 0.25);
+      conversationSection = this.formatConversationContext(
+        result.conversationContext!,
+        convoBudget
+      );
+      usedTokens += this.budget.estimate(conversationSection);
     }
 
-    // 3. Format context from retrieval result
+    // 3. Format code context from retrieval result
     const contextBudget = Math.floor(this.budget.available(usedTokens) * 0.9);
     const { contextContent, wasTruncated } = this.formatContext(
       result,
@@ -85,12 +95,15 @@ export class ContextAssembler {
     // 4. Build final messages array
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...historyMessages,
-      {
-        role: 'user',
-        content: this.formatUserMessage(question, contextContent),
-      },
     ];
+
+    // Add the two-layer context (conversation + code) as user message
+    const userContent = this.formatUserMessageWithTwoLayers(
+      question,
+      conversationSection,
+      contextContent
+    );
+    messages.push({ role: 'user', content: userContent });
 
     return {
       systemPrompt,
@@ -109,9 +122,29 @@ export class ContextAssembler {
 
   /**
    * Get system prompt based on strategy
+   * When conversation context is present, adds guidance for using both contexts
    */
-  private getSystemPrompt(strategy: 'simple' | 'tools' | 'hybrid'): string {
-    return SYSTEM_PROMPTS[strategy];
+  private getSystemPrompt(
+    strategy: 'simple' | 'tools' | 'hybrid',
+    hasConversationContext: boolean = false
+  ): string {
+    let basePrompt = SYSTEM_PROMPTS[strategy];
+
+    // Add two-layer context guidance when both are present
+    if (hasConversationContext) {
+      basePrompt += `
+
+TWO CONTEXT SECTIONS IN USER MESSAGE:
+1. <CONVERSATION_HISTORY> - Your previous answers to the user and their follow-up questions.
+2. <CODEBASE_CONTEXT> - Actual source code from the project (NOT your answers).
+
+CRITICAL RULE FOR FOLLOW-UP QUESTIONS:
+- If user asks about previous discussion (e.g., "what did you suggest?", "what did you say?", "explain that"), ONLY answer from <CONVERSATION_HISTORY>
+- The <CODEBASE_CONTEXT> is irrelevant for follow-up questions about our conversation
+- Do NOT mix up what you suggested with what's actually in the code`;
+    }
+
+    return basePrompt;
   }
 
   /**
@@ -322,6 +355,95 @@ ${contextContent}
 </CONTEXT>
 
 ${question}`;
+  }
+
+  /**
+   * Format conversation context from retrieval result
+   * Presents previous discussion in a clear, summarized format
+   */
+  private formatConversationContext(
+    context: { messages: ChatMessage[]; summary?: string },
+    budget: number
+  ): string {
+    if (context.messages.length === 0) {
+      return '';
+    }
+
+    const lines: string[] = [];
+    let usedTokens = 0;
+
+    for (const msg of context.messages) {
+      let formattedMsg: string;
+      
+      if (msg.role === 'user') {
+        const content = this.budget.truncate(msg.content, 300);
+        formattedMsg = `User asked: ${content}`;
+      } else {
+        // Summarize assistant messages to avoid confusion with actual code
+        const summary = this.summarizeAssistantMessage(msg.content);
+        formattedMsg = `You suggested: ${summary}`;
+      }
+
+      const tokens = this.budget.estimate(formattedMsg);
+      if (usedTokens + tokens > budget) {
+        break;
+      }
+
+      lines.push(formattedMsg);
+      usedTokens += tokens;
+    }
+
+    return lines.join('\n\n');
+  }
+
+  /**
+   * Summarize an assistant message for conversation context
+   * Keep enough detail for follow-up questions while being concise
+   */
+  private summarizeAssistantMessage(content: string): string {
+    // Keep code blocks but abbreviate long ones (they contain the actual suggestions)
+    const withAbbreviatedCode = content.replace(
+      /```(\w*)\n([\s\S]{0,150})([\s\S]*?)```/g,
+      (_, lang, start, rest) => rest.length > 0 ? `\`\`\`${lang}\n${start}...\n\`\`\`` : `\`\`\`${lang}\n${start}\`\`\``
+    );
+    
+    // Take more content to preserve context - up to 800 chars
+    const truncated = withAbbreviatedCode.slice(0, 800);
+    
+    return truncated + (content.length > 800 ? '...' : '');
+  }
+
+  /**
+   * Format user message with two-layer context (conversation + code)
+   */
+  private formatUserMessageWithTwoLayers(
+    question: string,
+    conversationSection: string,
+    codeSection: string
+  ): string {
+    const parts: string[] = [];
+
+    // Add conversation context if present
+    if (conversationSection) {
+      parts.push(`<CONVERSATION_HISTORY>
+${conversationSection}
+</CONVERSATION_HISTORY>`);
+    }
+
+    // Add code context if present
+    if (codeSection) {
+      parts.push(`<CODEBASE_CONTEXT>
+${codeSection}
+</CODEBASE_CONTEXT>`);
+    }
+
+    // Add the question
+    if (parts.length > 0) {
+      parts.push(question);
+      return parts.join('\n\n');
+    }
+
+    return question;
   }
 }
 

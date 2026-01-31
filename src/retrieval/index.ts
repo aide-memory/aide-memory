@@ -14,6 +14,9 @@ export {
   ToolCall,
   ToolResult,
   ToolCallRecord,
+  // Two-layer context types
+  CodeContext,
+  ConversationContext,
 } from './types';
 
 // Retrieval strategies
@@ -24,6 +27,8 @@ export {
 export {
   ToolBasedRetrieval,
   RETRIEVAL_TOOLS,
+  CONVERSATION_TOOLS,
+  CONVERSATION_TOOL_LIMITS,
   ToolRetrievalOptions,
 } from './toolBasedRetrieval';
 export {

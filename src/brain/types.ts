@@ -195,6 +195,19 @@ export interface GraphStats {
 // Retrieval Types
 // ============================================================================
 
+// Forward reference for SessionManager to avoid circular imports
+export interface SessionManagerRef {
+  getHistory(): ChatMessage[];
+  getId(): string;
+}
+
+// Forward reference for listing sessions
+export interface SessionListItem {
+  id: string;
+  name: string;
+  updatedAt: string;
+}
+
 export interface RetrievalQuery {
   question: string;
   focusSymbolIds?: string[];
@@ -202,6 +215,18 @@ export interface RetrievalQuery {
   maxDepth?: number;
   maxFanout?: number;
   tokenBudget?: number;
+
+  // Conversation history access
+  /** For direct mode: recent messages to include in retrieval context */
+  conversationHistory?: ChatMessage[];
+  /** For tool-based mode: session manager for cross-session search */
+  sessionManager?: SessionManagerRef;
+  /** Directory containing session files (for cross-session search) */
+  sessionsDir?: string;
+  /** Function to list all sessions (for cross-session search) */
+  listSessions?: () => SessionListItem[];
+  /** Function to load a session's history by ID */
+  loadSessionHistory?: (sessionId: string) => ChatMessage[] | null;
 }
 
 export interface CodeSlice {
@@ -246,6 +271,8 @@ export interface ProjectConfig {
   maxBlocks?: number;
   strategy?: 'simple' | 'tools' | 'hybrid';
   hybridMode?: 'code' | 'hints';
+  historyMode?: 'direct' | 'tools';
+  historyLimit?: number;
 }
 
 // ============================================================================

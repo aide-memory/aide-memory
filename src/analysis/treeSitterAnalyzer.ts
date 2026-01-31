@@ -180,6 +180,7 @@ export class TreeSitterAnalyzer {
       typescript: 'tree-sitter-typescript',
       javascript: 'tree-sitter-javascript',
       tsx: 'tree-sitter-tsx',
+      jsx: 'tree-sitter-javascript', // JSX uses JavaScript parser
       python: 'tree-sitter-python',
       go: 'tree-sitter-go',
       rust: 'tree-sitter-rust',
@@ -195,7 +196,7 @@ export class TreeSitterAnalyzer {
     }
 
     // Try to find the WASM file in node_modules
-    // TypeScript package has nested structure with tsx separate
+    // TypeScript package contains both typescript and tsx WASM files
     const possiblePaths = [
       // Direct package path
       path.join(process.cwd(), 'node_modules', wasmName, `${wasmName}.wasm`),
@@ -206,6 +207,22 @@ export class TreeSitterAnalyzer {
         '..',
         'node_modules',
         wasmName,
+        `${wasmName}.wasm`
+      ),
+      // TSX is inside tree-sitter-typescript package (not a separate package)
+      path.join(
+        process.cwd(),
+        'node_modules',
+        'tree-sitter-typescript',
+        `${wasmName}.wasm`
+      ),
+      // From dist directory for TSX
+      path.join(
+        __dirname,
+        '..',
+        '..',
+        'node_modules',
+        'tree-sitter-typescript',
         `${wasmName}.wasm`
       ),
       // TypeScript nested JS (tree-sitter-typescript contains tree-sitter-javascript)
@@ -252,6 +269,7 @@ export class TreeSitterAnalyzer {
     const queryLangMap: Record<string, string> = {
       typescript: 'typescript',
       tsx: 'typescript',
+      jsx: 'javascript',
       javascript: 'javascript',
       python: 'python',
     };
@@ -585,7 +603,23 @@ export class TreeSitterAnalyzer {
       }
     }
 
-    // Second pass: extract comments, imports, exports
+    // Second pass: extract React hooks (useEffect, useCallback, useMemo, useLayoutEffect)
+    // These are important implementation blocks that aren't captured as symbols
+    // NOTE: We pass an EMPTY set for coveredLines because hooks are always important
+    // even when they're inside a larger symbol block (like a function component)
+    if (language === 'tsx' || language === 'jsx' || language === 'typescript' || language === 'javascript') {
+      const hookCoveredLines = new Set<number>(); // Hooks are always extracted
+      const hookBlocks = this.extractReactHooks(tree, lines, fileId, hookCoveredLines);
+      blocks.push(...hookBlocks);
+      // Now mark hook lines as covered so comments inside hooks aren't duplicated
+      for (const block of hookBlocks) {
+        for (let i = block.startLine; i <= block.endLine; i++) {
+          coveredLines.add(i);
+        }
+      }
+    }
+
+    // Third pass: extract comments, imports, exports
     const visit = () => {
       const node = cursor.currentNode;
       const block = this.nodeToBlock(
@@ -608,6 +642,103 @@ export class TreeSitterAnalyzer {
     };
 
     visit();
+    return blocks;
+  }
+
+  /**
+   * Extract React hook calls as code blocks
+   * Hooks like useEffect, useCallback, useMemo, useLayoutEffect contain important implementation logic
+   */
+  private extractReactHooks(
+    tree: TreeSitterTree,
+    lines: string[],
+    fileId: string,
+    coveredLines: Set<number>
+  ): ContentBlock[] {
+    const blocks: ContentBlock[] = [];
+    const hookNames = new Set([
+      'useEffect',
+      'useLayoutEffect',
+      'useCallback',
+      'useMemo',
+      'useReducer',
+      'useImperativeHandle',
+    ]);
+
+    const visitNode = (node: TreeSitterNode) => {
+      // Look for call expressions
+      if (node.type === 'call_expression' || node.type === 'expression_statement') {
+        let callNode = node;
+        
+        // If this is an expression_statement, get the call_expression child
+        if (node.type === 'expression_statement') {
+          const child = node.namedChildren.find(c => c.type === 'call_expression');
+          if (child) {
+            callNode = child;
+          } else {
+            // Not a call expression, skip
+            for (const child of node.namedChildren) {
+              visitNode(child);
+            }
+            return;
+          }
+        }
+
+        // Get the function being called
+        const funcNode = callNode.childForFieldName('function') || callNode.namedChildren[0];
+        if (funcNode && hookNames.has(funcNode.text)) {
+          const startLine = node.startPosition.row + 1;
+          const endLine = node.endPosition.row + 1;
+
+          // Check if any line in this range is already covered
+          let alreadyCovered = false;
+          for (let i = startLine; i <= endLine; i++) {
+            if (coveredLines.has(i)) {
+              alreadyCovered = true;
+              break;
+            }
+          }
+
+          if (!alreadyCovered) {
+            const content = lines.slice(startLine - 1, endLine).join('\n');
+            
+            // Create signature from hook name and dependencies
+            const argsNode = callNode.childForFieldName('arguments');
+            let signature = funcNode.text + '(...)';
+            if (argsNode && argsNode.namedChildren.length > 1) {
+              // Second argument is usually the dependency array
+              const depsNode = argsNode.namedChildren[1];
+              if (depsNode && depsNode.type === 'array') {
+                signature = `${funcNode.text}(..., [${depsNode.namedChildren.map(n => n.text).join(', ')}])`;
+              }
+            }
+
+            blocks.push({
+              id: this.generateBlockId(fileId, startLine, 'hook'),
+              fileId,
+              kind: 'code',
+              startLine,
+              endLine,
+              content,
+              isChunk: false,
+              signature,
+            });
+
+            // Mark these lines as covered
+            for (let i = startLine; i <= endLine; i++) {
+              coveredLines.add(i);
+            }
+          }
+        }
+      }
+
+      // Recurse into children
+      for (const child of node.namedChildren) {
+        visitNode(child);
+      }
+    };
+
+    visitNode(tree.rootNode);
     return blocks;
   }
 
@@ -896,6 +1027,7 @@ export function isTreeSitterSupported(language: string): boolean {
     'typescript',
     'tsx',
     'javascript',
+    'jsx',
     'python',
     'go',
     'rust',

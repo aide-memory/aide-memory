@@ -10,9 +10,28 @@ import {
   FileRecord,
   Relation,
   RetrievalQuery,
+  ChatMessage,
 } from '../brain/types';
 import { ProjectGraph } from '../brain/projectGraph';
 import { AIDE_DEFAULTS } from '../core/config';
+
+// ============================================================================
+// Context Types - Separated code and conversation context
+// ============================================================================
+
+export interface CodeContext {
+  symbols: SymbolRecord[];
+  blocks: ContentBlock[];
+  files: FileRecord[];
+  relations: Relation[];
+}
+
+export interface ConversationContext {
+  /** Messages from conversation history */
+  messages: ChatMessage[];
+  /** Optional summary of the conversation */
+  summary?: string;
+}
 
 // ============================================================================
 // RetrievalResult - Unified output from all strategies
@@ -42,6 +61,9 @@ export interface RetrievalResult {
 
   /** Priority for context assembly ordering (higher = more important) */
   priority?: number;
+
+  /** Conversation context (separate from code context) */
+  conversationContext?: ConversationContext;
 }
 
 // ============================================================================

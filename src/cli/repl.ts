@@ -33,6 +33,8 @@ export interface ReplOptions {
   strategy?: RetrievalConfig['strategy'];
   /** Hybrid mode: 'code' (full code upfront) or 'hints' (entry points only) */
   hybridMode?: 'code' | 'hints';
+  /** History mode: 'direct' includes history in prompt, 'tools' provides on-demand access */
+  historyMode?: 'direct' | 'tools';
   /** Token budget for context */
   tokenBudget?: number;
   /** Maximum number of code blocks to include */
@@ -112,6 +114,7 @@ export async function startRepl(
   const settings = getEffectiveSettings(config, {
     strategy: options.strategy,
     hybridMode: options.hybridMode,
+    historyMode: options.historyMode,
     tokenBudget: options.tokenBudget,
     maxBlocks: options.maxBlocks,
   });
@@ -128,11 +131,15 @@ export async function startRepl(
     },
     model, // Pass runtime for tool-based retrieval
     undefined, // budget
-    { verbose: options.verbose } // Pass verbose for tool logging
+    {
+      verbose: options.verbose,
+      historyMode: settings.historyMode,
+      historyLimit: settings.historyLimit,
+    }
   );
 
   // Token budget manager for verbose logging
-  const budget = new TokenBudgetManager(8000);
+  const budget = new TokenBudgetManager(AIDE_DEFAULTS.tokenBudget);
 
   // Try to resume previous session unless --new flag is set
   let session: SessionManager;
@@ -389,15 +396,37 @@ ${ui.heading('Index Statistics:')}
         // Save immediately after user prompt (preserves question if model crashes)
         session.save();
 
+        // Build retrieval query with conversation history based on mode
+        const retrievalQuery = {
+          question: trimmed,
+          focusSymbolIds: session.getFocusSymbolIds(),
+          focusFileIds: session.getFocusFileIds(),
+          // For direct mode: include recent history
+          conversationHistory:
+            settings.historyMode === 'direct'
+              ? session.getHistory().slice(-settings.historyLimit)
+              : session.getHistory(), // Tools mode still needs history for the tools
+          // For tools mode: provide session access callbacks
+          listSessions:
+            settings.historyMode === 'tools'
+              ? () => SessionManager.listSessions(sessionsDir)
+              : undefined,
+          loadSessionHistory:
+            settings.historyMode === 'tools'
+              ? (sessionId: string) => {
+                  const loadedSession = SessionManager.load(
+                    sessionId,
+                    sessionsDir,
+                    store,
+                    { sessionsDir }
+                  );
+                  return loadedSession ? loadedSession.getHistory() : null;
+                }
+              : undefined,
+        };
+
         // Retrieve context using configured strategy
-        const result = await retrieval.retrieve(
-          {
-            question: trimmed,
-            focusSymbolIds: session.getFocusSymbolIds(),
-            focusFileIds: session.getFocusFileIds(),
-          },
-          store
-        );
+        const result = await retrieval.retrieve(retrievalQuery, store);
 
         // Show what we found (debug info)
         const contextInfo = [];

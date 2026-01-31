@@ -104,9 +104,13 @@ program
   .option(
     '-t, --tokens <tokens>',
     'Token budget for context (legacy alias)',
-    '6000'
+    String(AIDE_DEFAULTS.tokenBudget)
   )
-  .option('--token-budget <budget>', 'Token budget for context', '6000')
+  .option(
+    '--token-budget <budget>',
+    'Token budget for context',
+    String(AIDE_DEFAULTS.tokenBudget)
+  )
   .option('--max-blocks <blocks>', 'Max code blocks to include', '10')
   .option(
     '-s, --strategy <strategy>',
@@ -115,6 +119,10 @@ program
   .option(
     '--hybrid-mode <mode>',
     'Hybrid mode: code (full code upfront) or hints (entry points only)'
+  )
+  .option(
+    '-H, --history-mode <mode>',
+    'History access: direct (in prompt) or tools (on-demand)'
   )
   .option('--debug', 'Print debug information (includes verbose logging)')
   .action(
@@ -129,6 +137,7 @@ program
         maxBlocks?: string;
         strategy?: string;
         hybridMode?: string;
+        historyMode?: string;
         debug?: boolean;
       }
     ) => {
@@ -155,6 +164,7 @@ program
           maxBlocks,
           strategy: options.strategy as 'simple' | 'tools' | 'hybrid',
           hybridMode: options.hybridMode as 'code' | 'hints',
+          historyMode: options.historyMode as 'direct' | 'tools',
           debug: options.debug,
         });
       } catch (err) {
@@ -220,7 +230,15 @@ program
     '--hybrid-mode <mode>',
     'Hybrid mode: code (full code upfront) or hints (entry points only)'
   )
-  .option('--token-budget <budget>', 'Token budget for context', '6000')
+  .option(
+    '--history-mode <mode>',
+    'History access: direct (in prompt) or tools (on-demand)'
+  )
+  .option(
+    '--token-budget <budget>',
+    'Token budget for context',
+    String(AIDE_DEFAULTS.tokenBudget)
+  )
   .option('--max-blocks <blocks>', 'Max code blocks to include', '10')
   .option('-v, --verbose', 'Log full context sent to model')
   .action(
@@ -232,6 +250,7 @@ program
         clearHistory?: boolean;
         strategy?: string;
         hybridMode?: string;
+        historyMode?: string;
         tokenBudget?: string;
         maxBlocks?: string;
         verbose?: boolean;
@@ -263,6 +282,7 @@ program
           clearHistory: options.clearHistory,
           strategy: options.strategy as 'simple' | 'tools' | 'hybrid',
           hybridMode: options.hybridMode as 'code' | 'hints',
+          historyMode: options.historyMode as 'direct' | 'tools',
           tokenBudget: options.tokenBudget
             ? parseInt(options.tokenBudget, 10)
             : undefined,

@@ -84,6 +84,7 @@ export default function App() {
     'tools'
   );
   const [hybridMode, setHybridMode] = useState<'code' | 'hints'>('code');
+  const [historyMode, setHistoryMode] = useState<'direct' | 'tools'>('tools');
   const [verboseOpen, setVerboseOpen] = useState(true);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -445,7 +446,7 @@ export default function App() {
       JSON.stringify({
         type: 'question',
         content: input.trim(),
-        options: { strategy, hybridMode, verbose: true },
+        options: { strategy, hybridMode, historyMode, verbose: true },
       })
     );
 
@@ -557,6 +558,29 @@ export default function App() {
               </div>
             </div>
           )}
+          <div className="controls-section">
+            <h3>History Mode</h3>
+            <div className="control-options">
+              <label className="control-option">
+                <input
+                  type="radio"
+                  name="historyMode"
+                  checked={historyMode === 'tools'}
+                  onChange={() => setHistoryMode('tools')}
+                />
+                On-demand (tools)
+              </label>
+              <label className="control-option">
+                <input
+                  type="radio"
+                  name="historyMode"
+                  checked={historyMode === 'direct'}
+                  onChange={() => setHistoryMode('direct')}
+                />
+                Always include
+              </label>
+            </div>
+          </div>
           <div className="controls-section">
             <h3>Connection</h3>
             <div

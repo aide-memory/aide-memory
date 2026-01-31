@@ -12,6 +12,7 @@ import {
   RetrievalResult,
   RetrievalConfig,
   DEFAULT_RETRIEVAL_CONFIG,
+  ConversationContext,
 } from './types';
 import {
   SymbolRecord,
@@ -20,6 +21,7 @@ import {
   Relation,
   RetrievalQuery,
   BlockKind,
+  ChatMessage as BrainChatMessage,
 } from '../brain/types';
 import { ProjectGraph } from '../brain/projectGraph';
 import { TokenBudgetManager } from '../core/tokenBudget';
@@ -30,6 +32,25 @@ import {
   ChatMessage,
 } from '../models/types';
 import { verbose as verboseUI } from '../cli/ui';
+
+// ============================================================================
+// Token Limits for Conversation Tools
+// ============================================================================
+
+export const CONVERSATION_TOOL_LIMITS = {
+  /** Max tokens for previous answer */
+  get_previous_answer: 1500,
+  /** Max tokens per message for recent messages */
+  get_recent_messages: 500,
+  /** Max total tokens for conversation search results */
+  search_conversation: 2000,
+  /** Max tokens per session for cross-session search */
+  search_sessions: 1000,
+  /** Max sessions to return in cross-session search */
+  max_sessions: 3,
+  /** Max tokens for direct mode history */
+  direct_history: 1500,
+};
 
 // ============================================================================
 // Tool Definitions (Provider-Agnostic Format)
@@ -66,7 +87,7 @@ export const RETRIEVAL_TOOLS: ToolDefinition[] = [
   {
     name: 'search',
     description:
-      'Search for symbols and code content. Optionally filter by directory.',
+      'Search for symbols and code content. By default searches code blocks only. Add kinds=["code","comment"] to include comments.',
     parameters: {
       type: 'object',
       properties: {
@@ -79,6 +100,12 @@ export const RETRIEVAL_TOOLS: ToolDefinition[] = [
           type: 'string',
           description:
             'Optional: limit search to this directory (e.g., "web/src")',
+        },
+        kinds: {
+          type: 'array',
+          description:
+            'Optional: block kinds to search (default: ["code"]). Options: code, comment, docstring, import, export',
+          items: { type: 'string' },
         },
       },
       required: ['query'],
@@ -164,7 +191,7 @@ export const RETRIEVAL_TOOLS: ToolDefinition[] = [
   {
     name: 'get_symbol_context',
     description:
-      'Get full context for a symbol including its code, comments, and documentation.',
+      'Get full code for a symbol. By default returns only the symbol code, not nearby comments.',
     parameters: {
       type: 'object',
       properties: {
@@ -172,19 +199,30 @@ export const RETRIEVAL_TOOLS: ToolDefinition[] = [
           type: 'string',
           description: 'ID of the symbol',
         },
+        includeNearbyComments: {
+          type: 'boolean',
+          description:
+            'Optional: include nearby comments/docstrings (default: false)',
+        },
       },
       required: ['symbolId'],
     },
   },
   {
     name: 'get_file_content',
-    description: 'Get all symbols and blocks from a specific file.',
+    description: 'Get all symbols and code blocks from a specific file. By default returns code blocks only.',
     parameters: {
       type: 'object',
       properties: {
         filePath: {
           type: 'string',
           description: 'Path to the file (can be partial match)',
+        },
+        kinds: {
+          type: 'array',
+          description:
+            'Optional: block kinds to include (default: ["code"]). Options: code, comment, docstring, import, export',
+          items: { type: 'string' },
         },
       },
       required: ['filePath'],
@@ -207,6 +245,75 @@ export const RETRIEVAL_TOOLS: ToolDefinition[] = [
   },
 ];
 
+// Conversation tools - added dynamically when historyMode is 'tools'
+export const CONVERSATION_TOOLS: ToolDefinition[] = [
+  {
+    name: 'get_previous_answer',
+    description:
+      'Get your previous response in this conversation. Use when user asks "why did you say that?" or references your prior answer.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_recent_messages',
+    description:
+      'Get recent messages from the current conversation. Use to understand conversation context.',
+    parameters: {
+      type: 'object',
+      properties: {
+        count: {
+          type: 'number',
+          description: 'Number of recent messages to retrieve (default: 4)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'search_conversation',
+    description:
+      'Search the current conversation for specific topics or terms.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query to find in conversation history',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'list_sessions',
+    description:
+      'List all available chat sessions. Use when user references previous conversations.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'search_sessions',
+    description:
+      'Search across all sessions for relevant conversations. Use when user asks about something discussed previously.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query to find across all sessions',
+        },
+      },
+      required: ['query'],
+    },
+  },
+];
+
 // ============================================================================
 // ToolBasedRetrieval
 // ============================================================================
@@ -216,6 +323,10 @@ const MAX_TOOL_ITERATIONS = 10;
 export interface ToolRetrievalOptions {
   /** Log tool calls as they happen */
   verbose?: boolean;
+  /** History access mode: 'direct' includes history in prompt, 'tools' provides on-demand access */
+  historyMode?: 'direct' | 'tools';
+  /** For direct mode: how many messages to include */
+  historyLimit?: number;
 }
 
 export class ToolBasedRetrieval implements RetrievalStrategy {
@@ -223,8 +334,10 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
   private budget: TokenBudgetManager;
   private runtime: ToolCapableRuntime;
   private verbose: boolean;
+  private historyMode: 'direct' | 'tools';
+  private historyLimit: number;
 
-  readonly tools = RETRIEVAL_TOOLS;
+  readonly tools: ToolDefinition[];
 
   constructor(
     runtime: ToolCapableRuntime,
@@ -236,6 +349,19 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
     this.config = { ...DEFAULT_RETRIEVAL_CONFIG, ...config };
     this.budget = budget || new TokenBudgetManager(this.config.tokenBudget);
     this.verbose = options?.verbose ?? false;
+    this.historyMode = options?.historyMode ?? 'tools';
+    this.historyLimit = options?.historyLimit ?? 6;
+
+    // Build tools list - include conversation tools if historyMode is 'tools'
+    this.tools =
+      this.historyMode === 'tools'
+        ? [...RETRIEVAL_TOOLS, ...CONVERSATION_TOOLS]
+        : RETRIEVAL_TOOLS;
+
+    // Debug: log constructor options
+    if (this.verbose) {
+      console.log(`[ToolBasedRetrieval] historyMode=${this.historyMode}, tools=${this.tools.length} (conversation tools: ${this.historyMode === 'tools' ? 'included' : 'excluded'})`);
+    }
   }
 
   private log(message: string): void {
@@ -308,6 +434,36 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
   }
 
   /**
+   * Detect if a question is likely about the conversation (not codebase)
+   */
+  private isConversationQuestion(question: string): boolean {
+    const lowerQ = question.toLowerCase();
+    // Patterns that indicate asking about previous conversation
+    const conversationPatterns = [
+      // "what did you suggest" variants
+      /what did you (say|suggest|recommend|mention)/,
+      /what .{0,30} did you (say|suggest|recommend|mention)/,  // "what X did you suggest"
+      /how did you (suggest|say|recommend)/,
+      // "your suggestion" variants
+      /can you (explain|clarify) (that|what you said|your (answer|suggestion))/,
+      /what (was|were) (that|your) (suggestion|approach|fix|solution)/,
+      /what .{0,30} (suggestion|approach|fix|solution)/,  // "what scroll suggestion"
+      // Reference to previous answer
+      /tell me (more )?about what you (said|suggested)/,
+      /remind me what you/,
+      /what do you mean by/,
+      /elaborate on (that|your)/,
+      // Direct references
+      /you (said|suggested|mentioned|recommended)/,
+      /your (answer|response|suggestion|recommendation|fix|solution|approach)/,
+      // Follow-up patterns
+      /explain (that|this|your|the) (fix|solution|approach|suggestion)/,
+      /(that|the) (fix|solution|approach) you/,
+    ];
+    return conversationPatterns.some((p) => p.test(lowerQ));
+  }
+
+  /**
    * Main retrieval method - runs agentic tool-calling loop
    * Tools-only mode: Model must explore to find code
    */
@@ -315,6 +471,34 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
     query: RetrievalQuery,
     graph: ProjectGraph
   ): Promise<RetrievalResult> {
+    // Direct mode optimization: skip exploration for conversation questions
+    if (
+      this.historyMode === 'direct' &&
+      query.conversationHistory &&
+      query.conversationHistory.length > 0 &&
+      this.isConversationQuestion(query.question)
+    ) {
+      this.log(
+        'Detected conversation question in direct mode - skipping codebase exploration'
+      );
+      // Return empty result - conversation context will be added by assembler
+      const historyToInclude = query.conversationHistory.slice(
+        -this.historyLimit
+      );
+      return {
+        symbols: [],
+        blocks: [],
+        files: [],
+        relations: [],
+        strategy: 'tools',
+        tokenEstimate: 0,
+        conversationContext: {
+          messages: historyToInclude,
+          summary: this.formatHistoryForDirectMode(historyToInclude),
+        },
+      };
+    }
+
     const accumulated: AccumulatedResults = {
       symbols: [],
       blocks: [],
@@ -344,13 +528,74 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
     const makeCallKey = (name: string, args: unknown): string =>
       `${name}:${JSON.stringify(args)}`;
 
+    // Check if conversation history is available - only true if there are actual messages
+    // We check for at least one assistant message to ensure it's not just the current user message
+    const hasConversationHistory = !!(
+      query.conversationHistory && 
+      query.conversationHistory.length > 0 &&
+      query.conversationHistory.some(m => m.role === 'assistant')
+    );
+
+    // In both modes, detect conversation follow-up questions and handle appropriately
+    if (hasConversationHistory && this.isConversationQuestion(query.question)) {
+      this.log('Detected conversation follow-up question');
+      const historyToInclude = query.conversationHistory!.slice(-this.historyLimit);
+      
+      if (this.historyMode === 'direct') {
+        // Direct mode: skip exploration entirely
+        this.log('Direct mode: skipping exploration, returning conversation context');
+        return {
+          ...accumulated,
+          strategy: 'tools',
+          tokenEstimate: 0,
+          toolCalls: [],
+          conversationContext: {
+            messages: historyToInclude,
+            summary: this.formatHistoryForDirectMode(historyToInclude),
+          },
+        };
+      }
+      // Tools mode: continue but model should use conversation tools
+    }
+
     // Build initial system message based on mode
-    const systemPrompt = this.buildSystemPrompt(mode, context);
+    const systemPrompt = this.buildSystemPrompt(
+      mode,
+      context,
+      hasConversationHistory
+    );
 
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: query.question },
     ];
+
+    // Direct mode: include conversation history context
+    let questionWithContext = query.question;
+    if (
+      this.historyMode === 'direct' &&
+      query.conversationHistory &&
+      query.conversationHistory.length > 0
+    ) {
+      const historyToInclude = query.conversationHistory.slice(
+        -this.historyLimit
+      );
+      const formattedHistory = this.formatHistoryForDirectMode(historyToInclude);
+      if (formattedHistory) {
+        // Inject conversation context into the question itself
+        // Put the decision instruction FIRST so the model sees it before the context
+        questionWithContext = `FIRST DECIDE: Is my question about your PREVIOUS RESPONSE or about ACTUAL CODE?
+- If about your previous response → call done() immediately (you have the context below)
+- If about actual code → explore the codebase
+
+[PREVIOUS CONVERSATION:
+${formattedHistory}
+]
+
+My question: ${query.question}`;
+      }
+    }
+
+    messages.push({ role: 'user', content: questionWithContext });
 
     let iteration = 0;
     let done = false;
@@ -361,11 +606,13 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
     this.log('Starting agentic exploration...');
 
     // Log initial messages sent to model
+    const allSystemContent = messages
+      .filter((m) => m.role === 'system')
+      .map((m) => m.content)
+      .join('\n\n---\n\n');
     this.logVerbose(
       'INITIAL PROMPT TO MODEL',
-      `System:\n${systemPrompt}\n\nUser:\n${
-        query.question
-      }\n\nTools available: ${this.tools.map((t) => t.name).join(', ')}`
+      `System:\n${allSystemContent}\n\nUser:\n${questionWithContext}\n\nTools available: ${this.tools.map((t) => t.name).join(', ')}`
     );
 
     while (!done && iteration < MAX_TOOL_ITERATIONS) {
@@ -391,23 +638,35 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
 
       // If model returns content without tool calls, check if we should nudge it to continue
       if (!response.toolCalls || response.toolCalls.length === 0) {
-        // If we haven't found any actual code yet, prompt model to continue
+        // Check if we have conversation context - if so, we might not need codebase exploration
+        const hasConversationContext = accumulated.conversationContext && 
+          accumulated.conversationContext.messages.length > 0;
+        
+        // If we haven't found any actual code AND no conversation context, prompt model to continue
         if (
           accumulated.symbols.length === 0 &&
           accumulated.blocks.length === 0 &&
+          !hasConversationContext &&
           iteration < 5
         ) {
           this.log(
-            'Model stopped early with no code found - prompting to continue...'
+            'Model stopped early with no code or conversation context found - prompting to continue...'
           );
 
-          // Add a nudge message to continue exploration
-          messages.push({
-            role: 'user',
-            content: `You haven't found any actual code yet. Please continue exploring:
+          // Add a nudge message - include conversation tools if available
+          const nudgeContent = hasConversationHistory
+            ? `You haven't gathered enough context yet. Consider:
+- If this is a question about previous discussion: use get_previous_answer() or get_recent_messages()
+- If this is a question about actual code: use search("query") or get_file_content("path")
+- Call done() when you have the relevant context.`
+            : `You haven't found any actual code yet. Please continue exploring:
 - Use get_file_content("path") to read files you found
 - Use search("query") to find specific code
-- Keep going until you find the implementation code that answers the question.`,
+- Keep going until you find the implementation code that answers the question.`;
+
+          messages.push({
+            role: 'user',
+            content: nudgeContent,
           });
 
           // Don't finish yet, let the loop continue
@@ -449,7 +708,7 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
           wasCached = true;
         } else {
           // Execute the tool
-          result = await this.executeTool(toolCall, graph);
+          result = await this.executeTool(toolCall, graph, query);
           // Cache the result
           callCache.set(callKey, result);
         }
@@ -466,10 +725,15 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
           if (data.files?.length) counts.push(`${data.files.length} files`);
           if (data.dirFiles?.length)
             counts.push(`${data.dirFiles.length} files`);
+          if (data.conversationMessages?.length)
+            counts.push(`${data.conversationMessages.length} messages`);
           if (counts.length > 0) {
             this.logToolResult(
               `${wasCached ? '[CACHED] ' : ''}Found: ${counts.join(', ')}`
             );
+          } else if (data.message) {
+            // Conversation tools return a message instead of counts
+            this.logToolResult(`${wasCached ? '[CACHED] ' : ''}OK`);
           } else {
             this.logToolResult(`${wasCached ? '[CACHED] ' : ''}No results`);
           }
@@ -511,6 +775,17 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
           role: 'assistant',
           content: `Called ${toolCall.name}`,
         });
+
+        // If a conversation tool returned results, STRONGLY instruct to call done()
+        const isConversationTool = [
+          'get_previous_answer',
+          'get_recent_messages',
+          'search_conversation',
+        ].includes(toolCall.name);
+        if (isConversationTool && result.success) {
+          toolResultContent += `\n\n>>> STOP: You now have conversation context. Call done() IMMEDIATELY. Do NOT search the codebase - the user is asking about YOUR previous response, not about code.`;
+        }
+
         messages.push({
           role: 'tool',
           content: toolResultContent,
@@ -542,19 +817,39 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
       verboseUI.footer();
     }
 
+    // Build conversation context for the answer model
+    // Always include conversation history so the answer model can reference previous discussion
+    let conversationContext: ConversationContext | undefined = accumulated.conversationContext;
+
+    // If no conversation context was accumulated from tools, but we have history, include it
+    // This ensures the answer model always has access to previous conversation
+    if (query.conversationHistory && query.conversationHistory.length > 0) {
+      const historyToInclude = query.conversationHistory.slice(-this.historyLimit);
+      if (!conversationContext || conversationContext.messages.length === 0) {
+        // No conversation context from tools - use the session history
+        conversationContext = {
+          messages: historyToInclude,
+          summary: this.formatHistoryForDirectMode(historyToInclude),
+        };
+      }
+      // If conversation context exists from tools, it already has relevant messages
+    }
+
     return {
       ...accumulated,
       strategy: 'tools',
       tokenEstimate: this.estimateTokens(accumulated.blocks),
       toolCalls: toolCallRecords,
+      conversationContext,
     };
   }
 
   private buildSystemPrompt(
     mode: 'tools' | 'hybrid',
-    context?: string
+    context?: string,
+    hasConversationHistory?: boolean
   ): string {
-    const toolsList = `Available tools:
+    const codeToolsList = `Available tools:
 - search: Search symbols and code content. Supports optional path filter.
 - list_packages: See top-level directories (call first to understand project structure)
 - list_files: List files in a directory (use to explore before searching)
@@ -566,6 +861,30 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
 Advanced (rarely needed):
 - search_symbols: Search symbol names only
 - search_content: Search code content only`;
+
+    // Add conversation tools ONLY if there's actual conversation history
+    const conversationToolsList =
+      this.historyMode === 'tools' && hasConversationHistory
+        ? `
+
+CONVERSATION TOOLS (for questions about previous discussion):
+- get_previous_answer: Get your last response (CALL THIS FIRST for follow-ups)
+- get_recent_messages(count): Get recent messages
+- search_conversation(query): Search conversation
+
+CRITICAL DECISION (make this FIRST before any tool call):
+A) Is user asking about YOUR previous response/suggestion/answer?
+   → Call get_previous_answer(), then IMMEDIATELY call done()
+   → Do NOT search the codebase
+   
+B) Is user asking about actual code in the project?
+   → Use codebase tools (search, get_file_content, etc.)
+   → Do NOT use conversation tools
+
+NEVER mix both paths. If you called a conversation tool, call done() next.`
+        : '';
+
+    const toolsList = codeToolsList + conversationToolsList;
 
     if (mode === 'hybrid' && context) {
       // Hybrid mode: Code is already provided, tools are optional
@@ -583,13 +902,20 @@ INSTRUCTIONS:
 5. Be efficient - only explore if the existing context is insufficient`;
     } else {
       // Tools-only mode: Must explore to find code
+      const conversationGuidance = hasConversationHistory
+        ? `
+PREVIOUS CONVERSATION EXISTS. First decide:
+- Is user asking about what YOU said/suggested? → Use conversation tools ONLY, then done()
+- Is user asking about actual CODE? → Use codebase tools ONLY`
+        : '';
+
       let prompt = `You are a code exploration assistant. Your job is to find relevant code to answer the user's question.
 
 ${toolsList}
+${conversationGuidance}
 
 HOW TO CALL TOOLS:
-You MUST use the tool calling format - do NOT write shell commands or code.
-Call tools by using the function calling interface provided.
+Use the tool calling format provided. Do NOT write shell commands.
 
 EXPLORATION STRATEGY:
 1. Start with list_packages() to see project structure
@@ -598,12 +924,7 @@ EXPLORATION STRATEGY:
 4. Use get_file_content("path") to see full file contents
 5. Use get_symbol_context(symbolId) for specific symbols (use IDs from search)
 6. Call done("summary") when you have found the relevant code
-
-IMPORTANT:
-- Keep exploring until you find the ACTUAL IMPLEMENTATION code
-- If search returns only comments, use get_file_content() to see the real code
-- Do NOT stop until you have found functions/classes that answer the question
-- Do NOT make up file names - only reference files you've actually found`;
+${conversationGuidance}`;
 
       if (context) {
         prompt += `\n\nSuggested entry points:\n${context}`;
@@ -773,6 +1094,11 @@ IMPORTANT:
       parts.push(`Relations: ${data.relations.length} found`);
     }
 
+    // Handle message-only responses (conversation tools, etc.)
+    if (data.message && parts.length === 0) {
+      parts.push(data.message);
+    }
+
     return parts.length > 0 ? parts.join('\n') : 'No results found';
   }
 
@@ -782,7 +1108,8 @@ IMPORTANT:
 
   private async executeTool(
     call: ToolCallRequest,
-    graph: ProjectGraph
+    graph: ProjectGraph,
+    query: RetrievalQuery
   ): Promise<ToolExecutionResult> {
     try {
       switch (call.name) {
@@ -815,6 +1142,22 @@ IMPORTANT:
 
         case 'done':
           return { success: true };
+
+        // Conversation tools
+        case 'get_previous_answer':
+          return this.handleGetPreviousAnswer(query);
+
+        case 'get_recent_messages':
+          return this.handleGetRecentMessages(call.arguments, query);
+
+        case 'search_conversation':
+          return this.handleSearchConversation(call.arguments, query);
+
+        case 'list_sessions':
+          return this.handleListSessions(query);
+
+        case 'search_sessions':
+          return this.handleSearchSessions(call.arguments, query);
 
         default:
           return { success: false, error: `Unknown tool: ${call.name}` };
@@ -901,6 +1244,7 @@ IMPORTANT:
   /**
    * Combined search - searches symbols by name first, then content
    * Supports optional path filter to limit results to specific directory
+   * Supports optional kinds filter (defaults to ['code'] to prioritize implementation code)
    */
   private handleSearch(
     args: Record<string, unknown>,
@@ -908,6 +1252,8 @@ IMPORTANT:
   ): ToolExecutionResult {
     const query = args.query as string;
     const pathFilter = args.path as string | undefined;
+    // Default to code-only search to prioritize implementation over comments
+    const kinds = (args.kinds as BlockKind[] | undefined) || ['code'];
     const allSymbols: SymbolRecord[] = [];
     const allBlocks: ContentBlock[] = [];
     const seenSymbolIds = new Set<string>();
@@ -938,15 +1284,19 @@ IMPORTANT:
       );
     }
 
+    // Maximum block size - prefer focused blocks over huge function bodies
+    const MAX_BLOCK_LINES = 150;
+    const isBlockSizeOk = (b: ContentBlock) => (b.endLine - b.startLine + 1) <= MAX_BLOCK_LINES;
+
     // Add symbol matches (these are prioritized)
     for (const symbol of symbolMatches.slice(0, 10)) {
       if (!seenSymbolIds.has(symbol.id)) {
         allSymbols.push(symbol);
         seenSymbolIds.add(symbol.id);
 
-        // Get blocks for this symbol
+        // Get blocks for this symbol (only code blocks, not comments, and not too large)
         const symbolBlocks = graph.getBlocksForSymbol(symbol.id);
-        for (const block of symbolBlocks.filter((b) => !b.isChunk)) {
+        for (const block of symbolBlocks.filter((b) => !b.isChunk && b.kind === 'code' && isBlockSizeOk(b))) {
           if (!seenBlockIds.has(block.id)) {
             allBlocks.push(block);
             seenBlockIds.add(block.id);
@@ -955,8 +1305,8 @@ IMPORTANT:
       }
     }
 
-    // 2. Then, search by content (full-text search)
-    let contentBlocks = graph.searchBlocks(query, ['code', 'comment']);
+    // 2. Then, search by content (full-text search) using specified kinds
+    let contentBlocks = graph.searchBlocks(query, kinds);
 
     // Filter by path if specified
     if (allowedFileIds) {
@@ -964,6 +1314,9 @@ IMPORTANT:
         allowedFileIds!.has(b.fileId)
       );
     }
+
+    // Filter out huge blocks - prefer focused, relevant blocks
+    contentBlocks = contentBlocks.filter(isBlockSizeOk);
 
     // Add content matches (lower priority, but fill in gaps)
     for (const block of contentBlocks.slice(0, 10)) {
@@ -1141,6 +1494,7 @@ IMPORTANT:
     graph: ProjectGraph
   ): ToolExecutionResult {
     const symbolId = args.symbolId as string;
+    const includeNearbyComments = args.includeNearbyComments as boolean | undefined;
 
     const symbol = graph.getSymbol(symbolId);
     if (!symbol) {
@@ -1150,16 +1504,19 @@ IMPORTANT:
     const blocks = graph.getBlocksForSymbol(symbolId);
     const file = graph.getFile(symbol.fileId);
 
-    // Also get file-level comments near this symbol
-    const fileBlocks = graph.getBlocksForFile(symbol.fileId);
-    const nearbyComments = fileBlocks.filter(
-      (b) =>
-        (b.kind === 'comment' || b.kind === 'docstring') &&
-        b.endLine >= symbol.startLine - 10 &&
-        b.startLine <= symbol.startLine
-    );
+    let allBlocks = [...blocks];
 
-    const allBlocks = [...blocks, ...nearbyComments];
+    // Only include nearby comments if explicitly requested
+    if (includeNearbyComments) {
+      const fileBlocks = graph.getBlocksForFile(symbol.fileId);
+      const nearbyComments = fileBlocks.filter(
+        (b) =>
+          (b.kind === 'comment' || b.kind === 'docstring') &&
+          b.endLine >= symbol.startLine - 10 &&
+          b.startLine <= symbol.startLine
+      );
+      allBlocks = [...blocks, ...nearbyComments];
+    }
 
     return {
       success: true,
@@ -1177,6 +1534,9 @@ IMPORTANT:
     graph: ProjectGraph
   ): ToolExecutionResult {
     const filePath = args.filePath as string;
+    // Default to code-only to prioritize implementation over comments/imports
+    const kinds = (args.kinds as BlockKind[] | undefined) || ['code'];
+    const kindsSet = new Set(kinds);
 
     const files = graph.findFiles({ pathPattern: `*${filePath}*` });
     if (files.length === 0) {
@@ -1187,15 +1547,381 @@ IMPORTANT:
     const symbols = graph.getSymbolsForFile(file.id);
     const blocks = graph.getBlocksForFile(file.id);
 
+    // Filter blocks by requested kinds AND limit size
+    // Prefer focused blocks (< 150 lines) over huge function bodies
+    const MAX_BLOCK_LINES = 150;
+    const filteredBlocks = blocks.filter((b) => {
+      if (b.isChunk) return false;
+      if (!kindsSet.has(b.kind)) return false;
+      const lineCount = b.endLine - b.startLine + 1;
+      // Include smaller focused blocks, exclude huge ones
+      return lineCount <= MAX_BLOCK_LINES;
+    });
+
     return {
       success: true,
       data: {
         symbols,
-        blocks: blocks.filter((b) => !b.isChunk),
+        blocks: filteredBlocks,
         files: [file],
         relations: [],
       },
     };
+  }
+
+  // =========================================================================
+  // Conversation Tool Handlers
+  // =========================================================================
+
+  /**
+   * Get the previous assistant response
+   * Note: We summarize the response to avoid model confusing suggestions with actual code
+   */
+  private handleGetPreviousAnswer(
+    query: RetrievalQuery
+  ): ToolExecutionResult {
+    const history = query.conversationHistory || [];
+    const assistantMessages = history.filter((m) => m.role === 'assistant');
+
+    if (assistantMessages.length === 0) {
+      return {
+        success: true,
+        data: {
+          message: 'No previous answer found. This is the first message.',
+        },
+      };
+    }
+
+    const lastAnswer = assistantMessages[assistantMessages.length - 1];
+    // Summarize to avoid confusing suggestions with actual code
+    const summary = this.summarizeAssistantMessage(lastAnswer.content);
+
+    // Also find the user message that preceded this answer
+    const lastUserIdx = history.findIndex((m) => m === lastAnswer) - 1;
+    const precedingUser = lastUserIdx >= 0 ? history[lastUserIdx] : null;
+    const messagesToInclude = precedingUser
+      ? [precedingUser, lastAnswer]
+      : [lastAnswer];
+
+    return {
+      success: true,
+      data: {
+        message: `Your previous response:\n${summary}\n\n(This is what you suggested, not implemented code)`,
+        conversationMessages: messagesToInclude,
+      },
+    };
+  }
+
+  /**
+   * Get recent messages from conversation
+   */
+  private handleGetRecentMessages(
+    args: Record<string, unknown>,
+    query: RetrievalQuery
+  ): ToolExecutionResult {
+    const count = (args.count as number) || 4;
+    const history = query.conversationHistory || [];
+
+    if (history.length === 0) {
+      return {
+        success: true,
+        data: {
+          message: 'No conversation history available.',
+        },
+      };
+    }
+
+    const recentMessages = history.slice(-count);
+    const formatted = recentMessages
+      .map((msg) =>
+        this.formatMessageForTool(msg, CONVERSATION_TOOL_LIMITS.get_recent_messages)
+      )
+      .join('\n\n');
+
+    return {
+      success: true,
+      data: {
+        message: `Recent conversation (${recentMessages.length} messages):\n\n${formatted}`,
+        conversationMessages: recentMessages,
+      },
+    };
+  }
+
+  /**
+   * Search current conversation for a query
+   */
+  private handleSearchConversation(
+    args: Record<string, unknown>,
+    query: RetrievalQuery
+  ): ToolExecutionResult {
+    const searchQuery = (args.query as string || '').toLowerCase();
+    const history = query.conversationHistory || [];
+
+    if (!searchQuery) {
+      return { success: false, error: 'Search query required' };
+    }
+
+    if (history.length === 0) {
+      return {
+        success: true,
+        data: {
+          message: 'No conversation history to search.',
+        },
+      };
+    }
+
+    // Find matching messages
+    const matches = history.filter((msg) =>
+      msg.content.toLowerCase().includes(searchQuery)
+    );
+
+    if (matches.length === 0) {
+      return {
+        success: true,
+        data: {
+          message: `No messages found matching "${searchQuery}"`,
+        },
+      };
+    }
+
+    // Format matches with token limit
+    let totalTokens = 0;
+    const formattedMatches: string[] = [];
+    const includedMessages: BrainChatMessage[] = [];
+
+    for (const msg of matches) {
+      const formatted = this.formatMessageForTool(msg, 300);
+      const tokens = this.budget.estimate(formatted);
+
+      if (totalTokens + tokens > CONVERSATION_TOOL_LIMITS.search_conversation) {
+        break;
+      }
+
+      formattedMatches.push(formatted);
+      includedMessages.push(msg);
+      totalTokens += tokens;
+    }
+
+    return {
+      success: true,
+      data: {
+        message: `Found ${matches.length} message(s) matching "${searchQuery}":\n\n${formattedMatches.join('\n\n---\n\n')}`,
+        conversationMessages: includedMessages,
+      },
+    };
+  }
+
+  /**
+   * List all available sessions
+   */
+  private handleListSessions(
+    query: RetrievalQuery
+  ): ToolExecutionResult {
+    if (!query.listSessions) {
+      return {
+        success: true,
+        data: {
+          message: 'Cross-session search not available.',
+        },
+      };
+    }
+
+    const sessions = query.listSessions();
+
+    if (sessions.length === 0) {
+      return {
+        success: true,
+        data: {
+          message: 'No other sessions found.',
+        },
+      };
+    }
+
+    const formatted = sessions
+      .slice(0, 10)
+      .map((s) => {
+        const date = new Date(s.updatedAt).toLocaleDateString();
+        return `- ${s.name} (${date}) [id: ${s.id}]`;
+      })
+      .join('\n');
+
+    return {
+      success: true,
+      data: {
+        message: `Available sessions (${sessions.length}):\n${formatted}`,
+      },
+    };
+  }
+
+  /**
+   * Search across all sessions for a query
+   */
+  private handleSearchSessions(
+    args: Record<string, unknown>,
+    query: RetrievalQuery
+  ): ToolExecutionResult {
+    const searchQuery = (args.query as string || '').toLowerCase();
+
+    if (!searchQuery) {
+      return { success: false, error: 'Search query required' };
+    }
+
+    if (!query.listSessions || !query.loadSessionHistory) {
+      return {
+        success: true,
+        data: {
+          message: 'Cross-session search not available.',
+        },
+      };
+    }
+
+    const sessions = query.listSessions();
+    const results: Array<{
+      sessionName: string;
+      sessionId: string;
+      matches: string[];
+    }> = [];
+
+    let sessionsSearched = 0;
+    let totalTokens = 0;
+
+    // Search through sessions
+    for (const session of sessions) {
+      if (sessionsSearched >= CONVERSATION_TOOL_LIMITS.max_sessions) {
+        break;
+      }
+
+      const history = query.loadSessionHistory(session.id);
+      if (!history) continue;
+
+      // Find matching messages in this session
+      const matches = history.filter((msg) =>
+        msg.content.toLowerCase().includes(searchQuery)
+      );
+
+      if (matches.length > 0) {
+        const formattedMatches: string[] = [];
+        let sessionTokens = 0;
+
+        for (const msg of matches.slice(0, 3)) {
+          const formatted = this.formatMessageForTool(msg, 200);
+          const tokens = this.budget.estimate(formatted);
+
+          if (sessionTokens + tokens > CONVERSATION_TOOL_LIMITS.search_sessions) {
+            break;
+          }
+
+          formattedMatches.push(formatted);
+          sessionTokens += tokens;
+        }
+
+        if (formattedMatches.length > 0) {
+          results.push({
+            sessionName: session.name,
+            sessionId: session.id,
+            matches: formattedMatches,
+          });
+          totalTokens += sessionTokens;
+        }
+
+        sessionsSearched++;
+      }
+    }
+
+    if (results.length === 0) {
+      return {
+        success: true,
+        data: {
+          message: `No matches found for "${searchQuery}" across sessions.`,
+        },
+      };
+    }
+
+    // Format results
+    const formatted = results
+      .map((r) => {
+        return `**${r.sessionName}** (${r.sessionId}):\n${r.matches.join('\n---\n')}`;
+      })
+      .join('\n\n');
+
+    return {
+      success: true,
+      data: {
+        message: `Found matches in ${results.length} session(s):\n\n${formatted}`,
+      },
+    };
+  }
+
+  // =========================================================================
+  // Conversation History Helpers
+  // =========================================================================
+
+  /**
+   * Format conversation history for direct mode (included in prompt)
+   * Note: We include user messages for context but summarize assistant responses
+   * to avoid the model confusing its suggestions with actual codebase content.
+   */
+  private formatHistoryForDirectMode(history: ChatMessage[]): string {
+    const parts: string[] = [];
+    let totalTokens = 0;
+
+    for (const msg of history) {
+      let content: string;
+      let prefix: string;
+
+      if (msg.role === 'user') {
+        prefix = 'User asked';
+        content = this.budget.truncate(msg.content, 400);
+      } else {
+        // For assistant messages, summarize to avoid confusion with actual code
+        prefix = 'You responded with suggestions about';
+        // Extract just the topic/summary, not the full code suggestions
+        const firstLine = msg.content.split('\n')[0];
+        const summary = firstLine.length > 200 ? firstLine.slice(0, 200) + '...' : firstLine;
+        content = summary;
+      }
+
+      const tokens = this.budget.estimate(content);
+
+      if (totalTokens + tokens > CONVERSATION_TOOL_LIMITS.direct_history) {
+        break;
+      }
+
+      parts.push(`${prefix}: ${content}`);
+      totalTokens += tokens;
+    }
+
+    return parts.join('\n\n');
+  }
+
+  /**
+   * Format a single message for tool output
+   * For assistant messages, summarizes to avoid confusion with actual code
+   */
+  private formatMessageForTool(msg: ChatMessage, maxTokens: number): string {
+    if (msg.role === 'user') {
+      const content = this.budget.truncate(msg.content, maxTokens);
+      return `User asked: ${content}`;
+    } else {
+      // Summarize assistant messages to avoid confusion
+      const summary = this.summarizeAssistantMessage(msg.content);
+      return `You suggested: ${summary}`;
+    }
+  }
+
+  /**
+   * Summarize an assistant message to avoid model confusing suggestions with actual code
+   * Extracts the main topic/approach without including full code blocks
+   */
+  private summarizeAssistantMessage(content: string): string {
+    // Remove code blocks to avoid confusion
+    const withoutCode = content.replace(/```[\s\S]*?```/g, '[code suggestion]');
+    
+    // Take first few sentences or lines
+    const lines = withoutCode.split('\n').filter((l) => l.trim());
+    const summary = lines.slice(0, 3).join(' ').slice(0, 300);
+    
+    return summary + (content.length > 300 ? '...' : '');
   }
 
   // =========================================================================
@@ -1294,6 +2020,21 @@ IMPORTANT:
         seenRelations.add(relation.id);
       }
     }
+
+    // Merge conversation context if provided
+    if (data.conversationMessages && data.conversationMessages.length > 0) {
+      if (!accumulated.conversationContext) {
+        accumulated.conversationContext = { messages: [] };
+      }
+      // Add messages that aren't already included
+      const existingContent = new Set(accumulated.conversationContext.messages.map(m => m.content));
+      for (const msg of data.conversationMessages) {
+        if (!existingContent.has(msg.content)) {
+          accumulated.conversationContext.messages.push(msg);
+          existingContent.add(msg.content);
+        }
+      }
+    }
   }
 
   private estimateTokens(blocks: ContentBlock[]): number {
@@ -1313,6 +2054,8 @@ interface AccumulatedResults {
   blocks: ContentBlock[];
   files: FileRecord[];
   relations: Relation[];
+  /** Conversation context collected from conversation tools */
+  conversationContext?: ConversationContext;
 }
 
 interface ToolResultData {
@@ -1326,6 +2069,8 @@ interface ToolResultData {
   dirFiles?: Array<{ path: string; symbolCount: number }>;
   // For descriptive messages
   message?: string;
+  // For conversation tools - messages to include in conversation context
+  conversationMessages?: BrainChatMessage[];
 }
 
 interface ToolExecutionResult {

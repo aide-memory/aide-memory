@@ -120,6 +120,10 @@ export class HybridRetrieval implements RetrievalStrategy {
 export interface CreateRetrievalOptions {
   /** Log retrieval steps and tool calls */
   verbose?: boolean;
+  /** History access mode for retrieval model */
+  historyMode?: 'direct' | 'tools';
+  /** For direct mode: how many messages to include */
+  historyLimit?: number;
 }
 
 /**

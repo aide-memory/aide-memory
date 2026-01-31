@@ -9,9 +9,9 @@ import fs from 'fs';
 const LANGUAGE_MAP: Record<string, string> = {
   // TypeScript/JavaScript
   '.ts': 'typescript',
-  '.tsx': 'typescript',
+  '.tsx': 'tsx',
   '.js': 'javascript',
-  '.jsx': 'javascript',
+  '.jsx': 'jsx',
   '.mjs': 'javascript',
   '.cjs': 'javascript',
   // Python
@@ -76,7 +76,9 @@ const LANGUAGE_MAP: Record<string, string> = {
 // Languages that support symbol extraction (via ts-morph or ctags)
 const PROGRAMMING_LANGUAGES = new Set([
   'typescript',
+  'tsx',
   'javascript',
+  'jsx',
   'python',
   'go',
   'rust',
@@ -117,7 +119,7 @@ export function generateFileId(
 }
 
 export function isTypeScriptOrJavaScript(language: string): boolean {
-  return language === 'typescript' || language === 'javascript';
+  return language === 'typescript' || language === 'tsx' || language === 'javascript' || language === 'jsx';
 }
 
 export function isProgrammingLanguage(language: string): boolean {

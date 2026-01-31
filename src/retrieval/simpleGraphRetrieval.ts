@@ -101,6 +101,8 @@ export class SimpleGraphRetrieval implements RetrievalStrategy {
       ...trimmed,
       strategy: 'simple',
       tokenEstimate,
+      // Simple retrieval has no conversation context
+      conversationContext: undefined,
     };
   }
 

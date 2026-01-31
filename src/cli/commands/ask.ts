@@ -87,6 +87,9 @@ export interface AskOptions {
   /** Hybrid mode: 'code' (full code upfront) or 'hints' (entry points only) */
   hybridMode?: 'code' | 'hints';
 
+  /** History mode: 'direct' includes history in prompt, 'tools' provides on-demand access */
+  historyMode?: 'direct' | 'tools';
+
   /** Print debug info */
   debug?: boolean;
 }
@@ -124,6 +127,7 @@ export async function askQuestion(
   const settings = getEffectiveSettings(config, {
     strategy: options.strategy,
     hybridMode: options.hybridMode,
+    historyMode: options.historyMode,
     tokenBudget: options.tokenBudget,
     maxBlocks: options.maxBlocks,
     maxDepth: options.depth,
@@ -142,7 +146,11 @@ export async function askQuestion(
     },
     model, // Pass runtime for tool-based retrieval
     undefined, // budget
-    { verbose: options.debug } // Pass debug as verbose for tool logging
+    {
+      verbose: options.debug,
+      historyMode: settings.historyMode,
+      historyLimit: settings.historyLimit,
+    }
   );
 
   // Retrieve relevant context using session focus
@@ -150,12 +158,26 @@ export async function askQuestion(
     logInfo('Retrieving context...');
   }
 
+  // Get session history for conversation context
+  const sessionHistory = session.getHistory();
+
   // Retrieve context
   const result = await retrieval.retrieve(
     {
       question,
       focusSymbolIds: session.getFocusSymbolIds(),
       focusFileIds: session.getFocusFileIds(),
+      conversationHistory: sessionHistory,
+      listSessions: () => SessionManager.listSessions(sessionsDir),
+      loadSessionHistory: (sessionId: string) => {
+        const loadedSession = SessionManager.load(
+          sessionId,
+          sessionsDir,
+          store,
+          { sessionsDir }
+        );
+        return loadedSession ? loadedSession.getHistory() : null;
+      },
     },
     store
   );
@@ -204,7 +226,9 @@ export async function askQuestion(
 
   // Verbose logging if debug is enabled
   if (options.debug) {
-    const budget = new TokenBudgetManager(options.tokenBudget ?? 8000);
+    const budget = new TokenBudgetManager(
+      options.tokenBudget ?? AIDE_DEFAULTS.tokenBudget
+    );
     logVerbose(messages, budget);
     logInfo('Querying model...');
     logInfo('');

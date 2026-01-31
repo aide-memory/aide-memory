@@ -14,7 +14,7 @@ import { getProjectConfigPath, ensureProjectDirs } from '../storage/paths';
 
 export const AIDE_DEFAULTS = {
   /** Token budget for both retrieval and context assembly */
-  tokenBudget: 6000,
+  tokenBudget: 16000,
   /** Maximum code blocks to return from retrieval */
   maxBlocks: 10,
   /** Maximum graph traversal depth */
@@ -25,6 +25,10 @@ export const AIDE_DEFAULTS = {
   strategy: 'tools' as const,
   /** Default hybrid mode */
   hybridMode: 'code' as const,
+  /** History access mode for retrieval model: 'direct' includes last N messages, 'tools' uses on-demand tools */
+  historyMode: 'tools' as 'direct' | 'tools',
+  /** For direct mode: how many recent messages to include */
+  historyLimit: 6,
 } as const;
 
 /**
@@ -115,6 +119,8 @@ export interface RetrievalSettings {
   maxFanout: number;
   strategy: 'simple' | 'tools' | 'hybrid';
   hybridMode: 'code' | 'hints';
+  historyMode: 'direct' | 'tools';
+  historyLimit: number;
 }
 
 /**
@@ -144,5 +150,13 @@ export function getEffectiveSettings(
       runtimeOptions?.hybridMode ??
       projectConfig?.hybridMode ??
       AIDE_DEFAULTS.hybridMode,
+    historyMode:
+      runtimeOptions?.historyMode ??
+      projectConfig?.historyMode ??
+      AIDE_DEFAULTS.historyMode,
+    historyLimit:
+      runtimeOptions?.historyLimit ??
+      projectConfig?.historyLimit ??
+      AIDE_DEFAULTS.historyLimit,
   };
 }
