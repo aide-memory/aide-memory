@@ -31,6 +31,8 @@ export interface ConversationContext {
   messages: ChatMessage[];
   /** Optional summary of the conversation */
   summary?: string;
+  /** True if the question was detected as asking about previous conversation (not code) */
+  isConversationQuestion?: boolean;
 }
 
 // ============================================================================
@@ -144,7 +146,7 @@ export interface RetrievalConfig {
 export const DEFAULT_RETRIEVAL_CONFIG: RetrievalConfig = {
   strategy: AIDE_DEFAULTS.strategy,
   maxDepth: AIDE_DEFAULTS.maxDepth,
-  maxFanout: 3, // Reduced from 5 - fewer symbols per relation
+  maxFanout: 5,
   tokenBudget: AIDE_DEFAULTS.tokenBudget,
   maxBlocks: AIDE_DEFAULTS.maxBlocks,
   hybridMode: AIDE_DEFAULTS.hybridMode,

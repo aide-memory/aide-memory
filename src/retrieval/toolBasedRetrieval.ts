@@ -210,7 +210,8 @@ export const RETRIEVAL_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'get_file_content',
-    description: 'Get all symbols and code blocks from a specific file. By default returns code blocks only.',
+    description:
+      'Get all symbols and code blocks from a specific file. By default returns code blocks only.',
     parameters: {
       type: 'object',
       properties: {
@@ -360,7 +361,13 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
 
     // Debug: log constructor options
     if (this.verbose) {
-      console.log(`[ToolBasedRetrieval] historyMode=${this.historyMode}, tools=${this.tools.length} (conversation tools: ${this.historyMode === 'tools' ? 'included' : 'excluded'})`);
+      console.log(
+        `[ToolBasedRetrieval] historyMode=${this.historyMode}, tools=${
+          this.tools.length
+        } (conversation tools: ${
+          this.historyMode === 'tools' ? 'included' : 'excluded'
+        })`
+      );
     }
   }
 
@@ -438,27 +445,41 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
    */
   private isConversationQuestion(question: string): boolean {
     const lowerQ = question.toLowerCase();
+
+    // FIRST: Check for patterns that indicate they want CODE, not conversation
+    // These override conversation detection
+    const codeRequestPatterns = [
+      /show me (the )?(actual |real )?(code|implementation|source)/,
+      /find (the |that )?(code|function|method|file)/,
+      /where (is|are) (the |that )?(code|function|method|file)/,
+      /look at (the )?(actual |real )?(code|implementation)/,
+      /search (for|the)/,
+      /in the (codebase|project|repo)/,
+    ];
+    if (codeRequestPatterns.some((p) => p.test(lowerQ))) {
+      return false; // They want code, not conversation
+    }
+
     // Patterns that indicate asking about previous conversation
     const conversationPatterns = [
       // "what did you suggest" variants
       /what did you (say|suggest|recommend|mention)/,
-      /what .{0,30} did you (say|suggest|recommend|mention)/,  // "what X did you suggest"
+      /what .{0,30} did you (say|suggest|recommend|mention)/, // "what X did you suggest"
       /how did you (suggest|say|recommend)/,
       // "your suggestion" variants
       /can you (explain|clarify) (that|what you said|your (answer|suggestion))/,
       /what (was|were) (that|your) (suggestion|approach|fix|solution)/,
-      /what .{0,30} (suggestion|approach|fix|solution)/,  // "what scroll suggestion"
       // Reference to previous answer
       /tell me (more )?about what you (said|suggested)/,
       /remind me what you/,
       /what do you mean by/,
       /elaborate on (that|your)/,
-      // Direct references
-      /you (said|suggested|mentioned|recommended)/,
-      /your (answer|response|suggestion|recommendation|fix|solution|approach)/,
+      // Direct references (but not "show me code you mentioned")
+      /^(you (said|suggested|mentioned|recommended))/, // Only at start
+      /^(your (answer|response|suggestion|recommendation))/, // Only at start
       // Follow-up patterns
-      /explain (that|this|your|the) (fix|solution|approach|suggestion)/,
-      /(that|the) (fix|solution|approach) you/,
+      /explain (that|this|your) (fix|solution|approach|suggestion)/,
+      /^(that|the) (fix|solution|approach) you/, // Only at start
     ];
     return conversationPatterns.some((p) => p.test(lowerQ));
   }
@@ -531,32 +552,14 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
     // Check if conversation history is available - only true if there are actual messages
     // We check for at least one assistant message to ensure it's not just the current user message
     const hasConversationHistory = !!(
-      query.conversationHistory && 
+      query.conversationHistory &&
       query.conversationHistory.length > 0 &&
-      query.conversationHistory.some(m => m.role === 'assistant')
+      query.conversationHistory.some((m) => m.role === 'assistant')
     );
 
-    // In both modes, detect conversation follow-up questions and handle appropriately
-    if (hasConversationHistory && this.isConversationQuestion(query.question)) {
-      this.log('Detected conversation follow-up question');
-      const historyToInclude = query.conversationHistory!.slice(-this.historyLimit);
-      
-      if (this.historyMode === 'direct') {
-        // Direct mode: skip exploration entirely
-        this.log('Direct mode: skipping exploration, returning conversation context');
-        return {
-          ...accumulated,
-          strategy: 'tools',
-          tokenEstimate: 0,
-          toolCalls: [],
-          conversationContext: {
-            messages: historyToInclude,
-            summary: this.formatHistoryForDirectMode(historyToInclude),
-          },
-        };
-      }
-      // Tools mode: continue but model should use conversation tools
-    }
+    // NOTE: We no longer short-circuit for conversation questions.
+    // The model should decide what to explore based on the user's question.
+    // This allows handling mixed questions (both conversation AND codebase).
 
     // Build initial system message based on mode
     const systemPrompt = this.buildSystemPrompt(
@@ -565,9 +568,7 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
       hasConversationHistory
     );
 
-    const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-    ];
+    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
 
     // Direct mode: include conversation history context
     let questionWithContext = query.question;
@@ -579,7 +580,8 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
       const historyToInclude = query.conversationHistory.slice(
         -this.historyLimit
       );
-      const formattedHistory = this.formatHistoryForDirectMode(historyToInclude);
+      const formattedHistory =
+        this.formatHistoryForDirectMode(historyToInclude);
       if (formattedHistory) {
         // Inject conversation context into the question itself
         // Put the decision instruction FIRST so the model sees it before the context
@@ -612,7 +614,9 @@ My question: ${query.question}`;
       .join('\n\n---\n\n');
     this.logVerbose(
       'INITIAL PROMPT TO MODEL',
-      `System:\n${allSystemContent}\n\nUser:\n${questionWithContext}\n\nTools available: ${this.tools.map((t) => t.name).join(', ')}`
+      `System:\n${allSystemContent}\n\nUser:\n${questionWithContext}\n\nTools available: ${this.tools
+        .map((t) => t.name)
+        .join(', ')}`
     );
 
     while (!done && iteration < MAX_TOOL_ITERATIONS) {
@@ -639,9 +643,10 @@ My question: ${query.question}`;
       // If model returns content without tool calls, check if we should nudge it to continue
       if (!response.toolCalls || response.toolCalls.length === 0) {
         // Check if we have conversation context - if so, we might not need codebase exploration
-        const hasConversationContext = accumulated.conversationContext && 
+        const hasConversationContext =
+          accumulated.conversationContext &&
           accumulated.conversationContext.messages.length > 0;
-        
+
         // If we haven't found any actual code AND no conversation context, prompt model to continue
         if (
           accumulated.symbols.length === 0 &&
@@ -653,16 +658,13 @@ My question: ${query.question}`;
             'Model stopped early with no code or conversation context found - prompting to continue...'
           );
 
-          // Add a nudge message - include conversation tools if available
+          // Add a nudge message - help model think about what's needed
           const nudgeContent = hasConversationHistory
-            ? `You haven't gathered enough context yet. Consider:
-- If this is a question about previous discussion: use get_previous_answer() or get_recent_messages()
-- If this is a question about actual code: use search("query") or get_file_content("path")
-- Call done() when you have the relevant context.`
-            : `You haven't found any actual code yet. Please continue exploring:
-- Use get_file_content("path") to read files you found
-- Use search("query") to find specific code
-- Keep going until you find the implementation code that answers the question.`;
+            ? `You haven't gathered any context yet. Think about what the user is asking:
+- What information do you need to answer their question?
+- Would conversation history or codebase exploration help more?
+- Call done() once you have what you need.`
+            : `You haven't gathered any context yet. Use the tools to find relevant information, then call done().`;
 
           messages.push({
             role: 'user',
@@ -763,6 +765,11 @@ My question: ${query.question}`;
         // Add tool result to messages for model context
         let toolResultContent = this.formatToolResult(toolCall.name, result);
 
+        // Add note if present (e.g., "showing first 15 of 35 blocks")
+        if (result.note) {
+          toolResultContent += `\n\nNote: ${result.note}`;
+        }
+
         // Add guidance message for cached results
         if (wasCached) {
           const queryArg = (toolCall.arguments as Record<string, unknown>)
@@ -783,7 +790,7 @@ My question: ${query.question}`;
           'search_conversation',
         ].includes(toolCall.name);
         if (isConversationTool && result.success) {
-          toolResultContent += `\n\n>>> STOP: You now have conversation context. Call done() IMMEDIATELY. Do NOT search the codebase - the user is asking about YOUR previous response, not about code.`;
+          toolResultContent += `\n\nYou now have conversation context. If this answers the user's question, call done(). If you also need code context, you can explore the codebase.`;
         }
 
         messages.push({
@@ -819,12 +826,15 @@ My question: ${query.question}`;
 
     // Build conversation context for the answer model
     // Always include conversation history so the answer model can reference previous discussion
-    let conversationContext: ConversationContext | undefined = accumulated.conversationContext;
+    let conversationContext: ConversationContext | undefined =
+      accumulated.conversationContext;
 
     // If no conversation context was accumulated from tools, but we have history, include it
     // This ensures the answer model always has access to previous conversation
     if (query.conversationHistory && query.conversationHistory.length > 0) {
-      const historyToInclude = query.conversationHistory.slice(-this.historyLimit);
+      const historyToInclude = query.conversationHistory.slice(
+        -this.historyLimit
+      );
       if (!conversationContext || conversationContext.messages.length === 0) {
         // No conversation context from tools - use the session history
         conversationContext = {
@@ -867,21 +877,10 @@ Advanced (rarely needed):
       this.historyMode === 'tools' && hasConversationHistory
         ? `
 
-CONVERSATION TOOLS (for questions about previous discussion):
-- get_previous_answer: Get your last response (CALL THIS FIRST for follow-ups)
+CONVERSATION TOOLS (for questions about our discussion):
+- get_previous_answer: Get your last response
 - get_recent_messages(count): Get recent messages
-- search_conversation(query): Search conversation
-
-CRITICAL DECISION (make this FIRST before any tool call):
-A) Is user asking about YOUR previous response/suggestion/answer?
-   → Call get_previous_answer(), then IMMEDIATELY call done()
-   → Do NOT search the codebase
-   
-B) Is user asking about actual code in the project?
-   → Use codebase tools (search, get_file_content, etc.)
-   → Do NOT use conversation tools
-
-NEVER mix both paths. If you called a conversation tool, call done() next.`
+- search_conversation(query): Search conversation history`
         : '';
 
     const toolsList = codeToolsList + conversationToolsList;
@@ -896,35 +895,45 @@ ${toolsList}
 
 INSTRUCTIONS:
 1. Review the code context above
-2. If it answers the question, call done() immediately with a summary
-3. If you need MORE context (callers, callees, related code), use the tools
+2. If it answers the question, call done() immediately
+3. If you need MORE context, use the tools
 4. Do NOT re-fetch code that's already shown above
 5. Be efficient - only explore if the existing context is insufficient`;
     } else {
-      // Tools-only mode: Must explore to find code
+      // Tools-only mode: Model decides what to explore
+      const stoppingGuidance = `
+WHEN TO CALL done():
+- You have enough context to answer the user's question
+- You've already seen the relevant code/conversation
+- Further exploration would not add useful information
+- DO NOT keep exploring "just in case" - be decisive
+
+EFFICIENCY RULES:
+- If a tool returns what you need, call done() immediately
+- Don't call the same tool twice with same/similar arguments
+- Don't explore the codebase if conversation history answers the question
+- Don't explore conversation if the question is purely about code structure`;
+
       const conversationGuidance = hasConversationHistory
         ? `
-PREVIOUS CONVERSATION EXISTS. First decide:
-- Is user asking about what YOU said/suggested? → Use conversation tools ONLY, then done()
-- Is user asking about actual CODE? → Use codebase tools ONLY`
+CONVERSATION CONTEXT EXISTS - CHECK IT FIRST:
+- Questions referencing previous discussion ("the issue", "simpler way", "what you said", "explain that") → call get_previous_answer() FIRST
+- If conversation already answers the question, call done() immediately
+- Only explore codebase if conversation context is insufficient
+- For mixed questions: get conversation context first, then supplement with codebase if needed`
         : '';
 
-      let prompt = `You are a code exploration assistant. Your job is to find relevant code to answer the user's question.
+      let prompt = `You are a code exploration assistant. Your job is to gather the MINIMUM context needed to answer the user's question, then call done().
 
 ${toolsList}
+${stoppingGuidance}
 ${conversationGuidance}
 
-HOW TO CALL TOOLS:
-Use the tool calling format provided. Do NOT write shell commands.
-
 EXPLORATION STRATEGY:
-1. Start with list_packages() to see project structure
-2. Use list_files("path") to browse a directory  
-3. Use search("query") to find code - filter with search("query", "path") if needed
-4. Use get_file_content("path") to see full file contents
-5. Use get_symbol_context(symbolId) for specific symbols (use IDs from search)
-6. Call done("summary") when you have found the relevant code
-${conversationGuidance}`;
+1. First, understand what the user is asking - is it about conversation, code, or both?
+2. Use the appropriate tools to gather context
+3. Call done() as soon as you have sufficient information
+4. Do NOT over-explore - gather only what's needed`;
 
       if (context) {
         prompt += `\n\nSuggested entry points:\n${context}`;
@@ -1286,7 +1295,8 @@ ${conversationGuidance}`;
 
     // Maximum block size - prefer focused blocks over huge function bodies
     const MAX_BLOCK_LINES = 150;
-    const isBlockSizeOk = (b: ContentBlock) => (b.endLine - b.startLine + 1) <= MAX_BLOCK_LINES;
+    const isBlockSizeOk = (b: ContentBlock) =>
+      b.endLine - b.startLine + 1 <= MAX_BLOCK_LINES;
 
     // Add symbol matches (these are prioritized)
     for (const symbol of symbolMatches.slice(0, 10)) {
@@ -1296,7 +1306,9 @@ ${conversationGuidance}`;
 
         // Get blocks for this symbol (only code blocks, not comments, and not too large)
         const symbolBlocks = graph.getBlocksForSymbol(symbol.id);
-        for (const block of symbolBlocks.filter((b) => !b.isChunk && b.kind === 'code' && isBlockSizeOk(b))) {
+        for (const block of symbolBlocks.filter(
+          (b) => !b.isChunk && b.kind === 'code' && isBlockSizeOk(b)
+        )) {
           if (!seenBlockIds.has(block.id)) {
             allBlocks.push(block);
             seenBlockIds.add(block.id);
@@ -1494,7 +1506,9 @@ ${conversationGuidance}`;
     graph: ProjectGraph
   ): ToolExecutionResult {
     const symbolId = args.symbolId as string;
-    const includeNearbyComments = args.includeNearbyComments as boolean | undefined;
+    const includeNearbyComments = args.includeNearbyComments as
+      | boolean
+      | undefined;
 
     const symbol = graph.getSymbol(symbolId);
     if (!symbol) {
@@ -1577,9 +1591,7 @@ ${conversationGuidance}`;
    * Get the previous assistant response
    * Note: We summarize the response to avoid model confusing suggestions with actual code
    */
-  private handleGetPreviousAnswer(
-    query: RetrievalQuery
-  ): ToolExecutionResult {
+  private handleGetPreviousAnswer(query: RetrievalQuery): ToolExecutionResult {
     const history = query.conversationHistory || [];
     const assistantMessages = history.filter((m) => m.role === 'assistant');
 
@@ -1634,7 +1646,10 @@ ${conversationGuidance}`;
     const recentMessages = history.slice(-count);
     const formatted = recentMessages
       .map((msg) =>
-        this.formatMessageForTool(msg, CONVERSATION_TOOL_LIMITS.get_recent_messages)
+        this.formatMessageForTool(
+          msg,
+          CONVERSATION_TOOL_LIMITS.get_recent_messages
+        )
       )
       .join('\n\n');
 
@@ -1654,7 +1669,7 @@ ${conversationGuidance}`;
     args: Record<string, unknown>,
     query: RetrievalQuery
   ): ToolExecutionResult {
-    const searchQuery = (args.query as string || '').toLowerCase();
+    const searchQuery = ((args.query as string) || '').toLowerCase();
     const history = query.conversationHistory || [];
 
     if (!searchQuery) {
@@ -1705,7 +1720,11 @@ ${conversationGuidance}`;
     return {
       success: true,
       data: {
-        message: `Found ${matches.length} message(s) matching "${searchQuery}":\n\n${formattedMatches.join('\n\n---\n\n')}`,
+        message: `Found ${
+          matches.length
+        } message(s) matching "${searchQuery}":\n\n${formattedMatches.join(
+          '\n\n---\n\n'
+        )}`,
         conversationMessages: includedMessages,
       },
     };
@@ -1714,9 +1733,7 @@ ${conversationGuidance}`;
   /**
    * List all available sessions
    */
-  private handleListSessions(
-    query: RetrievalQuery
-  ): ToolExecutionResult {
+  private handleListSessions(query: RetrievalQuery): ToolExecutionResult {
     if (!query.listSessions) {
       return {
         success: true,
@@ -1760,7 +1777,7 @@ ${conversationGuidance}`;
     args: Record<string, unknown>,
     query: RetrievalQuery
   ): ToolExecutionResult {
-    const searchQuery = (args.query as string || '').toLowerCase();
+    const searchQuery = ((args.query as string) || '').toLowerCase();
 
     if (!searchQuery) {
       return { success: false, error: 'Search query required' };
@@ -1807,7 +1824,10 @@ ${conversationGuidance}`;
           const formatted = this.formatMessageForTool(msg, 200);
           const tokens = this.budget.estimate(formatted);
 
-          if (sessionTokens + tokens > CONVERSATION_TOOL_LIMITS.search_sessions) {
+          if (
+            sessionTokens + tokens >
+            CONVERSATION_TOOL_LIMITS.search_sessions
+          ) {
             break;
           }
 
@@ -1840,7 +1860,9 @@ ${conversationGuidance}`;
     // Format results
     const formatted = results
       .map((r) => {
-        return `**${r.sessionName}** (${r.sessionId}):\n${r.matches.join('\n---\n')}`;
+        return `**${r.sessionName}** (${r.sessionId}):\n${r.matches.join(
+          '\n---\n'
+        )}`;
       })
       .join('\n\n');
 
@@ -1877,7 +1899,8 @@ ${conversationGuidance}`;
         prefix = 'You responded with suggestions about';
         // Extract just the topic/summary, not the full code suggestions
         const firstLine = msg.content.split('\n')[0];
-        const summary = firstLine.length > 200 ? firstLine.slice(0, 200) + '...' : firstLine;
+        const summary =
+          firstLine.length > 200 ? firstLine.slice(0, 200) + '...' : firstLine;
         content = summary;
       }
 
@@ -1916,11 +1939,11 @@ ${conversationGuidance}`;
   private summarizeAssistantMessage(content: string): string {
     // Remove code blocks to avoid confusion
     const withoutCode = content.replace(/```[\s\S]*?```/g, '[code suggestion]');
-    
+
     // Take first few sentences or lines
     const lines = withoutCode.split('\n').filter((l) => l.trim());
     const summary = lines.slice(0, 3).join(' ').slice(0, 300);
-    
+
     return summary + (content.length > 300 ? '...' : '');
   }
 
@@ -2027,7 +2050,9 @@ ${conversationGuidance}`;
         accumulated.conversationContext = { messages: [] };
       }
       // Add messages that aren't already included
-      const existingContent = new Set(accumulated.conversationContext.messages.map(m => m.content));
+      const existingContent = new Set(
+        accumulated.conversationContext.messages.map((m) => m.content)
+      );
       for (const msg of data.conversationMessages) {
         if (!existingContent.has(msg.content)) {
           accumulated.conversationContext.messages.push(msg);
@@ -2077,6 +2102,7 @@ interface ToolExecutionResult {
   success: boolean;
   data?: ToolResultData;
   error?: string;
+  note?: string; // Additional guidance for the model
 }
 
 interface ToolCallRecord {

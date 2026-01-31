@@ -68,7 +68,10 @@ export class ContextAssembler {
     );
 
     // 1. Get system prompt based on strategy and context type
-    const systemPrompt = this.getSystemPrompt(result.strategy, hasConversationContext);
+    const systemPrompt = this.getSystemPrompt(
+      result.strategy,
+      hasConversationContext
+    );
     let usedTokens = this.budget.estimate(systemPrompt);
 
     // 2. Format conversation context (if available from retrieval)
@@ -93,9 +96,7 @@ export class ContextAssembler {
     usedTokens += this.budget.estimate(contextContent);
 
     // 4. Build final messages array
-    const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-    ];
+    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
 
     // Add the two-layer context (conversation + code) as user message
     const userContent = this.formatUserMessageWithTwoLayers(
@@ -126,22 +127,24 @@ export class ContextAssembler {
    */
   private getSystemPrompt(
     strategy: 'simple' | 'tools' | 'hybrid',
-    hasConversationContext: boolean = false
+    hasConversationContext: boolean = false,
+    _isConversationQuestion: boolean = false // Kept for compatibility but not used
   ): string {
     let basePrompt = SYSTEM_PROMPTS[strategy];
 
-    // Add two-layer context guidance when both are present
+    // Add guidance when conversation context is present
     if (hasConversationContext) {
       basePrompt += `
 
-TWO CONTEXT SECTIONS IN USER MESSAGE:
-1. <CONVERSATION_HISTORY> - Your previous answers to the user and their follow-up questions.
-2. <CODEBASE_CONTEXT> - Actual source code from the project (NOT your answers).
+CONTEXT SECTIONS IN USER MESSAGE:
+1. <CONVERSATION_HISTORY> - Your previous answers and the user's follow-up questions
+2. <CODEBASE_CONTEXT> - Actual source code from the project
 
-CRITICAL RULE FOR FOLLOW-UP QUESTIONS:
-- If user asks about previous discussion (e.g., "what did you suggest?", "what did you say?", "explain that"), ONLY answer from <CONVERSATION_HISTORY>
-- The <CODEBASE_CONTEXT> is irrelevant for follow-up questions about our conversation
-- Do NOT mix up what you suggested with what's actually in the code`;
+HOW TO USE THESE:
+- If the question references your previous response, use <CONVERSATION_HISTORY>
+- If the question is about code, use <CODEBASE_CONTEXT>
+- Some questions may need BOTH - that's fine
+- Do NOT confuse what you suggested with what's actually in the code`;
     }
 
     return basePrompt;
@@ -374,7 +377,7 @@ ${question}`;
 
     for (const msg of context.messages) {
       let formattedMsg: string;
-      
+
       if (msg.role === 'user') {
         const content = this.budget.truncate(msg.content, 300);
         formattedMsg = `User asked: ${content}`;
@@ -404,12 +407,15 @@ ${question}`;
     // Keep code blocks but abbreviate long ones (they contain the actual suggestions)
     const withAbbreviatedCode = content.replace(
       /```(\w*)\n([\s\S]{0,150})([\s\S]*?)```/g,
-      (_, lang, start, rest) => rest.length > 0 ? `\`\`\`${lang}\n${start}...\n\`\`\`` : `\`\`\`${lang}\n${start}\`\`\``
+      (_, lang, start, rest) =>
+        rest.length > 0
+          ? `\`\`\`${lang}\n${start}...\n\`\`\``
+          : `\`\`\`${lang}\n${start}\`\`\``
     );
-    
+
     // Take more content to preserve context - up to 800 chars
     const truncated = withAbbreviatedCode.slice(0, 800);
-    
+
     return truncated + (content.length > 800 ? '...' : '');
   }
 
