@@ -682,15 +682,30 @@ My question: ${query.question}`;
 
       this.log(`Model requested ${response.toolCalls.length} tool call(s)`);
 
-      // Process each tool call
-      for (const toolCall of response.toolCalls) {
-        // Check for 'done' tool
-        if (toolCall.name === 'done') {
-          this.log('Model called done() - finishing');
-          done = true;
-          break;
-        }
+      // Check if 'done' is one of the tool calls
+      const doneCall = response.toolCalls.find((tc) => tc.name === 'done');
+      if (doneCall) {
+        this.log('Model called done() - finishing');
+        done = true;
+        // Still need to add the assistant message with toolCalls for proper message history
+        messages.push({
+          role: 'assistant',
+          content: response.content || '',
+          toolCalls: response.toolCalls,
+        });
+        break;
+      }
 
+      // Add ONE assistant message with ALL tool calls from this response
+      // This is required by OpenAI: tool result messages must follow an assistant message with tool_calls
+      messages.push({
+        role: 'assistant',
+        content: response.content || '',
+        toolCalls: response.toolCalls,
+      });
+
+      // Process each tool call and add tool result messages
+      for (const toolCall of response.toolCalls) {
         this.logTool(
           toolCall.name,
           toolCall.arguments as Record<string, unknown>
@@ -778,11 +793,6 @@ My question: ${query.question}`;
           toolResultContent = `[CACHED] Already searched${queryInfo}. Results:\n${toolResultContent}\n\nIf you need more context, try a different search query or explore different directories.`;
         }
 
-        messages.push({
-          role: 'assistant',
-          content: `Called ${toolCall.name}`,
-        });
-
         // If a conversation tool returned results, STRONGLY instruct to call done()
         const isConversationTool = [
           'get_previous_answer',
@@ -793,6 +803,7 @@ My question: ${query.question}`;
           toolResultContent += `\n\nYou now have conversation context. If this answers the user's question, call done(). If you also need code context, you can explore the codebase.`;
         }
 
+        // Add tool result message (references the tool call by ID)
         messages.push({
           role: 'tool',
           content: toolResultContent,

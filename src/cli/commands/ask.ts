@@ -13,7 +13,7 @@ import {
   ContextAssembler,
   extractAnswerSummary,
 } from '../../context/assembler';
-import { OllamaRuntime } from '../../models/localModelClient';
+import { createRuntimeFromProjectConfig } from '../../models';
 import { logInfo, logError } from '../../core/logger';
 import { renderMarkdown, verbose } from '../ui';
 import { getProjectDbPath, getSessionsDir } from '../../storage/paths';
@@ -121,7 +121,7 @@ export async function askQuestion(
   }
 
   // Create model runtime (needed for tool-based retrieval)
-  const model = new OllamaRuntime(config);
+  const model = createRuntimeFromProjectConfig(config);
 
   // Get effective settings (project config + CLI options + defaults)
   const settings = getEffectiveSettings(config, {

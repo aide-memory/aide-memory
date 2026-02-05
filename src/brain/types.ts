@@ -262,8 +262,11 @@ export interface SessionState {
 export interface ProjectConfig {
   id: string;
   rootPath: string;
+  /** Model name - provider is auto-detected (gpt-* → OpenAI, claude-* → Anthropic, else → Ollama) */
   model: string;
+  /** Embedding model for vector operations */
   embeddingModel: string;
+  /** Ollama base URL (only used for local models) */
   ollamaBaseUrl: string;
 
   // Retrieval settings (optional - falls back to AIDE_DEFAULTS)

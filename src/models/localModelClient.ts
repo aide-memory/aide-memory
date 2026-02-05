@@ -14,9 +14,14 @@ import {
   ToolDefinition,
   ToolCallRequest,
 } from './types';
-import { ProjectConfig } from '../brain/types';
 
 export type Embedding = number[];
+
+export interface OllamaConfig {
+  model: string;
+  baseUrl: string;
+  embeddingModel?: string;
+}
 
 // ============================================================================
 // Ollama-Specific Types (internal)
@@ -72,10 +77,10 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
   private model: string;
   private embeddingModel: string;
 
-  constructor(config: ProjectConfig) {
-    this.baseUrl = config.ollamaBaseUrl.replace(/\/$/, '');
+  constructor(config: OllamaConfig) {
+    this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.model = config.model;
-    this.embeddingModel = config.embeddingModel;
+    this.embeddingModel = config.embeddingModel ?? 'all-minilm:latest';
   }
 
   /**
@@ -215,12 +220,30 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
 
   /**
    * Convert our generic messages to Ollama format
+   *
+   * Ollama format is similar to OpenAI but:
+   * - Arguments are objects (not JSON strings)
+   * - Tool calls don't have IDs (uses function name/args for matching)
    */
   private toOllamaMessages(messages: ChatMessage[]): OllamaMessage[] {
-    return messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    return messages.map((msg) => {
+      const ollamaMsg: OllamaMessage = {
+        role: msg.role,
+        content: msg.content,
+      };
+
+      // Handle assistant messages with tool calls
+      if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+        ollamaMsg.tool_calls = msg.toolCalls.map((tc) => ({
+          function: {
+            name: tc.name,
+            arguments: tc.arguments,
+          },
+        }));
+      }
+
+      return ollamaMsg;
+    });
   }
 
   /**

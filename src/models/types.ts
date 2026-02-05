@@ -15,6 +15,8 @@ export interface ChatMessage {
   content: string;
   /** For tool role: the tool call ID this result corresponds to */
   toolCallId?: string;
+  /** For assistant role: tool calls the model wants to make */
+  toolCalls?: ToolCallRequest[];
 }
 
 export interface ChatResponse {

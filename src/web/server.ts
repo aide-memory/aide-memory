@@ -15,7 +15,7 @@ import { SQLiteBrainStore } from '../brain/sqliteStore';
 import { createRetrievalStrategy } from '../retrieval';
 import { SessionManager } from '../session/sessionManager';
 import { ContextAssembler, extractAnswerSummary } from '../context/assembler';
-import { OllamaRuntime } from '../models/localModelClient';
+import { createRuntimeFromProjectConfig } from '../models';
 import { getProjectDbPath, getSessionsDir } from '../storage/paths';
 import { TokenBudgetManager } from '../core/tokenBudget';
 import { AIDE_DEFAULTS, getEffectiveSettings } from '../core/config';
@@ -467,7 +467,7 @@ async function handleQuestion(
 
   try {
     // Create model runtime
-    const model = new OllamaRuntime(currentConfig);
+    const model = createRuntimeFromProjectConfig(currentConfig);
 
     // Get effective settings (project config + runtime options + defaults)
     const settings = getEffectiveSettings(currentConfig, {

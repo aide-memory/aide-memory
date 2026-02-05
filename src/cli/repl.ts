@@ -16,7 +16,7 @@ import {
   extractAnswerSummary,
   parseSuggestedNotes,
 } from '../context/assembler';
-import { OllamaRuntime } from '../models/localModelClient';
+import { createRuntimeFromProjectConfig } from '../models';
 import { logError } from '../core/logger';
 import { getProjectDbPath, getSessionsDir } from '../storage/paths';
 import { TokenBudgetManager } from '../core/tokenBudget';
@@ -108,7 +108,7 @@ export async function startRepl(
   const store = new SQLiteBrainStore(dbPath);
   store.initialize();
 
-  const model = new OllamaRuntime(config);
+  const model = createRuntimeFromProjectConfig(config);
 
   // Get effective settings (project config + CLI options + defaults)
   const settings = getEffectiveSettings(config, {

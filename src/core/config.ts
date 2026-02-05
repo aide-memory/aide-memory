@@ -1,5 +1,8 @@
 /**
  * Project configuration management
+ *
+ * Config is minimal - just stores what the user specified.
+ * The model factory (src/models/modelFactory.ts) handles provider detection and defaults.
  */
 
 import fs from 'fs';
@@ -13,6 +16,12 @@ import { getProjectConfigPath, ensureProjectDirs } from '../storage/paths';
 // ============================================================================
 
 export const AIDE_DEFAULTS = {
+  /** Default model (local Ollama) */
+  model: 'gpt-5.2',
+  /** Default embedding model */
+  embeddingModel: 'all-minilm:latest',
+  /** Default Ollama base URL */
+  ollamaBaseUrl: 'http://127.0.0.1:11434/api',
   /** Token budget for both retrieval and context assembly */
   tokenBudget: 16000,
   /** Maximum code blocks to return from retrieval */
@@ -45,12 +54,13 @@ export function projectIdFromPath(rootPath: string): string {
 
 /**
  * Load existing project config or create a new one
+ *
+ * Config only stores what's explicitly set. Provider detection happens
+ * in the model factory when creating a runtime.
  */
 export async function loadOrCreateProjectConfig(
   rootPath: string,
-  overrides?: Partial<
-    Pick<ProjectConfig, 'model' | 'embeddingModel' | 'ollamaBaseUrl'>
-  >
+  overrides?: { model?: string }
 ): Promise<ProjectConfig> {
   const id = projectIdFromPath(rootPath);
   ensureProjectDirs(id);
@@ -68,16 +78,21 @@ export async function loadOrCreateProjectConfig(
       fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8');
     }
 
+    // Apply runtime model override (don't persist)
+    if (overrides?.model) {
+      cfg.model = overrides.model;
+    }
+
     return cfg;
   }
 
-  // Create new config with defaults
+  // Create new config with minimal defaults
   const config: ProjectConfig = {
     id,
     rootPath: path.resolve(rootPath),
-    model: overrides?.model ?? 'qwen3-coder:30b',
-    embeddingModel: overrides?.embeddingModel ?? 'all-minilm:latest',
-    ollamaBaseUrl: overrides?.ollamaBaseUrl ?? 'http://127.0.0.1:11434/api',
+    model: overrides?.model ?? AIDE_DEFAULTS.model,
+    embeddingModel: AIDE_DEFAULTS.embeddingModel,
+    ollamaBaseUrl: AIDE_DEFAULTS.ollamaBaseUrl,
   };
 
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
@@ -93,7 +108,6 @@ export function updateProjectConfig(
     Pick<
       ProjectConfig,
       | 'model'
-      | 'embeddingModel'
       | 'ollamaBaseUrl'
       | 'tokenBudget'
       | 'maxBlocks'
