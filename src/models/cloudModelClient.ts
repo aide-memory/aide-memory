@@ -251,7 +251,16 @@ export class OpenAIRuntime implements ToolCapableRuntime, EmbeddingRuntime {
 
       const toolCalls = this.parseToolCalls(message?.tool_calls);
 
-      return { content, toolCalls };
+      // Extract token usage from API response
+      const apiUsage = resp.data.usage;
+      const usage = apiUsage
+        ? {
+            inputTokens: apiUsage.prompt_tokens,
+            outputTokens: apiUsage.completion_tokens,
+          }
+        : undefined;
+
+      return { content, toolCalls, usage };
     } catch (err: any) {
       const status = err.response?.status;
       const data = err.response?.data;

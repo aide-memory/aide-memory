@@ -22,6 +22,7 @@ import {
   generateFileId,
   FileInfo,
 } from '../analysis/fileAnalyzer';
+import { SemanticSearchEngine } from '../retrieval/semanticSearch';
 import { logInfo, logError, logWarn } from '../core/logger';
 
 // ============================================================================
@@ -122,10 +123,12 @@ export class ProjectIndexer {
   private analyzer: TreeSitterAnalyzer;
   private config: Required<IndexerConfig>;
   private initialized = false;
+  private searchEngine?: SemanticSearchEngine;
 
-  constructor(graph: ProjectGraph, config: IndexerConfig = {}) {
+  constructor(graph: ProjectGraph, config: IndexerConfig = {}, searchEngine?: SemanticSearchEngine) {
     this.graph = graph;
     this.analyzer = new TreeSitterAnalyzer();
+    this.searchEngine = searchEngine;
     this.config = {
       filePatterns: config.filePatterns ?? DEFAULT_FILE_PATTERNS,
       ignorePatterns: config.ignorePatterns ?? DEFAULT_IGNORE_PATTERNS,
@@ -169,6 +172,22 @@ export class ProjectIndexer {
         }
       } catch (err) {
         logError(`Failed to index ${absPath}`, err);
+      }
+    }
+
+    // Generate embeddings if a semantic search engine is available
+    if (this.searchEngine) {
+      logInfo('Generating embeddings from raw source files...');
+      try {
+        const embeddingStats = await this.searchEngine.indexProject(rootPath, {
+          filePatterns: this.config.filePatterns,
+          ignorePatterns: this.config.ignorePatterns,
+        });
+        logInfo(
+          `Embeddings: ${embeddingStats.chunksCreated} chunks from ${embeddingStats.filesIndexed} files (${embeddingStats.chunksSkipped} unchanged)`
+        );
+      } catch (err) {
+        logError('Failed to generate embeddings', err);
       }
     }
 

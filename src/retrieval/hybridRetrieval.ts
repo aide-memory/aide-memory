@@ -16,9 +16,13 @@ import {
 import { RetrievalQuery } from '../brain/types';
 import { ProjectGraph } from '../brain/projectGraph';
 import { TokenBudgetManager } from '../core/tokenBudget';
+import { TokenTracker } from '../core/tokenTracker';
 import { SimpleGraphRetrieval } from './simpleGraphRetrieval';
 import { ToolBasedRetrieval, ToolRetrievalOptions } from './toolBasedRetrieval';
-import { ToolCapableRuntime } from '../models/types';
+import { GraphRetrieval } from './graphRetrieval';
+import { SemanticRetrieval } from './semanticRetrieval';
+import { SemanticSearchEngine } from './semanticSearch';
+import { ToolCapableRuntime, ModelRuntimes } from '../models/types';
 import { verbose as verboseUI } from '../cli/ui';
 
 // ============================================================================
@@ -124,6 +128,12 @@ export interface CreateRetrievalOptions {
   historyMode?: 'direct' | 'tools';
   /** For direct mode: how many messages to include */
   historyLimit?: number;
+  /** Token tracker for usage logging */
+  tokenTracker?: TokenTracker;
+  /** Model runtimes for new orchestration-based strategies */
+  modelRuntimes?: ModelRuntimes;
+  /** Semantic search engine for new strategies */
+  searchEngine?: SemanticSearchEngine;
 }
 
 /**
@@ -154,6 +164,62 @@ export function createRetrievalStrategy(
         return new SimpleGraphRetrieval(config, budget, options);
       }
       return new ToolBasedRetrieval(runtime, config, budget, options);
+
+    case 'graph':
+      if (!options?.searchEngine || !options?.modelRuntimes) {
+        console.warn(
+          '[aide] Graph strategy requires SemanticSearchEngine and ModelRuntimes. Falling back to hybrid.'
+        );
+        return new HybridRetrieval(runtime ?? null, config, budget, options);
+      }
+      return new GraphRetrieval(
+        options.searchEngine,
+        options.modelRuntimes,
+        config,
+        budget,
+        {
+          verbose: options.verbose,
+          tokenTracker: options.tokenTracker,
+        }
+      );
+
+    case 'semantic':
+      if (!options?.searchEngine || !options?.modelRuntimes) {
+        console.warn(
+          '[aide] Semantic strategy requires SemanticSearchEngine and ModelRuntimes. Falling back to simple.'
+        );
+        return new SimpleGraphRetrieval(config, budget, options);
+      }
+      return new SemanticRetrieval(
+        options.searchEngine,
+        options.modelRuntimes,
+        config,
+        budget,
+        {
+          verbose: options.verbose,
+          tokenTracker: options.tokenTracker,
+        }
+      );
+
+    case 'auto':
+      // Auto: pick best available
+      // Graph + embeddings -> graph strategy
+      // Embeddings only -> semantic strategy
+      // Neither -> fall back to hybrid/tools
+      if (options?.searchEngine?.hasEmbeddings() && options?.modelRuntimes) {
+        return new GraphRetrieval(
+          options.searchEngine,
+          options.modelRuntimes,
+          config,
+          budget,
+          {
+            verbose: options.verbose,
+            tokenTracker: options.tokenTracker,
+          }
+        );
+      }
+      // Fall through to hybrid
+      return new HybridRetrieval(runtime ?? null, config, budget, options);
 
     case 'hybrid':
     default:

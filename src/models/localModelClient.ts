@@ -66,6 +66,8 @@ interface OllamaChatResponse {
     content: string;
     tool_calls?: OllamaToolCall[];
   };
+  prompt_eval_count?: number;
+  eval_count?: number;
 }
 
 // ============================================================================
@@ -110,13 +112,23 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
         const vec = resp.data?.embeddings?.[0] as Embedding | undefined;
 
         if (!vec) {
-          throw new Error('No embedding returned from Ollama');
+          // Return a zero vector as placeholder for failed embeddings
+          embeddings.push([]);
+          continue;
         }
 
         embeddings.push(vec);
       } catch (err: any) {
         const status = err.response?.status;
         const data = err.response?.data;
+        const errorMsg = data?.error || '';
+
+        // Handle context length exceeded gracefully - return empty vector
+        if (status === 400 && errorMsg.includes('context length')) {
+          embeddings.push([]);
+          continue;
+        }
+
         console.error(
           '[aide:embed] Ollama error:',
           status,
@@ -124,12 +136,6 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
         );
         throw err;
       }
-    }
-
-    if (embeddings.length !== texts.length) {
-      throw new Error(
-        `Expected ${texts.length} embeddings, got ${embeddings.length}`
-      );
     }
 
     return embeddings;
@@ -198,7 +204,15 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
         }
       }
 
-      return { content, toolCalls };
+      // Extract token usage from Ollama response
+      const promptTokens = resp.data?.prompt_eval_count ?? 0;
+      const completionTokens = resp.data?.eval_count ?? 0;
+      const usage =
+        promptTokens > 0 || completionTokens > 0
+          ? { inputTokens: promptTokens, outputTokens: completionTokens }
+          : undefined;
+
+      return { content, toolCalls, usage };
     } catch (err: any) {
       const status = err.response?.status;
       const data = err.response?.data;

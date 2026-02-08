@@ -164,4 +164,11 @@ export const verbose = {
       fullContent: '**Result:**\n```\n' + result + '\n```',
     });
   },
+
+  /** Token usage summary (uses TokenTracker.printSummary internally) */
+  tokenSummary: (summary: string) => {
+    // Print the pre-formatted summary from TokenTracker
+    console.log(chalk.gray(summary));
+    emitWebLog('tokens', summary, { fullContent: '```\n' + summary + '\n```' });
+  },
 };

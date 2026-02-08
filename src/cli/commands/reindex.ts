@@ -10,8 +10,11 @@ import fg from 'fast-glob';
 import { SQLiteBrainStore } from '../../brain/sqliteStore';
 import { ProjectConfig, FileRecord } from '../../brain/types';
 import { ProjectIndexer } from '../../project/indexer';
+import { SemanticSearchEngine } from '../../retrieval/semanticSearch';
+import { OllamaRuntime } from '../../models/localModelClient';
+import { detectProvider } from '../../models/modelFactory';
 import { analyzeFile, generateFileId } from '../../analysis/fileAnalyzer';
-import { logInfo, logError } from '../../core/logger';
+import { logInfo, logError, logWarn } from '../../core/logger';
 import { getProjectDbPath } from '../../storage/paths';
 
 export interface ReindexOptions {
@@ -88,8 +91,32 @@ export async function reindexProject(
   const store = new SQLiteBrainStore(dbPath);
   store.initialize();
 
-  // Create indexer
-  const indexer = new ProjectIndexer(store);
+  // Create embedding runtime for embedding generation (only needs embedding model, not reasoning/context)
+  let searchEngine: SemanticSearchEngine | undefined;
+  try {
+    const embeddingModelName = config.models.embedding;
+    const embeddingProvider = detectProvider(embeddingModelName);
+
+    if (embeddingProvider === 'ollama') {
+      const embeddingRuntime = new OllamaRuntime({
+        model: embeddingModelName,
+        baseUrl: config.ollamaBaseUrl,
+        embeddingModel: embeddingModelName,
+      });
+      searchEngine = new SemanticSearchEngine(
+        store,
+        embeddingRuntime,
+        embeddingModelName
+      );
+    } else {
+      logWarn(`Cloud embedding models require API keys. Skipping embedding generation.`);
+    }
+  } catch (err) {
+    logWarn(`Embedding model not available, skipping embedding generation: ${err}`);
+  }
+
+  // Create indexer (with optional embedding generation)
+  const indexer = new ProjectIndexer(store, {}, searchEngine);
 
   try {
     await indexer.initialize();
@@ -175,6 +202,19 @@ export async function reindexProject(
           store.deleteFile(file.id);
           removed++;
         }
+      }
+    }
+
+    // Regenerate embeddings if changes were made and search engine is available
+    if (searchEngine && (added > 0 || updated > 0 || removed > 0)) {
+      logInfo('Regenerating embeddings...');
+      try {
+        const embeddingStats = await searchEngine.indexProject(config.rootPath);
+        logInfo(
+          `Embeddings: ${embeddingStats.chunksCreated} chunks from ${embeddingStats.filesIndexed} files (${embeddingStats.chunksSkipped} unchanged)`
+        );
+      } catch (err) {
+        logError('Failed to regenerate embeddings', err);
       }
     }
 

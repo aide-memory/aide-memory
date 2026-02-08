@@ -53,7 +53,7 @@ export interface RetrievalResult {
   relations: Relation[];
 
   /** Which strategy produced this result */
-  strategy: 'simple' | 'tools' | 'hybrid';
+  strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic';
 
   /** Estimated token count for the content */
   tokenEstimate: number;
@@ -119,9 +119,12 @@ export interface RetrievalStrategy {
 // Strategy Configuration
 // ============================================================================
 
+/** Strategy type including both old and new names */
+export type StrategyType = 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto';
+
 export interface RetrievalConfig {
   /** Strategy to use */
-  strategy: 'simple' | 'tools' | 'hybrid';
+  strategy: StrategyType;
 
   /** Maximum depth for BFS graph traversal */
   maxDepth: number;

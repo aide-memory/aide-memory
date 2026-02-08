@@ -13,11 +13,14 @@ import {
   ContextAssembler,
   extractAnswerSummary,
 } from '../../context/assembler';
-import { createRuntimeFromProjectConfig } from '../../models';
+import { createRuntimes } from '../../models';
+import { ModelRuntimes } from '../../models/types';
+import { SemanticSearchEngine } from '../../retrieval/semanticSearch';
 import { logInfo, logError } from '../../core/logger';
 import { renderMarkdown, verbose } from '../ui';
 import { getProjectDbPath, getSessionsDir } from '../../storage/paths';
 import { TokenBudgetManager } from '../../core/tokenBudget';
+import { TokenTracker } from '../../core/tokenTracker';
 import { AIDE_DEFAULTS, getEffectiveSettings } from '../../core/config';
 
 /**
@@ -120,8 +123,26 @@ export async function askQuestion(
     session = new SessionManager(config.id, store, { sessionsDir });
   }
 
-  // Create model runtime (needed for tool-based retrieval)
-  const model = createRuntimeFromProjectConfig(config);
+  // Create token tracker for this query
+  const tokenTracker = new TokenTracker();
+
+  // Create model runtimes (reasoning, context, embedding)
+  let modelRuntimes: ModelRuntimes | undefined;
+  try {
+    modelRuntimes = createRuntimes(config);
+  } catch (err) {
+    logInfo(`Could not create all model runtimes (${err}), some strategies may be limited.`);
+  }
+
+  // Create semantic search engine from embeddings in the store
+  let searchEngine: SemanticSearchEngine | undefined;
+  if (modelRuntimes?.embedding) {
+    searchEngine = new SemanticSearchEngine(
+      store,
+      modelRuntimes.embedding,
+      config.models.embedding
+    );
+  }
 
   // Get effective settings (project config + CLI options + defaults)
   const settings = getEffectiveSettings(config, {
@@ -144,17 +165,23 @@ export async function askQuestion(
       tokenBudget: settings.tokenBudget,
       maxBlocks: settings.maxBlocks,
     },
-    model, // Pass runtime for tool-based retrieval
+    modelRuntimes?.reasoning, // Pass reasoning runtime for legacy tool-based retrieval fallback
     undefined, // budget
     {
       verbose: options.debug,
       historyMode: settings.historyMode,
       historyLimit: settings.historyLimit,
+      tokenTracker,
+      modelRuntimes,
+      searchEngine,
     }
   );
 
-  // Retrieve relevant context using session focus
+  // Log effective configuration
   if (options.debug) {
+    logInfo(`Models: reasoning=${config.models.reasoning}, context=${config.models.context}, embedding=${config.models.embedding}`);
+    logInfo(`Strategy: ${settings.strategy} | Token budget: ${settings.tokenBudget}`);
+    logInfo(`Search engine: ${searchEngine ? 'active' : 'not available'}`);
     logInfo('Retrieving context...');
   }
 
@@ -192,56 +219,111 @@ export async function askQuestion(
     logInfo('');
   }
 
-  // Assemble context using effective settings
-  const assembler = new ContextAssembler({
-    projectRoot: config.rootPath,
-    maxContextTokens: settings.tokenBudget,
-  });
-
-  const assembled = assembler.assemble(question, result, session.getState());
-
-  if (options.debug) {
-    logInfo(
-      `Context: ${assembled.metadata.symbolCount} symbols, ${assembled.metadata.blockCount} blocks`
-    );
-    logInfo(`Estimated tokens: ${assembled.tokenEstimate}`);
-    logInfo(`Truncated: ${assembled.metadata.wasTruncated}`);
-    logInfo('');
-  }
+  // =====================================================================
+  // Orchestrated strategies (graph, semantic) return a fully formed answer.
+  // The orchestrator does planning -> tool execution -> context evaluation -> answering.
+  // Legacy strategies (simple, tools, hybrid) return raw blocks for assembly.
+  // =====================================================================
+  const isOrchestrated = result.strategy === 'graph' || result.strategy === 'semantic';
 
   // Add user message to session and save
   session.setLastQuestion(question);
   session.addMessage({ role: 'user', content: question });
   session.save();
 
-  // Build messages with recent history
-  const recentHistory = session.getHistory().slice(-8);
-
-  // Build messages from AssembledContext
-  const messages: ChatMessage[] = [
-    { role: 'system', content: assembled.systemPrompt },
-    ...recentHistory.slice(0, -1), // Exclude last user message (included in assembled.messages)
-    ...assembled.messages.filter((m) => m.role !== 'system'),
-  ];
-
-  // Verbose logging if debug is enabled
-  if (options.debug) {
-    const budget = new TokenBudgetManager(
-      options.tokenBudget ?? AIDE_DEFAULTS.tokenBudget
-    );
-    logVerbose(messages, budget);
-    logInfo('Querying model...');
-    logInfo('');
-  }
-
   try {
-    const response = await model.chat(messages);
-    renderMarkdown(response.content);
+    let responseContent: string;
+
+    if (isOrchestrated && result.blocks.length > 0) {
+      // The orchestrator already answered — the answer is in the first block
+      responseContent = result.blocks[0].content;
+
+      if (options.debug) {
+        logInfo(`Using orchestrated answer (strategy: ${result.strategy})`);
+        logInfo(`Token estimate: ${result.tokenEstimate}`);
+        logInfo('');
+      }
+    } else {
+      // Legacy path: assemble context and query the model
+      const assembler = new ContextAssembler({
+        projectRoot: config.rootPath,
+        maxContextTokens: settings.tokenBudget,
+      });
+
+      const assembled = assembler.assemble(question, result, session.getState());
+
+      // Track context assembly tokens
+      tokenTracker.record(
+        'context_assembly',
+        'reasoning',
+        'context assembly',
+        assembled.tokenEstimate,
+        0
+      );
+
+      if (options.debug) {
+        logInfo(
+          `Context: ${assembled.metadata.symbolCount} symbols, ${assembled.metadata.blockCount} blocks`
+        );
+        logInfo(`Estimated tokens: ${assembled.tokenEstimate}`);
+        logInfo(`Truncated: ${assembled.metadata.wasTruncated}`);
+        logInfo('');
+      }
+
+      // Build messages with recent history
+      const recentHistory = session.getHistory().slice(-8);
+
+      // Build messages from AssembledContext
+      const messages: ChatMessage[] = [
+        { role: 'system', content: assembled.systemPrompt },
+        ...recentHistory.slice(0, -1),
+        ...assembled.messages.filter((m) => m.role !== 'system'),
+      ];
+
+      // Verbose logging if debug is enabled
+      if (options.debug) {
+        const budget = new TokenBudgetManager(
+          options.tokenBudget ?? AIDE_DEFAULTS.tokenBudget
+        );
+        logVerbose(messages, budget);
+        logInfo('Querying model...');
+        logInfo('');
+      }
+
+      // Use reasoning model for the final answer
+      const reasoningModel = modelRuntimes?.reasoning;
+      if (!reasoningModel) {
+        logError('Reasoning model not available. Cannot generate answer.');
+        store.close();
+        process.exit(1);
+      }
+
+      const response = await reasoningModel.chat(messages);
+
+      // Track final model response tokens
+      if (response.usage) {
+        tokenTracker.record(
+          'model_response',
+          'reasoning',
+          'final answer',
+          response.usage.inputTokens,
+          response.usage.outputTokens
+        );
+      }
+
+      responseContent = response.content;
+    }
+
+    // Display the answer
+    renderMarkdown(responseContent);
+
+    // Print token usage summary
+    tokenTracker.printSummary();
 
     // Add response to session and save
-    session.addMessage({ role: 'assistant', content: response.content });
-    session.setLastAnswerSummary(extractAnswerSummary(response.content));
-    session.updateFocusFromResponse(response.content);
+    session.addMessage({ role: 'assistant', content: responseContent });
+    session.setLastAnswerSummary(extractAnswerSummary(responseContent));
+    session.updateFocusFromResponse(responseContent);
 
     // Update focus with symbols from result
     for (const sym of result.symbols.slice(0, 3)) {

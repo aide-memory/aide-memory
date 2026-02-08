@@ -6,7 +6,10 @@ import fs from 'fs';
 import { SQLiteBrainStore } from '../../brain/sqliteStore';
 import { ProjectConfig } from '../../brain/types';
 import { ProjectIndexer } from '../../project/indexer';
-import { logInfo, logError } from '../../core/logger';
+import { SemanticSearchEngine } from '../../retrieval/semanticSearch';
+import { OllamaRuntime } from '../../models/localModelClient';
+import { detectProvider } from '../../models/modelFactory';
+import { logInfo, logError, logWarn } from '../../core/logger';
 import { getProjectDbPath, getSessionsDir } from '../../storage/paths';
 import { SessionManager } from '../../session/sessionManager';
 
@@ -45,8 +48,32 @@ export async function initProject(
     logInfo(`Cleared ${deleted} session files.`);
   }
 
-  // Create indexer and index all files
-  const indexer = new ProjectIndexer(store);
+  // Create embedding runtime for embedding generation (only needs embedding model, not reasoning/context)
+  let searchEngine: SemanticSearchEngine | undefined;
+  try {
+    const embeddingModelName = config.models.embedding;
+    const embeddingProvider = detectProvider(embeddingModelName);
+
+    if (embeddingProvider === 'ollama') {
+      const embeddingRuntime = new OllamaRuntime({
+        model: embeddingModelName,
+        baseUrl: config.ollamaBaseUrl,
+        embeddingModel: embeddingModelName,
+      });
+      searchEngine = new SemanticSearchEngine(
+        store,
+        embeddingRuntime,
+        embeddingModelName
+      );
+    } else {
+      logWarn(`Cloud embedding models require API keys. Skipping embedding generation.`);
+    }
+  } catch (err) {
+    logWarn(`Embedding model not available, skipping embedding generation: ${err}`);
+  }
+
+  // Create indexer and index all files (with optional embedding generation)
+  const indexer = new ProjectIndexer(store, {}, searchEngine);
 
   try {
     await indexer.initialize();

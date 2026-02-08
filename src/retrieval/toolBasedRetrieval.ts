@@ -25,6 +25,7 @@ import {
 } from '../brain/types';
 import { ProjectGraph } from '../brain/projectGraph';
 import { TokenBudgetManager } from '../core/tokenBudget';
+import { TokenTracker } from '../core/tokenTracker';
 import {
   ToolCapableRuntime,
   ToolDefinition,
@@ -328,6 +329,8 @@ export interface ToolRetrievalOptions {
   historyMode?: 'direct' | 'tools';
   /** For direct mode: how many messages to include */
   historyLimit?: number;
+  /** Token tracker for usage logging */
+  tokenTracker?: TokenTracker;
 }
 
 export class ToolBasedRetrieval implements RetrievalStrategy {
@@ -337,6 +340,7 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
   private verbose: boolean;
   private historyMode: 'direct' | 'tools';
   private historyLimit: number;
+  private tokenTracker?: TokenTracker;
 
   readonly tools: ToolDefinition[];
 
@@ -352,6 +356,7 @@ export class ToolBasedRetrieval implements RetrievalStrategy {
     this.verbose = options?.verbose ?? false;
     this.historyMode = options?.historyMode ?? 'tools';
     this.historyLimit = options?.historyLimit ?? 6;
+    this.tokenTracker = options?.tokenTracker;
 
     // Build tools list - include conversation tools if historyMode is 'tools'
     this.tools =
@@ -625,6 +630,17 @@ My question: ${query.question}`;
 
       // Ask model what tools to call
       const response = await this.runtime.chatWithTools(messages, this.tools);
+
+      // Track token usage from model response
+      if (this.tokenTracker && response.usage) {
+        this.tokenTracker.record(
+          'tool_call',
+          'context',
+          `retrieval iteration ${iteration}`,
+          response.usage.inputTokens,
+          response.usage.outputTokens
+        );
+      }
 
       // Log model's response
       if (this.verbose) {

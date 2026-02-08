@@ -27,7 +27,7 @@ export interface AssembledContext {
 
 export interface ContextMetadata {
   /** Which retrieval strategy was used */
-  strategy: 'simple' | 'tools' | 'hybrid';
+  strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic';
 
   /** Number of symbols included */
   symbolCount: number;

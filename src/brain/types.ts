@@ -259,20 +259,54 @@ export interface SessionState {
 // Project Config
 // ============================================================================
 
+export interface ModelRoleConfig {
+  /** High-level planning, answering, and decision-making */
+  reasoning: string;
+  /** Context gathering, tool call iteration, relevance evaluation */
+  context: string;
+  /** Vector embedding generation */
+  embedding: string;
+}
+
 export interface ProjectConfig {
   id: string;
   rootPath: string;
-  /** Model name - provider is auto-detected (gpt-* → OpenAI, claude-* → Anthropic, else → Ollama) */
-  model: string;
-  /** Embedding model for vector operations */
-  embeddingModel: string;
-  /** Ollama base URL (only used for local models) */
+  /** All three model roles -- required */
+  models: ModelRoleConfig;
+  /** Ollama base URL (for local models) */
   ollamaBaseUrl: string;
 
-  // Retrieval settings (optional - falls back to AIDE_DEFAULTS)
+  // === Optional overrides (fall back to AIDE_DEFAULTS) ===
+
+  /** Token limits override */
+  tokens?: {
+    globalBudget?: number;
+    maxModelInput?: number;
+    reservedForResponse?: number;
+  };
+
+  /** Retrieval strategy override */
+  strategy?: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto';
+
+  /** Orchestration override */
+  orchestration?: {
+    maxIterations?: number;
+    maxToolCallsPerBatch?: number;
+    enableContextStripping?: boolean;
+  };
+
+  /** Embedding override */
+  embedding?: {
+    batchSize?: number;
+    chunkMaxTokens?: number;
+    chunkOverlapLines?: number;
+    minScore?: number;
+    topK?: number;
+  };
+
+  // Legacy retrieval settings (still supported)
   tokenBudget?: number;
   maxBlocks?: number;
-  strategy?: 'simple' | 'tools' | 'hybrid';
   hybridMode?: 'code' | 'hints';
   historyMode?: 'direct' | 'tools';
   historyLimit?: number;

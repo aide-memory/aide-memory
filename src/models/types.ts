@@ -23,6 +23,11 @@ export interface ChatResponse {
   content: string;
   /** Tool calls requested by the model (if any) */
   toolCalls?: ToolCallRequest[];
+  /** Token usage from the API (if available) */
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+  };
 }
 
 // ============================================================================
@@ -105,6 +110,33 @@ export interface ToolCapableRuntime extends ModelRuntime {
  */
 export interface EmbeddingRuntime {
   embed(texts: string[]): Promise<number[][]>;
+}
+
+// ============================================================================
+// Model Roles
+// ============================================================================
+
+/** The three model roles in the system */
+export type ModelRole = 'reasoning' | 'context' | 'embedding';
+
+/** Configuration for which model to use for each role */
+export interface ModelRoleConfig {
+  /** High-level planning, answering, and decision-making */
+  reasoning: string;
+  /** Context gathering, tool call iteration, relevance evaluation */
+  context: string;
+  /** Vector embedding generation */
+  embedding: string;
+}
+
+/** Runtime instances for all three model roles */
+export interface ModelRuntimes {
+  /** High-level planning + answering model */
+  reasoning: ToolCapableRuntime;
+  /** Context gathering + iteration model */
+  context: ToolCapableRuntime;
+  /** Embedding model for vector operations */
+  embedding: EmbeddingRuntime;
 }
 
 // ============================================================================

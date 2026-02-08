@@ -126,11 +126,13 @@ export class ContextAssembler {
    * When conversation context is present, adds guidance for using both contexts
    */
   private getSystemPrompt(
-    strategy: 'simple' | 'tools' | 'hybrid',
+    strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic',
     hasConversationContext: boolean = false,
     _isConversationQuestion: boolean = false // Kept for compatibility but not used
   ): string {
-    let basePrompt = SYSTEM_PROMPTS[strategy];
+    // Map new strategies to existing prompts
+    const promptKey = strategy === 'graph' || strategy === 'semantic' ? 'tools' : strategy;
+    let basePrompt = SYSTEM_PROMPTS[promptKey];
 
     // Add guidance when conversation context is present
     if (hasConversationContext) {

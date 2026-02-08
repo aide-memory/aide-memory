@@ -7,7 +7,7 @@
  * - Runtime instantiation
  */
 
-import { ToolCapableRuntime } from './types';
+import { ToolCapableRuntime, EmbeddingRuntime, ModelRuntimes } from './types';
 import { OllamaRuntime } from './localModelClient';
 import {
   OpenAIRuntime,
@@ -163,15 +163,56 @@ export function createRuntime(
 }
 
 /**
- * Create a runtime from ProjectConfig
+ * Create a runtime from ProjectConfig (uses reasoning model for backward compat)
  */
 export function createRuntimeFromProjectConfig(
   projectConfig: ProjectConfig
 ): ToolCapableRuntime {
-  return createRuntime(projectConfig.model, {
+  return createRuntime(projectConfig.models.reasoning, {
     ollamaBaseUrl: projectConfig.ollamaBaseUrl,
-    embeddingModel: projectConfig.embeddingModel,
+    embeddingModel: projectConfig.models.embedding,
   });
+}
+
+/**
+ * Create all three model runtimes from ProjectConfig
+ */
+export function createRuntimes(projectConfig: ProjectConfig): ModelRuntimes {
+  const ollamaBaseUrl = projectConfig.ollamaBaseUrl;
+  const embeddingModelName = projectConfig.models.embedding;
+
+  const reasoning = createRuntime(projectConfig.models.reasoning, {
+    ollamaBaseUrl,
+    embeddingModel: embeddingModelName,
+  });
+
+  // Context model may be the same as reasoning (same model name = same config)
+  const context =
+    projectConfig.models.context === projectConfig.models.reasoning
+      ? reasoning
+      : createRuntime(projectConfig.models.context, {
+          ollamaBaseUrl,
+          embeddingModel: embeddingModelName,
+        });
+
+  // Embedding runtime: create from the embedding model name
+  // OllamaRuntime and OpenAIRuntime both implement EmbeddingRuntime
+  const embeddingProvider = detectProvider(embeddingModelName);
+  let embedding: EmbeddingRuntime;
+
+  if (embeddingProvider === 'ollama') {
+    embedding = new OllamaRuntime({
+      model: embeddingModelName,
+      baseUrl: ollamaBaseUrl,
+      embeddingModel: embeddingModelName,
+    });
+  } else {
+    // For cloud embedding models, use the reasoning runtime's embedding capability
+    // (OpenAIRuntime implements EmbeddingRuntime)
+    embedding = reasoning as unknown as EmbeddingRuntime;
+  }
+
+  return { reasoning, context, embedding };
 }
 
 /**

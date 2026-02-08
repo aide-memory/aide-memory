@@ -16,28 +16,50 @@ import { getProjectConfigPath, ensureProjectDirs } from '../storage/paths';
 // ============================================================================
 
 export const AIDE_DEFAULTS = {
-  /** Default model (local Ollama) */
-  model: 'gpt-5.2',
-  /** Default embedding model */
-  embeddingModel: 'all-minilm:latest',
-  /** Default Ollama base URL */
+  // === Model Roles (all 3 required) ===
+  models: {
+    reasoning: 'qwen3-coder:30b',       // High-level planning + answering
+    context: 'qwen3-coder:30b',         // Context gathering, iteration, relevance eval
+    embedding: 'all-minilm:latest',      // Vector embeddings (Ollama)
+  },
+
+  // === Ollama (for local models) ===
   ollamaBaseUrl: 'http://127.0.0.1:11434/api',
-  /** Token budget for both retrieval and context assembly */
+
+  // === Token Limits ===
+  tokens: {
+    globalBudget: 16000,          // Total token budget for assembled context
+    maxModelInput: 128000,        // Max tokens to send to any model
+    reservedForResponse: 4000,    // Reserved for model response generation
+  },
+
+  /** Token budget (alias for tokens.globalBudget, used throughout codebase) */
   tokenBudget: 16000,
-  /** Maximum code blocks to return from retrieval */
+
+  // === Retrieval Strategy ===
+  strategy: 'auto' as 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto',
   maxBlocks: 10,
-  /** Maximum graph traversal depth */
   maxDepth: 2,
-  /** Maximum fanout per node during graph traversal */
   maxFanout: 5,
-  /** Default retrieval strategy */
-  strategy: 'tools' as const,
-  /** Default hybrid mode */
-  hybridMode: 'code' as const,
-  /** History access mode for retrieval model: 'direct' includes last N messages, 'tools' uses on-demand tools */
+  hybridMode: 'code' as 'code' | 'hints',
   historyMode: 'tools' as 'direct' | 'tools',
-  /** For direct mode: how many recent messages to include */
   historyLimit: 6,
+
+  // === Orchestration ===
+  orchestration: {
+    maxIterations: 5,             // Max context-model loops
+    maxToolCallsPerBatch: 10,     // Max tool calls per batch
+    enableContextStripping: true, // Context model strips irrelevant results
+  },
+
+  // === Embedding ===
+  embedding: {
+    batchSize: 50,                // Chunks per embedding API call
+    chunkMaxTokens: 256,          // Max tokens per chunk
+    chunkOverlapLines: 2,         // Lines of overlap between chunks
+    minScore: 0.3,                // Minimum similarity score threshold
+    topK: 10,                     // Default top-K search results
+  },
 } as const;
 
 /**
@@ -70,30 +92,53 @@ export async function loadOrCreateProjectConfig(
   // Load existing config if present
   if (fs.existsSync(configPath)) {
     const raw = fs.readFileSync(configPath, 'utf8');
-    const cfg = JSON.parse(raw) as ProjectConfig;
+    const cfg = JSON.parse(raw) as Record<string, unknown>;
 
-    // Ensure rootPath is up to date (in case project was moved)
-    if (cfg.rootPath !== rootPath) {
-      cfg.rootPath = rootPath;
+    // Migrate legacy config: if old `model` field exists but no `models`, convert
+    if (cfg.model && !cfg.models) {
+      cfg.models = {
+        reasoning: cfg.model as string,
+        context: cfg.model as string,
+        embedding: (cfg.embeddingModel as string) ?? AIDE_DEFAULTS.models.embedding,
+      };
+      delete cfg.model;
+      delete cfg.embeddingModel;
       fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8');
     }
 
-    // Apply runtime model override (don't persist)
-    if (overrides?.model) {
-      cfg.model = overrides.model;
+    const result = cfg as unknown as ProjectConfig;
+
+    // Ensure rootPath is up to date (in case project was moved)
+    if (result.rootPath !== rootPath) {
+      result.rootPath = rootPath;
+      fs.writeFileSync(configPath, JSON.stringify(result, null, 2), 'utf8');
     }
 
-    return cfg;
+    // Apply runtime model override (don't persist) - overrides reasoning model
+    if (overrides?.model) {
+      result.models = { ...result.models, reasoning: overrides.model };
+    }
+
+    // Ensure models field exists with defaults
+    if (!result.models) {
+      result.models = { ...AIDE_DEFAULTS.models };
+    }
+
+    return result;
   }
 
   // Create new config with minimal defaults
   const config: ProjectConfig = {
     id,
     rootPath: path.resolve(rootPath),
-    model: overrides?.model ?? AIDE_DEFAULTS.model,
-    embeddingModel: AIDE_DEFAULTS.embeddingModel,
+    models: { ...AIDE_DEFAULTS.models },
     ollamaBaseUrl: AIDE_DEFAULTS.ollamaBaseUrl,
   };
+
+  // Apply runtime model override
+  if (overrides?.model) {
+    config.models.reasoning = overrides.model;
+  }
 
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
   return config;
@@ -107,7 +152,7 @@ export function updateProjectConfig(
   updates: Partial<
     Pick<
       ProjectConfig,
-      | 'model'
+      | 'models'
       | 'ollamaBaseUrl'
       | 'tokenBudget'
       | 'maxBlocks'
@@ -131,7 +176,7 @@ export interface RetrievalSettings {
   maxBlocks: number;
   maxDepth: number;
   maxFanout: number;
-  strategy: 'simple' | 'tools' | 'hybrid';
+  strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto';
   hybridMode: 'code' | 'hints';
   historyMode: 'direct' | 'tools';
   historyLimit: number;

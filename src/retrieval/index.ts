@@ -17,6 +17,8 @@ export {
   // Two-layer context types
   CodeContext,
   ConversationContext,
+  // Strategy type
+  StrategyType,
 } from './types';
 
 // Retrieval strategies
@@ -36,3 +38,10 @@ export {
   createRetrievalStrategy,
   CreateRetrievalOptions,
 } from './hybridRetrieval';
+export { GraphRetrieval } from './graphRetrieval';
+export { SemanticRetrieval } from './semanticRetrieval';
+export {
+  SemanticSearchEngine,
+  SemanticSearchResult,
+  SearchOptions,
+} from './semanticSearch';

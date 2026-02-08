@@ -114,7 +114,7 @@ program
   .option('--max-blocks <blocks>', 'Max code blocks to include', '10')
   .option(
     '-s, --strategy <strategy>',
-    'Retrieval strategy: simple, tools, hybrid'
+    'Retrieval strategy: auto, graph, semantic, simple, tools, hybrid'
   )
   .option(
     '--hybrid-mode <mode>',
@@ -162,7 +162,7 @@ program
           fanout: parseInt(options.fanout || '5', 10),
           tokenBudget,
           maxBlocks,
-          strategy: options.strategy as 'simple' | 'tools' | 'hybrid',
+          strategy: options.strategy as 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto',
           hybridMode: options.hybridMode as 'code' | 'hints',
           historyMode: options.historyMode as 'direct' | 'tools',
           debug: options.debug,
@@ -223,8 +223,8 @@ program
   .option('-n, --new', 'Start a new session instead of resuming')
   .option('--clear-history', 'Clear chat history before starting')
   .option(
-    '-s, --strategy <strategy>',
-    'Retrieval strategy: simple, tools, hybrid'
+    '--strategy <strategy>',
+    'Retrieval strategy: auto, graph, semantic, simple, tools, hybrid'
   )
   .option(
     '--hybrid-mode <mode>',
@@ -280,7 +280,7 @@ program
         await startRepl(config, {
           newSession: options.new,
           clearHistory: options.clearHistory,
-          strategy: options.strategy as 'simple' | 'tools' | 'hybrid',
+          strategy: options.strategy as 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto',
           hybridMode: options.hybridMode as 'code' | 'hints',
           historyMode: options.historyMode as 'direct' | 'tools',
           tokenBudget: options.tokenBudget

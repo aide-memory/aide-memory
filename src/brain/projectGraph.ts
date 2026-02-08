@@ -195,6 +195,47 @@ export interface ProjectGraph {
       limit?: number;
     }
   ): SymbolRecord[];
+
+  // =========================================================================
+  // Embedding Operations
+  // =========================================================================
+
+  /** Insert or update an embedding record */
+  upsertEmbedding(record: {
+    id: string;
+    filePath: string;
+    content: string;
+    startLine: number;
+    endLine: number;
+    contentHash: string;
+    embedding: Float32Array;
+    model: string;
+  }): void;
+
+  /** Get all embeddings for similarity search */
+  getAllEmbeddings(): Array<{
+    id: string;
+    filePath: string;
+    content: string;
+    startLine: number;
+    endLine: number;
+    embedding: Float32Array;
+  }>;
+
+  /** Get content hashes for a file (for incremental re-indexing) */
+  getEmbeddingHashesForFile(filePath: string): Set<string>;
+
+  /** Delete embeddings for a file */
+  deleteEmbeddingsForFile(filePath: string): void;
+
+  /** Delete all embeddings */
+  clearEmbeddings(): void;
+
+  /** Check if any embeddings exist */
+  hasEmbeddings(): boolean;
+
+  /** Get embedding stats */
+  getEmbeddingStats(): { totalChunks: number; totalFiles: number };
 }
 
 /**

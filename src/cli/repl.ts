@@ -16,10 +16,13 @@ import {
   extractAnswerSummary,
   parseSuggestedNotes,
 } from '../context/assembler';
-import { createRuntimeFromProjectConfig } from '../models';
-import { logError } from '../core/logger';
+import { createRuntimes } from '../models';
+import { ModelRuntimes } from '../models/types';
+import { SemanticSearchEngine } from '../retrieval/semanticSearch';
+import { logError, logInfo, logWarn } from '../core/logger';
 import { getProjectDbPath, getSessionsDir } from '../storage/paths';
 import { TokenBudgetManager } from '../core/tokenBudget';
+import { TokenTracker } from '../core/tokenTracker';
 import { AIDE_DEFAULTS, getEffectiveSettings } from '../core/config';
 
 const MAX_HISTORY_MESSAGES = 8;
@@ -30,7 +33,7 @@ export interface ReplOptions {
   /** Clear chat history before starting (keeps focus) */
   clearHistory?: boolean;
   /** Retrieval strategy to use */
-  strategy?: RetrievalConfig['strategy'];
+  strategy?: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto';
   /** Hybrid mode: 'code' (full code upfront) or 'hints' (entry points only) */
   hybridMode?: 'code' | 'hints';
   /** History mode: 'direct' includes history in prompt, 'tools' provides on-demand access */
@@ -108,7 +111,23 @@ export async function startRepl(
   const store = new SQLiteBrainStore(dbPath);
   store.initialize();
 
-  const model = createRuntimeFromProjectConfig(config);
+  // Create model runtimes (reasoning, context, embedding)
+  let modelRuntimes: ModelRuntimes | undefined;
+  try {
+    modelRuntimes = createRuntimes(config);
+  } catch (err) {
+    logWarn(`Could not create all model runtimes (${err}), some strategies may be limited.`);
+  }
+
+  // Create semantic search engine from embeddings in the store
+  let searchEngine: SemanticSearchEngine | undefined;
+  if (modelRuntimes?.embedding) {
+    searchEngine = new SemanticSearchEngine(
+      store,
+      modelRuntimes.embedding,
+      config.models.embedding
+    );
+  }
 
   // Get effective settings (project config + CLI options + defaults)
   const settings = getEffectiveSettings(config, {
@@ -118,6 +137,9 @@ export async function startRepl(
     tokenBudget: options.tokenBudget,
     maxBlocks: options.maxBlocks,
   });
+
+  // Token tracker for per-query usage logging (reset per query)
+  const tokenTracker = new TokenTracker();
 
   // Create retrieval strategy using effective settings
   const retrieval = createRetrievalStrategy(
@@ -129,12 +151,15 @@ export async function startRepl(
       tokenBudget: settings.tokenBudget,
       maxBlocks: settings.maxBlocks,
     },
-    model, // Pass runtime for tool-based retrieval
+    modelRuntimes?.reasoning, // Pass reasoning runtime for legacy tool-based retrieval fallback
     undefined, // budget
     {
       verbose: options.verbose,
       historyMode: settings.historyMode,
       historyLimit: settings.historyLimit,
+      tokenTracker,
+      modelRuntimes,
+      searchEngine,
     }
   );
 
@@ -180,6 +205,30 @@ export async function startRepl(
   console.log(
     ui.info(
       `Index: ${stats.fileCount} files, ${stats.symbolCount} symbols, ${stats.blockCount} blocks`
+    )
+  );
+  console.log(
+    ui.info(
+      `Models: reasoning=${config.models.reasoning}, context=${config.models.context}, embedding=${config.models.embedding}`
+    )
+  );
+  // Resolve what strategy auto will pick
+  let resolvedNote = '';
+  if (settings.strategy === 'auto') {
+    if (searchEngine?.hasEmbeddings() && modelRuntimes) {
+      resolvedNote = ' (resolved to: graph)';
+    } else {
+      resolvedNote = ' (resolved to: hybrid fallback)';
+    }
+  }
+  console.log(
+    ui.info(
+      `Strategy: ${settings.strategy}${resolvedNote} | Token budget: ${settings.tokenBudget}`
+    )
+  );
+  console.log(
+    ui.info(
+      `Search engine: ${searchEngine?.hasEmbeddings() ? 'active (embeddings available)' : 'not available'}`
     )
   );
 
@@ -388,6 +437,9 @@ ${ui.heading('Index Statistics:')}
 
       // Process question
       try {
+        // Reset token tracker for this query
+        tokenTracker.reset();
+
         // Update session with the question and add to history
         session.setLastQuestion(trimmed);
         const userMsg: ChatMessage = { role: 'user', content: trimmed };
@@ -448,42 +500,77 @@ ${ui.heading('Index Statistics:')}
           );
         }
 
-        // Assemble LLM context
-        const assembled = assembler.assemble(
-          trimmed,
-          result,
-          session.getState()
-        );
+        // Check if orchestrated strategy (graph/semantic) returned a final answer
+        const isOrchestrated = result.strategy === 'graph' || result.strategy === 'semantic';
+        let responseContent: string;
 
-        // AssembledContext.messages already includes system prompt
-        // Just add recent history before the user message
-        const recentHistory = session.getHistory().slice(-MAX_HISTORY_MESSAGES);
+        if (isOrchestrated && result.blocks.length > 0) {
+          // Orchestrated strategies return the answer directly in the block content
+          responseContent = result.blocks[0].content;
+        } else {
+          // Legacy path: assemble context and query the model
+          const assembled = assembler.assemble(
+            trimmed,
+            result,
+            session.getState()
+          );
 
-        // Build final messages: system + history + user with context
-        const messages: ChatMessage[] = [
-          { role: 'system', content: assembled.systemPrompt },
-          ...recentHistory.slice(0, -1), // Exclude the last user message (it's in assembled.messages)
-          ...assembled.messages.filter((m) => m.role !== 'system'), // User message with context
-        ];
+          // Track context assembly tokens
+          tokenTracker.record(
+            'context_assembly',
+            'reasoning',
+            'context assembly',
+            assembled.tokenEstimate,
+            0
+          );
 
-        // Verbose logging if enabled
-        if (options.verbose) {
-          logVerbose(messages, budget);
+          // AssembledContext.messages already includes system prompt
+          // Just add recent history before the user message
+          const recentHistory = session.getHistory().slice(-MAX_HISTORY_MESSAGES);
+
+          // Build final messages: system + history + user with context
+          const messages: ChatMessage[] = [
+            { role: 'system', content: assembled.systemPrompt },
+            ...recentHistory.slice(0, -1),
+            ...assembled.messages.filter((m) => m.role !== 'system'),
+          ];
+
+          // Verbose logging if enabled
+          if (options.verbose) {
+            logVerbose(messages, budget);
+          }
+
+          // Get response using reasoning model
+          if (!modelRuntimes?.reasoning) {
+            ui.error('Reasoning model not available. Cannot generate answer.');
+            return askLoop();
+          }
+          const response = await modelRuntimes.reasoning.chat(messages);
+
+          // Track final model response tokens
+          if (response.usage) {
+            tokenTracker.record(
+              'model_response',
+              'reasoning',
+              'final answer',
+              response.usage.inputTokens,
+              response.usage.outputTokens
+            );
+          }
+
+          responseContent = response.content;
         }
-
-        // Get response
-        const response = await model.chat(messages);
 
         // Add response to session history
         const assistantMsg: ChatMessage = {
           role: 'assistant',
-          content: response.content,
+          content: responseContent,
         };
         session.addMessage(assistantMsg);
 
         // Update session
-        session.setLastAnswerSummary(extractAnswerSummary(response.content));
-        session.updateFocusFromResponse(response.content);
+        session.setLastAnswerSummary(extractAnswerSummary(responseContent));
+        session.updateFocusFromResponse(responseContent);
 
         // Update focus with symbols from this query
         for (const sym of result.symbols.slice(0, 3)) {
@@ -494,7 +581,7 @@ ${ui.heading('Index Statistics:')}
         session.save();
 
         // Check for suggested notes from the model
-        const suggestedNotes = parseSuggestedNotes(response.content);
+        const suggestedNotes = parseSuggestedNotes(responseContent);
         for (const suggestion of suggestedNotes) {
           // Find the target symbol
           const symbols = store.findSymbols({ name: suggestion.target });
@@ -511,7 +598,10 @@ ${ui.heading('Index Statistics:')}
         }
 
         // Print response (rendered as markdown via glow)
-        renderMarkdown(response.content);
+        renderMarkdown(responseContent);
+
+        // Print token usage summary
+        tokenTracker.printSummary();
       } catch (err) {
         logError('Error processing question', err);
       }

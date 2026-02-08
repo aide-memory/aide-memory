@@ -150,6 +150,24 @@ export class SQLiteBrainStore implements ProjectGraph {
         INSERT INTO content_blocks_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
       END;
     `);
+
+    // Embeddings table (self-contained, independent of project graph)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS embeddings (
+        id TEXT PRIMARY KEY,
+        file_path TEXT NOT NULL,
+        content TEXT NOT NULL,
+        start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        embedding BLOB NOT NULL,
+        model TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_embeddings_file ON embeddings(file_path);
+      CREATE INDEX IF NOT EXISTS idx_embeddings_hash ON embeddings(content_hash);
+    `);
   }
 
   close(): void {
@@ -903,5 +921,112 @@ export class SQLiteBrainStore implements ProjectGraph {
 
   private mapTagRows(rows: unknown[]): Tag[] {
     return rows.map((r) => this.mapTagRow(r));
+  }
+
+  // =========================================================================
+  // Embedding Operations
+  // =========================================================================
+
+  /** Embedding record for storage and retrieval */
+  upsertEmbedding(record: {
+    id: string;
+    filePath: string;
+    content: string;
+    startLine: number;
+    endLine: number;
+    contentHash: string;
+    embedding: Float32Array;
+    model: string;
+  }): void {
+    const embeddingBlob = Buffer.from(record.embedding.buffer);
+    this.db
+      .prepare(
+        `INSERT INTO embeddings (id, file_path, content, start_line, end_line, content_hash, embedding, model, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           content = excluded.content,
+           start_line = excluded.start_line,
+           end_line = excluded.end_line,
+           content_hash = excluded.content_hash,
+           embedding = excluded.embedding,
+           model = excluded.model,
+           created_at = excluded.created_at`
+      )
+      .run(
+        record.id,
+        record.filePath,
+        record.content,
+        record.startLine,
+        record.endLine,
+        record.contentHash,
+        embeddingBlob,
+        record.model,
+        new Date().toISOString()
+      );
+  }
+
+  /** Get all embeddings (for brute-force similarity search) */
+  getAllEmbeddings(): Array<{
+    id: string;
+    filePath: string;
+    content: string;
+    startLine: number;
+    endLine: number;
+    embedding: Float32Array;
+  }> {
+    const rows = this.db
+      .prepare('SELECT id, file_path, content, start_line, end_line, embedding FROM embeddings')
+      .all() as Array<Record<string, unknown>>;
+
+    return rows.map((r) => ({
+      id: r.id as string,
+      filePath: r.file_path as string,
+      content: r.content as string,
+      startLine: r.start_line as number,
+      endLine: r.end_line as number,
+      embedding: new Float32Array((r.embedding as Buffer).buffer, (r.embedding as Buffer).byteOffset, (r.embedding as Buffer).byteLength / 4),
+    }));
+  }
+
+  /** Get existing content hashes for a file (for incremental re-indexing) */
+  getEmbeddingHashesForFile(filePath: string): Set<string> {
+    const rows = this.db
+      .prepare('SELECT content_hash FROM embeddings WHERE file_path = ?')
+      .all(filePath) as Array<Record<string, unknown>>;
+
+    return new Set(rows.map((r) => r.content_hash as string));
+  }
+
+  /** Delete embeddings for a file */
+  deleteEmbeddingsForFile(filePath: string): void {
+    this.db
+      .prepare('DELETE FROM embeddings WHERE file_path = ?')
+      .run(filePath);
+  }
+
+  /** Delete all embeddings */
+  clearEmbeddings(): void {
+    this.db.prepare('DELETE FROM embeddings').run();
+  }
+
+  /** Check if any embeddings exist */
+  hasEmbeddings(): boolean {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM embeddings')
+      .get() as Record<string, unknown>;
+    return (row.count as number) > 0;
+  }
+
+  /** Get embedding stats */
+  getEmbeddingStats(): { totalChunks: number; totalFiles: number } {
+    const row = this.db
+      .prepare(
+        'SELECT COUNT(*) as chunks, COUNT(DISTINCT file_path) as files FROM embeddings'
+      )
+      .get() as Record<string, unknown>;
+    return {
+      totalChunks: row.chunks as number,
+      totalFiles: row.files as number,
+    };
   }
 }

@@ -22,6 +22,9 @@ export type {
   ToolParameterProperty,
   ToolCallRequest,
   ToolCallResult,
+  ModelRole,
+  ModelRoleConfig,
+  ModelRuntimes,
 } from './types';
 
 // Runtimes (prefer using createRuntime instead of direct instantiation)
@@ -34,6 +37,7 @@ export type { CloudConfig } from './cloudModelClient';
 export {
   createRuntime,
   createRuntimeFromProjectConfig,
+  createRuntimes,
   detectProvider,
   isCloudProvider,
   validateModel,
