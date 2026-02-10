@@ -20,7 +20,7 @@ import { TokenBudgetManager } from '../core/tokenBudget';
 import { TokenTracker } from '../core/tokenTracker';
 import { ModelRuntimes } from '../models/types';
 import { SemanticSearchEngine } from './semanticSearch';
-import { Orchestrator } from '../orchestration/orchestrator';
+import { Orchestrator, VerboseLogger } from '../orchestration/orchestrator';
 import { ToolExecutor } from '../orchestration/toolExecutor';
 import { OrchestratorConfig } from '../orchestration/types';
 import { logInfo } from '../core/logger';
@@ -29,6 +29,7 @@ export interface SemanticRetrievalOptions {
   verbose?: boolean;
   tokenTracker?: TokenTracker;
   orchestration?: Partial<OrchestratorConfig>;
+  logger?: VerboseLogger;
 }
 
 export class SemanticRetrieval implements RetrievalStrategy {
@@ -39,6 +40,7 @@ export class SemanticRetrieval implements RetrievalStrategy {
   private tracker: TokenTracker;
   private orchestrationConfig?: Partial<OrchestratorConfig>;
   private verbose: boolean;
+  private logger?: VerboseLogger;
 
   constructor(
     searchEngine: SemanticSearchEngine,
@@ -54,6 +56,7 @@ export class SemanticRetrieval implements RetrievalStrategy {
     this.tracker = options?.tokenTracker || new TokenTracker();
     this.orchestrationConfig = options?.orchestration;
     this.verbose = options?.verbose ?? false;
+    this.logger = options?.logger;
   }
 
   async retrieve(
@@ -64,11 +67,15 @@ export class SemanticRetrieval implements RetrievalStrategy {
       logInfo('[semantic-retrieval] Starting pure semantic retrieval');
     }
 
-    // Create tool executor with semantic search only (no graph reliance)
+    // Create tool executor with semantic search and conversation history (no graph reliance)
     // We pass graph for basic file operations but tools are semantic-only
-    const toolExecutor = new ToolExecutor(graph, this.searchEngine);
+    const toolExecutor = new ToolExecutor(
+      graph,
+      this.searchEngine,
+      query.conversationHistory
+    );
 
-    // Semantic-only tools (no graph-dependent tools)
+    // Semantic-only tools (no graph-dependent tools + conversation if history exists)
     const hasGraph = false; // Force semantic-only tools
     const hasEmbeddings = this.searchEngine.hasEmbeddings();
     const availableTools = toolExecutor.getAvailableTools(hasGraph, hasEmbeddings);
@@ -78,16 +85,13 @@ export class SemanticRetrieval implements RetrievalStrategy {
       this.runtimes,
       toolExecutor,
       this.tracker,
-      this.orchestrationConfig
+      this.orchestrationConfig,
+      { verbose: this.verbose, logger: this.logger }
     );
-
-    // Build conversation context if available
-    const conversationHistory = query.conversationHistory;
 
     // Run the orchestration loop
     const result = await orchestrator.answer(query.question, {
       availableTools,
-      conversationHistory,
     });
 
     if (this.verbose) {

@@ -174,6 +174,7 @@ export async function askQuestion(
       tokenTracker,
       modelRuntimes,
       searchEngine,
+      logger: options.debug ? verbose : undefined,
     }
   );
 

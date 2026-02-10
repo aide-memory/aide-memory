@@ -160,6 +160,7 @@ export async function startRepl(
       tokenTracker,
       modelRuntimes,
       searchEngine,
+      logger: options.verbose ? verbose : undefined,
     }
   );
 

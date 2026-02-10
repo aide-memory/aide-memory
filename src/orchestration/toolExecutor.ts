@@ -19,6 +19,44 @@ import { logInfo } from '../core/logger';
 // Tool Definitions
 // ============================================================================
 
+/** Conversation tools (available when session has conversation history) */
+export const CONVERSATION_TOOLS: ToolDefinition[] = [
+  {
+    name: 'get_conversation_history',
+    description:
+      'Get recent messages from the current conversation session. Use this to understand prior questions and answers when the user asks a follow-up.',
+    parameters: {
+      type: 'object',
+      properties: {
+        count: {
+          type: 'number',
+          description: 'Number of recent messages to return (default 10)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'search_conversation',
+    description:
+      'Search the conversation history for messages containing a keyword or phrase. Use this when the user refers to something previously discussed (e.g., "the solution you proposed", "what delay did you suggest").',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Keyword or phrase to search for in conversation history',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of matching messages to return (default 5)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+];
+
 /** Graph tools (when project graph exists) */
 export const GRAPH_TOOLS: ToolDefinition[] = [
   {
@@ -216,30 +254,49 @@ export const SEMANTIC_ONLY_TOOLS: ToolDefinition[] = [
 export class ToolExecutor {
   private graph: ProjectGraph | null;
   private searchEngine: SemanticSearchEngine | null;
+  private conversationHistory: ChatMessage[];
 
   constructor(
     graph: ProjectGraph | null,
-    searchEngine: SemanticSearchEngine | null
+    searchEngine: SemanticSearchEngine | null,
+    conversationHistory?: ChatMessage[]
   ) {
     this.graph = graph;
     this.searchEngine = searchEngine;
+    this.conversationHistory = conversationHistory ?? [];
   }
 
   /**
-   * Get available tools based on what backends exist
+   * Whether conversation history is available (has at least one assistant message)
+   */
+  hasConversationHistory(): boolean {
+    return this.conversationHistory.length > 0 &&
+      this.conversationHistory.some((m) => m.role === 'assistant');
+  }
+
+  /**
+   * Get available tools based on what backends exist.
+   * Conversation tools are appended when session has conversation history.
    */
   getAvailableTools(hasGraph: boolean, hasEmbeddings: boolean): ToolDefinition[] {
+    let tools: ToolDefinition[];
+
     if (hasGraph && hasEmbeddings) {
-      return GRAPH_TOOLS;
+      tools = [...GRAPH_TOOLS];
+    } else if (hasEmbeddings) {
+      tools = [...SEMANTIC_ONLY_TOOLS];
+    } else if (hasGraph) {
+      tools = GRAPH_TOOLS.filter((t) => t.name !== 'semantic_search');
+    } else {
+      tools = [];
     }
-    if (hasEmbeddings) {
-      return SEMANTIC_ONLY_TOOLS;
+
+    // Add conversation tools when history exists
+    if (this.hasConversationHistory()) {
+      tools = [...tools, ...CONVERSATION_TOOLS];
     }
-    if (hasGraph) {
-      // Graph without embeddings: use graph tools but without semantic_search
-      return GRAPH_TOOLS.filter((t) => t.name !== 'semantic_search');
-    }
-    return [];
+
+    return tools;
   }
 
   /**
@@ -303,6 +360,10 @@ export class ToolExecutor {
           return this.handleGetFileChunk(spec.arguments);
         case 'list_files':
           return this.handleListFiles(spec.arguments);
+        case 'get_conversation_history':
+          return this.handleGetConversationHistory(spec.arguments);
+        case 'search_conversation':
+          return this.handleSearchConversation(spec.arguments);
         case 'done':
           return { success: true, data: 'done' };
         default:
@@ -573,6 +634,78 @@ export class ToolExecutor {
     }
 
     return { success: true, data: `Files in ${dirPath}:\n${dirFiles.join('\n')}` };
+  }
+
+  // =========================================================================
+  // Conversation Tool Handlers
+  // =========================================================================
+
+  private handleGetConversationHistory(
+    args: Record<string, unknown>
+  ): { success: boolean; data?: string; error?: string } {
+    const count = (args.count as number) ?? 10;
+    const history = this.conversationHistory;
+
+    if (history.length === 0) {
+      return { success: true, data: 'No conversation history available.' };
+    }
+
+    const recent = history.slice(-count);
+    const formatted = recent
+      .map((msg, i) => {
+        // Cap each message to 2000 chars to stay token-efficient
+        const content = msg.content.length > 2000
+          ? msg.content.slice(0, 2000) + '...[truncated]'
+          : msg.content;
+        return `[${i + 1}] ${msg.role}:\n${content}`;
+      })
+      .join('\n\n---\n\n');
+
+    return {
+      success: true,
+      data: `Conversation history (${recent.length} of ${history.length} messages):\n\n${formatted}`,
+    };
+  }
+
+  private handleSearchConversation(
+    args: Record<string, unknown>
+  ): { success: boolean; data?: string; error?: string } {
+    const query = args.query as string;
+    const maxResults = (args.maxResults as number) ?? 5;
+    const history = this.conversationHistory;
+
+    if (history.length === 0) {
+      return { success: true, data: 'No conversation history to search.' };
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const matches: Array<{ index: number; msg: ChatMessage }> = [];
+
+    for (let i = 0; i < history.length; i++) {
+      if (history[i].content.toLowerCase().includes(lowerQuery)) {
+        matches.push({ index: i, msg: history[i] });
+      }
+    }
+
+    if (matches.length === 0) {
+      return { success: true, data: `No messages found matching "${query}".` };
+    }
+
+    // Return the most recent matches first (most likely relevant)
+    const topMatches = matches.slice(-maxResults).reverse();
+    const formatted = topMatches
+      .map((m) => {
+        const content = m.msg.content.length > 2000
+          ? m.msg.content.slice(0, 2000) + '...[truncated]'
+          : m.msg.content;
+        return `[message ${m.index + 1}] ${m.msg.role}:\n${content}`;
+      })
+      .join('\n\n---\n\n');
+
+    return {
+      success: true,
+      data: `Found ${matches.length} messages matching "${query}" (showing ${topMatches.length}):\n\n${formatted}`,
+    };
   }
 
   // =========================================================================

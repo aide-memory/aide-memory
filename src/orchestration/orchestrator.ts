@@ -13,7 +13,6 @@
 
 import { ModelRuntimes, ToolDefinition } from '../models/types';
 import { TokenTracker } from '../core/tokenTracker';
-import { ChatMessage } from '../brain/types';
 import { ToolExecutor } from './toolExecutor';
 import {
   OrchestratorConfig,
@@ -34,6 +33,19 @@ import {
 } from './prompts';
 import { logInfo, logWarn } from '../core/logger';
 
+/** Verbose logging callback interface */
+export interface VerboseLogger {
+  header(title: string): void;
+  label(label: string, value: string | number): void;
+  text(text: string): void;
+  content(text: string): void;
+  separator(): void;
+  footer(): void;
+  tool(name: string, args?: Record<string, unknown>): void;
+  toolResult(result: string, truncate?: number): void;
+  info(message: string): void;
+}
+
 // ============================================================================
 // Orchestrator
 // ============================================================================
@@ -43,17 +55,22 @@ export class Orchestrator {
   private toolExecutor: ToolExecutor;
   private tracker: TokenTracker;
   private config: OrchestratorConfig;
+  private verbose: boolean;
+  private log?: VerboseLogger;
 
   constructor(
     runtimes: ModelRuntimes,
     toolExecutor: ToolExecutor,
     tracker: TokenTracker,
-    config?: Partial<OrchestratorConfig>
+    config?: Partial<OrchestratorConfig>,
+    options?: { verbose?: boolean; logger?: VerboseLogger }
   ) {
     this.runtimes = runtimes;
     this.toolExecutor = toolExecutor;
     this.tracker = tracker;
     this.config = { ...DEFAULT_ORCHESTRATOR_CONFIG, ...config };
+    this.verbose = options?.verbose ?? false;
+    this.log = options?.logger;
   }
 
   /**
@@ -70,11 +87,10 @@ export class Orchestrator {
       iteration: 0,
     };
 
-    // Build conversation context string if available
-    const conversationContext = context.conversationHistory
-      ?.slice(-6)
-      .map((m) => `${m.role}: ${m.content.slice(0, 200)}`)
-      .join('\n');
+    // Conversation history is now accessed via tool calls (get_conversation_history,
+    // search_conversation) rather than injected into prompts. The tools are automatically
+    // included in availableTools when the ToolExecutor has conversation history.
+    const hasConversation = this.toolExecutor.hasConversationHistory();
 
     // =====================================================================
     // Step 1: Reasoning model plans initial tool calls
@@ -83,8 +99,17 @@ export class Orchestrator {
 
     const planningSystemPrompt = buildPlanningPrompt(
       context.availableTools,
-      conversationContext
+      hasConversation
     );
+
+    if (this.verbose && this.log) {
+      this.log.header('ORCHESTRATOR: PLANNING PROMPT → Reasoning Model');
+      this.log.label('System prompt length', `${planningSystemPrompt.length} chars`);
+      this.log.text(planningSystemPrompt);
+      this.log.separator();
+      this.log.label('User message', query);
+      this.log.footer();
+    }
 
     const planningResponse = await this.runtimes.reasoning.chat([
       { role: 'system', content: planningSystemPrompt },
@@ -102,12 +127,20 @@ export class Orchestrator {
       );
     }
 
+    if (this.verbose && this.log) {
+      this.log.header('REASONING MODEL RESPONSE (Planning)');
+      if (planningResponse.usage) {
+        this.log.label('Tokens', `in=${planningResponse.usage.inputTokens} out=${planningResponse.usage.outputTokens}`);
+      }
+      this.log.content(planningResponse.content);
+      this.log.footer();
+    }
+
     // Parse tool calls from planning response
     let toolCalls = this.parseToolCallsFromResponse(planningResponse.content);
 
     if (toolCalls.length === 0) {
       logWarn('[orchestrator] Planning model returned no tool calls, attempting direct answer');
-      // Fall back to direct answer
       return {
         answer: planningResponse.content,
         relevantResults: [],
@@ -128,7 +161,17 @@ export class Orchestrator {
 
     while (state.iteration < this.config.maxIterations) {
       state.iteration++;
-      logInfo(`[orchestrator] Iteration ${state.iteration}: Executing ${toolCalls.length} tool calls...`);
+      logInfo(
+        `[orchestrator] Iteration ${state.iteration}: Executing ${toolCalls.length} tool calls...`
+      );
+
+      if (this.verbose && this.log) {
+        this.log.header(`ITERATION ${state.iteration}: TOOL CALLS`);
+        for (const tc of toolCalls) {
+          this.log.tool(tc.name, tc.arguments);
+        }
+        this.log.footer();
+      }
 
       // Step 2: Execute tool calls (pure code, no model)
       const results = await this.toolExecutor.executeBatch(
@@ -141,6 +184,22 @@ export class Orchestrator {
       // Record results in state
       for (const result of results) {
         state.previousCalls.set(result.callKey, result);
+      }
+
+      // Verbose: show each tool result
+      if (this.verbose && this.log) {
+        this.log.header(`ITERATION ${state.iteration}: TOOL RESULTS`);
+        for (const r of results) {
+          this.log.tool(r.spec.name, r.spec.arguments);
+          if (r.success && r.data) {
+            this.log.toolResult(r.data, 500);
+          } else if (r.error) {
+            this.log.info(`ERROR: ${r.error}`);
+          } else {
+            this.log.info('(skipped - duplicate)');
+          }
+        }
+        this.log.footer();
       }
 
       // Track tool execution (estimate tokens from result size)
@@ -158,7 +217,6 @@ export class Orchestrator {
 
       // Check for 'done' call
       if (results.some((r) => r.spec.name === 'done')) {
-        // Collect all non-done results as relevant
         for (const r of results) {
           if (r.spec.name !== 'done' && r.success && r.data) {
             state.relevantResults.push(r);
@@ -169,7 +227,9 @@ export class Orchestrator {
 
       // Step 3: Context model evaluates results
       if (this.config.enableContextStripping) {
-        logInfo(`[orchestrator] Iteration ${state.iteration}: Context model evaluating...`);
+        logInfo(
+          `[orchestrator] Iteration ${state.iteration}: Context model evaluating...`
+        );
 
         const evaluation = await this.evaluateWithContextModel(
           query,
@@ -178,7 +238,6 @@ export class Orchestrator {
         );
 
         if (!evaluation) {
-          // Context model failed to produce valid evaluation, keep all results
           for (const r of results) {
             if (r.success && r.data) {
               state.relevantResults.push(r);
@@ -217,9 +276,13 @@ export class Orchestrator {
             0,
             this.config.maxToolCallsPerBatch
           );
-          logInfo(`[orchestrator] Context model requested ${toolCalls.length} more calls`);
+          logInfo(
+            `[orchestrator] Context model requested ${toolCalls.length} more calls`
+          );
         } else {
-          logInfo('[orchestrator] Context model requested no more calls, finishing');
+          logInfo(
+            '[orchestrator] Context model requested no more calls, finishing'
+          );
           break;
         }
       } else {
@@ -240,10 +303,24 @@ export class Orchestrator {
 
     const curatedContext = formatResultsAsContext(state.relevantResults);
 
+    // Answering prompt receives curated context (which may include conversation
+    // tool results alongside codebase results). A flag indicates whether
+    // conversation tools were available so the answering model knows follow-up
+    // context may be present in the curated results.
     const answeringSystemPrompt = buildAnsweringPrompt(
       curatedContext,
-      state.strippedSummaries
+      state.strippedSummaries,
+      hasConversation
     );
+
+    if (this.verbose && this.log) {
+      this.log.header('ORCHESTRATOR: ANSWERING PROMPT → Reasoning Model');
+      this.log.label('System prompt length', `${answeringSystemPrompt.length} chars`);
+      this.log.text(answeringSystemPrompt);
+      this.log.separator();
+      this.log.label('User message', query);
+      this.log.footer();
+    }
 
     const answerResponse = await this.runtimes.reasoning.chat([
       { role: 'system', content: answeringSystemPrompt },
@@ -259,6 +336,15 @@ export class Orchestrator {
         answerResponse.usage.inputTokens,
         answerResponse.usage.outputTokens
       );
+    }
+
+    if (this.verbose && this.log) {
+      this.log.header('REASONING MODEL RESPONSE (Final Answer)');
+      if (answerResponse.usage) {
+        this.log.label('Tokens', `in=${answerResponse.usage.inputTokens} out=${answerResponse.usage.outputTokens}`);
+      }
+      this.log.label('Answer length', `${answerResponse.content.length} chars`);
+      this.log.footer();
     }
 
     return {
@@ -292,11 +378,19 @@ export class Orchestrator {
       this.config.maxIterations
     );
 
+    if (this.verbose && this.log) {
+      this.log.header(`CONTEXT EVALUATION PROMPT → Context Model (Iteration ${state.iteration})`);
+      this.log.label('Prompt length', `${prompt.length} chars`);
+      this.log.text(prompt);
+      this.log.footer();
+    }
+
     const response = await this.runtimes.context.chat([
       { role: 'system', content: prompt },
       {
         role: 'user',
-        content: 'Evaluate the above results and respond with the JSON evaluation.',
+        content:
+          'Evaluate the above results and respond with the JSON evaluation.',
       },
     ]);
 
@@ -309,6 +403,15 @@ export class Orchestrator {
         response.usage.inputTokens,
         response.usage.outputTokens
       );
+    }
+
+    if (this.verbose && this.log) {
+      this.log.header(`CONTEXT MODEL RESPONSE (Iteration ${state.iteration})`);
+      if (response.usage) {
+        this.log.label('Tokens', `in=${response.usage.inputTokens} out=${response.usage.outputTokens}`);
+      }
+      this.log.content(response.content);
+      this.log.footer();
     }
 
     // Parse the JSON evaluation
@@ -334,16 +437,16 @@ export class Orchestrator {
       return parsed
         .filter(
           (item: unknown) =>
-            typeof item === 'object' &&
-            item !== null &&
-            'name' in item
+            typeof item === 'object' && item !== null && 'name' in item
         )
         .map((item: Record<string, unknown>) => ({
           name: item.name as string,
           arguments: (item.arguments ?? {}) as Record<string, unknown>,
         }));
     } catch {
-      logWarn('[orchestrator] Failed to parse tool calls from planning response');
+      logWarn(
+        '[orchestrator] Failed to parse tool calls from planning response'
+      );
       return [];
     }
   }
@@ -363,8 +466,12 @@ export class Orchestrator {
 
       return {
         sufficient: parsed.sufficient ?? true,
-        relevantIndices: Array.isArray(parsed.relevantIndices) ? parsed.relevantIndices : [],
-        strippedIndices: Array.isArray(parsed.strippedIndices) ? parsed.strippedIndices : [],
+        relevantIndices: Array.isArray(parsed.relevantIndices)
+          ? parsed.relevantIndices
+          : [],
+        strippedIndices: Array.isArray(parsed.strippedIndices)
+          ? parsed.strippedIndices
+          : [],
         newToolCalls: Array.isArray(parsed.newToolCalls)
           ? parsed.newToolCalls.map((tc: Record<string, unknown>) => ({
               name: tc.name as string,

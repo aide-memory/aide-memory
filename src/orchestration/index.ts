@@ -3,7 +3,8 @@
  */
 
 export { Orchestrator } from './orchestrator';
-export { ToolExecutor, GRAPH_TOOLS, SEMANTIC_ONLY_TOOLS } from './toolExecutor';
+export type { VerboseLogger } from './orchestrator';
+export { ToolExecutor, GRAPH_TOOLS, SEMANTIC_ONLY_TOOLS, CONVERSATION_TOOLS } from './toolExecutor';
 export {
   buildPlanningPrompt,
   buildAnsweringPrompt,

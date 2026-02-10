@@ -23,6 +23,7 @@ import { GraphRetrieval } from './graphRetrieval';
 import { SemanticRetrieval } from './semanticRetrieval';
 import { SemanticSearchEngine } from './semanticSearch';
 import { ToolCapableRuntime, ModelRuntimes } from '../models/types';
+import { VerboseLogger } from '../orchestration/orchestrator';
 import { verbose as verboseUI } from '../cli/ui';
 
 // ============================================================================
@@ -134,6 +135,8 @@ export interface CreateRetrievalOptions {
   modelRuntimes?: ModelRuntimes;
   /** Semantic search engine for new strategies */
   searchEngine?: SemanticSearchEngine;
+  /** Verbose logger for orchestrator */
+  logger?: VerboseLogger;
 }
 
 /**
@@ -180,6 +183,7 @@ export function createRetrievalStrategy(
         {
           verbose: options.verbose,
           tokenTracker: options.tokenTracker,
+          logger: options.logger,
         }
       );
 
@@ -198,6 +202,7 @@ export function createRetrievalStrategy(
         {
           verbose: options.verbose,
           tokenTracker: options.tokenTracker,
+          logger: options.logger,
         }
       );
 
@@ -215,6 +220,7 @@ export function createRetrievalStrategy(
           {
             verbose: options.verbose,
             tokenTracker: options.tokenTracker,
+            logger: options.logger,
           }
         );
       }

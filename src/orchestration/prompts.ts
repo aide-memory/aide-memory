@@ -17,10 +17,13 @@ import { ToolCallResult, ToolCallSummary } from './types';
  * System prompt for the reasoning model's planning phase.
  * The model receives the user query and available tools,
  * and outputs a JSON array of tool calls to gather context.
+ *
+ * @param availableTools - tools the model can use (includes conversation tools when history exists)
+ * @param hasConversation - whether conversation tools are available (history exists)
  */
 export function buildPlanningPrompt(
   availableTools: ToolDefinition[],
-  conversationContext?: string
+  hasConversation: boolean
 ): string {
   const toolDescriptions = availableTools
     .map((t) => {
@@ -40,13 +43,20 @@ ${toolDescriptions}
 IMPORTANT GUIDELINES:
 - Start with semantic_search to find relevant entry points -- do NOT start with list_packages or broad file listing
 - Plan targeted, specific tool calls based on the question
+- Plan ALL the tool calls you think you'll need upfront. It is better to make 5 targeted calls in one batch than 1 call across 5 iterations.
 - Output a JSON array of tool call objects: [{"name": "tool_name", "arguments": {...}}, ...]
-- Keep batches small and focused (max 5-8 calls)
+- Keep batches focused (max 5-8 calls)
 - These calls will be executed by code and evaluated by another model
 - Output ONLY the JSON array, no other text`;
 
-  if (conversationContext) {
-    prompt += `\n\nConversation context (for follow-up questions):\n${conversationContext}`;
+  if (hasConversation) {
+    prompt += `
+
+CONVERSATION CONTEXT:
+The user may be asking a follow-up question. Conversation tools are available.
+- If the question references something previously discussed (e.g., "what did you suggest", "the delay you mentioned", "show me how to implement that"), ALWAYS include get_conversation_history in your batch. This retrieves the full recent conversation so you can find the exact prior answer.
+- search_conversation is useful for targeted keyword lookups, but get_conversation_history is more reliable for follow-up questions since it returns full messages rather than requiring exact keyword matches.
+- You can combine conversation and codebase tool calls in the same batch.`;
   }
 
   return prompt;
@@ -55,15 +65,25 @@ IMPORTANT GUIDELINES:
 /**
  * System prompt for the reasoning model's answering phase.
  * The model receives curated context and produces the final answer.
+ *
+ * @param relevantContext - curated context from tool results (may include conversation tool results)
+ * @param strippedSummaries - summaries of stripped results
+ * @param hasConversation - whether conversation tools were available
  */
 export function buildAnsweringPrompt(
   relevantContext: string,
-  strippedSummaries: ToolCallSummary[]
+  strippedSummaries: ToolCallSummary[],
+  hasConversation: boolean
 ): string {
-  let prompt = `You are the ANSWERING model. You have been given curated context gathered by the planning and context evaluation pipeline. Answer the user's question based on this context.
+  let prompt = `You are the ANSWERING model. You have been given curated context gathered by the planning and context evaluation pipeline. Answer the user's question based on this context.`;
 
-## Curated Context
-${relevantContext}`;
+  if (hasConversation) {
+    prompt += `
+
+NOTE: This is a conversation with history. The curated context may include results from conversation tools (get_conversation_history, search_conversation) alongside codebase results. If the user's question refers to something from a previous answer (e.g., "the solution you proposed", "what delay did you suggest"), use the conversation context to answer. You do NOT need to search the codebase for answers that were already given.`;
+  }
+
+  prompt += `\n\n## Curated Context\n${relevantContext}`;
 
   if (strippedSummaries.length > 0) {
     const summaries = strippedSummaries
@@ -75,6 +95,7 @@ ${relevantContext}`;
   prompt += `\n\nGuidelines:
 - Reference specific file paths and line numbers when possible
 - Be concrete and specific -- cite actual code
+- If the question refers to a previous answer in conversation history, reference that answer directly
 - If the context is insufficient, say so clearly
 - Do NOT make up code that isn't in the context`;
 
@@ -125,6 +146,13 @@ ${resultsFormatted}
 - You CANNOT repeat previous tool calls${previousCallsList}
 - Keep only what directly helps answer the question
 - For each stripped result, explain briefly why
+
+## Batching & Efficiency
+- If you need more context, batch ALL needed tool calls together in newToolCalls (prefer 3-5 calls per batch, NOT 1 at a time)
+- Only request more context if the existing results are clearly insufficient to answer the question
+- Prefer marking sufficient=true with partial context over requesting many follow-up iterations
+- Each iteration costs tokens and time. Be decisive about what's needed.
+- If conversation tool results answer the user's question, mark sufficient=true immediately.
 
 ## Output Format
 Respond with a JSON object:

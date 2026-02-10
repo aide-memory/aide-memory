@@ -5,7 +5,6 @@
  */
 
 import { ToolDefinition, ToolCallRequest } from '../models/types';
-import { ChatMessage } from '../brain/types';
 
 // ============================================================================
 // Tool Call Plan & Spec
@@ -82,8 +81,6 @@ export const DEFAULT_ORCHESTRATOR_CONFIG: OrchestratorConfig = {
 export interface OrchestratorContext {
   /** Available tool definitions */
   availableTools: ToolDefinition[];
-  /** Conversation history (for context) */
-  conversationHistory?: ChatMessage[];
 }
 
 /** Result of the orchestration loop */
