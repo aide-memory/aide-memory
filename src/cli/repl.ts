@@ -111,23 +111,15 @@ export async function startRepl(
   const store = new SQLiteBrainStore(dbPath);
   store.initialize();
 
-  // Create model runtimes (reasoning, context, embedding)
-  let modelRuntimes: ModelRuntimes | undefined;
-  try {
-    modelRuntimes = createRuntimes(config);
-  } catch (err) {
-    logWarn(`Could not create all model runtimes (${err}), some strategies may be limited.`);
-  }
+  // Create model runtimes — fails fast if any configured model is invalid
+  const modelRuntimes = createRuntimes(config);
 
   // Create semantic search engine from embeddings in the store
-  let searchEngine: SemanticSearchEngine | undefined;
-  if (modelRuntimes?.embedding) {
-    searchEngine = new SemanticSearchEngine(
-      store,
-      modelRuntimes.embedding,
-      config.models.embedding
-    );
-  }
+  const searchEngine = new SemanticSearchEngine(
+    store,
+    modelRuntimes.embedding,
+    config.models.embedding
+  );
 
   // Get effective settings (project config + CLI options + defaults)
   const settings = getEffectiveSettings(config, {
@@ -151,7 +143,7 @@ export async function startRepl(
       tokenBudget: settings.tokenBudget,
       maxBlocks: settings.maxBlocks,
     },
-    modelRuntimes?.reasoning, // Pass reasoning runtime for legacy tool-based retrieval fallback
+    modelRuntimes.reasoning, // Pass reasoning runtime for legacy tool-based retrieval fallback
     undefined, // budget
     {
       verbose: options.verbose,
@@ -216,10 +208,10 @@ export async function startRepl(
   // Resolve what strategy auto will pick
   let resolvedNote = '';
   if (settings.strategy === 'auto') {
-    if (searchEngine?.hasEmbeddings() && modelRuntimes) {
+    if (searchEngine.hasEmbeddings()) {
       resolvedNote = ' (resolved to: graph)';
     } else {
-      resolvedNote = ' (resolved to: hybrid fallback)';
+      resolvedNote = ' (resolved to: semantic)';
     }
   }
   console.log(
@@ -229,7 +221,7 @@ export async function startRepl(
   );
   console.log(
     ui.info(
-      `Search engine: ${searchEngine?.hasEmbeddings() ? 'active (embeddings available)' : 'not available'}`
+      `Search engine: ${searchEngine.hasEmbeddings() ? 'active (embeddings available)' : 'active (no embeddings yet - run aide init)'}`
     )
   );
 
@@ -542,10 +534,6 @@ ${ui.heading('Index Statistics:')}
           }
 
           // Get response using reasoning model
-          if (!modelRuntimes?.reasoning) {
-            ui.error('Reasoning model not available. Cannot generate answer.');
-            return askLoop();
-          }
           const response = await modelRuntimes.reasoning.chat(messages);
 
           // Track final model response tokens

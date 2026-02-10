@@ -13,7 +13,7 @@
 
 import { Command } from 'commander';
 import path from 'path';
-import { loadOrCreateProjectConfig, AIDE_DEFAULTS } from '../core/config';
+import { loadOrCreateProjectConfig, updateProjectConfig, AIDE_DEFAULTS } from '../core/config';
 import { logInfo, logError } from '../core/logger';
 import { initProject } from './commands/init';
 import { reindexProject } from './commands/reindex';
@@ -211,6 +211,65 @@ program
         });
       } catch (err) {
         logError('Web server failed', err);
+        process.exit(1);
+      }
+    }
+  );
+
+// aide config - View or update project configuration
+program
+  .command('config')
+  .description('View or update project configuration (models, strategy, etc.)')
+  .option('-p, --path <path>', 'Project root path', process.cwd())
+  .option('--reasoning <model>', 'Set reasoning model')
+  .option('--context <model>', 'Set context model')
+  .option('--embedding <model>', 'Set embedding model')
+  .option('--reset', 'Reset models to AIDE_DEFAULTS (clears user override)')
+  .action(
+    async (options: {
+      path?: string;
+      reasoning?: string;
+      context?: string;
+      embedding?: string;
+      reset?: boolean;
+    }) => {
+      try {
+        const rootPath = path.resolve(options.path || process.cwd());
+        let config = await loadOrCreateProjectConfig(rootPath);
+
+        if (options.reset) {
+          // Reset to defaults and clear the user override flag
+          config = updateProjectConfig(config, {
+            models: { ...AIDE_DEFAULTS.models },
+            modelsSetByUser: false,
+          });
+          console.log('Models reset to defaults.');
+        } else if (options.reasoning || options.context || options.embedding) {
+          // Update specified models and mark as user-set
+          const models = { ...config.models };
+          if (options.reasoning) models.reasoning = options.reasoning;
+          if (options.context) models.context = options.context;
+          if (options.embedding) models.embedding = options.embedding;
+          config = updateProjectConfig(config, {
+            models,
+            modelsSetByUser: true,
+          });
+          console.log('Config updated.');
+        }
+
+        // Always show current config
+        console.log(`\nProject: ${config.rootPath}`);
+        console.log(`Config:  ~/.aide/projects/${config.id}/config.json`);
+        console.log(`\nModels:`);
+        console.log(`  reasoning: ${config.models.reasoning}`);
+        console.log(`  context:   ${config.models.context}`);
+        console.log(`  embedding: ${config.models.embedding}`);
+        console.log(`  (${config.modelsSetByUser ? 'user-set — will NOT auto-sync from defaults' : 'default — will auto-sync when AIDE_DEFAULTS change'})`);
+        if (config.strategy) {
+          console.log(`\nStrategy: ${config.strategy}`);
+        }
+      } catch (err) {
+        logError('Config command failed', err);
         process.exit(1);
       }
     }

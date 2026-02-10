@@ -14,7 +14,7 @@ import {
   extractAnswerSummary,
 } from '../../context/assembler';
 import { createRuntimes } from '../../models';
-import { ModelRuntimes } from '../../models/types';
+
 import { SemanticSearchEngine } from '../../retrieval/semanticSearch';
 import { logInfo, logError } from '../../core/logger';
 import { renderMarkdown, verbose } from '../ui';
@@ -126,23 +126,15 @@ export async function askQuestion(
   // Create token tracker for this query
   const tokenTracker = new TokenTracker();
 
-  // Create model runtimes (reasoning, context, embedding)
-  let modelRuntimes: ModelRuntimes | undefined;
-  try {
-    modelRuntimes = createRuntimes(config);
-  } catch (err) {
-    logInfo(`Could not create all model runtimes (${err}), some strategies may be limited.`);
-  }
+  // Create model runtimes — fails fast if any configured model is invalid
+  const modelRuntimes = createRuntimes(config);
 
   // Create semantic search engine from embeddings in the store
-  let searchEngine: SemanticSearchEngine | undefined;
-  if (modelRuntimes?.embedding) {
-    searchEngine = new SemanticSearchEngine(
-      store,
-      modelRuntimes.embedding,
-      config.models.embedding
-    );
-  }
+  const searchEngine = new SemanticSearchEngine(
+    store,
+    modelRuntimes.embedding,
+    config.models.embedding
+  );
 
   // Get effective settings (project config + CLI options + defaults)
   const settings = getEffectiveSettings(config, {
@@ -165,7 +157,7 @@ export async function askQuestion(
       tokenBudget: settings.tokenBudget,
       maxBlocks: settings.maxBlocks,
     },
-    modelRuntimes?.reasoning, // Pass reasoning runtime for legacy tool-based retrieval fallback
+    modelRuntimes.reasoning, // Pass reasoning runtime for legacy tool-based retrieval fallback
     undefined, // budget
     {
       verbose: options.debug,
@@ -292,7 +284,7 @@ export async function askQuestion(
       }
 
       // Use reasoning model for the final answer
-      const reasoningModel = modelRuntimes?.reasoning;
+      const reasoningModel = modelRuntimes.reasoning;
       if (!reasoningModel) {
         logError('Reasoning model not available. Cannot generate answer.');
         store.close();

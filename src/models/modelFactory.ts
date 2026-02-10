@@ -175,18 +175,38 @@ export function createRuntimeFromProjectConfig(
 }
 
 /**
- * Create all three model runtimes from ProjectConfig
+ * Create all three model runtimes from ProjectConfig.
+ * Fails fast with a clear error if any configured model cannot be created
+ * (e.g., missing API key, unreachable provider).
  */
 export function createRuntimes(projectConfig: ProjectConfig): ModelRuntimes {
   const ollamaBaseUrl = projectConfig.ollamaBaseUrl;
   const embeddingModelName = projectConfig.models.embedding;
 
+  // Validate all models upfront before creating anything
+  const modelsToValidate: Array<{ role: string; model: string }> = [
+    { role: 'reasoning', model: projectConfig.models.reasoning },
+    { role: 'context', model: projectConfig.models.context },
+    { role: 'embedding', model: embeddingModelName },
+  ];
+
+  for (const { role, model } of modelsToValidate) {
+    const error = validateModel(model);
+    if (error) {
+      throw new Error(
+        `Cannot start AIDE: ${role} model "${model}" — ${error}\n` +
+        `Fix: set the required API key, or change the model with: aide config --${role} <model>`
+      );
+    }
+  }
+
+  // All validated — create runtimes
   const reasoning = createRuntime(projectConfig.models.reasoning, {
     ollamaBaseUrl,
     embeddingModel: embeddingModelName,
   });
 
-  // Context model may be the same as reasoning (same model name = same config)
+  // Context model: reuse reasoning runtime if same model name
   const context =
     projectConfig.models.context === projectConfig.models.reasoning
       ? reasoning
@@ -195,8 +215,7 @@ export function createRuntimes(projectConfig: ProjectConfig): ModelRuntimes {
           embeddingModel: embeddingModelName,
         });
 
-  // Embedding runtime: create from the embedding model name
-  // OllamaRuntime and OpenAIRuntime both implement EmbeddingRuntime
+  // Embedding runtime
   const embeddingProvider = detectProvider(embeddingModelName);
   let embedding: EmbeddingRuntime;
 
@@ -208,7 +227,6 @@ export function createRuntimes(projectConfig: ProjectConfig): ModelRuntimes {
     });
   } else {
     // For cloud embedding models, use the reasoning runtime's embedding capability
-    // (OpenAIRuntime implements EmbeddingRuntime)
     embedding = reasoning as unknown as EmbeddingRuntime;
   }
 

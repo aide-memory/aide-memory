@@ -304,6 +304,9 @@ export interface ProjectConfig {
     topK?: number;
   };
 
+  /** True if models were explicitly set by user via `aide config` (prevents auto-sync from AIDE_DEFAULTS) */
+  modelsSetByUser?: boolean;
+
   // Legacy retrieval settings (still supported)
   tokenBudget?: number;
   maxBlocks?: number;
