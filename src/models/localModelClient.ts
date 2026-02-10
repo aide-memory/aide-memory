@@ -94,6 +94,12 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
     return true;
   }
 
+  supportsNativeTools(): boolean {
+    // Ollama's native tool calling is unreliable (poor batching, inconsistent format).
+    // The orchestrator should use text-based tool descriptions in prompts instead.
+    return false;
+  }
+
   /**
    * Generate embeddings for texts
    */

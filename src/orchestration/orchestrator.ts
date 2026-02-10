@@ -11,7 +11,7 @@
  * Token tracking flows through the entire pipeline.
  */
 
-import { ModelRuntimes, ToolDefinition } from '../models/types';
+import { ModelRuntimes, ToolDefinition, ChatResponse } from '../models/types';
 import { TokenTracker } from '../core/tokenTracker';
 import { ToolExecutor } from './toolExecutor';
 import {
@@ -57,6 +57,8 @@ export class Orchestrator {
   private config: OrchestratorConfig;
   private verbose: boolean;
   private log?: VerboseLogger;
+  /** Stored during answer() so evaluateWithContextModel can pass tools to chatWithTools */
+  private availableTools: ToolDefinition[] = [];
 
   constructor(
     runtimes: ModelRuntimes,
@@ -80,6 +82,9 @@ export class Orchestrator {
     query: string,
     context: OrchestratorContext
   ): Promise<OrchestratorResult> {
+    // Store tools so evaluateWithContextModel can access them
+    this.availableTools = context.availableTools;
+
     const state: IterationState = {
       previousCalls: new Map(),
       relevantResults: [],
@@ -97,13 +102,16 @@ export class Orchestrator {
     // =====================================================================
     logInfo('[orchestrator] Step 1: Reasoning model planning...');
 
+    const reasoningUsesNativeTools = this.runtimes.reasoning.supportsNativeTools();
     const planningSystemPrompt = buildPlanningPrompt(
       context.availableTools,
+      !reasoningUsesNativeTools, // include tool descriptions in text for Ollama
       hasConversation
     );
 
     if (this.verbose && this.log) {
       this.log.header('ORCHESTRATOR: PLANNING PROMPT → Reasoning Model');
+      this.log.label('Provider mode', reasoningUsesNativeTools ? 'native tools (cloud)' : 'text-based tools (Ollama)');
       this.log.label('System prompt length', `${planningSystemPrompt.length} chars`);
       this.log.text(planningSystemPrompt);
       this.log.separator();
@@ -111,10 +119,23 @@ export class Orchestrator {
       this.log.footer();
     }
 
-    const planningResponse = await this.runtimes.reasoning.chat([
-      { role: 'system', content: planningSystemPrompt },
-      { role: 'user', content: query },
-    ]);
+    let planningResponse: ChatResponse;
+    if (reasoningUsesNativeTools) {
+      // Cloud path: use native tool calling
+      planningResponse = await this.runtimes.reasoning.chatWithTools(
+        [
+          { role: 'system', content: planningSystemPrompt },
+          { role: 'user', content: query },
+        ],
+        context.availableTools
+      );
+    } else {
+      // Ollama path: use plain chat, tool descriptions are in the prompt text
+      planningResponse = await this.runtimes.reasoning.chat([
+        { role: 'system', content: planningSystemPrompt },
+        { role: 'user', content: query },
+      ]);
+    }
 
     // Track planning tokens
     if (planningResponse.usage) {
@@ -132,12 +153,32 @@ export class Orchestrator {
       if (planningResponse.usage) {
         this.log.label('Tokens', `in=${planningResponse.usage.inputTokens} out=${planningResponse.usage.outputTokens}`);
       }
-      this.log.content(planningResponse.content);
+      if (planningResponse.toolCalls && planningResponse.toolCalls.length > 0) {
+        this.log.label('Native tool calls', `${planningResponse.toolCalls.length}`);
+        for (const tc of planningResponse.toolCalls) {
+          this.log.tool(tc.name, tc.arguments);
+        }
+      }
+      if (planningResponse.content) {
+        this.log.content(planningResponse.content);
+      }
       this.log.footer();
     }
 
-    // Parse tool calls from planning response
-    let toolCalls = this.parseToolCallsFromResponse(planningResponse.content);
+    // Parse tool calls using the appropriate method for the provider
+    let toolCalls: ToolCallSpec[];
+    if (reasoningUsesNativeTools) {
+      // Cloud: primary extraction from structured tool calls, fallback to text
+      toolCalls = this.extractToolCalls(planningResponse);
+      if (toolCalls.length === 0 && planningResponse.content) {
+        toolCalls = this.parseToolCallsFromResponse(planningResponse.content);
+      }
+    } else {
+      // Ollama: parse from text response (primary path)
+      toolCalls = planningResponse.content
+        ? this.parseToolCallsFromResponse(planningResponse.content)
+        : [];
+    }
 
     if (toolCalls.length === 0) {
       logWarn('[orchestrator] Planning model returned no tool calls, attempting direct answer');
@@ -361,38 +402,63 @@ export class Orchestrator {
   // =========================================================================
 
   /**
-   * Use the context model to evaluate tool call results
+   * Use the context model to evaluate tool call results.
+   * Provider-aware: cloud uses chatWithTools + simple JSON, Ollama uses chat + JSON with newToolCalls.
    */
   private async evaluateWithContextModel(
     query: string,
     results: ToolCallResult[],
     state: IterationState
   ): Promise<ContextEvaluation | null> {
-    const previousCallKeys = Array.from(state.previousCalls.keys());
+    // Build human-readable previous call descriptions so the model can understand
+    // what was already tried (hash-based keys like "search:9704bee7" are meaningless to models)
+    const previousCallDescriptions = Array.from(state.previousCalls.values()).map(
+      (r) => `${r.spec.name}(${JSON.stringify(r.spec.arguments)})`
+    );
+    const contextUsesNativeTools = this.runtimes.context.supportsNativeTools();
 
     const prompt = buildContextEvaluationPrompt(
       query,
       results,
-      previousCallKeys,
+      previousCallDescriptions,
       state.iteration,
-      this.config.maxIterations
+      this.config.maxIterations,
+      !contextUsesNativeTools // include newToolCalls in JSON for Ollama
     );
 
     if (this.verbose && this.log) {
       this.log.header(`CONTEXT EVALUATION PROMPT → Context Model (Iteration ${state.iteration})`);
+      this.log.label('Provider mode', contextUsesNativeTools ? 'native tools (cloud)' : 'text-based tools (Ollama)');
       this.log.label('Prompt length', `${prompt.length} chars`);
       this.log.text(prompt);
       this.log.footer();
     }
 
-    const response = await this.runtimes.context.chat([
-      { role: 'system', content: prompt },
-      {
-        role: 'user',
-        content:
-          'Evaluate the above results and respond with the JSON evaluation.',
-      },
-    ]);
+    let response: ChatResponse;
+    if (contextUsesNativeTools) {
+      // Cloud path: use native tool calling, simpler JSON format
+      response = await this.runtimes.context.chatWithTools(
+        [
+          { role: 'system', content: prompt },
+          {
+            role: 'user',
+            content:
+              'Evaluate the above results. Respond with the JSON evaluation. If you need more context, use the available tools.',
+          },
+        ],
+        this.availableTools
+      );
+    } else {
+      // Ollama path: use plain chat, tool descriptions and newToolCalls format in prompt
+      response = await this.runtimes.context.chat([
+        { role: 'system', content: prompt },
+        {
+          role: 'user',
+          content:
+            'Evaluate the above results. Respond with the JSON evaluation object.',
+        },
+      ]);
+    }
 
     // Track context model tokens
     if (response.usage) {
@@ -410,45 +476,119 @@ export class Orchestrator {
       if (response.usage) {
         this.log.label('Tokens', `in=${response.usage.inputTokens} out=${response.usage.outputTokens}`);
       }
-      this.log.content(response.content);
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        this.log.label('Native tool calls', `${response.toolCalls.length}`);
+        for (const tc of response.toolCalls) {
+          this.log.tool(tc.name, tc.arguments);
+        }
+      }
+      if (response.content) {
+        this.log.content(response.content);
+      }
       this.log.footer();
     }
 
-    // Parse the JSON evaluation
-    return this.parseContextEvaluation(response.content);
+    // Parse the JSON evaluation from text content
+    const evaluation = this.parseContextEvaluation(response.content);
+    if (!evaluation) return null;
+
+    if (contextUsesNativeTools) {
+      // Cloud path: merge native tool calls from the provider into evaluation
+      const nativeToolCalls = this.extractToolCalls(response);
+      if (nativeToolCalls.length > 0) {
+        evaluation.newToolCalls = nativeToolCalls;
+      }
+    }
+    // Ollama path: newToolCalls are already parsed from the JSON content by parseContextEvaluation
+
+    return evaluation;
   }
 
   /**
-   * Parse tool call specs from the reasoning model's planning response
+   * Extract structured tool calls from a ChatResponse (native tool calling).
+   * Maps provider-specific ToolCallRequest[] to our ToolCallSpec[].
+   */
+  private extractToolCalls(response: ChatResponse): ToolCallSpec[] {
+    if (!response.toolCalls || response.toolCalls.length === 0) return [];
+
+    return response.toolCalls
+      .filter((tc) => tc.name !== 'done')
+      .map((tc) => ({
+        name: tc.name,
+        arguments:
+          typeof tc.arguments === 'string'
+            ? JSON.parse(tc.arguments)
+            : (tc.arguments ?? {}),
+      }));
+  }
+
+  /**
+   * Parse tool call specs from text (fallback for models that don't use native tool calling).
+   * Handles multiple JSON arrays and prose mixed in.
    */
   private parseToolCallsFromResponse(content: string): ToolCallSpec[] {
+    const allCalls: ToolCallSpec[] = [];
+
     try {
-      // Try to find JSON array in the response
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        return [];
-      }
+      // Extract all valid JSON arrays from the response individually.
+      // This handles models that output multiple arrays or mix prose with JSON.
+      let searchFrom = 0;
+      while (searchFrom < content.length) {
+        const start = content.indexOf('[', searchFrom);
+        if (start === -1) break;
 
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (!Array.isArray(parsed)) {
-        return [];
-      }
+        // Try to find matching closing bracket by parsing progressively
+        let found = false;
+        for (let end = start + 2; end <= content.length; end++) {
+          if (content[end - 1] === ']') {
+            try {
+              const parsed = JSON.parse(content.slice(start, end));
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                // Valid array found — extract tool call objects
+                for (const item of parsed) {
+                  if (
+                    typeof item === 'object' &&
+                    item !== null &&
+                    'name' in item &&
+                    item.name !== 'done'
+                  ) {
+                    allCalls.push({
+                      name: item.name as string,
+                      arguments: (item.arguments ?? {}) as Record<
+                        string,
+                        unknown
+                      >,
+                    });
+                  }
+                }
+                searchFrom = end;
+                found = true;
+                break;
+              }
+            } catch {
+              // Not valid JSON yet, keep extending
+            }
+          }
+        }
 
-      return parsed
-        .filter(
-          (item: unknown) =>
-            typeof item === 'object' && item !== null && 'name' in item
-        )
-        .map((item: Record<string, unknown>) => ({
-          name: item.name as string,
-          arguments: (item.arguments ?? {}) as Record<string, unknown>,
-        }));
+        // If no valid array found starting at this '[', skip it
+        if (!found) {
+          searchFrom = start + 1;
+        }
+      }
     } catch {
       logWarn(
         '[orchestrator] Failed to parse tool calls from planning response'
       );
-      return [];
     }
+
+    if (allCalls.length > 0) {
+      logInfo(
+        `[orchestrator] Parsed ${allCalls.length} tool calls from text fallback`
+      );
+    }
+
+    return allCalls;
   }
 
   /**

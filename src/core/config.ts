@@ -18,7 +18,7 @@ import { getProjectConfigPath, ensureProjectDirs } from '../storage/paths';
 export const AIDE_DEFAULTS = {
   // === Model Roles (all 3 required) ===
   models: {
-    reasoning: 'gpt-5.2', // High-level planning + answering
+    reasoning: 'qwen3-coder:30b', // High-level planning + answering
     context: 'qwen3-coder:30b', // Context gathering, iteration, relevance eval
     embedding: 'all-minilm:latest', // Vector embeddings (Ollama)
   },

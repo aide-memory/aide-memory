@@ -145,6 +145,10 @@ export class OpenAIRuntime implements ToolCapableRuntime, EmbeddingRuntime {
     return true;
   }
 
+  supportsNativeTools(): boolean {
+    return this.supportsTools();
+  }
+
   /**
    * Generate embeddings for texts
    */
@@ -218,6 +222,7 @@ export class OpenAIRuntime implements ToolCapableRuntime, EmbeddingRuntime {
       if (openaiTools && openaiTools.length > 0 && this.supportsTools()) {
         payload.tools = openaiTools;
         payload.tool_choice = 'auto';
+        payload.parallel_tool_calls = true;
       }
 
       if (process.env.AIDE_DEBUG) {
@@ -405,6 +410,10 @@ export class AnthropicRuntime implements ToolCapableRuntime, EmbeddingRuntime {
     return true;
   }
 
+  supportsNativeTools(): boolean {
+    return true;
+  }
+
   async embed(_texts: string[]): Promise<Embedding[]> {
     throw new Error('Anthropic provider is not yet implemented.');
   }
@@ -430,6 +439,10 @@ export class GoogleRuntime implements ToolCapableRuntime, EmbeddingRuntime {
   }
 
   supportsTools(): boolean {
+    return true;
+  }
+
+  supportsNativeTools(): boolean {
     return true;
   }
 

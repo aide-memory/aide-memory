@@ -103,6 +103,13 @@ export interface ToolCapableRuntime extends ModelRuntime {
    * Check if this runtime supports tool calling
    */
   supportsTools(): boolean;
+
+  /**
+   * Whether this runtime reliably supports native tool calling via the API.
+   * When true, the orchestrator uses chatWithTools() with structured tool_calls.
+   * When false, the orchestrator uses chat() with text-based tool descriptions.
+   */
+  supportsNativeTools(): boolean;
 }
 
 /**
