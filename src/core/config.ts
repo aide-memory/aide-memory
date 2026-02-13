@@ -18,9 +18,9 @@ import { getProjectConfigPath, ensureProjectDirs } from '../storage/paths';
 export const AIDE_DEFAULTS = {
   // === Model Roles (all 3 required) ===
   models: {
-    reasoning: 'qwen3-coder:30b', // High-level planning + answering
-    context: 'qwen3-coder:30b', // Context gathering, iteration, relevance eval
-    embedding: 'all-minilm:latest', // Vector embeddings (Ollama)
+    reasoning: 'gpt-5.2', // High-level planning + answering
+    context: 'gpt-5.2', // Context gathering, iteration, relevance eval
+    embedding: 'mxbai-embed-large', // Vector embeddings (Ollama, 1024-dim, SOTA for BERT-large). Cloud alternative: 'text-embedding-3-small' (OpenAI, 1536-dim, $0.02/1M tokens)
   },
 
   // === Ollama (for local models) ===

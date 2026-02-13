@@ -30,6 +30,10 @@ export function getSessionsDir(projectId: string): string {
   return path.join(getProjectDir(projectId), 'sessions');
 }
 
+export function getLogsDir(projectId: string): string {
+  return path.join(getProjectDir(projectId), 'logs');
+}
+
 /**
  * @deprecated Use getProjectDbPath instead
  */

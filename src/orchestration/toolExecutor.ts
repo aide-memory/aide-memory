@@ -2,149 +2,57 @@
  * Tool Executor
  *
  * Standalone tool execution engine. Executes tool call specs against
- * the project graph and/or semantic search engine. Pure code, no model calls.
+ * the project graph, semantic search engine, and/or filesystem.
+ * Pure code, no model calls.
  *
- * Refactored from toolBasedRetrieval.ts to be reusable by the orchestrator.
+ * Tool sets:
+ * - SHARED_TOOLS: available in both graph and semantic strategies
+ * - GRAPH_ONLY_TOOLS: require project graph
+ * - CONVERSATION_TOOLS: available when session has conversation history
  */
 
 import crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ProjectGraph } from '../brain/projectGraph';
+import { SQLiteBrainStore } from '../brain/sqliteStore';
 import { SemanticSearchEngine } from '../retrieval/semanticSearch';
-import { ToolDefinition } from '../models/types';
+import { ToolDefinition, EmbeddingRuntime } from '../models/types';
 import { ToolCallSpec, ToolCallResult } from './types';
-import { BlockKind, RetrievalQuery, ChatMessage } from '../brain/types';
-import { logInfo } from '../core/logger';
+import { BlockKind, ChatMessage } from '../brain/types';
+import { TreeSitterAnalyzer, ExtractedSymbol } from '../analysis/treeSitterAnalyzer';
 
 // ============================================================================
 // Tool Definitions
 // ============================================================================
 
-/** Conversation tools (available when session has conversation history) */
-export const CONVERSATION_TOOLS: ToolDefinition[] = [
-  {
-    name: 'get_conversation_history',
-    description:
-      'Get recent messages from the current conversation session. Use this to understand prior questions and answers when the user asks a follow-up.',
-    parameters: {
-      type: 'object',
-      properties: {
-        count: {
-          type: 'number',
-          description: 'Number of recent messages to return (default 10)',
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'search_conversation',
-    description:
-      'Search the conversation history for messages containing a keyword or phrase. Use this when the user refers to something previously discussed (e.g., "the solution you proposed", "what delay did you suggest").',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Keyword or phrase to search for in conversation history',
-        },
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of matching messages to return (default 5)',
-        },
-      },
-      required: ['query'],
-    },
-  },
-];
-
-/** Graph tools (when project graph exists) */
-export const GRAPH_TOOLS: ToolDefinition[] = [
+/** Shared tools available in BOTH graph and semantic strategies */
+export const SHARED_TOOLS: ToolDefinition[] = [
   {
     name: 'semantic_search',
     description:
-      'Search the codebase by meaning using natural language. Returns the most semantically similar code chunks. Use this FIRST to find entry points.',
+      'Search the codebase by meaning using natural language. Returns file paths, line ranges, code snippets, and similarity scores. Use this FIRST to find entry points. topK guidance: 4-6 for focused queries, 6-8 for broader questions, 8-12 for surveys.',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Natural language search query (e.g., "authentication handler", "database connection")',
+          description:
+            'Natural language search query (e.g., "authentication handler", "scroll behavior in verbose log")',
         },
         topK: {
           type: 'number',
-          description: 'Number of results to return (default 10)',
+          description:
+            'Number of results to return (default 8). Use 4-6 for focused, 6-8 for broader, 8-12 for surveys.',
         },
       },
       required: ['query'],
     },
   },
   {
-    name: 'search',
-    description: 'Search for symbols and content in the project graph by name or content text.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Search query (symbol name, function name, or content text)',
-        },
-        path: {
-          type: 'string',
-          description: 'Optional file/directory path prefix to narrow search',
-        },
-        kinds: {
-          type: 'string',
-          description: 'Comma-separated symbol kinds to filter: function, class, interface, type, variable, method, property',
-        },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'get_symbol_context',
-    description: 'Get the full code and context for a specific symbol by its ID.',
-    parameters: {
-      type: 'object',
-      properties: {
-        symbolId: {
-          type: 'string',
-          description: 'The symbol ID to look up',
-        },
-      },
-      required: ['symbolId'],
-    },
-  },
-  {
-    name: 'get_callers',
-    description: 'Find all symbols that call/reference the given symbol.',
-    parameters: {
-      type: 'object',
-      properties: {
-        symbolId: {
-          type: 'string',
-          description: 'The symbol ID to find callers for',
-        },
-      },
-      required: ['symbolId'],
-    },
-  },
-  {
-    name: 'get_callees',
-    description: 'Find all symbols that the given symbol calls/references.',
-    parameters: {
-      type: 'object',
-      properties: {
-        symbolId: {
-          type: 'string',
-          description: 'The symbol ID to find callees for',
-        },
-      },
-      required: ['symbolId'],
-    },
-  },
-  {
-    name: 'get_file_content',
-    description: 'Get the full content and symbols of a specific file.',
+    name: 'read_file_outline',
+    description:
+      'See a file\'s structure without reading full content. Returns symbols (functions, classes, interfaces, types) with their kind, name, and line range. Low token cost. Use this to understand file structure before drilling into specific sections with read_lines.',
     parameters: {
       type: 'object',
       properties: {
@@ -157,53 +65,9 @@ export const GRAPH_TOOLS: ToolDefinition[] = [
     },
   },
   {
-    name: 'done',
-    description: 'Signal that you have gathered enough context.',
-    parameters: {
-      type: 'object',
-      properties: {},
-    },
-  },
-];
-
-/** Semantic-only tools (when no graph, just embeddings) */
-export const SEMANTIC_ONLY_TOOLS: ToolDefinition[] = [
-  {
-    name: 'semantic_search',
+    name: 'read_lines',
     description:
-      'Search the codebase by meaning using natural language. Returns the most semantically similar code chunks.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Natural language search query',
-        },
-        topK: {
-          type: 'number',
-          description: 'Number of results to return (default 10)',
-        },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'get_file_content',
-    description: 'Read the content of a specific file.',
-    parameters: {
-      type: 'object',
-      properties: {
-        filePath: {
-          type: 'string',
-          description: 'Relative file path',
-        },
-      },
-      required: ['filePath'],
-    },
-  },
-  {
-    name: 'get_file_chunk',
-    description: 'Read specific lines from a file.',
+      'Read specific line range from a file. Primary drill-down tool after finding entry points with semantic_search. Use line ranges from search results directly. Prefer this over read_file when you know the location.',
     parameters: {
       type: 'object',
       properties: {
@@ -224,6 +88,21 @@ export const SEMANTIC_ONLY_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'read_file',
+    description:
+      'Read full file content. Use for small files or when full context is necessary. For large files, prefer read_file_outline first, then read_lines for specific sections.',
+    parameters: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Relative file path',
+        },
+      },
+      required: ['filePath'],
+    },
+  },
+  {
     name: 'list_files',
     description: 'List files in a directory.',
     parameters: {
@@ -231,7 +110,7 @@ export const SEMANTIC_ONLY_TOOLS: ToolDefinition[] = [
       properties: {
         path: {
           type: 'string',
-          description: 'Directory path to list',
+          description: 'Directory path to list (relative to project root)',
         },
       },
       required: ['path'],
@@ -247,6 +126,138 @@ export const SEMANTIC_ONLY_TOOLS: ToolDefinition[] = [
   },
 ];
 
+/** Graph-only tools (require project graph) */
+export const GRAPH_ONLY_TOOLS: ToolDefinition[] = [
+  {
+    name: 'find_symbol',
+    description:
+      'Find symbols by name pattern. Searches symbol names with pattern matching (partial match) and also searches code content via full-text search. Use when you know a specific symbol name or keyword to look up.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'Symbol name or code keyword to search for (e.g., "toggleLogExpand", "scrollIntoView")',
+        },
+        kinds: {
+          type: 'string',
+          description:
+            'Comma-separated symbol kinds to filter: function, class, interface, type, variable, method, property',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_symbol_detail',
+    description:
+      'Get the full code and context for a specific symbol by its ID. Use after find_symbol to get implementation details.',
+    parameters: {
+      type: 'object',
+      properties: {
+        symbolId: {
+          type: 'string',
+          description: 'The symbol ID (from find_symbol results)',
+        },
+      },
+      required: ['symbolId'],
+    },
+  },
+  {
+    name: 'get_references',
+    description:
+      'Find what calls/references/imports/extends/tests a given symbol. Navigate the code graph to understand usage.',
+    parameters: {
+      type: 'object',
+      properties: {
+        symbolId: {
+          type: 'string',
+          description: 'The symbol ID to find references for',
+        },
+        relationKind: {
+          type: 'string',
+          description:
+            'Filter by relation type: CALLS, IMPORTS, EXTENDS, IMPLEMENTS, TESTS. Default: all kinds.',
+        },
+      },
+      required: ['symbolId'],
+    },
+  },
+  {
+    name: 'get_dependencies',
+    description:
+      'Find what a symbol calls/references/imports/extends. Navigate the code graph to understand what a symbol depends on.',
+    parameters: {
+      type: 'object',
+      properties: {
+        symbolId: {
+          type: 'string',
+          description: 'The symbol ID to find dependencies for',
+        },
+        relationKind: {
+          type: 'string',
+          description:
+            'Filter by relation type: CALLS, IMPORTS, EXTENDS, IMPLEMENTS, TESTS. Default: all kinds.',
+        },
+      },
+      required: ['symbolId'],
+    },
+  },
+];
+
+/** Conversation tools (available when session has conversation history) */
+export const CONVERSATION_TOOLS: ToolDefinition[] = [
+  {
+    name: 'search_conversation',
+    description:
+      'Semantic search over conversation history. Returns matching exchanges with preview. Use to find relevant prior discussion when user asks a follow-up (e.g., "what fix did you propose?", "the delay you mentioned").',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'Search query -- what you want to find in the conversation (e.g., "proposed fix for scroll", "delay value")',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum results to return (default 5)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'read_conversation',
+    description:
+      'Read a range of conversation exchanges by index. Like read_lines for conversations. Use after search_conversation to get full exchange content.',
+    parameters: {
+      type: 'object',
+      properties: {
+        startExchange: {
+          type: 'number',
+          description: 'Start exchange index (0-based)',
+        },
+        endExchange: {
+          type: 'number',
+          description: 'End exchange index (0-based, inclusive)',
+        },
+      },
+      required: ['startExchange', 'endExchange'],
+    },
+  },
+  {
+    name: 'get_full_conversation',
+    description:
+      'Get the entire conversation history (all exchanges). Higher token cost -- prefer search_conversation + read_conversation when you only need specific parts.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+];
+
 // ============================================================================
 // ToolExecutor
 // ============================================================================
@@ -255,40 +266,63 @@ export class ToolExecutor {
   private graph: ProjectGraph | null;
   private searchEngine: SemanticSearchEngine | null;
   private conversationHistory: ChatMessage[];
+  private projectRoot: string;
+  private treeSitterAnalyzer: TreeSitterAnalyzer | null = null;
+  private embeddingRuntime: EmbeddingRuntime | null;
+  private sqliteStore: SQLiteBrainStore | null;
+  private sessionId: string | null;
 
   constructor(
     graph: ProjectGraph | null,
     searchEngine: SemanticSearchEngine | null,
-    conversationHistory?: ChatMessage[]
+    projectRoot: string,
+    conversationHistory?: ChatMessage[],
+    embeddingRuntime?: EmbeddingRuntime | null,
+    sqliteStore?: SQLiteBrainStore | null,
+    sessionId?: string | null
   ) {
     this.graph = graph;
     this.searchEngine = searchEngine;
+    this.projectRoot = projectRoot;
     this.conversationHistory = conversationHistory ?? [];
+    this.embeddingRuntime = embeddingRuntime ?? null;
+    this.sqliteStore = sqliteStore ?? null;
+    this.sessionId = sessionId ?? null;
   }
 
   /**
    * Whether conversation history is available (has at least one assistant message)
    */
   hasConversationHistory(): boolean {
-    return this.conversationHistory.length > 0 &&
-      this.conversationHistory.some((m) => m.role === 'assistant');
+    return (
+      this.conversationHistory.length > 0 &&
+      this.conversationHistory.some((m) => m.role === 'assistant')
+    );
   }
 
   /**
    * Get available tools based on what backends exist.
    * Conversation tools are appended when session has conversation history.
    */
-  getAvailableTools(hasGraph: boolean, hasEmbeddings: boolean): ToolDefinition[] {
-    let tools: ToolDefinition[];
+  getAvailableTools(
+    hasGraph: boolean,
+    hasEmbeddings: boolean
+  ): ToolDefinition[] {
+    let tools: ToolDefinition[] = [];
 
-    if (hasGraph && hasEmbeddings) {
-      tools = [...GRAPH_TOOLS];
-    } else if (hasEmbeddings) {
-      tools = [...SEMANTIC_ONLY_TOOLS];
-    } else if (hasGraph) {
-      tools = GRAPH_TOOLS.filter((t) => t.name !== 'semantic_search');
-    } else {
-      tools = [];
+    if (hasEmbeddings || hasGraph) {
+      // Shared tools always available when we have any backend
+      tools = [...SHARED_TOOLS];
+
+      // Add graph-only tools when graph exists
+      if (hasGraph) {
+        tools = [...tools, ...GRAPH_ONLY_TOOLS];
+      }
+
+      // If no embeddings, remove semantic_search from shared tools
+      if (!hasEmbeddings) {
+        tools = tools.filter((t) => t.name !== 'semantic_search');
+      }
     }
 
     // Add conversation tools when history exists
@@ -300,40 +334,35 @@ export class ToolExecutor {
   }
 
   /**
-   * Execute a batch of tool calls. Returns results keyed by call.
+   * Execute a batch of tool calls in parallel. Returns results.
    * Pure code -- no model involved.
    */
   async executeBatch(
     calls: ToolCallSpec[],
     previousCalls?: Map<string, ToolCallResult>
   ): Promise<ToolCallResult[]> {
-    const results: ToolCallResult[] = [];
-
-    for (const spec of calls) {
+    const promises = calls.map(async (spec): Promise<ToolCallResult | null> => {
       const callKey = this.generateCallKey(spec);
 
-      // Check for duplicate
+      // Skip duplicates entirely -- don't re-execute, don't add duplicate results.
+      // The model is told not to repeat calls; if it disobeys, we just ignore them.
       if (previousCalls?.has(callKey)) {
-        const cached = previousCalls.get(callKey)!;
-        results.push({
-          ...cached,
-          callKey,
-        });
-        continue;
+        return null;
       }
 
       // Execute the tool
       const result = await this.executeSingle(spec);
-      results.push({
+      return {
         spec,
         success: result.success,
         data: result.data,
         error: result.error,
         callKey,
-      });
-    }
+      };
+    });
 
-    return results;
+    const results = await Promise.all(promises);
+    return results.filter((r): r is ToolCallResult => r !== null);
   }
 
   /**
@@ -344,28 +373,54 @@ export class ToolExecutor {
   ): Promise<{ success: boolean; data?: string; error?: string }> {
     try {
       switch (spec.name) {
+        // Shared tools
         case 'semantic_search':
           return this.handleSemanticSearch(spec.arguments);
-        case 'search':
-          return this.handleSearch(spec.arguments);
-        case 'get_symbol_context':
-          return this.handleGetSymbolContext(spec.arguments);
-        case 'get_callers':
-          return this.handleGetCallers(spec.arguments);
-        case 'get_callees':
-          return this.handleGetCallees(spec.arguments);
-        case 'get_file_content':
-          return this.handleGetFileContent(spec.arguments);
-        case 'get_file_chunk':
-          return this.handleGetFileChunk(spec.arguments);
+        case 'read_file_outline':
+          return this.handleReadFileOutline(spec.arguments);
+        case 'read_lines':
+          return this.handleReadLines(spec.arguments);
+        case 'read_file':
+          return this.handleReadFile(spec.arguments);
         case 'list_files':
           return this.handleListFiles(spec.arguments);
-        case 'get_conversation_history':
-          return this.handleGetConversationHistory(spec.arguments);
-        case 'search_conversation':
-          return this.handleSearchConversation(spec.arguments);
         case 'done':
           return { success: true, data: 'done' };
+
+        // Graph-only tools
+        case 'find_symbol':
+          return this.handleFindSymbol(spec.arguments);
+        case 'get_symbol_detail':
+          return this.handleGetSymbolDetail(spec.arguments);
+        case 'get_references':
+          return this.handleGetReferences(spec.arguments);
+        case 'get_dependencies':
+          return this.handleGetDependencies(spec.arguments);
+
+        // Conversation tools
+        case 'search_conversation':
+          return this.handleSearchConversation(spec.arguments);
+        case 'read_conversation':
+          return this.handleReadConversation(spec.arguments);
+        case 'get_full_conversation':
+          return this.handleGetFullConversation();
+
+        // Legacy tool names (backwards compat during transition)
+        case 'search':
+          return this.handleFindSymbol(spec.arguments);
+        case 'get_symbol_context':
+          return this.handleGetSymbolDetail(spec.arguments);
+        case 'get_callers':
+          return this.handleGetReferences(spec.arguments);
+        case 'get_callees':
+          return this.handleGetDependencies(spec.arguments);
+        case 'get_file_content':
+          return this.handleReadFile(spec.arguments);
+        case 'get_file_chunk':
+          return this.handleReadLines(spec.arguments);
+        case 'get_conversation_history':
+          return this.handleGetFullConversation();
+
         default:
           return { success: false, error: `Unknown tool: ${spec.name}` };
       }
@@ -378,18 +433,21 @@ export class ToolExecutor {
   }
 
   // =========================================================================
-  // Tool Handlers
+  // Shared Tool Handlers
   // =========================================================================
 
   private async handleSemanticSearch(
     args: Record<string, unknown>
   ): Promise<{ success: boolean; data?: string; error?: string }> {
     if (!this.searchEngine) {
-      return { success: false, error: 'Semantic search not available (no embeddings)' };
+      return {
+        success: false,
+        error: 'Semantic search not available (no embeddings)',
+      };
     }
 
     const query = args.query as string;
-    const topK = (args.topK as number) ?? 10;
+    const topK = (args.topK as number) ?? 8;
 
     const results = await this.searchEngine.search(query, { topK });
 
@@ -397,17 +455,242 @@ export class ToolExecutor {
       return { success: true, data: 'No results found.' };
     }
 
-    const formatted = results
-      .map((r, i) => {
-        const preview = r.content.length > 500 ? r.content.slice(0, 500) + '...' : r.content;
-        return `[${i + 1}] ${r.filePath}:${r.startLine}-${r.endLine} (score: ${r.score.toFixed(3)})\n${preview}`;
+    // Deduplicate overlapping results from the same file
+    const deduped = this.deduplicateSearchResults(results);
+
+    const formatted = deduped
+      .map((r) => {
+        const preview =
+          r.content.length > 500
+            ? r.content.slice(0, 500) + '...'
+            : r.content;
+        return `- ${r.filePath}:${r.startLine}-${r.endLine} (score: ${r.score.toFixed(3)})\n${preview}`;
       })
       .join('\n\n');
 
     return { success: true, data: formatted };
   }
 
-  private handleSearch(
+  private async handleReadFileOutline(
+    args: Record<string, unknown>
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
+    const filePath = args.filePath as string;
+
+    // Graph mode: use graph.getSymbolsForFile()
+    if (this.graph) {
+      const files = this.graph.findFiles();
+      const file = files.find(
+        (f) => f.path === filePath || f.path.endsWith(filePath)
+      );
+
+      if (file) {
+        const symbols = this.graph.getSymbolsForFile(file.id);
+        if (symbols.length > 0) {
+          const outline = symbols
+            .map(
+              (s) => `  ${s.kind} ${s.name} :${s.startLine}-${s.endLine}`
+            )
+            .join('\n');
+          return {
+            success: true,
+            data: `File: ${file.path}\nOutline (${symbols.length} symbols):\n${outline}`,
+          };
+        }
+      }
+    }
+
+    // No-graph / fallback: use Tree-sitter
+    const absPath = this.resolveFilePath(filePath);
+    if (!absPath || !fs.existsSync(absPath)) {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+
+    try {
+      const content = fs.readFileSync(absPath, 'utf8');
+      const language = this.detectLanguage(filePath);
+
+      if (language) {
+        const analyzer = await this.getTreeSitterAnalyzer();
+        if (analyzer) {
+          const result = await analyzer.analyze(content, language, filePath);
+          if (result.symbols.length > 0) {
+            const outline = result.symbols
+              .map(
+                (s: ExtractedSymbol) =>
+                  `  ${s.kind} ${s.name} :${s.startLine}-${s.endLine}`
+              )
+              .join('\n');
+            return {
+              success: true,
+              data: `File: ${filePath}\nOutline (${result.symbols.length} symbols):\n${outline}`,
+            };
+          }
+        }
+      }
+
+      // Final fallback: show basic file info
+      const lines = content.split('\n');
+      return {
+        success: true,
+        data: `File: ${filePath} (${lines.length} lines)\nNo symbols extracted. Use read_lines to view specific sections.`,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: `Error reading file: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  private handleReadLines(
+    args: Record<string, unknown>
+  ): { success: boolean; data?: string; error?: string } {
+    const filePath = args.filePath as string;
+    const startLine = (args.startLine as number) ?? 1;
+    const endLine = args.endLine as number;
+
+    const absPath = this.resolveFilePath(filePath);
+    if (!absPath || !fs.existsSync(absPath)) {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+
+    try {
+      const content = fs.readFileSync(absPath, 'utf8');
+      const allLines = content.split('\n');
+      const start = Math.max(1, startLine);
+      const end = Math.min(allLines.length, endLine ?? allLines.length);
+
+      const selectedLines = allLines.slice(start - 1, end);
+      const numbered = selectedLines
+        .map((line, i) => `${start + i}| ${line}`)
+        .join('\n');
+
+      return {
+        success: true,
+        data: `${filePath}:${start}-${end}:\n${numbered}`,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: `Error reading file: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  private handleReadFile(
+    args: Record<string, unknown>
+  ): { success: boolean; data?: string; error?: string } {
+    const filePath = args.filePath as string;
+
+    // Graph mode: enrich with symbol info
+    if (this.graph) {
+      const files = this.graph.findFiles();
+      const file = files.find(
+        (f) => f.path === filePath || f.path.endsWith(filePath)
+      );
+
+      if (file) {
+        const blocks = this.graph.getBlocksForFile(file.id);
+        const symbols = this.graph.getSymbolsForFile(file.id);
+
+        const parts = [`File: ${file.path}`, `Language: ${file.language}`];
+
+        if (symbols.length > 0) {
+          const symList = symbols.map(
+            (s) =>
+              `  ${s.kind} ${s.name} :${s.startLine}-${s.endLine} (ID: ${s.id})`
+          );
+          parts.push(
+            `\nSymbols (${symbols.length}):\n${symList.join('\n')}`
+          );
+        }
+
+        if (blocks.length > 0) {
+          const content = blocks
+            .filter((b) => !b.isChunk)
+            .map((b) => b.content)
+            .join('\n');
+          parts.push(`\nContent:\n${content}`);
+        }
+
+        return { success: true, data: parts.join('\n') };
+      }
+    }
+
+    // Filesystem fallback
+    const absPath = this.resolveFilePath(filePath);
+    if (!absPath || !fs.existsSync(absPath)) {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+
+    try {
+      const content = fs.readFileSync(absPath, 'utf8');
+      return {
+        success: true,
+        data: `File: ${filePath}\n\n${content}`,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: `Error reading file: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  private handleListFiles(
+    args: Record<string, unknown>
+  ): { success: boolean; data?: string; error?: string } {
+    const dirPath = args.path as string;
+
+    // Graph mode: use graph.findFiles()
+    if (this.graph) {
+      const files = this.graph.findFiles();
+      const dirFiles = files
+        .filter((f) => f.path.startsWith(dirPath))
+        .map((f) => f.path)
+        .slice(0, 50);
+
+      if (dirFiles.length > 0) {
+        return {
+          success: true,
+          data: `Files in ${dirPath} (${dirFiles.length}):\n${dirFiles.join('\n')}`,
+        };
+      }
+    }
+
+    // Filesystem fallback
+    const absDir = this.resolveFilePath(dirPath);
+    if (!absDir || !fs.existsSync(absDir)) {
+      return { success: true, data: `No files found in ${dirPath}` };
+    }
+
+    try {
+      const entries = this.listFilesRecursive(absDir, 3);
+      const relativeEntries = entries.map((e) =>
+        path.relative(this.projectRoot, e)
+      );
+
+      if (relativeEntries.length === 0) {
+        return { success: true, data: `No files found in ${dirPath}` };
+      }
+
+      return {
+        success: true,
+        data: `Files in ${dirPath} (${relativeEntries.length}):\n${relativeEntries.slice(0, 50).join('\n')}`,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: `Error listing directory: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  // =========================================================================
+  // Graph-Only Tool Handlers
+  // =========================================================================
+
+  private handleFindSymbol(
     args: Record<string, unknown>
   ): { success: boolean; data?: string; error?: string } {
     if (!this.graph) {
@@ -415,45 +698,77 @@ export class ToolExecutor {
     }
 
     const query = args.query as string;
-    const pathPrefix = args.path as string | undefined;
     const kindsStr = args.kinds as string | undefined;
-    const kinds = kindsStr?.split(',').map((k) => k.trim()) as BlockKind[] | undefined;
+    const kinds = kindsStr
+      ?.split(',')
+      .map((k) => k.trim())
+      .filter(Boolean);
 
-    // Search symbols
-    const symbols = this.graph.findSymbols({ name: query });
-    const filteredSymbols = pathPrefix
-      ? symbols.filter((s) => {
-          const file = this.graph!.getFile(s.fileId);
-          return file && file.path.startsWith(pathPrefix);
-        })
+    // Pattern-based symbol search (LIKE '%query%')
+    const symbols = this.graph.findSymbols({ namePattern: query });
+    const filteredSymbols = kinds
+      ? symbols.filter((s) =>
+          kinds.some((k) => s.kind.toLowerCase() === k.toLowerCase())
+        )
       : symbols;
 
-    // Search content blocks
-    const blocks = this.graph.searchBlocks(query, kinds);
-    const filteredBlocks = pathPrefix
-      ? blocks.filter((b) => {
-          const file = this.graph!.getFile(b.fileId);
-          return file && file.path.startsWith(pathPrefix);
-        })
-      : blocks;
-
+    // FTS5 content search
+    const blocks = this.graph.searchBlocks(query);
     const parts: string[] = [];
 
     if (filteredSymbols.length > 0) {
-      const symbolList = filteredSymbols.slice(0, 10).map((s) => {
+      const symbolList = filteredSymbols.slice(0, 15).map((s) => {
         const file = this.graph!.getFile(s.fileId);
-        return `  ${s.kind} ${s.name} @ ${file?.path ?? s.fileId}:${s.startLine}${s.signature ? `\n    ${s.signature}` : ''}\n    ID: ${s.id}`;
+        return `  ${s.kind} ${s.name} @ ${file?.path ?? s.fileId}:${s.startLine}-${s.endLine}${s.signature ? `\n    ${s.signature}` : ''}\n    ID: ${s.id}`;
       });
-      parts.push(`Symbols (${filteredSymbols.length}):\n${symbolList.join('\n')}`);
+      parts.push(
+        `Symbols matching "${query}" (${filteredSymbols.length}):\n${symbolList.join('\n')}`
+      );
     }
 
-    if (filteredBlocks.length > 0) {
-      const blockList = filteredBlocks.slice(0, 5).map((b) => {
+    if (blocks.length > 0) {
+      // Deduplicate overlapping blocks: if a small block (e.g. a hook) is
+      // fully contained within a larger block in the same file, drop the
+      // larger one because the specific match is more useful.
+      const deduped: typeof blocks = [];
+      for (const b of blocks) {
+        const dominated = deduped.some(
+          (existing) =>
+            existing.fileId === b.fileId &&
+            existing.startLine >= b.startLine &&
+            existing.endLine <= b.endLine &&
+            existing.content.length < b.content.length
+        );
+        if (dominated) continue; // skip larger block that contains a smaller, already-kept block
+
+        // Also remove any previously kept block that this block contains more specifically
+        for (let i = deduped.length - 1; i >= 0; i--) {
+          const existing = deduped[i];
+          if (
+            existing.fileId === b.fileId &&
+            b.startLine >= existing.startLine &&
+            b.endLine <= existing.endLine &&
+            b.content.length < existing.content.length
+          ) {
+            deduped.splice(i, 1); // remove the larger existing block
+          }
+        }
+        deduped.push(b);
+      }
+
+      const blockList = deduped.slice(0, 15).map((b) => {
         const file = this.graph!.getFile(b.fileId);
-        const preview = b.content.length > 300 ? b.content.slice(0, 300) + '...' : b.content;
-        return `  ${file?.path ?? b.fileId}:${b.startLine}-${b.endLine}\n${preview}`;
+        // Show full content for small blocks; truncate only very large ones
+        const maxPreview = b.content.length <= 1500 ? b.content.length : 800;
+        const preview =
+          b.content.length > maxPreview
+            ? b.content.slice(0, maxPreview) + `... (${b.content.length} chars total)`
+            : b.content;
+        return `  ${file?.path ?? b.fileId}:${b.startLine}-${b.endLine} [${b.kind}]\n${preview}`;
       });
-      parts.push(`Content matches (${filteredBlocks.length}):\n${blockList.join('\n')}`);
+      parts.push(
+        `Content matches (${blocks.length} total, showing ${deduped.slice(0, 15).length} deduplicated):\n${blockList.join('\n')}`
+      );
     }
 
     if (parts.length === 0) {
@@ -463,7 +778,7 @@ export class ToolExecutor {
     return { success: true, data: parts.join('\n\n') };
   }
 
-  private handleGetSymbolContext(
+  private handleGetSymbolDetail(
     args: Record<string, unknown>
   ): { success: boolean; data?: string; error?: string } {
     if (!this.graph) {
@@ -493,7 +808,7 @@ export class ToolExecutor {
     return { success: true, data: parts.join('\n') };
   }
 
-  private handleGetCallers(
+  private handleGetReferences(
     args: Record<string, unknown>
   ): { success: boolean; data?: string; error?: string } {
     if (!this.graph) {
@@ -501,23 +816,39 @@ export class ToolExecutor {
     }
 
     const symbolId = args.symbolId as string;
-    const incomingRelations = this.graph.getIncomingRelations(symbolId);
+    const relationKind = args.relationKind as string | undefined;
+
+    let incomingRelations = this.graph.getIncomingRelations(symbolId);
+
+    // Filter by relation kind if specified
+    if (relationKind) {
+      incomingRelations = incomingRelations.filter(
+        (rel) => rel.kind.toUpperCase() === relationKind.toUpperCase()
+      );
+    }
 
     if (incomingRelations.length === 0) {
-      return { success: true, data: 'No callers found.' };
+      const kindNote = relationKind ? ` (kind: ${relationKind})` : '';
+      return {
+        success: true,
+        data: `No references found${kindNote}.`,
+      };
     }
 
-    const callers = incomingRelations.slice(0, 10).map((rel) => {
-      const caller = this.graph!.getSymbol(rel.sourceSymbolId);
-      if (!caller) return `  Unknown (${rel.sourceSymbolId})`;
-      const file = this.graph!.getFile(caller.fileId);
-      return `  ${caller.kind} ${caller.name} @ ${file?.path ?? caller.fileId}:${caller.startLine}\n    ID: ${caller.id}`;
+    const refs = incomingRelations.slice(0, 15).map((rel) => {
+      const source = this.graph!.getSymbol(rel.sourceSymbolId);
+      if (!source) return `  Unknown (${rel.sourceSymbolId}) [${rel.kind}]`;
+      const file = this.graph!.getFile(source.fileId);
+      return `  ${source.kind} ${source.name} @ ${file?.path ?? source.fileId}:${source.startLine} [${rel.kind}]\n    ID: ${source.id}`;
     });
 
-    return { success: true, data: `Callers (${incomingRelations.length}):\n${callers.join('\n')}` };
+    return {
+      success: true,
+      data: `References (${incomingRelations.length}):\n${refs.join('\n')}`,
+    };
   }
 
-  private handleGetCallees(
+  private handleGetDependencies(
     args: Record<string, unknown>
   ): { success: boolean; data?: string; error?: string } {
     if (!this.graph) {
@@ -525,151 +856,45 @@ export class ToolExecutor {
     }
 
     const symbolId = args.symbolId as string;
-    const outgoingRelations = this.graph.getOutgoingRelations(symbolId);
+    const relationKind = args.relationKind as string | undefined;
+
+    let outgoingRelations = this.graph.getOutgoingRelations(symbolId);
+
+    // Filter by relation kind if specified
+    if (relationKind) {
+      outgoingRelations = outgoingRelations.filter(
+        (rel) => rel.kind.toUpperCase() === relationKind.toUpperCase()
+      );
+    }
 
     if (outgoingRelations.length === 0) {
-      return { success: true, data: 'No callees found.' };
+      const kindNote = relationKind ? ` (kind: ${relationKind})` : '';
+      return {
+        success: true,
+        data: `No dependencies found${kindNote}.`,
+      };
     }
 
-    const callees = outgoingRelations.slice(0, 10).map((rel) => {
-      const callee = this.graph!.getSymbol(rel.targetSymbolId);
-      if (!callee) return `  Unknown (${rel.targetSymbolId})`;
-      const file = this.graph!.getFile(callee.fileId);
-      return `  ${callee.kind} ${callee.name} @ ${file?.path ?? callee.fileId}:${callee.startLine}\n    ID: ${callee.id}`;
+    const deps = outgoingRelations.slice(0, 15).map((rel) => {
+      const target = this.graph!.getSymbol(rel.targetSymbolId);
+      if (!target) return `  Unknown (${rel.targetSymbolId}) [${rel.kind}]`;
+      const file = this.graph!.getFile(target.fileId);
+      return `  ${target.kind} ${target.name} @ ${file?.path ?? target.fileId}:${target.startLine} [${rel.kind}]\n    ID: ${target.id}`;
     });
 
-    return { success: true, data: `Callees (${outgoingRelations.length}):\n${callees.join('\n')}` };
-  }
-
-  private handleGetFileContent(
-    args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
-    if (!this.graph) {
-      return { success: false, error: 'Project graph not available' };
-    }
-
-    const filePath = args.filePath as string;
-    const files = this.graph.findFiles();
-    const file = files.find((f) => f.path === filePath || f.path.endsWith(filePath));
-
-    if (!file) {
-      return { success: false, error: `File not found: ${filePath}` };
-    }
-
-    const blocks = this.graph.getBlocksForFile(file.id);
-    const symbols = this.graph.getSymbolsForFile(file.id);
-
-    const parts = [`File: ${file.path}`, `Language: ${file.language}`];
-
-    if (symbols.length > 0) {
-      const symList = symbols.map(
-        (s) => `  ${s.kind} ${s.name} :${s.startLine}-${s.endLine} (ID: ${s.id})`
-      );
-      parts.push(`\nSymbols (${symbols.length}):\n${symList.join('\n')}`);
-    }
-
-    if (blocks.length > 0) {
-      const content = blocks
-        .filter((b) => !b.isChunk)
-        .map((b) => b.content)
-        .join('\n');
-      if (content.length > 5000) {
-        parts.push(`\nContent (truncated):\n${content.slice(0, 5000)}...`);
-      } else {
-        parts.push(`\nContent:\n${content}`);
-      }
-    }
-
-    return { success: true, data: parts.join('\n') };
-  }
-
-  private handleGetFileChunk(
-    args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
-    if (!this.graph) {
-      return { success: false, error: 'Project graph not available' };
-    }
-
-    const filePath = args.filePath as string;
-    const startLine = args.startLine as number;
-    const endLine = args.endLine as number;
-
-    const files = this.graph.findFiles();
-    const file = files.find((f) => f.path === filePath || f.path.endsWith(filePath));
-
-    if (!file) {
-      return { success: false, error: `File not found: ${filePath}` };
-    }
-
-    const blocks = this.graph.getBlocksForFile(file.id);
-    const relevantBlocks = blocks.filter(
-      (b) => b.startLine <= endLine && b.endLine >= startLine
-    );
-
-    if (relevantBlocks.length === 0) {
-      return { success: true, data: `No content found in ${filePath}:${startLine}-${endLine}` };
-    }
-
-    const content = relevantBlocks.map((b) => b.content).join('\n');
-    return { success: true, data: `${filePath}:${startLine}-${endLine}:\n${content}` };
-  }
-
-  private handleListFiles(
-    args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
-    if (!this.graph) {
-      return { success: false, error: 'Project graph not available' };
-    }
-
-    const dirPath = args.path as string;
-    const files = this.graph.findFiles();
-
-    const dirFiles = files
-      .filter((f) => f.path.startsWith(dirPath))
-      .map((f) => f.path)
-      .slice(0, 30);
-
-    if (dirFiles.length === 0) {
-      return { success: true, data: `No files found in ${dirPath}` };
-    }
-
-    return { success: true, data: `Files in ${dirPath}:\n${dirFiles.join('\n')}` };
+    return {
+      success: true,
+      data: `Dependencies (${outgoingRelations.length}):\n${deps.join('\n')}`,
+    };
   }
 
   // =========================================================================
   // Conversation Tool Handlers
   // =========================================================================
 
-  private handleGetConversationHistory(
+  private async handleSearchConversation(
     args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
-    const count = (args.count as number) ?? 10;
-    const history = this.conversationHistory;
-
-    if (history.length === 0) {
-      return { success: true, data: 'No conversation history available.' };
-    }
-
-    const recent = history.slice(-count);
-    const formatted = recent
-      .map((msg, i) => {
-        // Cap each message to 2000 chars to stay token-efficient
-        const content = msg.content.length > 2000
-          ? msg.content.slice(0, 2000) + '...[truncated]'
-          : msg.content;
-        return `[${i + 1}] ${msg.role}:\n${content}`;
-      })
-      .join('\n\n---\n\n');
-
-    return {
-      success: true,
-      data: `Conversation history (${recent.length} of ${history.length} messages):\n\n${formatted}`,
-    };
-  }
-
-  private handleSearchConversation(
-    args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
     const query = args.query as string;
     const maxResults = (args.maxResults as number) ?? 5;
     const history = this.conversationHistory;
@@ -678,39 +903,447 @@ export class ToolExecutor {
       return { success: true, data: 'No conversation history to search.' };
     }
 
-    const lowerQuery = query.toLowerCase();
-    const matches: Array<{ index: number; msg: ChatMessage }> = [];
+    // Build exchanges for display/fallback
+    const exchanges = this.buildExchanges();
 
-    for (let i = 0; i < history.length; i++) {
-      if (history[i].content.toLowerCase().includes(lowerQuery)) {
-        matches.push({ index: i, msg: history[i] });
+    // Semantic search path: embed query + cosine similarity against stored embeddings
+    if (this.embeddingRuntime && this.sqliteStore && this.sessionId) {
+      try {
+        // Embed the query
+        const [queryEmbedding] = await this.embeddingRuntime.embed([query]);
+        if (!queryEmbedding || queryEmbedding.length === 0) {
+          // Fall through to keyword search
+          return this.keywordSearchConversation(query, exchanges, maxResults);
+        }
+
+        // Get all stored conversation embeddings for this session
+        const storedEmbeddings = this.sqliteStore.getConversationEmbeddings(this.sessionId);
+        if (storedEmbeddings.length === 0) {
+          // No embeddings yet, fall through to keyword search
+          return this.keywordSearchConversation(query, exchanges, maxResults);
+        }
+
+        // Compute cosine similarity for each stored embedding
+        const scored: Array<{
+          exchangeIndex: number;
+          role: 'user' | 'assistant';
+          score: number;
+        }> = [];
+
+        for (const stored of storedEmbeddings) {
+          const score = this.cosineSimilarity(queryEmbedding, stored.embedding);
+          scored.push({
+            exchangeIndex: stored.exchangeIndex,
+            role: stored.role,
+            score,
+          });
+        }
+
+        // Deduplicate by exchange index: keep the best score per exchange
+        const bestPerExchange = new Map<number, { role: 'user' | 'assistant'; score: number }>();
+        for (const item of scored) {
+          const existing = bestPerExchange.get(item.exchangeIndex);
+          if (!existing || item.score > existing.score) {
+            bestPerExchange.set(item.exchangeIndex, { role: item.role, score: item.score });
+          }
+        }
+
+        // Sort by score descending, then recency as tiebreaker
+        const sortedMatches = Array.from(bestPerExchange.entries())
+          .map(([exchangeIndex, { role, score }]) => ({ exchangeIndex, matchedRole: role, score }))
+          .sort((a, b) => {
+            const scoreDiff = b.score - a.score;
+            if (Math.abs(scoreDiff) > 0.001) return scoreDiff;
+            return b.exchangeIndex - a.exchangeIndex; // Recency tiebreaker
+          })
+          .slice(0, maxResults);
+
+        // Format results with previews from actual exchanges
+        const formatted = sortedMatches
+          .map((m) => {
+            const exchange = exchanges.find((e) => e.index === m.exchangeIndex);
+            const matchedContent = exchange
+              ? (m.matchedRole === 'user' ? exchange.user : exchange.assistant)
+              : '';
+            const preview = matchedContent.length > 200
+              ? matchedContent.slice(0, 200) + '...'
+              : matchedContent;
+            return `Exchange ${m.exchangeIndex} (score: ${m.score.toFixed(3)}, matched: ${m.matchedRole}): ${preview}`;
+          })
+          .join('\n\n');
+
+        return {
+          success: true,
+          data: `Found ${bestPerExchange.size} relevant exchanges (showing top ${sortedMatches.length}):\n\n${formatted}`,
+        };
+      } catch (err) {
+        // If semantic search fails, fall through to keyword search
+        console.warn(`[search_conversation] Semantic search failed, falling back to keyword: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    }
+
+    // Fallback: keyword search
+    return this.keywordSearchConversation(query, exchanges, maxResults);
+  }
+
+  /**
+   * Cosine similarity between two vectors
+   */
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) return 0;
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+    return denominator === 0 ? 0 : dotProduct / denominator;
+  }
+
+  /**
+   * Keyword-based conversation search (fallback when embeddings are unavailable)
+   */
+  private keywordSearchConversation(
+    query: string,
+    exchanges: Array<{ index: number; user: string; assistant: string }>,
+    maxResults: number
+  ): { success: boolean; data?: string; error?: string } {
+    const lowerQuery = query.toLowerCase();
+    const matches: Array<{
+      exchangeIndex: number;
+      score: number;
+      preview: string;
+    }> = [];
+
+    for (const exchange of exchanges) {
+      const userMatch = exchange.user.toLowerCase().includes(lowerQuery);
+      const assistantMatch = exchange.assistant
+        .toLowerCase()
+        .includes(lowerQuery);
+
+      if (userMatch || assistantMatch) {
+        const matchedContent = userMatch ? exchange.user : exchange.assistant;
+        const matchedRole = userMatch ? 'user' : 'assistant';
+        const preview =
+          matchedContent.length > 200
+            ? matchedContent.slice(0, 200) + '...'
+            : matchedContent;
+
+        matches.push({
+          exchangeIndex: exchange.index,
+          score: 1.0,
+          preview: `[${matchedRole}] ${preview}`,
+        });
       }
     }
 
     if (matches.length === 0) {
-      return { success: true, data: `No messages found matching "${query}".` };
+      return {
+        success: true,
+        data: `No conversation matches found for "${query}".`,
+      };
     }
 
-    // Return the most recent matches first (most likely relevant)
+    // Return most recent matches first
     const topMatches = matches.slice(-maxResults).reverse();
     const formatted = topMatches
-      .map((m) => {
-        const content = m.msg.content.length > 2000
-          ? m.msg.content.slice(0, 2000) + '...[truncated]'
-          : m.msg.content;
-        return `[message ${m.index + 1}] ${m.msg.role}:\n${content}`;
-      })
-      .join('\n\n---\n\n');
+      .map(
+        (m) =>
+          `Exchange ${m.exchangeIndex}: ${m.preview}`
+      )
+      .join('\n\n');
 
     return {
       success: true,
-      data: `Found ${matches.length} messages matching "${query}" (showing ${topMatches.length}):\n\n${formatted}`,
+      data: `Found ${matches.length} matching exchanges (showing ${topMatches.length}):\n\n${formatted}`,
+    };
+  }
+
+  private handleReadConversation(
+    args: Record<string, unknown>
+  ): { success: boolean; data?: string; error?: string } {
+    const startExchange = (args.startExchange as number) ?? 0;
+    const endExchange = args.endExchange as number;
+
+    const exchanges = this.buildExchanges();
+
+    if (exchanges.length === 0) {
+      return { success: true, data: 'No conversation exchanges available.' };
+    }
+
+    const start = Math.max(0, startExchange);
+    const end = Math.min(
+      exchanges.length - 1,
+      endExchange ?? exchanges.length - 1
+    );
+
+    const selected = exchanges.filter(
+      (e) => e.index >= start && e.index <= end
+    );
+
+    if (selected.length === 0) {
+      return {
+        success: true,
+        data: `No exchanges found in range ${start}-${end} (${exchanges.length} total exchanges).`,
+      };
+    }
+
+    const formatted = selected
+      .map((e) => {
+        let entry = `--- Exchange ${e.index} ---\nUser: ${e.user}`;
+        if (e.assistant) {
+          entry += `\n\nAssistant: ${e.assistant}`;
+        }
+        return entry;
+      })
+      .join('\n\n');
+
+    return {
+      success: true,
+      data: `Exchanges ${start}-${end}:\n\n${formatted}`,
+    };
+  }
+
+  private handleGetFullConversation(): {
+    success: boolean;
+    data?: string;
+    error?: string;
+  } {
+    const exchanges = this.buildExchanges();
+
+    if (exchanges.length === 0) {
+      return { success: true, data: 'No conversation history available.' };
+    }
+
+    const formatted = exchanges
+      .map((e) => {
+        let entry = `--- Exchange ${e.index} ---\nUser: ${e.user}`;
+        if (e.assistant) {
+          entry += `\n\nAssistant: ${e.assistant}`;
+        }
+        return entry;
+      })
+      .join('\n\n');
+
+    return {
+      success: true,
+      data: `Full conversation (${exchanges.length} exchanges):\n\n${formatted}`,
     };
   }
 
   // =========================================================================
-  // Utility
+  // Utility Methods
   // =========================================================================
+
+  /**
+   * Build exchange pairs from conversation history.
+   * Each exchange = one user message + one assistant response.
+   */
+  private buildExchanges(): Array<{
+    index: number;
+    user: string;
+    assistant: string;
+  }> {
+    const exchanges: Array<{
+      index: number;
+      user: string;
+      assistant: string;
+    }> = [];
+    const history = this.conversationHistory;
+
+    let exchangeIndex = 0;
+    for (let i = 0; i < history.length; i++) {
+      if (history[i].role === 'user') {
+        const user = history[i].content;
+        let assistant = '';
+
+        // Look for the next assistant message
+        if (i + 1 < history.length && history[i + 1].role === 'assistant') {
+          assistant = history[i + 1].content;
+          i++; // Skip the assistant message in the next iteration
+        }
+
+        exchanges.push({ index: exchangeIndex, user, assistant });
+        exchangeIndex++;
+      }
+    }
+
+    return exchanges;
+  }
+
+  /**
+   * Merge overlapping search results from the same file.
+   */
+  private deduplicateSearchResults(
+    results: Array<{
+      filePath: string;
+      startLine: number;
+      endLine: number;
+      content: string;
+      score: number;
+      chunkId: string;
+    }>
+  ): Array<{
+    filePath: string;
+    startLine: number;
+    endLine: number;
+    content: string;
+    score: number;
+    chunkId: string;
+  }> {
+    if (results.length <= 1) return results;
+
+    const sorted = [...results].sort((a, b) => {
+      const fileCmp = a.filePath.localeCompare(b.filePath);
+      if (fileCmp !== 0) return fileCmp;
+      return a.startLine - b.startLine;
+    });
+
+    const merged: typeof sorted = [sorted[0]];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const current = sorted[i];
+      const last = merged[merged.length - 1];
+
+      if (
+        current.filePath === last.filePath &&
+        current.startLine <= last.endLine + 1
+      ) {
+        const newEndLine = Math.max(last.endLine, current.endLine);
+        const overlapLines = last.endLine - current.startLine + 1;
+        let mergedContent = last.content;
+        if (overlapLines >= 0) {
+          const currentLines = current.content.split('\n');
+          const newLines = currentLines.slice(Math.max(0, overlapLines));
+          if (newLines.length > 0) {
+            mergedContent = last.content + '\n' + newLines.join('\n');
+          }
+        }
+
+        merged[merged.length - 1] = {
+          ...last,
+          endLine: newEndLine,
+          content: mergedContent,
+          score: Math.max(last.score, current.score),
+        };
+      } else {
+        merged.push(current);
+      }
+    }
+
+    return merged;
+  }
+
+  /**
+   * Resolve a relative file path against the project root.
+   * Returns absolute path or null if it doesn't exist.
+   */
+  private resolveFilePath(filePath: string): string | null {
+    // Try as-is (might already be absolute)
+    if (path.isAbsolute(filePath) && fs.existsSync(filePath)) {
+      return filePath;
+    }
+
+    // Resolve relative to project root
+    const resolved = path.resolve(this.projectRoot, filePath);
+    if (fs.existsSync(resolved)) {
+      return resolved;
+    }
+
+    // Try finding in graph files if path is partial
+    if (this.graph) {
+      const files = this.graph.findFiles();
+      const match = files.find(
+        (f) => f.path === filePath || f.path.endsWith(filePath)
+      );
+      if (match) {
+        const fromGraph = path.resolve(this.projectRoot, match.path);
+        if (fs.existsSync(fromGraph)) {
+          return fromGraph;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect language from file extension for Tree-sitter
+   */
+  private detectLanguage(filePath: string): string | null {
+    const ext = path.extname(filePath).toLowerCase();
+    const mapping: Record<string, string> = {
+      '.ts': 'typescript',
+      '.tsx': 'tsx',
+      '.js': 'javascript',
+      '.jsx': 'jsx',
+      '.py': 'python',
+      '.go': 'go',
+      '.rs': 'rust',
+      '.java': 'java',
+      '.rb': 'ruby',
+      '.c': 'c',
+      '.cpp': 'cpp',
+      '.h': 'c',
+      '.hpp': 'cpp',
+    };
+    return mapping[ext] ?? null;
+  }
+
+  /**
+   * Get or create Tree-sitter analyzer (lazy initialization)
+   */
+  private async getTreeSitterAnalyzer(): Promise<TreeSitterAnalyzer | null> {
+    if (this.treeSitterAnalyzer) {
+      return this.treeSitterAnalyzer;
+    }
+
+    try {
+      const analyzer = new TreeSitterAnalyzer();
+      await analyzer.initialize();
+      this.treeSitterAnalyzer = analyzer;
+      return analyzer;
+    } catch {
+      // Tree-sitter not available (e.g., WASM files missing)
+      return null;
+    }
+  }
+
+  /**
+   * List files recursively up to a max depth
+   */
+  private listFilesRecursive(dir: string, maxDepth: number): string[] {
+    const results: string[] = [];
+
+    const walk = (currentDir: string, depth: number) => {
+      if (depth > maxDepth || results.length >= 100) return;
+
+      try {
+        const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+        for (const entry of entries) {
+          // Skip hidden files and common non-code directories
+          if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+            continue;
+          }
+
+          const fullPath = path.join(currentDir, entry.name);
+          if (entry.isDirectory()) {
+            walk(fullPath, depth + 1);
+          } else {
+            results.push(fullPath);
+          }
+        }
+      } catch {
+        // Permission denied or other error, skip
+      }
+    };
+
+    walk(dir, 0);
+    return results;
+  }
 
   /**
    * Generate a unique, deterministic key for a tool call (for deduplication)

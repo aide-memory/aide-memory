@@ -234,6 +234,9 @@ export interface ProjectGraph {
   /** Check if any embeddings exist */
   hasEmbeddings(): boolean;
 
+  /** Get the model name used for existing embeddings (null if no embeddings) */
+  getStoredEmbeddingModel(): string | null;
+
   /** Get embedding stats */
   getEmbeddingStats(): { totalChunks: number; totalFiles: number };
 }

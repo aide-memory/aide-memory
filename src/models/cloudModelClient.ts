@@ -149,6 +149,8 @@ export class OpenAIRuntime implements ToolCapableRuntime, EmbeddingRuntime {
     return this.supportsTools();
   }
 
+
+
   /**
    * Generate embeddings for texts
    */
@@ -414,6 +416,8 @@ export class AnthropicRuntime implements ToolCapableRuntime, EmbeddingRuntime {
     return true;
   }
 
+
+
   async embed(_texts: string[]): Promise<Embedding[]> {
     throw new Error('Anthropic provider is not yet implemented.');
   }
@@ -445,6 +449,8 @@ export class GoogleRuntime implements ToolCapableRuntime, EmbeddingRuntime {
   supportsNativeTools(): boolean {
     return true;
   }
+
+
 
   async embed(_texts: string[]): Promise<Embedding[]> {
     throw new Error('Google provider is not yet implemented.');

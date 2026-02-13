@@ -15,6 +15,7 @@ import {
 } from './types';
 import { RetrievalQuery } from '../brain/types';
 import { ProjectGraph } from '../brain/projectGraph';
+import { SQLiteBrainStore } from '../brain/sqliteStore';
 import { TokenBudgetManager } from '../core/tokenBudget';
 import { TokenTracker } from '../core/tokenTracker';
 import { SimpleGraphRetrieval } from './simpleGraphRetrieval';
@@ -22,7 +23,7 @@ import { ToolBasedRetrieval, ToolRetrievalOptions } from './toolBasedRetrieval';
 import { GraphRetrieval } from './graphRetrieval';
 import { SemanticRetrieval } from './semanticRetrieval';
 import { SemanticSearchEngine } from './semanticSearch';
-import { ToolCapableRuntime, ModelRuntimes } from '../models/types';
+import { ToolCapableRuntime, ModelRuntimes, EmbeddingRuntime } from '../models/types';
 import { VerboseLogger } from '../orchestration/orchestrator';
 import { verbose as verboseUI } from '../cli/ui';
 
@@ -137,6 +138,14 @@ export interface CreateRetrievalOptions {
   searchEngine?: SemanticSearchEngine;
   /** Verbose logger for orchestrator */
   logger?: VerboseLogger;
+  /** Project root path for filesystem-based tools */
+  projectRoot?: string;
+  /** Embedding runtime for semantic conversation search */
+  embeddingRuntime?: EmbeddingRuntime;
+  /** SQLite store for conversation embeddings */
+  sqliteStore?: SQLiteBrainStore;
+  /** Current session ID for conversation embedding lookup */
+  sessionId?: string;
 }
 
 /**
@@ -184,6 +193,10 @@ export function createRetrievalStrategy(
           verbose: options.verbose,
           tokenTracker: options.tokenTracker,
           logger: options.logger,
+          projectRoot: options.projectRoot,
+          embeddingRuntime: options.embeddingRuntime,
+          sqliteStore: options.sqliteStore,
+          sessionId: options.sessionId,
         }
       );
 
@@ -203,6 +216,10 @@ export function createRetrievalStrategy(
           verbose: options.verbose,
           tokenTracker: options.tokenTracker,
           logger: options.logger,
+          projectRoot: options.projectRoot,
+          embeddingRuntime: options.embeddingRuntime,
+          sqliteStore: options.sqliteStore,
+          sessionId: options.sessionId,
         }
       );
 
@@ -221,6 +238,10 @@ export function createRetrievalStrategy(
             verbose: options.verbose,
             tokenTracker: options.tokenTracker,
             logger: options.logger,
+            projectRoot: options.projectRoot,
+            embeddingRuntime: options.embeddingRuntime,
+            sqliteStore: options.sqliteStore,
+            sessionId: options.sessionId,
           }
         );
       }

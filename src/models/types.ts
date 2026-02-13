@@ -110,6 +110,7 @@ export interface ToolCapableRuntime extends ModelRuntime {
    * When false, the orchestrator uses chat() with text-based tool descriptions.
    */
   supportsNativeTools(): boolean;
+
 }
 
 /**

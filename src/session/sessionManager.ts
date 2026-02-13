@@ -17,6 +17,8 @@ import {
   ChatMessage,
 } from '../brain/types';
 import { ProjectGraph as ProjectBrainStore } from '../brain/projectGraph';
+import { EmbeddingRuntime } from '../models/types';
+import { SQLiteBrainStore } from '../brain/sqliteStore';
 
 export interface SessionConfig {
   /** Maximum number of focus symbols to track */
@@ -44,6 +46,8 @@ export class SessionManager {
   private config: SessionConfig;
   private store: ProjectBrainStore;
   private dirty: boolean = false;
+  private embeddingRuntime: EmbeddingRuntime | null = null;
+  private sqliteStore: SQLiteBrainStore | null = null;
 
   constructor(
     projectId: string,
@@ -285,6 +289,153 @@ export class SessionManager {
       this.state.lastAnswerSummary = undefined;
       this.markDirty();
     }
+  }
+
+  // =========================================================================
+  // Conversation Embedding Support
+  // =========================================================================
+
+  /**
+   * Enable conversation embedding by providing the embedding runtime and sqlite store.
+   * Call this after session creation/load when embedding support is available.
+   */
+  setEmbeddingSupport(embeddingRuntime: EmbeddingRuntime, sqliteStore: SQLiteBrainStore): void {
+    this.embeddingRuntime = embeddingRuntime;
+    this.sqliteStore = sqliteStore;
+  }
+
+  /**
+   * Generate embeddings for the latest exchange (user + assistant).
+   * Should be called after an assistant response is added to history.
+   * Non-blocking: errors are logged but don't affect the main flow.
+   */
+  async embedLatestExchange(): Promise<void> {
+    if (!this.embeddingRuntime || !this.sqliteStore) return;
+
+    try {
+      const exchanges = this.buildExchanges();
+      if (exchanges.length === 0) return;
+
+      const latest = exchanges[exchanges.length - 1];
+      const sessionId = this.state.id;
+
+      // Check if already embedded (by content hash)
+      const existingHashes = this.sqliteStore.getConversationEmbeddingHashes(sessionId);
+
+      // Embed user message
+      if (latest.user) {
+        const userHash = crypto.createHash('sha1').update(latest.user).digest('hex');
+        const existingUserHash = existingHashes.get(`${latest.index}:user`);
+
+        if (existingUserHash !== userHash) {
+          const [userEmbedding] = await this.embeddingRuntime.embed([latest.user]);
+          if (userEmbedding && userEmbedding.length > 0) {
+            this.sqliteStore.upsertConversationEmbedding(
+              sessionId, latest.index, 'user', userEmbedding, userHash
+            );
+          }
+        }
+      }
+
+      // Embed assistant message
+      if (latest.assistant) {
+        const assistantHash = crypto.createHash('sha1').update(latest.assistant).digest('hex');
+        const existingAssistantHash = existingHashes.get(`${latest.index}:assistant`);
+
+        if (existingAssistantHash !== assistantHash) {
+          const [assistantEmbedding] = await this.embeddingRuntime.embed([latest.assistant]);
+          if (assistantEmbedding && assistantEmbedding.length > 0) {
+            this.sqliteStore.upsertConversationEmbedding(
+              sessionId, latest.index, 'assistant', assistantEmbedding, assistantHash
+            );
+          }
+        }
+      }
+    } catch (err) {
+      // Non-blocking: log error but don't throw
+      console.warn(`[session] Failed to embed exchange: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Backfill embeddings for all exchanges that don't have them yet.
+   * Called on session start/load.
+   */
+  async backfillEmbeddings(): Promise<void> {
+    if (!this.embeddingRuntime || !this.sqliteStore) return;
+
+    try {
+      const exchanges = this.buildExchanges();
+      if (exchanges.length === 0) return;
+
+      const sessionId = this.state.id;
+      const existingHashes = this.sqliteStore.getConversationEmbeddingHashes(sessionId);
+      let backfilled = 0;
+
+      for (const exchange of exchanges) {
+        // Check and embed user message
+        if (exchange.user) {
+          const userHash = crypto.createHash('sha1').update(exchange.user).digest('hex');
+          const existingUserHash = existingHashes.get(`${exchange.index}:user`);
+
+          if (existingUserHash !== userHash) {
+            const [userEmbedding] = await this.embeddingRuntime.embed([exchange.user]);
+            if (userEmbedding && userEmbedding.length > 0) {
+              this.sqliteStore.upsertConversationEmbedding(
+                sessionId, exchange.index, 'user', userEmbedding, userHash
+              );
+              backfilled++;
+            }
+          }
+        }
+
+        // Check and embed assistant message
+        if (exchange.assistant) {
+          const assistantHash = crypto.createHash('sha1').update(exchange.assistant).digest('hex');
+          const existingAssistantHash = existingHashes.get(`${exchange.index}:assistant`);
+
+          if (existingAssistantHash !== assistantHash) {
+            const [assistantEmbedding] = await this.embeddingRuntime.embed([exchange.assistant]);
+            if (assistantEmbedding && assistantEmbedding.length > 0) {
+              this.sqliteStore.upsertConversationEmbedding(
+                sessionId, exchange.index, 'assistant', assistantEmbedding, assistantHash
+              );
+              backfilled++;
+            }
+          }
+        }
+      }
+
+      if (backfilled > 0) {
+        console.log(`[session] Backfilled ${backfilled} conversation embeddings`);
+      }
+    } catch (err) {
+      console.warn(`[session] Failed to backfill embeddings: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Build exchange pairs from chat history.
+   */
+  private buildExchanges(): Array<{ index: number; user: string; assistant: string }> {
+    const exchanges: Array<{ index: number; user: string; assistant: string }> = [];
+    const history = this.state.chatHistory;
+    let exchangeIndex = 0;
+
+    for (let i = 0; i < history.length; i++) {
+      if (history[i].role === 'user') {
+        const user = history[i].content;
+        let assistant = '';
+        if (i + 1 < history.length && history[i + 1].role === 'assistant') {
+          assistant = history[i + 1].content;
+          i++;
+        }
+        exchanges.push({ index: exchangeIndex, user, assistant });
+        exchangeIndex++;
+      }
+    }
+
+    return exchanges;
   }
 
   /**

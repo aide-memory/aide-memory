@@ -6,7 +6,7 @@
 
 import readline from 'readline';
 import fs from 'fs';
-import { ui, renderMarkdown, verbose } from './ui';
+import { ui, renderMarkdown, verbose, setLogFile, getLogFilePath, closeLogFile } from './ui';
 import { ProjectConfig, ChatMessage, Note } from '../brain/types';
 import { SQLiteBrainStore } from '../brain/sqliteStore';
 import { createRetrievalStrategy, RetrievalConfig } from '../retrieval';
@@ -20,7 +20,7 @@ import { createRuntimes } from '../models';
 import { ModelRuntimes } from '../models/types';
 import { SemanticSearchEngine } from '../retrieval/semanticSearch';
 import { logError, logInfo, logWarn } from '../core/logger';
-import { getProjectDbPath, getSessionsDir } from '../storage/paths';
+import { getProjectDbPath, getSessionsDir, getLogsDir } from '../storage/paths';
 import { TokenBudgetManager } from '../core/tokenBudget';
 import { TokenTracker } from '../core/tokenTracker';
 import { AIDE_DEFAULTS, getEffectiveSettings } from '../core/config';
@@ -133,31 +133,17 @@ export async function startRepl(
   // Token tracker for per-query usage logging (reset per query)
   const tokenTracker = new TokenTracker();
 
-  // Create retrieval strategy using effective settings
-  const retrieval = createRetrievalStrategy(
-    {
-      strategy: settings.strategy,
-      hybridMode: settings.hybridMode,
-      maxDepth: settings.maxDepth,
-      maxFanout: settings.maxFanout,
-      tokenBudget: settings.tokenBudget,
-      maxBlocks: settings.maxBlocks,
-    },
-    modelRuntimes.reasoning, // Pass reasoning runtime for legacy tool-based retrieval fallback
-    undefined, // budget
-    {
-      verbose: options.verbose,
-      historyMode: settings.historyMode,
-      historyLimit: settings.historyLimit,
-      tokenTracker,
-      modelRuntimes,
-      searchEngine,
-      logger: options.verbose ? verbose : undefined,
-    }
-  );
-
   // Token budget manager for verbose logging
   const budget = new TokenBudgetManager(AIDE_DEFAULTS.tokenBudget);
+
+  // When verbose is enabled, also log to a file (survives terminal buffer overflow)
+  if (options.verbose) {
+    const logsDir = getLogsDir(config.id);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const logPath = `${logsDir}/session-${timestamp}.log`;
+    setLogFile(logPath);
+    console.log(ui.info(`Verbose log file: ${logPath}`));
+  }
 
   // Try to resume previous session unless --new flag is set
   let session: SessionManager;
@@ -179,6 +165,41 @@ export async function startRepl(
   } else {
     session = new SessionManager(config.id, store, { sessionsDir });
   }
+
+  // Set up conversation embedding support
+  session.setEmbeddingSupport(modelRuntimes.embedding, store);
+
+  // Backfill embeddings for existing exchanges (non-blocking)
+  if (isResumed) {
+    session.backfillEmbeddings().catch(() => {/* non-blocking */});
+  }
+
+  // Create retrieval strategy using effective settings (after session init for embedding context)
+  const retrieval = createRetrievalStrategy(
+    {
+      strategy: settings.strategy,
+      hybridMode: settings.hybridMode,
+      maxDepth: settings.maxDepth,
+      maxFanout: settings.maxFanout,
+      tokenBudget: settings.tokenBudget,
+      maxBlocks: settings.maxBlocks,
+    },
+    modelRuntimes.reasoning, // Pass reasoning runtime for legacy tool-based retrieval fallback
+    undefined, // budget
+    {
+      verbose: options.verbose,
+      historyMode: settings.historyMode,
+      historyLimit: settings.historyLimit,
+      tokenTracker,
+      modelRuntimes,
+      searchEngine,
+      logger: options.verbose ? verbose : undefined,
+      projectRoot: config.rootPath,
+      embeddingRuntime: modelRuntimes.embedding,
+      sqliteStore: store,
+      sessionId: session.getId(),
+    }
+  );
 
   // Clear history if requested (but keep focus)
   if (options.clearHistory && isResumed) {
@@ -344,6 +365,7 @@ ${ui.heading('Index Statistics:')}
         if (cmd === 'q' || cmd === 'quit' || cmd === 'exit') {
           session.end();
           store.close();
+          closeLogFile();
           rl.close();
           return;
         }
@@ -557,6 +579,9 @@ ${ui.heading('Index Statistics:')}
         };
         session.addMessage(assistantMsg);
 
+        // Generate conversation embeddings for this exchange (non-blocking)
+        session.embedLatestExchange().catch(() => {/* non-blocking */});
+
         // Update session
         session.setLastAnswerSummary(extractAnswerSummary(responseContent));
         session.updateFocusFromResponse(responseContent);
@@ -604,6 +629,7 @@ ${ui.heading('Index Statistics:')}
     console.log('\n');
     session.end();
     store.close();
+    closeLogFile();
     process.exit(0);
   });
 

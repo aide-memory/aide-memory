@@ -27,7 +27,9 @@ const program = new Command();
 program
   .name('aide')
   .description('AIDE V0 - Local project-aware AI coding assistant')
-  .version('0.2.0');
+  .version('0.2.0')
+  .enablePositionalOptions()
+  .passThroughOptions();
 
 // aide init [path]
 program
@@ -99,6 +101,8 @@ program
   .description('Ask a single question about the project')
   .argument('<question>', 'Your question')
   .option('-p, --path <path>', 'Project root path', process.cwd())
+  .option('--reasoning <model>', 'Override reasoning model for this run')
+  .option('--context <model>', 'Override context model for this run')
   .option('-d, --depth <depth>', 'Graph traversal depth', '2')
   .option('-f, --fanout <fanout>', 'Max symbols per relation', '5')
   .option(
@@ -125,11 +129,14 @@ program
     'History access: direct (in prompt) or tools (on-demand)'
   )
   .option('--debug', 'Print debug information (includes verbose logging)')
+  .option('-v, --verbose', 'Alias for --debug')
   .action(
     async (
       question: string,
       options: {
         path?: string;
+        reasoning?: string;
+        context?: string;
         depth?: string;
         fanout?: string;
         tokens?: string;
@@ -139,11 +146,23 @@ program
         hybridMode?: string;
         historyMode?: string;
         debug?: boolean;
+        verbose?: boolean;
       }
     ) => {
       try {
         const rootPath = path.resolve(options.path || process.cwd());
         const config = await loadOrCreateProjectConfig(rootPath);
+
+        // --verbose is alias for --debug
+        if (options.verbose) options.debug = true;
+
+        // Apply runtime model overrides (don't persist to config file)
+        if (options.reasoning) {
+          config.models = { ...config.models, reasoning: options.reasoning };
+        }
+        if (options.context) {
+          config.models = { ...config.models, context: options.context };
+        }
 
         // Use tokenBudget if specified, fall back to tokens (legacy), then default
         const tokenBudget = parseInt(
@@ -281,6 +300,8 @@ program
   .option('--no-init', 'Skip auto-init if not indexed')
   .option('-n, --new', 'Start a new session instead of resuming')
   .option('--clear-history', 'Clear chat history before starting')
+  .option('--reasoning <model>', 'Override reasoning model for this session')
+  .option('--context <model>', 'Override context model for this session')
   .option(
     '--strategy <strategy>',
     'Retrieval strategy: auto, graph, semantic, simple, tools, hybrid'
@@ -307,6 +328,8 @@ program
         init?: boolean;
         new?: boolean;
         clearHistory?: boolean;
+        reasoning?: string;
+        context?: string;
         strategy?: string;
         hybridMode?: string;
         historyMode?: string;
@@ -320,6 +343,14 @@ program
         logInfo(`Starting AIDE for: ${rootPath}`);
 
         const config = await loadOrCreateProjectConfig(rootPath);
+
+        // Apply runtime model overrides (don't persist to config file)
+        if (options.reasoning) {
+          config.models = { ...config.models, reasoning: options.reasoning };
+        }
+        if (options.context) {
+          config.models = { ...config.models, context: options.context };
+        }
 
         // Check if init is needed
         const fs = await import('fs');

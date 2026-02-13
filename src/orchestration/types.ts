@@ -69,12 +69,15 @@ export interface OrchestratorConfig {
   maxToolCallsPerBatch: number;
   /** Whether context model strips irrelevant results (default true) */
   enableContextStripping: boolean;
+  /** Max times the reasoning model can loop back for more context (default 2) */
+  maxReasoningLoops: number;
 }
 
 export const DEFAULT_ORCHESTRATOR_CONFIG: OrchestratorConfig = {
   maxIterations: 5,
   maxToolCallsPerBatch: 10,
   enableContextStripping: true,
+  maxReasoningLoops: 2,
 };
 
 /** Context provided to the orchestrator for a single query */
@@ -107,8 +110,8 @@ export interface ContextEvaluation {
   sufficient: boolean;
   /** Indices of results deemed relevant (from the current batch) */
   relevantIndices: number[];
-  /** Indices of results to strip, with reasons */
-  strippedIndices: Array<{ index: number; reason: string }>;
+  /** Indices of results to strip */
+  strippedIndices: number[];
   /** New tool calls to make (if not sufficient) */
   newToolCalls: ToolCallSpec[];
 }

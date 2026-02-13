@@ -159,6 +159,16 @@ export class SemanticSearchEngine {
 
     logInfo(`Embedding: Found ${files.length} files to process.`);
 
+    // Detect embedding model change — if model changed, clear all old embeddings
+    // and force full re-embedding (old vectors have different dimensions/semantics)
+    const storedModel = this.graph.getStoredEmbeddingModel();
+    if (storedModel && storedModel !== this.embeddingModelName) {
+      logInfo(
+        `Embedding model changed: ${storedModel} -> ${this.embeddingModelName}. Clearing old embeddings for full re-embed.`
+      );
+      this.graph.clearEmbeddings();
+    }
+
     const stats: EmbeddingIndexStats = {
       filesIndexed: 0,
       chunksCreated: 0,

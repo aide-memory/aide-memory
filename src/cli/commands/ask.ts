@@ -17,8 +17,8 @@ import { createRuntimes } from '../../models';
 
 import { SemanticSearchEngine } from '../../retrieval/semanticSearch';
 import { logInfo, logError } from '../../core/logger';
-import { renderMarkdown, verbose } from '../ui';
-import { getProjectDbPath, getSessionsDir } from '../../storage/paths';
+import { renderMarkdown, verbose, setLogFile, closeLogFile } from '../ui';
+import { getProjectDbPath, getSessionsDir, getLogsDir } from '../../storage/paths';
 import { TokenBudgetManager } from '../../core/tokenBudget';
 import { TokenTracker } from '../../core/tokenTracker';
 import { AIDE_DEFAULTS, getEffectiveSettings } from '../../core/config';
@@ -129,6 +129,9 @@ export async function askQuestion(
   // Create model runtimes — fails fast if any configured model is invalid
   const modelRuntimes = createRuntimes(config);
 
+  // Enable conversation embedding support
+  session.setEmbeddingSupport(modelRuntimes.embedding, store);
+
   // Create semantic search engine from embeddings in the store
   const searchEngine = new SemanticSearchEngine(
     store,
@@ -167,8 +170,21 @@ export async function askQuestion(
       modelRuntimes,
       searchEngine,
       logger: options.debug ? verbose : undefined,
+      projectRoot: config.rootPath,
+      embeddingRuntime: modelRuntimes.embedding,
+      sqliteStore: store,
+      sessionId: session.getId(),
     }
   );
+
+  // When debug/verbose is enabled, also log to a file
+  if (options.debug) {
+    const logsDir = getLogsDir(config.id);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const logPath = `${logsDir}/ask-${timestamp}.log`;
+    setLogFile(logPath);
+    logInfo(`Verbose log file: ${logPath}`);
+  }
 
   // Log effective configuration
   if (options.debug) {
@@ -315,6 +331,7 @@ export async function askQuestion(
 
     // Add response to session and save
     session.addMessage({ role: 'assistant', content: responseContent });
+    await session.embedLatestExchange().catch(() => {/* non-blocking */});
     session.setLastAnswerSummary(extractAnswerSummary(responseContent));
     session.updateFocusFromResponse(responseContent);
 
@@ -329,5 +346,6 @@ export async function askQuestion(
     process.exit(1);
   } finally {
     store.close();
+    closeLogFile();
   }
 }

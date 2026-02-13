@@ -16,9 +16,10 @@ import {
 } from './types';
 import { RetrievalQuery } from '../brain/types';
 import { ProjectGraph } from '../brain/projectGraph';
+import { SQLiteBrainStore } from '../brain/sqliteStore';
 import { TokenBudgetManager } from '../core/tokenBudget';
 import { TokenTracker } from '../core/tokenTracker';
-import { ModelRuntimes } from '../models/types';
+import { ModelRuntimes, EmbeddingRuntime } from '../models/types';
 import { SemanticSearchEngine } from './semanticSearch';
 import { Orchestrator, VerboseLogger } from '../orchestration/orchestrator';
 import { ToolExecutor } from '../orchestration/toolExecutor';
@@ -30,6 +31,10 @@ export interface SemanticRetrievalOptions {
   tokenTracker?: TokenTracker;
   orchestration?: Partial<OrchestratorConfig>;
   logger?: VerboseLogger;
+  projectRoot?: string;
+  embeddingRuntime?: EmbeddingRuntime;
+  sqliteStore?: SQLiteBrainStore;
+  sessionId?: string;
 }
 
 export class SemanticRetrieval implements RetrievalStrategy {
@@ -41,6 +46,10 @@ export class SemanticRetrieval implements RetrievalStrategy {
   private orchestrationConfig?: Partial<OrchestratorConfig>;
   private verbose: boolean;
   private logger?: VerboseLogger;
+  private projectRoot: string;
+  private embeddingRuntime?: EmbeddingRuntime;
+  private sqliteStore?: SQLiteBrainStore;
+  private sessionId?: string;
 
   constructor(
     searchEngine: SemanticSearchEngine,
@@ -57,6 +66,10 @@ export class SemanticRetrieval implements RetrievalStrategy {
     this.orchestrationConfig = options?.orchestration;
     this.verbose = options?.verbose ?? false;
     this.logger = options?.logger;
+    this.projectRoot = options?.projectRoot || process.cwd();
+    this.embeddingRuntime = options?.embeddingRuntime;
+    this.sqliteStore = options?.sqliteStore;
+    this.sessionId = options?.sessionId;
   }
 
   async retrieve(
@@ -67,12 +80,16 @@ export class SemanticRetrieval implements RetrievalStrategy {
       logInfo('[semantic-retrieval] Starting pure semantic retrieval');
     }
 
-    // Create tool executor with semantic search and conversation history (no graph reliance)
+    // Create tool executor with semantic search, conversation history, and embedding support (no graph reliance)
     // We pass graph for basic file operations but tools are semantic-only
     const toolExecutor = new ToolExecutor(
       graph,
       this.searchEngine,
-      query.conversationHistory
+      this.projectRoot,
+      query.conversationHistory,
+      this.embeddingRuntime,
+      this.sqliteStore,
+      this.sessionId
     );
 
     // Semantic-only tools (no graph-dependent tools + conversation if history exists)

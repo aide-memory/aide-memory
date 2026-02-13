@@ -168,6 +168,22 @@ export class SQLiteBrainStore implements ProjectGraph {
       CREATE INDEX IF NOT EXISTS idx_embeddings_file ON embeddings(file_path);
       CREATE INDEX IF NOT EXISTS idx_embeddings_hash ON embeddings(content_hash);
     `);
+
+    // Conversation embeddings table (for semantic search over conversation history)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS conversation_embeddings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        exchange_index INTEGER NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+        embedding BLOB NOT NULL,
+        content_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_convo_emb_session ON conversation_embeddings(session_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_convo_emb_unique ON conversation_embeddings(session_id, exchange_index, role);
+    `);
   }
 
   close(): void {
@@ -460,18 +476,29 @@ export class SQLiteBrainStore implements ProjectGraph {
   }
 
   searchBlocks(query: string, kinds?: BlockKind[]): ContentBlock[] {
+    // Preprocess query for FTS5: escape special chars, wrap terms in quotes, join with OR
+    const ftsQuery = this.preprocessFTS5Query(query);
+    if (!ftsQuery) {
+      return []; // Empty query after preprocessing
+    }
+
     let sql = `
-      SELECT cb.* FROM content_blocks cb
+      SELECT cb.*, rank FROM content_blocks cb
       JOIN content_blocks_fts fts ON cb.rowid = fts.rowid
       WHERE content_blocks_fts MATCH ?
     `;
-    const params: unknown[] = [query];
+    const params: unknown[] = [ftsQuery];
 
     if (kinds && kinds.length > 0) {
       const placeholders = kinds.map(() => '?').join(', ');
       sql += ` AND cb.kind IN (${placeholders})`;
       params.push(...kinds);
     }
+
+    // FTS5 rank is negative (closer to 0 = better match).
+    // Prefer smaller, more specific blocks: penalize large blocks so
+    // a 123-char useEffect beats a 25KB function that happens to contain the term.
+    sql += ` ORDER BY rank * (1.0 + length(cb.content) / 5000.0)`;
 
     const rows = this.db.prepare(sql).all(...params);
     return this.mapBlockRows(rows);
@@ -816,6 +843,32 @@ export class SQLiteBrainStore implements ProjectGraph {
   }
 
   // =========================================================================
+  // FTS5 Query Preprocessing
+  // =========================================================================
+
+  /**
+   * Preprocess a raw query for FTS5 safety:
+   * - Strip special FTS5 syntax chars
+   * - Wrap each term in double-quotes to prevent syntax interpretation
+   * - Join with OR for multi-word queries
+   */
+  private preprocessFTS5Query(query: string): string {
+    // Remove FTS5 special characters that could break syntax
+    const cleaned = query.replace(/["\*\-\(\)\{\}\[\]:^~]/g, ' ');
+
+    // Split into terms, filter empties
+    const terms = cleaned
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    if (terms.length === 0) return '';
+
+    // Wrap each term in double-quotes and join with OR
+    return terms.map((t) => `"${t}"`).join(' OR ');
+  }
+
+  // =========================================================================
   // Row Mapping Helpers
   // =========================================================================
 
@@ -1017,6 +1070,14 @@ export class SQLiteBrainStore implements ProjectGraph {
     return (row.count as number) > 0;
   }
 
+  /** Get the model name used for existing embeddings (null if no embeddings) */
+  getStoredEmbeddingModel(): string | null {
+    const row = this.db
+      .prepare('SELECT model FROM embeddings LIMIT 1')
+      .get() as Record<string, unknown> | undefined;
+    return row ? (row.model as string) : null;
+  }
+
   /** Get embedding stats */
   getEmbeddingStats(): { totalChunks: number; totalFiles: number } {
     const row = this.db
@@ -1028,5 +1089,79 @@ export class SQLiteBrainStore implements ProjectGraph {
       totalChunks: row.chunks as number,
       totalFiles: row.files as number,
     };
+  }
+
+  // =========================================================================
+  // Conversation Embedding Operations
+  // =========================================================================
+
+  /**
+   * Upsert a conversation embedding (one per exchange+role combination)
+   */
+  upsertConversationEmbedding(
+    sessionId: string,
+    exchangeIndex: number,
+    role: 'user' | 'assistant',
+    embedding: number[],
+    contentHash: string
+  ): void {
+    const blob = Buffer.from(new Float32Array(embedding).buffer);
+    this.db
+      .prepare(
+        `INSERT INTO conversation_embeddings (session_id, exchange_index, role, embedding, content_hash, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(session_id, exchange_index, role)
+         DO UPDATE SET embedding = excluded.embedding, content_hash = excluded.content_hash, created_at = excluded.created_at`
+      )
+      .run(sessionId, exchangeIndex, role, blob, contentHash, new Date().toISOString());
+  }
+
+  /**
+   * Get all conversation embeddings for a session (for semantic search)
+   */
+  getConversationEmbeddings(
+    sessionId: string
+  ): Array<{
+    exchangeIndex: number;
+    role: 'user' | 'assistant';
+    embedding: number[];
+    contentHash: string;
+  }> {
+    const rows = this.db
+      .prepare('SELECT * FROM conversation_embeddings WHERE session_id = ? ORDER BY exchange_index, role')
+      .all(sessionId) as Array<Record<string, unknown>>;
+
+    return rows.map((r) => ({
+      exchangeIndex: r.exchange_index as number,
+      role: r.role as 'user' | 'assistant',
+      embedding: Array.from(new Float32Array((r.embedding as Buffer).buffer)),
+      contentHash: r.content_hash as string,
+    }));
+  }
+
+  /**
+   * Check which exchanges already have embeddings (for backfill)
+   */
+  getConversationEmbeddingHashes(
+    sessionId: string
+  ): Map<string, string> {
+    const rows = this.db
+      .prepare('SELECT exchange_index, role, content_hash FROM conversation_embeddings WHERE session_id = ?')
+      .all(sessionId) as Array<Record<string, unknown>>;
+
+    const hashes = new Map<string, string>();
+    for (const r of rows) {
+      hashes.set(`${r.exchange_index}:${r.role}`, r.content_hash as string);
+    }
+    return hashes;
+  }
+
+  /**
+   * Delete all conversation embeddings for a session
+   */
+  clearConversationEmbeddings(sessionId: string): void {
+    this.db
+      .prepare('DELETE FROM conversation_embeddings WHERE session_id = ?')
+      .run(sessionId);
   }
 }

@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import fs from 'fs';
 import { Marked, MarkedExtension } from 'marked';
 import { markedTerminal } from 'marked-terminal';
 
@@ -9,6 +10,53 @@ export const ui = {
   error: (t: string) => chalk.red(t),
   info: (t: string) => chalk.gray(t),
 };
+
+// ============================================================================
+// Log file support -- mirrors verbose output to a plain-text file
+// ============================================================================
+
+let logStream: fs.WriteStream | null = null;
+let logFilePath: string | null = null;
+
+/**
+ * Start writing verbose output to a log file.
+ * All subsequent verbose.* calls will also write plain text to this file.
+ */
+export function setLogFile(filePath: string): void {
+  // Ensure parent directory exists
+  const dir = filePath.substring(0, filePath.lastIndexOf('/'));
+  if (dir && !fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  logStream = fs.createWriteStream(filePath, { flags: 'a' });
+  logFilePath = filePath;
+  logStream.write(`=== AIDE Verbose Log - ${new Date().toISOString()} ===\n\n`);
+}
+
+/**
+ * Get the current log file path (if set).
+ */
+export function getLogFilePath(): string | null {
+  return logFilePath;
+}
+
+/**
+ * Close the log file stream.
+ */
+export function closeLogFile(): void {
+  if (logStream) {
+    logStream.end();
+    logStream = null;
+    logFilePath = null;
+  }
+}
+
+/** Write a line to the log file (if open) */
+function writeLog(line: string): void {
+  if (logStream) {
+    logStream.write(line + '\n');
+  }
+}
 
 // Web emission support
 type WebLogListener = (
@@ -84,18 +132,21 @@ export const verbose = {
         `\n╭─ ${title} ${'─'.repeat(Math.max(0, 50 - title.length))}╮`
       )
     );
+    writeLog(`\n--- ${title} ---`);
     emitWebLog('header', title, { fullContent: `## ${title}` });
   },
 
   /** Section footer */
   footer: () => {
     console.log(chalk.cyan.bold(`╰${'─'.repeat(54)}╯\n`));
+    writeLog(`---\n`);
     emitWebLog('footer', '---', { fullContent: '---' });
   },
 
   /** Label with value */
   label: (label: string, value: string | number) => {
     console.log(chalk.gray(`  ${label}: `) + chalk.white(value));
+    writeLog(`  ${label}: ${value}`);
     emitWebLog('label', `${label}: ${value}`, {
       fullContent: `**${label}:** ${value}`,
     });
@@ -115,6 +166,7 @@ export const verbose = {
         console.log(chalk.gray(`  ${line}`));
       }
     }
+    writeLog(content);
     // Send full content for web
     emitWebLog('content', content.slice(0, 80), { fullContent: content });
   },
@@ -125,6 +177,7 @@ export const verbose = {
     for (const line of lines) {
       console.log(chalk.gray(`  │ ${line}`));
     }
+    writeLog(content);
     // Send truncated preview but full content
     const preview =
       content.length > 100 ? content.slice(0, 100) + '...' : content;
@@ -136,12 +189,14 @@ export const verbose = {
   /** Separator line */
   separator: () => {
     console.log(chalk.gray(`  ${'─'.repeat(50)}`));
+    writeLog(`  ${'─'.repeat(50)}`);
     emitWebLog('separator', '---', { fullContent: '---' });
   },
 
   /** Info message */
   info: (message: string) => {
     console.log(chalk.gray(`  ℹ ${message}`));
+    writeLog(`  [info] ${message}`);
     emitWebLog('info', message, { fullContent: `ℹ️ ${message}` });
   },
 
@@ -151,6 +206,7 @@ export const verbose = {
       chalk.yellow(`  🔧 ${name}`) +
         (args ? chalk.gray(` ${JSON.stringify(args)}`) : '')
     );
+    writeLog(`  [tool] ${name}${args ? ' ' + JSON.stringify(args) : ''}`);
     emitWebLog('tool', name, { args });
   },
 
@@ -159,6 +215,8 @@ export const verbose = {
     const display =
       result.length > truncate ? result.slice(0, truncate) + '...' : result;
     console.log(chalk.green(`     → ${display.replace(/\n/g, ' ')}`));
+    // Log file gets full result (not truncated)
+    writeLog(`     → ${result}`);
     // Send full result
     emitWebLog('result', display, {
       fullContent: '**Result:**\n```\n' + result + '\n```',
@@ -169,6 +227,7 @@ export const verbose = {
   tokenSummary: (summary: string) => {
     // Print the pre-formatted summary from TokenTracker
     console.log(chalk.gray(summary));
+    writeLog(summary);
     emitWebLog('tokens', summary, { fullContent: '```\n' + summary + '\n```' });
   },
 };

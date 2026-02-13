@@ -4,7 +4,7 @@
 
 export { Orchestrator } from './orchestrator';
 export type { VerboseLogger } from './orchestrator';
-export { ToolExecutor, GRAPH_TOOLS, SEMANTIC_ONLY_TOOLS, CONVERSATION_TOOLS } from './toolExecutor';
+export { ToolExecutor, SHARED_TOOLS, GRAPH_ONLY_TOOLS, CONVERSATION_TOOLS } from './toolExecutor';
 export {
   buildPlanningPrompt,
   buildAnsweringPrompt,

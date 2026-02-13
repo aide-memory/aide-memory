@@ -82,7 +82,7 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
   constructor(config: OllamaConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.model = config.model;
-    this.embeddingModel = config.embeddingModel ?? 'all-minilm:latest';
+    this.embeddingModel = config.embeddingModel ?? 'mxbai-embed-large';
   }
 
   /**
@@ -95,9 +95,9 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
   }
 
   supportsNativeTools(): boolean {
-    // Ollama's native tool calling is unreliable (poor batching, inconsistent format).
-    // The orchestrator should use text-based tool descriptions in prompts instead.
-    return false;
+    // Enable native tool calling for Ollama. Works with qwen3-coder:30b.
+    // Evaluation schema is simplified (no nested objects) so Ollama native tools are safe.
+    return true;
   }
 
   /**
@@ -171,13 +171,21 @@ export class OllamaRuntime implements ToolCapableRuntime, EmbeddingRuntime {
         model: this.model,
         messages: ollamaMessages,
         stream: false,
+        options: {
+          // Explicitly set context window. Ollama defaults to a small window
+          // (2048-4096), but modern models support much larger contexts.
+          // 32768 is a safe default that most models support.
+          num_ctx: 32768,
+        },
       };
 
       if (ollamaTools && ollamaTools.length > 0) {
         payload.tools = ollamaTools;
       }
 
-      const resp = await axios.post<OllamaChatResponse>(url, payload);
+      const resp = await axios.post<OllamaChatResponse>(url, payload, {
+        timeout: 180000, // 3 minute timeout for Ollama responses
+      });
 
       const message = resp.data?.message;
       const content = message?.content ?? '';

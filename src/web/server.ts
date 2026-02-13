@@ -15,7 +15,8 @@ import { SQLiteBrainStore } from '../brain/sqliteStore';
 import { createRetrievalStrategy } from '../retrieval';
 import { SessionManager } from '../session/sessionManager';
 import { ContextAssembler, extractAnswerSummary } from '../context/assembler';
-import { createRuntimeFromProjectConfig } from '../models';
+import { createRuntimeFromProjectConfig, createRuntimes } from '../models';
+import { EmbeddingRuntime } from '../models/types';
 import { getProjectDbPath, getSessionsDir } from '../storage/paths';
 import { TokenBudgetManager } from '../core/tokenBudget';
 import { AIDE_DEFAULTS, getEffectiveSettings } from '../core/config';
@@ -50,6 +51,7 @@ interface SessionInfo {
 let currentStore: SQLiteBrainStore | null = null;
 let currentConfig: ProjectConfig | null = null;
 let sessionsDir: string = '';
+let embeddingRuntime: EmbeddingRuntime | null = null;
 
 // Map of session ID to SessionManager
 const sessionCache: Map<string, SessionManager> = new Map();
@@ -93,6 +95,14 @@ export async function startWebServer(
   // Set sessions directory
   sessionsDir = getSessionsDir(config.id);
 
+  // Create embedding runtime for conversation embedding support
+  try {
+    const runtimes = createRuntimes(config);
+    embeddingRuntime = runtimes.embedding;
+  } catch (err) {
+    console.warn(`[web] Could not create embedding runtime: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+
   // Load latest session or create new one
   const latestSession = SessionManager.loadLatest(
     config.id,
@@ -103,6 +113,13 @@ export async function startWebServer(
   if (latestSession) {
     sessionCache.set(latestSession.getId(), latestSession);
     activeSessionId = latestSession.getId();
+    // Enable embedding support on loaded session
+    if (embeddingRuntime && currentStore) {
+      latestSession.setEmbeddingSupport(embeddingRuntime, currentStore);
+      latestSession.backfillEmbeddings().catch((e: Error) =>
+        console.warn(`[web] Backfill failed: ${e.message}`)
+      );
+    }
   } else {
     const newSession = new SessionManager(config.id, currentStore, {
       sessionsDir,
@@ -110,6 +127,10 @@ export async function startWebServer(
     sessionCache.set(newSession.getId(), newSession);
     activeSessionId = newSession.getId();
     newSession.save();
+    // Enable embedding support on new session
+    if (embeddingRuntime && currentStore) {
+      newSession.setEmbeddingSupport(embeddingRuntime, currentStore);
+    }
   }
 
   // Serve static files from web/dist (built React app)
@@ -147,6 +168,10 @@ export async function startWebServer(
     });
     if (session) {
       sessionCache.set(sessionId, session);
+      // Enable embedding support on loaded session
+      if (embeddingRuntime && currentStore) {
+        session.setEmbeddingSupport(embeddingRuntime, currentStore);
+      }
     }
     return session;
   }
@@ -166,6 +191,10 @@ export async function startWebServer(
     });
     sessionCache.set(session.getId(), session);
     session.save();
+    // Enable embedding support
+    if (embeddingRuntime && currentStore) {
+      session.setEmbeddingSupport(embeddingRuntime, currentStore);
+    }
     return session;
   }
 
@@ -491,6 +520,7 @@ async function handleQuestion(
         verbose,
         historyMode: settings.historyMode,
         historyLimit: settings.historyLimit,
+        projectRoot: currentConfig.rootPath,
       }
     );
 

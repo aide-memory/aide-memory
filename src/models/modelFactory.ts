@@ -103,7 +103,7 @@ export function createRuntime(
   options: CreateRuntimeOptions = {}
 ): ToolCapableRuntime {
   const ollamaBaseUrl = options.ollamaBaseUrl ?? 'http://127.0.0.1:11434/api';
-  const embeddingModel = options.embeddingModel ?? 'all-minilm:latest';
+  const embeddingModel = options.embeddingModel ?? 'mxbai-embed-large';
   const provider = detectProvider(model);
   const apiKey = getApiKeyFromEnv(provider);
 
