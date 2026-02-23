@@ -84,6 +84,7 @@ const DEFAULT_IGNORE_PATTERNS = [
   '**/vendor/**', '**/target/**', '**/*.class',
   '**/*.lock', '**/*.log', '**/*.min.js', '**/*.min.css',
   '**/coverage/**', '**/tmp/**', '**/.cache/**',
+  '**/orchestration/prompts.ts',
 ];
 
 // ============================================================================

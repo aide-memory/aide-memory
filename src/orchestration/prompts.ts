@@ -62,14 +62,27 @@ ${toolDescriptions}`;
   prompt += `
 
 IMPORTANT GUIDELINES:
-- Start with semantic_search to find relevant entry points
-- Use read_lines to drill into specific line ranges from entry points (prefer over read_file when you know the location)
-- Use read_file_outline to understand file structure before reading full files
-- Use find_symbol when you know a specific symbol name to look up
-- For follow-up questions, use search_conversation to find relevant prior discussion, then read_conversation to get the full exchange
+
+STEP 1 - Find entry points:
+- Use semantic_search to identify relevant files and code locations
+- Make each query target a DIFFERENT aspect or angle of the request
+- Avoid making multiple queries that rephrase the same concept
+
+STEP 2 - Gather context from entry points:
+- read_lines: read specific code at line ranges found by semantic_search
+- read_file_outline: understand file structure (functions, classes, exports)
+- find_symbol: look up a specific function, class, or variable by name
+
+STEP 3 - Explore relationships (when graph tools are available):
+- get_references: find what calls or uses a symbol
+- get_dependencies: find what a symbol depends on
+
+BATCHING:
+- Batch calls that are DIVERSE and independent (e.g., a semantic_search + a read_lines + a find_symbol)
+- Do NOT batch multiple semantic_search calls with similar queries -- they return similar results
 - topK guidance: 4-6 for focused queries, 6-8 for broader questions, 8-12 for surveys
-- Call ALL tools you need in a single batch (prefer 3-5 targeted calls)
-- The results will be evaluated by another model that decides what is relevant`;
+
+The results will be evaluated by another model that decides what is relevant.`;
 
   if (includeToolDescriptions) {
     // Ollama path: instruct JSON array output since there's no native tool calling
@@ -88,11 +101,12 @@ Output ONLY the JSON array, no other text.`;
     prompt += `
 
 CONVERSATION CONTEXT:
-The user may be asking a follow-up question. Conversation tools are available.
-- If the question is short and vague (e.g., "fix it", "show me", "how?"), it is almost certainly a follow-up. Prioritize conversation history over broad codebase searches.
-- Use search_conversation to find relevant prior exchanges, then read_conversation to get full content.
-- Only search the codebase for specific files/symbols mentioned in the conversation.
-- You can combine conversation and codebase tool calls in the same batch.`;
+The user may be asking a follow-up question. Conversation tools are available:
+- search_conversation: find relevant prior exchanges by meaning
+- read_conversation: read full content of specific exchanges
+- get_full_conversation: get the entire conversation history
+If the question is short or references previous discussion, prioritize conversation tools.
+You can combine conversation and codebase tool calls in the same batch.`;
   }
 
   return prompt;
@@ -124,7 +138,12 @@ NOTE: This is a conversation with history. The curated context may include resul
   if (canRequestMore) {
     prompt += `
 
-IMPORTANT: If the curated context is clearly missing critical information needed to answer the question (e.g., a function implementation is referenced but not shown, a key file is mentioned but not included), you can request more context by calling the available tools (e.g., read_file, read_lines, semantic_search, find_symbol). Only do this if the context is genuinely insufficient -- prefer answering with what you have over requesting more rounds.`;
+IMPORTANT: If the curated context is missing critical information needed to fulfill the request (e.g., a function body is referenced but not shown, a key file is mentioned but not included), you can request more by calling tools directly:
+- read_lines: see specific code in a file already referenced
+- find_symbol: look up a specific function, class, or variable by name
+- read_file_outline: understand a file's structure before drilling in
+- semantic_search: find code in a different part of the codebase
+Answer if the context is sufficient and you are confident in the response. Request more only when you can identify a specific gap in the context.`;
   }
 
   prompt += `\n\n## Curated Context\n${relevantContext}`;
@@ -145,7 +164,10 @@ IMPORTANT: If the curated context is clearly missing critical information needed
 - Reference specific file paths and line numbers when possible.
 - Be concrete and specific -- cite actual code.
 - If the request refers to a previous answer in conversation history, reference that answer directly.
-- Do NOT make up code that isn't in the context.`;
+- When diagnosing a bug or issue, also provide a concrete fix or code change if the context contains enough information to do so. Show what to change and where.
+- Do NOT make up code that isn't in the context.
+- If you reference code that is already in your curated context, use it directly -- do not ask the user to paste or provide code you can already see.
+- Present your final recommendation(s) directly. If there are multiple valid approaches, list them as clearly labeled options (e.g., "Option A", "Option B") with brief trade-offs. Do NOT narrate your reasoning process or show intermediate attempts -- jump straight to your conclusions.`;
 
   return prompt;
 }
@@ -218,30 +240,33 @@ ${resultsFormatted}
 - Keep only what directly helps address the user's request
 - You CAN strip previously kept results if they are now superseded by better new results
 
-## Tool Usage Guide
-You have access to all available tools. Use the right tool for the job:
-- **semantic_search**: Find entry points by meaning. Use FIRST when you don't know where to look.
-- **read_lines**: Read specific line ranges. Use to drill into code found by semantic_search or outlines.
-- **read_file_outline**: Get file structure (functions, classes). Use before reading entire files.
-- **find_symbol**: Look up specific symbol names (functions, classes, variables).
-- **get_references / get_dependencies**: Find usage or dependencies of a symbol.
-- **read_file**: Read a full file. Only use for small files.
-- **search_conversation / read_conversation**: Access prior conversation history for follow-up questions.
-
 ## How to Respond
-1. Call \`report_evaluation\` with your assessment:
-   - \`sufficient\`: true if you can point to specific code that answers the request, false otherwise
+
+1. Call \`report_evaluation\` with:
+   - \`sufficient\`: true/false (see Evaluating Sufficiency below)
    - \`relevantIndices\`: array of indices (0-${totalResults - 1}) to KEEP
    - \`strippedIndices\`: array of indices to DISCARD
-2. If \`sufficient=false\`, also call the tools you need **directly** in the same response.
-   - Batch 2-5 targeted tool calls together.
-   - Use diverse tools (don't just repeat semantic_search).
-   - If initial results are too vague, use read_lines/read_file_outline to drill down.
+   - \`followUpCalls\`: (when sufficient=false) array of tool calls needed, e.g.
+     [{"name": "read_lines", "arguments": {"filePath": "src/foo.ts", "startLine": 10, "endLine": 50}}]
 
-Additional guidance:
-- The code you need may not match the user's exact words. For example, a useEffect with scrollIntoView IS "scrolling behavior".
-- If follow-up searches keep returning no results, the answer is likely already in what you have -> sufficient=true.
-${iteration >= maxIterations ? '- This is the LAST iteration. You MUST set sufficient=true and work with what you have.' : ''}`;
+2. You may ALSO call follow-up tools directly in the same response alongside report_evaluation.
+   Both methods work -- use whichever is natural. If you provide follow-ups in BOTH places, they will be merged.
+
+Available follow-up tools (when sufficient=false):
+- read_lines: expand or explore code around locations already found
+- read_file_outline: understand the structure of files appearing in results
+- find_symbol: look up specific names you see referenced in results
+- semantic_search: ONLY if you need to explore a genuinely different part of the codebase
+- get_references / get_dependencies: trace how symbols connect
+
+## Evaluating Sufficiency
+
+sufficient=true means: the kept results contain enough code snippets that the answering model could fulfill the user's request -- answer the question, diagnose the issue, or understand the relevant code. It does NOT require having every detail; the answering model can request targeted follow-ups if needed.
+
+sufficient=false means: the kept results do not yet contain the code needed to address the request, AND you have a concrete idea of what to look for next. You MUST specify follow-up calls (via followUpCalls parameter or direct tool calls) so the system knows what to fetch.
+
+The code you need may not match the user's exact words. Look at what the code DOES, not just what it's named.
+${iteration >= maxIterations ? '\nThis is the LAST iteration. You MUST set sufficient=true and work with what you have.' : ''}`;
 
   return prompt;
 }

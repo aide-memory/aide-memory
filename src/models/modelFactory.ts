@@ -100,7 +100,7 @@ export interface CreateRuntimeOptions {
  */
 export function createRuntime(
   model: string,
-  options: CreateRuntimeOptions = {}
+  options: CreateRuntimeOptions = {},
 ): ToolCapableRuntime {
   const ollamaBaseUrl = options.ollamaBaseUrl ?? 'http://127.0.0.1:11434/api';
   const embeddingModel = options.embeddingModel ?? 'mxbai-embed-large';
@@ -119,7 +119,7 @@ export function createRuntime(
     case 'openai':
       if (!apiKey) {
         throw new Error(
-          'OpenAI API key required. Set OPENAI_API_KEY environment variable.'
+          'OpenAI API key required. Set OPENAI_API_KEY environment variable.',
         );
       }
       return new OpenAIRuntime({
@@ -131,7 +131,7 @@ export function createRuntime(
     case 'anthropic':
       if (!apiKey) {
         throw new Error(
-          'Anthropic API key required. Set ANTHROPIC_API_KEY environment variable.'
+          'Anthropic API key required. Set ANTHROPIC_API_KEY environment variable.',
         );
       }
       return new AnthropicRuntime({
@@ -143,7 +143,7 @@ export function createRuntime(
     case 'google':
       if (!apiKey) {
         throw new Error(
-          'Google API key required. Set GOOGLE_API_KEY environment variable.'
+          'Google API key required. Set GOOGLE_API_KEY environment variable.',
         );
       }
       return new GoogleRuntime({
@@ -166,7 +166,7 @@ export function createRuntime(
  * Create a runtime from ProjectConfig (uses reasoning model for backward compat)
  */
 export function createRuntimeFromProjectConfig(
-  projectConfig: ProjectConfig
+  projectConfig: ProjectConfig,
 ): ToolCapableRuntime {
   return createRuntime(projectConfig.models.reasoning, {
     ollamaBaseUrl: projectConfig.ollamaBaseUrl,
@@ -195,7 +195,7 @@ export function createRuntimes(projectConfig: ProjectConfig): ModelRuntimes {
     if (error) {
       throw new Error(
         `Cannot start AIDE: ${role} model "${model}" — ${error}\n` +
-        `Fix: set the required API key, or change the model with: aide config --${role} <model>`
+          `Fix: set the required API key, or change the model with: aide config --${role} <model>`,
       );
     }
   }

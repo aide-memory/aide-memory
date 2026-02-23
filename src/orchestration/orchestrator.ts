@@ -55,7 +55,7 @@ export interface VerboseLogger {
 const EVALUATION_TOOL: ToolDefinition = {
   name: 'report_evaluation',
   description:
-    'Report your evaluation of the gathered results. You MUST call this tool exactly once. If more context is needed (sufficient=false), also call the appropriate tools directly in the same response.',
+    'Report your evaluation of the gathered results. You MUST call this tool exactly once. If more context is needed (sufficient=false), include followUpCalls OR call tools directly in the same response.',
   parameters: {
     type: 'object',
     properties: {
@@ -74,6 +74,12 @@ const EVALUATION_TOOL: ToolDefinition = {
         items: { type: 'number' },
         description:
           'Indices of results to STRIP (e.g., [1, 3]). Results at these indices will be removed.',
+      },
+      followUpCalls: {
+        type: 'array',
+        items: { type: 'object' },
+        description:
+          'If sufficient=false, list the tool calls needed to gather missing context. Each item must have "name" (string) and "arguments" (object), e.g. [{"name": "read_lines", "arguments": {"filePath": "src/foo.ts", "startLine": 10, "endLine": 50}}].',
       },
     },
     required: ['sufficient', 'relevantIndices'],
@@ -232,6 +238,20 @@ export class Orchestrator {
         iterations: 0,
         totalToolCalls: 0,
       };
+    }
+
+    // Filter similar semantic_search queries before execution
+    toolCalls = this.filterSimilarSearchCalls(toolCalls, state.previousCalls);
+
+    // Auto-inject get_full_conversation for likely follow-up questions
+    // when the planning model didn't include any conversation tools
+    if (hasConversation && this.isLikelyFollowUp(query)) {
+      const CONVERSATION_TOOLS = new Set(['search_conversation', 'read_conversation', 'get_full_conversation']);
+      const hasConversationCall = toolCalls.some(tc => CONVERSATION_TOOLS.has(tc.name));
+      if (!hasConversationCall) {
+        logInfo('[orchestrator] Follow-up detected, injecting get_full_conversation');
+        toolCalls.unshift({ name: 'get_full_conversation', arguments: {} });
+      }
     }
 
     // Limit batch size
@@ -395,27 +415,30 @@ export class Orchestrator {
         }
 
         // Not sufficient: use follow-up calls for next iteration.
-        // If the model suggests duplicate calls (already in previousCalls),
-        // the executor will silently skip them.
+        // Filter similar queries before execution to prevent degenerate loops.
         if (evaluation.newToolCalls.length > 0) {
-          toolCalls = evaluation.newToolCalls.slice(
-            0,
-            this.config.maxToolCallsPerBatch
-          );
-          logInfo(
-            `[orchestrator] Context model requested ${toolCalls.length} more calls`
-          );
-        } else {
-          // Re-prompt fallback: model said insufficient but gave no follow-up calls
-          logWarn(
-            '[orchestrator] Context model said insufficient but no follow-up calls. Sending re-prompt...'
-          );
-          const repromptResult = await this.repromptForFollowUpCalls(query, state);
-          if (repromptResult && repromptResult.length > 0) {
-            toolCalls = repromptResult.slice(0, this.config.maxToolCallsPerBatch);
-            logInfo(`[orchestrator] Re-prompt yielded ${toolCalls.length} follow-up calls`);
+          let followUps = this.filterSimilarSearchCalls(evaluation.newToolCalls, state.previousCalls);
+          followUps = followUps.slice(0, this.config.maxToolCallsPerBatch);
+          if (followUps.length > 0) {
+            toolCalls = followUps;
+            logInfo(
+              `[orchestrator] Context model requested ${toolCalls.length} more calls`
+            );
           } else {
-            logWarn('[orchestrator] Re-prompt also yielded no calls, proceeding to answer');
+            logWarn('[orchestrator] Context model follow-up calls all filtered by similarity guard, proceeding to answer');
+            break;
+          }
+        } else {
+          // No follow-ups from nested param or parallel calls -- targeted second call
+          logInfo(
+            '[orchestrator] No follow-up calls from evaluation. Requesting follow-ups...'
+          );
+          const followUpResult = await this.requestFollowUpCalls(query, state, evaluation);
+          if (followUpResult && followUpResult.length > 0) {
+            toolCalls = followUpResult.slice(0, this.config.maxToolCallsPerBatch);
+            logInfo(`[orchestrator] Follow-up request yielded ${toolCalls.length} calls`);
+          } else {
+            logWarn('[orchestrator] Follow-up request yielded no calls, proceeding to answer');
             break;
           }
         }
@@ -525,138 +548,62 @@ export class Orchestrator {
         : [];
 
       if (moreToolCalls.length > 0) {
-        // Reasoning model loop-back: re-enter execute/evaluate loop.
-        // If any calls are duplicates, the executor will silently skip them.
+        // Reasoning model loop-back: execute the requested tools and add results
+        // directly. The reasoning model is in the answering role and has decided
+        // it needs specific information -- trust that judgment rather than
+        // re-filtering through the context model.
         reasoningLoops++;
         logInfo(
           `[orchestrator] Reasoning model requested ${moreToolCalls.length} more calls (reasoning loop ${reasoningLoops})`
         );
 
-        toolCalls = moreToolCalls.slice(0, this.config.maxToolCallsPerBatch);
+        const loopbackCalls = moreToolCalls.slice(0, this.config.maxToolCallsPerBatch);
 
-        // Run through the execute/evaluate loop again (reuse Steps 2-3)
-        while (state.iteration < this.config.maxIterations) {
-          state.iteration++;
-          logInfo(
-            `[orchestrator] Reasoning loop-back iteration ${state.iteration}: Executing ${toolCalls.length} tool calls...`
-          );
-
-          globalIter = state.iteration;
-
-          if (this.verbose && this.log) {
-            this.log.header(`[Iter ${globalIter}] Executing ${toolCalls.length} tools (reasoning loop-back)`);
-            for (const tc of toolCalls) {
-              this.log.tool(tc.name, tc.arguments);
-            }
-            this.log.footer();
+        if (this.verbose && this.log) {
+          this.log.header(`[Iter ${globalIter}] Executing ${loopbackCalls.length} tools (reasoning loop-back)`);
+          for (const tc of loopbackCalls) {
+            this.log.tool(tc.name, tc.arguments);
           }
+          this.log.footer();
+        }
 
-          const results = await this.toolExecutor.executeBatch(
-            toolCalls,
-            state.previousCalls
-          );
+        const results = await this.toolExecutor.executeBatch(
+          loopbackCalls,
+          state.previousCalls
+        );
 
-          totalToolCalls += results.length;
+        totalToolCalls += results.length;
 
-          for (const result of results) {
-            state.previousCalls.set(result.callKey, result);
-          }
+        for (const result of results) {
+          state.previousCalls.set(result.callKey, result);
+        }
 
-          if (this.verbose && this.log) {
-            this.log.header(`[Iter ${globalIter}] Tool Results (reasoning loop-back)`);
-            for (const r of results) {
-              this.log.tool(r.spec.name, r.spec.arguments);
-              if (r.success && r.data) {
-                this.log.toolResult(r.data, 500);
-              } else if (r.error) {
-                this.log.info(`ERROR: ${r.error}`);
-              } else {
-                this.log.info('(skipped - duplicate)');
-              }
-            }
-            this.log.footer();
-          }
-
-          // Context model evaluates the new results (same full-visibility approach)
-          if (this.config.enableContextStripping) {
-            const evaluation = await this.evaluateWithContextModel(
-              query,
-              results,
-              state
-            );
-
-            if (!evaluation) {
-              for (const r of results) {
-                if (r.success && r.data) {
-                  state.relevantResults.push(r);
-                }
-              }
-              break;
-            }
-
-            // Rebuild relevantResults from scratch (same as main loop)
-            const allResults = [...state.relevantResults, ...results];
-            const newRelevant: ToolCallResult[] = [];
-            let anyValid = false;
-            for (const idx of evaluation.relevantIndices) {
-              if (idx >= 0 && idx < allResults.length) {
-                newRelevant.push(allResults[idx]);
-                anyValid = true;
-              }
-            }
-            if (evaluation.relevantIndices.length > 0 && !anyValid) {
-              logWarn('[orchestrator] Loop-back: all relevantIndices out of bounds, keeping all results');
-              for (const r of allResults) {
-                if (r.success && r.data) {
-                  newRelevant.push(r);
-                }
-              }
-            }
-
-            // Safety: preserve accumulated results if relevantIndices is empty
-            if (evaluation.relevantIndices.length === 0 && state.relevantResults.length > 0) {
-              logWarn('[orchestrator] Loop-back: empty relevantIndices, preserving accumulated results');
-              for (const r of results) {
-                if (r.success && r.data) {
-                  newRelevant.push(r);
-                }
-              }
-              state.relevantResults = [...state.relevantResults, ...newRelevant];
+        if (this.verbose && this.log) {
+          this.log.header(`[Iter ${globalIter}] Tool Results (reasoning loop-back)`);
+          for (const r of results) {
+            this.log.tool(r.spec.name, r.spec.arguments);
+            if (r.success && r.data) {
+              this.log.toolResult(r.data, 500);
+            } else if (r.error) {
+              this.log.info(`ERROR: ${r.error}`);
             } else {
-              state.relevantResults = newRelevant;
+              this.log.info('(skipped - duplicate)');
             }
+          }
+          this.log.footer();
+        }
 
-            for (const strippedIdx of evaluation.strippedIndices) {
-              if (strippedIdx >= 0 && strippedIdx < allResults.length) {
-                const r = allResults[strippedIdx];
-                state.strippedSummaries.push({
-                  callKey: r.callKey,
-                  toolName: r.spec.name,
-                  resultSummary: (r.data ?? '').slice(0, 100),
-                  reason: 'stripped by context model',
-                });
-              }
-            }
-
-            if (evaluation.sufficient || evaluation.newToolCalls.length === 0) {
-              break;
-            }
-
-            toolCalls = evaluation.newToolCalls.slice(
-              0,
-              this.config.maxToolCallsPerBatch
-            );
-          } else {
-            for (const r of results) {
-              if (r.success && r.data) {
-                state.relevantResults.push(r);
-              }
-            }
-            break;
+        // Add results directly (bypass context model re-evaluation)
+        for (const r of results) {
+          if (r.success && r.data) {
+            state.relevantResults.push(r);
           }
         }
 
-        // Loop back to the top of the while(true) for another answering attempt
+        // Dedup before next answering round
+        state.relevantResults = this.safetyNetDedup(state.relevantResults);
+
+        // Loop back to the top for another answering attempt with enriched context
         continue;
       }
 
@@ -699,8 +646,8 @@ export class Orchestrator {
     newResults: ToolCallResult[],
     state: IterationState
   ): Promise<ContextEvaluation | null> {
-    // Pre-evaluation dedup: merge overlapping file:line chunks before showing to context model.
-    // This reduces noise (e.g., App.tsx:762-797 appearing in both semantic_search AND read_lines).
+    // Dedup overlapping ranges across all tool types (but keep individual results
+    // as separate entries so the context model can reference them by index).
     const dedupedNewResults = this.safetyNetDedup(newResults);
     const dedupedAccumulated = this.safetyNetDedup(state.relevantResults);
 
@@ -753,7 +700,8 @@ export class Orchestrator {
             role: 'user',
             content:
               'Evaluate the above results. Call report_evaluation with your assessment. ' +
-              'If you need more context, also call the appropriate tools directly.',
+              'If more context is needed, specify follow-up tools via the followUpCalls parameter ' +
+              'or call them directly alongside report_evaluation.',
           },
         ],
         [EVALUATION_TOOL, ...this.availableTools]
@@ -811,8 +759,9 @@ export class Orchestrator {
   /**
    * Parse evaluation from native tool calls (works for both cloud and Ollama).
    *
-   * The model should call report_evaluation for its assessment AND call other
-   * tools directly for follow-ups. No nested followUpCalls in the schema.
+   * Follow-ups are extracted from TWO sources and merged:
+   * 1. Nested: followUpCalls parameter inside report_evaluation arguments
+   * 2. Parallel: separate tool calls in the response alongside report_evaluation
    */
   private parseNativeEvaluation(
     response: ChatResponse,
@@ -825,9 +774,8 @@ export class Orchestrator {
 
     const evalCall = response.toolCalls.find((tc) => tc.name === 'report_evaluation');
 
-    // Collect direct tool calls (not report_evaluation) as follow-ups.
-    // This is the PRIMARY mechanism for follow-up calls now.
-    const followUpCalls: ToolCallSpec[] = response.toolCalls
+    // Source 1: parallel tool calls alongside report_evaluation
+    const parallelFollowUps: ToolCallSpec[] = response.toolCalls
       .filter((tc) => tc.name !== 'report_evaluation' && tc.name !== 'done')
       .map((tc) => ({
         name: tc.name,
@@ -838,25 +786,28 @@ export class Orchestrator {
       }));
 
     if (!evalCall) {
-      // Model didn't call report_evaluation — only made direct tool calls.
-      // Treat as insufficient with accumulated results preserved.
-      if (followUpCalls.length > 0) {
+      if (parallelFollowUps.length > 0) {
         return {
           sufficient: false,
           relevantIndices: Array.from({ length: accumulatedCount }, (_, i) => i),
           strippedIndices: [],
-          newToolCalls: followUpCalls,
+          newToolCalls: parallelFollowUps,
         };
       }
       logWarn('[orchestrator] Context model returned no report_evaluation and no tool calls');
       return null;
     }
 
-    // Parse the evaluation arguments from report_evaluation
     const args =
       typeof evalCall.arguments === 'string'
         ? JSON.parse(evalCall.arguments)
         : (evalCall.arguments ?? {});
+
+    // Source 2: nested followUpCalls inside report_evaluation
+    const nestedFollowUps: ToolCallSpec[] = this.parseNestedFollowUps(args.followUpCalls);
+
+    // Merge both sources, deduplicate by call key
+    const allFollowUps = this.deduplicateFollowUps([...nestedFollowUps, ...parallelFollowUps]);
 
     const evaluation: ContextEvaluation = {
       sufficient: args.sufficient ?? true,
@@ -864,10 +815,52 @@ export class Orchestrator {
         ? args.relevantIndices
         : [],
       strippedIndices: this.normalizeStrippedIndices(args.strippedIndices),
-      newToolCalls: followUpCalls,
+      newToolCalls: allFollowUps,
     };
 
     return evaluation;
+  }
+
+  /**
+   * Parse nested followUpCalls from report_evaluation arguments.
+   * Lenient: skips malformed entries rather than failing.
+   */
+  private parseNestedFollowUps(raw: unknown): ToolCallSpec[] {
+    if (!Array.isArray(raw)) return [];
+    const calls: ToolCallSpec[] = [];
+    for (const item of raw) {
+      try {
+        if (typeof item !== 'object' || item === null) continue;
+        const entry = item as Record<string, unknown>;
+        if (typeof entry.name !== 'string' || !entry.name) continue;
+        let args: Record<string, unknown> = {};
+        if (typeof entry.arguments === 'string') {
+          args = JSON.parse(entry.arguments);
+        } else if (typeof entry.arguments === 'object' && entry.arguments !== null) {
+          args = entry.arguments as Record<string, unknown>;
+        }
+        calls.push({ name: entry.name, arguments: args });
+      } catch {
+        // Skip malformed entries
+      }
+    }
+    return calls;
+  }
+
+  /**
+   * Deduplicate follow-up tool calls by their call key (name + serialized args).
+   */
+  private deduplicateFollowUps(calls: ToolCallSpec[]): ToolCallSpec[] {
+    const seen = new Set<string>();
+    const result: ToolCallSpec[] = [];
+    for (const call of calls) {
+      const key = `${call.name}:${JSON.stringify(call.arguments)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(call);
+      }
+    }
+    return result;
   }
 
   /**
@@ -1140,32 +1133,198 @@ export class Orchestrator {
   }
 
   /**
-   * Re-prompt the context model when it says insufficient but provides no follow-up calls.
-   * Returns extracted tool call specs, or null/empty if re-prompt also fails.
+   * Detect whether a query is likely a follow-up to a previous conversation turn
+   * (short, uses pronouns/references, or explicitly references prior discussion).
    */
-  private async repromptForFollowUpCalls(
+  isLikelyFollowUp(query: string): boolean {
+    const normalized = query.toLowerCase().trim();
+    const words = normalized.split(/\s+/).filter(w => w.length > 0);
+    if (words.length <= 8) return true;
+    const followUpPatterns = [
+      /\b(the fix|the issue|the bug|the error|the problem|the solution|the change)\b/,
+      /\b(you said|you mentioned|you proposed|you suggested|you showed|you described)\b/,
+      /\b(show me how|how to fix|how do i fix|how do we fix)\b/,
+      /\b(earlier|from before|last time|previous answer|previous response)\b/,
+      /\b(fix it|do it|implement it|apply it|change it)\b/,
+      /\b(that (fix|solution|approach|change|issue|bug|error))\b/,
+    ];
+    return followUpPatterns.some(p => p.test(normalized));
+  }
+
+  /**
+   * Jaccard word-overlap similarity between two search queries.
+   * Returns 0..1 where 1 = identical word sets.
+   */
+  private computeQuerySimilarity(q1: string, q2: string): number {
+    const tokenize = (s: string) => new Set(s.toLowerCase().split(/\s+/).filter(w => w.length > 0));
+    const s1 = tokenize(q1);
+    const s2 = tokenize(q2);
+    if (s1.size === 0 && s2.size === 0) return 1;
+    if (s1.size === 0 || s2.size === 0) return 0;
+    let intersectionSize = 0;
+    for (const w of s1) {
+      if (s2.has(w)) intersectionSize++;
+    }
+    const unionSize = new Set([...s1, ...s2]).size;
+    return intersectionSize / unionSize;
+  }
+
+  /**
+   * Filter out semantic_search calls that are too similar to each other (within batch)
+   * or too similar to previously executed semantic_search calls.
+   * Non-semantic-search calls always pass through unchanged.
+   */
+  private filterSimilarSearchCalls(
+    calls: ToolCallSpec[],
+    previousCalls: Map<string, ToolCallResult>
+  ): ToolCallSpec[] {
+    const SIMILARITY_THRESHOLD = 0.6;
+    const nonSearch: ToolCallSpec[] = [];
+    const searchCalls: ToolCallSpec[] = [];
+
+    for (const call of calls) {
+      if (call.name === 'semantic_search' && typeof call.arguments.query === 'string') {
+        searchCalls.push(call);
+      } else {
+        nonSearch.push(call);
+      }
+    }
+
+    if (searchCalls.length === 0) return calls;
+
+    const previousQueries: string[] = [];
+    for (const r of previousCalls.values()) {
+      if (r.spec.name === 'semantic_search' && typeof r.spec.arguments.query === 'string') {
+        previousQueries.push(r.spec.arguments.query as string);
+      }
+    }
+
+    // Filter within batch: keep first, skip subsequent ones too similar to any kept
+    const keptSearch: ToolCallSpec[] = [];
+    const filteredQueries: string[] = [];
+
+    for (const call of searchCalls) {
+      const query = call.arguments.query as string;
+
+      // Check against previously executed queries
+      let tooSimilarToPrevious = false;
+      for (const prev of previousQueries) {
+        if (this.computeQuerySimilarity(query, prev) > SIMILARITY_THRESHOLD) {
+          tooSimilarToPrevious = true;
+          break;
+        }
+      }
+      if (tooSimilarToPrevious) {
+        logInfo(`[orchestrator] Similarity guard: skipping "${query}" (too similar to previous call)`);
+        continue;
+      }
+
+      // Check against other queries kept in this batch
+      let tooSimilarToKept = false;
+      for (const kept of filteredQueries) {
+        if (this.computeQuerySimilarity(query, kept) > SIMILARITY_THRESHOLD) {
+          tooSimilarToKept = true;
+          break;
+        }
+      }
+      if (tooSimilarToKept) {
+        logInfo(`[orchestrator] Similarity guard: skipping "${query}" (too similar to another query in batch)`);
+        continue;
+      }
+
+      keptSearch.push(call);
+      filteredQueries.push(query);
+    }
+
+    if (keptSearch.length < searchCalls.length) {
+      logInfo(`[orchestrator] Similarity guard: ${searchCalls.length} semantic_search calls → ${keptSearch.length} after filtering`);
+    }
+
+    return [...nonSearch, ...keptSearch];
+  }
+
+  /**
+   * Targeted second call to get follow-up tools when the context model evaluated
+   * as insufficient but didn't provide follow-ups via either nested or parallel calls.
+   * Only action tools are provided (no report_evaluation), so the model must call tools.
+   */
+  private async requestFollowUpCalls(
     query: string,
-    _state: IterationState
+    state: IterationState,
+    evaluation: ContextEvaluation
   ): Promise<ToolCallSpec[] | null> {
-    const repromptMessage = `You indicated more context is needed but didn't specify follow-up tool calls. Based on the results you kept, what specific tool calls should be made next to address: "${query}"? You MUST call at least one tool.`;
+    const filesSeen = new Set<string>();
+    for (const r of state.relevantResults) {
+      const filePattern = /([^\s:]+\.[a-zA-Z]+):\d+-\d+/g;
+      let match: RegExpExecArray | null;
+      while ((match = filePattern.exec(r.data ?? '')) !== null) {
+        filesSeen.add(match[1]);
+      }
+    }
+
+    const previousCallDescriptions = Array.from(state.previousCalls.values())
+      .map(r => `${r.spec.name}(${JSON.stringify(r.spec.arguments)})`)
+      .join('\n');
+
+    const keptSummary = evaluation.relevantIndices.length > 0
+      ? `You kept results at indices [${evaluation.relevantIndices.join(', ')}].`
+      : 'No results were kept.';
+
+    const followUpMessage = `The context gathered so far is not yet sufficient to address the user's request.
+
+User's request: "${query}"
+
+${keptSummary}
+Files found so far: ${[...filesSeen].join(', ') || '(none)'}
+
+Previous calls already made (do NOT repeat):
+${previousCallDescriptions || '(none)'}
+
+Call the tools needed to gather the missing context. Focus on:
+- read_lines to expand code around locations already found
+- read_file_outline to understand file structure
+- find_symbol to look up specific names referenced in results
+- semantic_search ONLY if exploring a genuinely different area`;
 
     try {
       if (this.runtimes.context.supportsNativeTools()) {
         const response = await this.runtimes.context.chatWithTools(
-          [{ role: 'user', content: repromptMessage }],
+          [{ role: 'user', content: followUpMessage }],
           this.availableTools
         );
+
+        if (response.usage) {
+          this.tracker.record(
+            'tool_call',
+            'context',
+            `follow-up request iteration ${state.iteration}`,
+            response.usage.inputTokens,
+            response.usage.outputTokens
+          );
+        }
+
         const calls = this.extractToolCalls(response);
         return calls.length > 0 ? calls : null;
       } else {
         const response = await this.runtimes.context.chat([
-          { role: 'user', content: repromptMessage + '\n\nRespond with a JSON array of tool calls: [{"name": "...", "arguments": {...}}]' },
+          { role: 'user', content: followUpMessage + '\n\nRespond with a JSON array of tool calls: [{"name": "...", "arguments": {...}}]' },
         ]);
+
+        if (response.usage) {
+          this.tracker.record(
+            'tool_call',
+            'context',
+            `follow-up request iteration ${state.iteration}`,
+            response.usage.inputTokens,
+            response.usage.outputTokens
+          );
+        }
+
         const calls = this.parseToolCallsFromResponse(response.content);
         return calls.length > 0 ? calls : null;
       }
     } catch (err) {
-      logWarn(`[orchestrator] Re-prompt failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      logWarn(`[orchestrator] Follow-up request failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       return null;
     }
   }

@@ -71,6 +71,7 @@ const IGNORE_PATTERNS = [
   '**/coverage/**',
   '**/tmp/**',
   '**/.cache/**',
+  '**/orchestration/prompts.ts',
 ];
 
 export async function reindexProject(

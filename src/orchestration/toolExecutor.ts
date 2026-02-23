@@ -458,7 +458,10 @@ export class ToolExecutor {
     // Deduplicate overlapping results from the same file
     const deduped = this.deduplicateSearchResults(results);
 
-    const formatted = deduped
+    // Drop noise tail: relative cutoff + gap detection
+    const filtered = this.applyAdaptiveThreshold(deduped);
+
+    const formatted = filtered
       .map((r) => {
         const preview =
           r.content.length > 500
@@ -1172,6 +1175,41 @@ export class ToolExecutor {
     }
 
     return exchanges;
+  }
+
+  /**
+   * Adaptive thresholding: drop low-score noise from search results.
+   * Uses two filters (whichever is more aggressive wins):
+   *  1. Relative cutoff: keep results >= topScore * 0.80
+   *  2. Gap detection: truncate at the first consecutive gap > 0.05
+   * Results must already be sorted by score descending.
+   */
+  private applyAdaptiveThreshold<
+    T extends { score: number },
+  >(results: T[]): T[] {
+    if (results.length <= 1) return results;
+
+    const topScore = results[0].score;
+    const relativeCutoff = topScore * 0.80;
+
+    let relativeEnd = results.length;
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].score < relativeCutoff) {
+        relativeEnd = i;
+        break;
+      }
+    }
+
+    let gapEnd = results.length;
+    for (let i = 1; i < results.length; i++) {
+      if (results[i - 1].score - results[i].score > 0.05) {
+        gapEnd = i;
+        break;
+      }
+    }
+
+    const keepCount = Math.max(1, Math.min(relativeEnd, gapEnd));
+    return results.slice(0, keepCount);
   }
 
   /**

@@ -112,6 +112,7 @@ const DEFAULT_IGNORE_PATTERNS = [
   '**/coverage/**',
   '**/tmp/**',
   '**/.cache/**',
+  '**/orchestration/prompts.ts',
 ];
 
 // ============================================================================
