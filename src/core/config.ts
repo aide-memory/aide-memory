@@ -198,7 +198,14 @@ export interface RetrievalSettings {
   maxBlocks: number;
   maxDepth: number;
   maxFanout: number;
-  strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'semanticandgraph' | 'auto';
+  strategy:
+    | 'simple'
+    | 'tools'
+    | 'hybrid'
+    | 'graph'
+    | 'semantic'
+    | 'semanticandgraph'
+    | 'auto';
   hybridMode: 'code' | 'hints';
   historyMode: 'direct' | 'tools';
   historyLimit: number;

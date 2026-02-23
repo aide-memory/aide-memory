@@ -403,7 +403,7 @@ export class Orchestrator {
             state.strippedSummaries.push({
               callKey: r.callKey,
               toolName: r.spec.name,
-              resultSummary: (r.data ?? '').slice(0, 100),
+              resultSummary: (r.data ?? '').slice(0, 300),
               reason: 'stripped by context model',
             });
           }
@@ -699,7 +699,7 @@ export class Orchestrator {
           {
             role: 'user',
             content:
-              'Evaluate the above results. Call report_evaluation with your assessment. ' +
+              'Evaluate the above results. You MUST call report_evaluation with your assessment. ' +
               'If more context is needed, specify follow-up tools via the followUpCalls parameter ' +
               'or call them directly alongside report_evaluation.',
           },
@@ -749,7 +749,7 @@ export class Orchestrator {
     if (contextUsesNativeTools) {
       // Native tools: extract evaluation from report_evaluation tool call,
       // and follow-up requests from all other direct tool calls.
-      return this.parseNativeEvaluation(response, state.relevantResults.length);
+      return this.parseNativeEvaluation(response, state.relevantResults.length, newResults.length);
     } else {
       // Text fallback: parse evaluation from JSON in text content
       return this.parseTextEvaluation(response.content);
@@ -765,7 +765,8 @@ export class Orchestrator {
    */
   private parseNativeEvaluation(
     response: ChatResponse,
-    accumulatedCount: number
+    accumulatedCount: number,
+    newResultsCount: number
   ): ContextEvaluation | null {
     if (!response.toolCalls || response.toolCalls.length === 0) {
       logWarn('[orchestrator] Context model returned no tool calls');
@@ -787,9 +788,10 @@ export class Orchestrator {
 
     if (!evalCall) {
       if (parallelFollowUps.length > 0) {
+        const totalCount = accumulatedCount + newResultsCount;
         return {
           sufficient: false,
-          relevantIndices: Array.from({ length: accumulatedCount }, (_, i) => i),
+          relevantIndices: Array.from({ length: totalCount }, (_, i) => i),
           strippedIndices: [],
           newToolCalls: parallelFollowUps,
         };

@@ -143,7 +143,7 @@ IMPORTANT: If the curated context is missing critical information needed to fulf
 - find_symbol: look up a specific function, class, or variable by name
 - read_file_outline: understand a file's structure before drilling in
 - semantic_search: find code in a different part of the codebase
-Answer if the context is sufficient and you are confident in the response. Request more only when you can identify a specific gap in the context.`;
+Answer if the curated context provides enough information to address the request. Only request more context if the answer genuinely depends on specific missing information. Do not request additional context purely for verification or completeness.`;
   }
 
   prompt += `\n\n## Curated Context\n${relevantContext}`;
@@ -249,8 +249,7 @@ ${resultsFormatted}
    - \`followUpCalls\`: (when sufficient=false) array of tool calls needed, e.g.
      [{"name": "read_lines", "arguments": {"filePath": "src/foo.ts", "startLine": 10, "endLine": 50}}]
 
-2. You may ALSO call follow-up tools directly in the same response alongside report_evaluation.
-   Both methods work -- use whichever is natural. If you provide follow-ups in BOTH places, they will be merged.
+2. You MUST always call report_evaluation exactly once. You may also call follow-up tools directly alongside it. Follow-ups from both sources (followUpCalls parameter and direct tool calls) will be merged.
 
 Available follow-up tools (when sufficient=false):
 - read_lines: expand or explore code around locations already found

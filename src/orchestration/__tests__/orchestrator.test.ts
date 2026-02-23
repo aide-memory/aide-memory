@@ -291,7 +291,7 @@ describe('parseNativeEvaluation', () => {
         },
       ],
     };
-    const result: ContextEvaluation = orch.parseNativeEvaluation(response, 2);
+    const result: ContextEvaluation = orch.parseNativeEvaluation(response, 2, 0);
     expect(result).not.toBeNull();
     expect(result!.sufficient).toBe(false);
     expect(result!.newToolCalls).toHaveLength(2);
@@ -315,7 +315,7 @@ describe('parseNativeEvaluation', () => {
         },
       ],
     };
-    const result = orch.parseNativeEvaluation(response, 1);
+    const result = orch.parseNativeEvaluation(response, 1, 0);
     expect(result).not.toBeNull();
     expect(result!.newToolCalls).toHaveLength(1);
     expect(result!.newToolCalls[0].name).toBe('read_lines');
@@ -350,7 +350,7 @@ describe('parseNativeEvaluation', () => {
         },
       ],
     };
-    const result = orch.parseNativeEvaluation(response, 1);
+    const result = orch.parseNativeEvaluation(response, 1, 0);
     expect(result).not.toBeNull();
     // read_lines(a.ts:10-50) appears in both sources but should be deduped
     expect(result!.newToolCalls).toHaveLength(3);
@@ -381,7 +381,7 @@ describe('parseNativeEvaluation', () => {
         },
       ],
     };
-    const result = orch.parseNativeEvaluation(response, 1);
+    const result = orch.parseNativeEvaluation(response, 1, 0);
     expect(result).not.toBeNull();
     // Only read_lines and find_symbol should survive (find_symbol has name but no arguments -> gets empty {})
     expect(result!.newToolCalls).toHaveLength(2);
@@ -405,7 +405,7 @@ describe('parseNativeEvaluation', () => {
         },
       ],
     };
-    const result = orch.parseNativeEvaluation(response, 2);
+    const result = orch.parseNativeEvaluation(response, 2, 0);
     expect(result).not.toBeNull();
     expect(result!.sufficient).toBe(true);
     expect(result!.newToolCalls).toHaveLength(0);
@@ -413,7 +413,7 @@ describe('parseNativeEvaluation', () => {
 
   it('returns null when no tool calls at all', () => {
     const response = { content: 'just text', toolCalls: [] };
-    const result = orch.parseNativeEvaluation(response, 0);
+    const result = orch.parseNativeEvaluation(response, 0, 0);
     expect(result).toBeNull();
   });
 
@@ -425,11 +425,28 @@ describe('parseNativeEvaluation', () => {
         { id: 'call_2', name: 'find_symbol', arguments: { query: 'foo' } },
       ],
     };
-    const result = orch.parseNativeEvaluation(response, 3);
+    const result = orch.parseNativeEvaluation(response, 3, 2);
     expect(result).not.toBeNull();
     expect(result!.sufficient).toBe(false);
-    expect(result!.relevantIndices).toHaveLength(3); // preserves accumulated
+    expect(result!.relevantIndices).toHaveLength(5); // preserves accumulated (3) + new (2)
+    expect(result!.relevantIndices).toEqual([0, 1, 2, 3, 4]);
     expect(result!.newToolCalls).toHaveLength(2);
+  });
+
+  it('preserves all results when no report_evaluation on first iteration', () => {
+    const response = {
+      content: '',
+      toolCalls: [
+        { id: 'call_1', name: 'semantic_search', arguments: { query: 'scroll behavior' } },
+      ],
+    };
+    // First iteration: 0 accumulated, 4 new results
+    const result = orch.parseNativeEvaluation(response, 0, 4);
+    expect(result).not.toBeNull();
+    expect(result!.sufficient).toBe(false);
+    expect(result!.relevantIndices).toHaveLength(4); // all new results preserved
+    expect(result!.relevantIndices).toEqual([0, 1, 2, 3]);
+    expect(result!.newToolCalls).toHaveLength(1);
   });
 });
 
