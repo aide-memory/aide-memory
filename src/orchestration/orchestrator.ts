@@ -79,10 +79,10 @@ const EVALUATION_TOOL: ToolDefinition = {
         type: 'array',
         items: { type: 'object' },
         description:
-          'If sufficient=false, list the tool calls needed to gather missing context. Each item must have "name" (string) and "arguments" (object), e.g. [{"name": "read_lines", "arguments": {"filePath": "src/foo.ts", "startLine": 10, "endLine": 50}}].',
+          'Tool calls to gather missing context. Provide calls when sufficient=false, or [] when sufficient=true. Each item must have "name" (string) and "arguments" (object), e.g. [{"name": "read_lines", "arguments": {"filePath": "src/foo.ts", "startLine": 10, "endLine": 50}}].',
       },
     },
-    required: ['sufficient', 'relevantIndices'],
+    required: ['sufficient', 'relevantIndices', 'followUpCalls'],
   },
 };
 
@@ -1253,6 +1253,11 @@ export class Orchestrator {
     state: IterationState,
     evaluation: ContextEvaluation
   ): Promise<ToolCallSpec[] | null> {
+    const resultsContext = state.relevantResults
+      .filter(r => r.success && r.data)
+      .map(r => `${r.spec.name}(${JSON.stringify(r.spec.arguments)}):\n${r.data}`)
+      .join('\n\n');
+
     const filesSeen = new Set<string>();
     for (const r of state.relevantResults) {
       const filePattern = /([^\s:]+\.[a-zA-Z]+):\d+-\d+/g;
@@ -1266,21 +1271,20 @@ export class Orchestrator {
       .map(r => `${r.spec.name}(${JSON.stringify(r.spec.arguments)})`)
       .join('\n');
 
-    const keptSummary = evaluation.relevantIndices.length > 0
-      ? `You kept results at indices [${evaluation.relevantIndices.join(', ')}].`
-      : 'No results were kept.';
-
-    const followUpMessage = `The context gathered so far is not yet sufficient to address the user's request.
+    const followUpMessage = `You indicated more context is needed but didn't call any follow-up tools.
 
 User's request: "${query}"
 
-${keptSummary}
-Files found so far: ${[...filesSeen].join(', ') || '(none)'}
+## Current Results
+${resultsContext}
 
-Previous calls already made (do NOT repeat):
+## Files Found
+${[...filesSeen].join(', ') || '(none)'}
+
+## Previous Calls (do not repeat)
 ${previousCallDescriptions || '(none)'}
 
-Call the tools needed to gather the missing context. Focus on:
+Based on the results above, call the tools you need to gather missing context. Focus on:
 - read_lines to expand code around locations already found
 - read_file_outline to understand file structure
 - find_symbol to look up specific names referenced in results
