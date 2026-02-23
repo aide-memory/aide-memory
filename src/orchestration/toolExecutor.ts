@@ -6,14 +6,15 @@
  * Pure code, no model calls.
  *
  * Tool sets:
- * - SHARED_TOOLS: available in both graph and semantic strategies
- * - GRAPH_ONLY_TOOLS: require project graph
+ * - SHARED_TOOLS: always available (semantic_search, read_lines, etc.)
+ * - ADVANCED_TOOLS: always available; use graph when present, filesystem fallbacks otherwise
  * - CONVERSATION_TOOLS: available when session has conversation history
  */
 
 import crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import fg from 'fast-glob';
 import { ProjectGraph } from '../brain/projectGraph';
 import { SQLiteBrainStore } from '../brain/sqliteStore';
 import { SemanticSearchEngine } from '../retrieval/semanticSearch';
@@ -23,10 +24,31 @@ import { BlockKind, ChatMessage } from '../brain/types';
 import { TreeSitterAnalyzer, ExtractedSymbol } from '../analysis/treeSitterAnalyzer';
 
 // ============================================================================
+// File Discovery Constants (reused from indexer for fallback tools)
+// ============================================================================
+
+const SOURCE_FILE_PATTERNS = [
+  '**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx',
+  '**/*.py', '**/*.go', '**/*.rs', '**/*.java',
+  '**/*.rb', '**/*.c', '**/*.cpp', '**/*.h', '**/*.hpp',
+];
+
+const FALLBACK_IGNORE_PATTERNS = [
+  '**/node_modules/**', '**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock',
+  '**/.git/**', '**/dist/**', '**/build/**', '**/out/**',
+  '**/.turbo/**', '**/.next/**', '**/__pycache__/**',
+  '**/.venv/**', '**/venv/**', '**/*.pyc', '**/*.egg-info/**',
+  '**/vendor/**', '**/target/**', '**/*.class', '**/*.lock',
+  '**/*.log', '**/*.min.js', '**/*.min.css',
+  '**/coverage/**', '**/tmp/**', '**/.cache/**',
+  '**/orchestration/prompts.ts',
+];
+
+// ============================================================================
 // Tool Definitions
 // ============================================================================
 
-/** Shared tools available in BOTH graph and semantic strategies */
+/** Shared tools -- always available */
 export const SHARED_TOOLS: ToolDefinition[] = [
   {
     name: 'semantic_search',
@@ -126,8 +148,8 @@ export const SHARED_TOOLS: ToolDefinition[] = [
   },
 ];
 
-/** Graph-only tools (require project graph) */
-export const GRAPH_ONLY_TOOLS: ToolDefinition[] = [
+/** Advanced tools -- always exposed; use graph when available, filesystem fallbacks otherwise */
+export const ADVANCED_TOOLS: ToolDefinition[] = [
   {
     name: 'find_symbol',
     description:
@@ -301,31 +323,17 @@ export class ToolExecutor {
   }
 
   /**
-   * Get available tools based on what backends exist.
+   * Get available tools. All tools (shared + advanced) are always exposed.
+   * Advanced tools use graph when available, filesystem fallbacks otherwise.
    * Conversation tools are appended when session has conversation history.
    */
-  getAvailableTools(
-    hasGraph: boolean,
-    hasEmbeddings: boolean
-  ): ToolDefinition[] {
-    let tools: ToolDefinition[] = [];
+  getAvailableTools(hasEmbeddings: boolean): ToolDefinition[] {
+    let tools = [...SHARED_TOOLS, ...ADVANCED_TOOLS];
 
-    if (hasEmbeddings || hasGraph) {
-      // Shared tools always available when we have any backend
-      tools = [...SHARED_TOOLS];
-
-      // Add graph-only tools when graph exists
-      if (hasGraph) {
-        tools = [...tools, ...GRAPH_ONLY_TOOLS];
-      }
-
-      // If no embeddings, remove semantic_search from shared tools
-      if (!hasEmbeddings) {
-        tools = tools.filter((t) => t.name !== 'semantic_search');
-      }
+    if (!hasEmbeddings) {
+      tools = tools.filter((t) => t.name !== 'semantic_search');
     }
 
-    // Add conversation tools when history exists
     if (this.hasConversationHistory()) {
       tools = [...tools, ...CONVERSATION_TOOLS];
     }
@@ -387,7 +395,7 @@ export class ToolExecutor {
         case 'done':
           return { success: true, data: 'done' };
 
-        // Graph-only tools
+        // Advanced tools (graph or fallback)
         case 'find_symbol':
           return this.handleFindSymbol(spec.arguments);
         case 'get_symbol_detail':
@@ -690,16 +698,12 @@ export class ToolExecutor {
   }
 
   // =========================================================================
-  // Graph-Only Tool Handlers
+  // Advanced Tool Handlers (graph when available, filesystem fallback otherwise)
   // =========================================================================
 
-  private handleFindSymbol(
+  private async handleFindSymbol(
     args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
-    if (!this.graph) {
-      return { success: false, error: 'Project graph not available' };
-    }
-
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
     const query = args.query as string;
     const kindsStr = args.kinds as string | undefined;
     const kinds = kindsStr
@@ -707,16 +711,24 @@ export class ToolExecutor {
       .map((k) => k.trim())
       .filter(Boolean);
 
-    // Pattern-based symbol search (LIKE '%query%')
-    const symbols = this.graph.findSymbols({ namePattern: query });
+    if (this.graph) {
+      return this.handleFindSymbolGraph(query, kinds);
+    }
+    return this.handleFindSymbolFallback(query, kinds);
+  }
+
+  private handleFindSymbolGraph(
+    query: string,
+    kinds?: string[]
+  ): { success: boolean; data?: string; error?: string } {
+    const symbols = this.graph!.findSymbols({ namePattern: query });
     const filteredSymbols = kinds
       ? symbols.filter((s) =>
           kinds.some((k) => s.kind.toLowerCase() === k.toLowerCase())
         )
       : symbols;
 
-    // FTS5 content search
-    const blocks = this.graph.searchBlocks(query);
+    const blocks = this.graph!.searchBlocks(query);
     const parts: string[] = [];
 
     if (filteredSymbols.length > 0) {
@@ -730,38 +742,9 @@ export class ToolExecutor {
     }
 
     if (blocks.length > 0) {
-      // Deduplicate overlapping blocks: if a small block (e.g. a hook) is
-      // fully contained within a larger block in the same file, drop the
-      // larger one because the specific match is more useful.
-      const deduped: typeof blocks = [];
-      for (const b of blocks) {
-        const dominated = deduped.some(
-          (existing) =>
-            existing.fileId === b.fileId &&
-            existing.startLine >= b.startLine &&
-            existing.endLine <= b.endLine &&
-            existing.content.length < b.content.length
-        );
-        if (dominated) continue; // skip larger block that contains a smaller, already-kept block
-
-        // Also remove any previously kept block that this block contains more specifically
-        for (let i = deduped.length - 1; i >= 0; i--) {
-          const existing = deduped[i];
-          if (
-            existing.fileId === b.fileId &&
-            b.startLine >= existing.startLine &&
-            b.endLine <= existing.endLine &&
-            b.content.length < existing.content.length
-          ) {
-            deduped.splice(i, 1); // remove the larger existing block
-          }
-        }
-        deduped.push(b);
-      }
-
+      const deduped = this.deduplicateBlocks(blocks);
       const blockList = deduped.slice(0, 15).map((b) => {
         const file = this.graph!.getFile(b.fileId);
-        // Show full content for small blocks; truncate only very large ones
         const maxPreview = b.content.length <= 1500 ? b.content.length : 800;
         const preview =
           b.content.length > maxPreview
@@ -781,22 +764,165 @@ export class ToolExecutor {
     return { success: true, data: parts.join('\n\n') };
   }
 
-  private handleGetSymbolDetail(
-    args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
-    if (!this.graph) {
-      return { success: false, error: 'Project graph not available' };
+  private async handleFindSymbolFallback(
+    query: string,
+    kinds?: string[]
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
+    const matchingFiles = await this.findProjectFiles(query);
+    const capped = matchingFiles.slice(0, 20);
+
+    const analyzer = await this.getTreeSitterAnalyzer();
+    const parts: string[] = [];
+
+    interface FoundSymbol {
+      name: string;
+      kind: string;
+      file: string;
+      startLine: number;
+      endLine: number;
+      signature?: string;
+    }
+    const foundSymbols: FoundSymbol[] = [];
+
+    interface ContentMatch {
+      file: string;
+      startLine: number;
+      endLine: number;
+      content: string;
+    }
+    const contentMatches: ContentMatch[] = [];
+
+    const queryLower = query.toLowerCase();
+
+    for (const filePath of capped) {
+      const relPath = path.relative(this.projectRoot, filePath);
+      let content: string;
+      try {
+        content = fs.readFileSync(filePath, 'utf8');
+      } catch {
+        continue;
+      }
+
+      if (analyzer) {
+        const ext = path.extname(filePath).slice(1);
+        const langMap: Record<string, string> = {
+          ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
+          py: 'python', go: 'go', rs: 'rust', java: 'java',
+          rb: 'ruby', c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp',
+        };
+        const lang = langMap[ext];
+        if (lang) {
+          try {
+            const result = await analyzer.analyze(content, lang, relPath);
+            for (const sym of result.symbols) {
+              if (sym.name.toLowerCase().includes(queryLower)) {
+                if (kinds && !kinds.some((k) => sym.kind.toLowerCase() === k.toLowerCase())) {
+                  continue;
+                }
+                foundSymbols.push({
+                  name: sym.name,
+                  kind: sym.kind,
+                  file: relPath,
+                  startLine: sym.startLine,
+                  endLine: sym.endLine,
+                  signature: sym.signature,
+                });
+              }
+            }
+          } catch {
+            // tree-sitter parse failure, fall through to content match
+          }
+        }
+      }
+
+      // Content matching: find lines containing the query
+      if (foundSymbols.filter((s) => s.file === relPath).length === 0) {
+        const lines = content.split('\n');
+        const matchLineNums: number[] = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().includes(queryLower)) {
+            matchLineNums.push(i);
+          }
+        }
+
+        // Merge nearby matches into ranges with context
+        const ranges: Array<{ start: number; end: number }> = [];
+        for (const lineNum of matchLineNums) {
+          const start = Math.max(0, lineNum - 3);
+          const end = Math.min(lines.length - 1, lineNum + 3);
+          if (ranges.length > 0 && start <= ranges[ranges.length - 1].end + 1) {
+            ranges[ranges.length - 1].end = end;
+          } else {
+            ranges.push({ start, end });
+          }
+        }
+
+        for (const range of ranges.slice(0, 3)) {
+          const snippet = lines.slice(range.start, range.end + 1).join('\n');
+          contentMatches.push({
+            file: relPath,
+            startLine: range.start + 1,
+            endLine: range.end + 1,
+            content: snippet,
+          });
+        }
+      }
     }
 
+    if (foundSymbols.length > 0) {
+      const symbolList = foundSymbols.slice(0, 15).map((s) => {
+        const syntheticId = `fs:${s.file}:${s.startLine}:${s.endLine}`;
+        return `  ${s.kind} ${s.name} @ ${s.file}:${s.startLine}-${s.endLine}${s.signature ? `\n    ${s.signature}` : ''}\n    ID: ${syntheticId}`;
+      });
+      parts.push(
+        `Symbols matching "${query}" (${foundSymbols.length}):\n${symbolList.join('\n')}`
+      );
+    }
+
+    if (contentMatches.length > 0) {
+      const dedupedContent = this.deduplicateContentMatches(contentMatches);
+      const blockList = dedupedContent.slice(0, 15).map((m) => {
+        const maxPreview = m.content.length <= 1500 ? m.content.length : 800;
+        const preview =
+          m.content.length > maxPreview
+            ? m.content.slice(0, maxPreview) + `... (${m.content.length} chars total)`
+            : m.content;
+        return `  ${m.file}:${m.startLine}-${m.endLine} [code]\n${preview}`;
+      });
+      parts.push(
+        `Content matches (${contentMatches.length} total, showing ${dedupedContent.slice(0, 15).length} deduplicated):\n${blockList.join('\n')}`
+      );
+    }
+
+    if (parts.length === 0) {
+      return { success: true, data: `No results found for "${query}".` };
+    }
+
+    return { success: true, data: parts.join('\n\n') };
+  }
+
+  private async handleGetSymbolDetail(
+    args: Record<string, unknown>
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
     const symbolId = args.symbolId as string;
-    const symbol = this.graph.getSymbol(symbolId);
+
+    if (this.graph) {
+      return this.handleGetSymbolDetailGraph(symbolId);
+    }
+    return this.handleGetSymbolDetailFallback(symbolId);
+  }
+
+  private handleGetSymbolDetailGraph(
+    symbolId: string
+  ): { success: boolean; data?: string; error?: string } {
+    const symbol = this.graph!.getSymbol(symbolId);
 
     if (!symbol) {
       return { success: false, error: `Symbol not found: ${symbolId}` };
     }
 
-    const file = this.graph.getFile(symbol.fileId);
-    const blocks = this.graph.getBlocksForSymbol(symbolId);
+    const file = this.graph!.getFile(symbol.fileId);
+    const blocks = this.graph!.getBlocksForSymbol(symbolId);
     const code = blocks.map((b) => b.content).join('\n');
 
     const parts = [
@@ -811,19 +937,103 @@ export class ToolExecutor {
     return { success: true, data: parts.join('\n') };
   }
 
-  private handleGetReferences(
-    args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
-    if (!this.graph) {
-      return { success: false, error: 'Project graph not available' };
+  private async handleGetSymbolDetailFallback(
+    symbolId: string
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
+    // Parse synthetic ID: fs:relativePath:startLine:endLine
+    if (!symbolId.startsWith('fs:')) {
+      return {
+        success: false,
+        error: `Symbol ID "${symbolId}" looks like a graph ID but no project graph is available. Use find_symbol first to get a valid ID.`,
+      };
     }
 
+    const parts = symbolId.split(':');
+    if (parts.length < 4) {
+      return { success: false, error: `Invalid synthetic symbol ID: ${symbolId}` };
+    }
+
+    const relPath = parts.slice(1, -2).join(':');
+    const startLine = parseInt(parts[parts.length - 2], 10);
+    const endLine = parseInt(parts[parts.length - 1], 10);
+
+    if (isNaN(startLine) || isNaN(endLine)) {
+      return { success: false, error: `Invalid line numbers in symbol ID: ${symbolId}` };
+    }
+
+    const absPath = path.resolve(this.projectRoot, relPath);
+    let content: string;
+    try {
+      content = fs.readFileSync(absPath, 'utf8');
+    } catch {
+      return { success: false, error: `File not found: ${relPath}` };
+    }
+
+    const lines = content.split('\n');
+    const start = Math.max(0, startLine - 1);
+    const end = Math.min(lines.length, endLine);
+
+    // Try tree-sitter for richer symbol info
+    const analyzer = await this.getTreeSitterAnalyzer();
+    if (analyzer) {
+      const ext = path.extname(absPath).slice(1);
+      const langMap: Record<string, string> = {
+        ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
+        py: 'python', go: 'go', rs: 'rust', java: 'java',
+        rb: 'ruby', c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp',
+      };
+      const lang = langMap[ext];
+      if (lang) {
+        try {
+          const result = await analyzer.analyze(content, lang, relPath);
+          const sym = result.symbols.find(
+            (s) => s.startLine >= startLine && s.startLine <= endLine
+          );
+          if (sym) {
+            const symEnd = Math.min(lines.length, sym.endLine);
+            const code = lines.slice(Math.max(0, sym.startLine - 1), symEnd).join('\n');
+            const output = [
+              `Symbol: ${sym.kind} ${sym.name}`,
+              `File: ${relPath}:${sym.startLine}-${sym.endLine}`,
+            ];
+            if (sym.signature) output.push(`Signature: ${sym.signature}`);
+            if (sym.docComment) output.push(`Doc: ${sym.docComment}`);
+            if (code) output.push(`\nCode:\n${code}`);
+            return { success: true, data: output.join('\n') };
+          }
+        } catch {
+          // fall through to raw line extraction
+        }
+      }
+    }
+
+    const code = lines.slice(start, end).join('\n');
+    const output = [
+      `Symbol: unknown`,
+      `File: ${relPath}:${startLine}-${endLine}`,
+      `\nCode:\n${code}`,
+    ];
+    return { success: true, data: output.join('\n') };
+  }
+
+  private async handleGetReferences(
+    args: Record<string, unknown>
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
     const symbolId = args.symbolId as string;
     const relationKind = args.relationKind as string | undefined;
 
-    let incomingRelations = this.graph.getIncomingRelations(symbolId);
+    if (this.graph) {
+      return this.handleGetReferencesGraph(symbolId, relationKind);
+    }
+    return this.handleGetReferencesFallback(symbolId);
+  }
 
-    // Filter by relation kind if specified
+  private handleGetReferencesGraph(
+    symbolId: string,
+    relationKind?: string
+  ): { success: boolean; data?: string; error?: string } {
+    let incomingRelations = this.graph!.getIncomingRelations(symbolId);
+
     if (relationKind) {
       incomingRelations = incomingRelations.filter(
         (rel) => rel.kind.toUpperCase() === relationKind.toUpperCase()
@@ -851,19 +1061,101 @@ export class ToolExecutor {
     };
   }
 
-  private handleGetDependencies(
-    args: Record<string, unknown>
-  ): { success: boolean; data?: string; error?: string } {
-    if (!this.graph) {
-      return { success: false, error: 'Project graph not available' };
+  private async handleGetReferencesFallback(
+    symbolId: string
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
+    // Extract symbol name from synthetic ID or use as raw name
+    let symbolName: string;
+    if (symbolId.startsWith('fs:')) {
+      const parts = symbolId.split(':');
+      const relPath = parts.slice(1, -2).join(':');
+      const startLine = parseInt(parts[parts.length - 2], 10);
+      const absPath = path.resolve(this.projectRoot, relPath);
+
+      // Try to extract the symbol name from the file at the given line
+      try {
+        const content = fs.readFileSync(absPath, 'utf8');
+        const lines = content.split('\n');
+        const line = lines[Math.max(0, startLine - 1)] || '';
+        // Handle `export function X`, `export class X`, `export default X`, etc.
+        const match = line.match(
+          /(?:export\s+(?:default\s+)?)?(?:function|class|interface|type|const|let|var|def|fn|func)\s+(\w+)/
+        );
+        symbolName = match ? match[1] : line.trim().split(/[\s(:{<]/)[0];
+      } catch {
+        return { success: false, error: `Cannot read file for symbol: ${symbolId}` };
+      }
+    } else {
+      symbolName = symbolId;
     }
 
+    if (!symbolName || symbolName.length < 2) {
+      return { success: true, data: 'No references found.' };
+    }
+
+    const matchingFiles = await this.findProjectFiles(symbolName);
+
+    interface RefMatch {
+      file: string;
+      line: number;
+      context: string;
+    }
+    const refs: RefMatch[] = [];
+
+    for (const filePath of matchingFiles.slice(0, 30)) {
+      const relPath = path.relative(this.projectRoot, filePath);
+      let content: string;
+      try {
+        content = fs.readFileSync(filePath, 'utf8');
+      } catch {
+        continue;
+      }
+
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(symbolName)) {
+          const ctxStart = Math.max(0, i - 1);
+          const ctxEnd = Math.min(lines.length - 1, i + 1);
+          const context = lines.slice(ctxStart, ctxEnd + 1).join('\n');
+          refs.push({ file: relPath, line: i + 1, context });
+          if (refs.length >= 15) break;
+        }
+      }
+      if (refs.length >= 15) break;
+    }
+
+    if (refs.length === 0) {
+      return { success: true, data: 'No references found.' };
+    }
+
+    const refList = refs.map(
+      (r) => `  ${r.file}:${r.line} [MENTION]\n    ${r.context.split('\n').join('\n    ')}`
+    );
+
+    return {
+      success: true,
+      data: `References (${refs.length}):\n${refList.join('\n')}`,
+    };
+  }
+
+  private async handleGetDependencies(
+    args: Record<string, unknown>
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
     const symbolId = args.symbolId as string;
     const relationKind = args.relationKind as string | undefined;
 
-    let outgoingRelations = this.graph.getOutgoingRelations(symbolId);
+    if (this.graph) {
+      return this.handleGetDependenciesGraph(symbolId, relationKind);
+    }
+    return this.handleGetDependenciesFallback(symbolId);
+  }
 
-    // Filter by relation kind if specified
+  private handleGetDependenciesGraph(
+    symbolId: string,
+    relationKind?: string
+  ): { success: boolean; data?: string; error?: string } {
+    let outgoingRelations = this.graph!.getOutgoingRelations(symbolId);
+
     if (relationKind) {
       outgoingRelations = outgoingRelations.filter(
         (rel) => rel.kind.toUpperCase() === relationKind.toUpperCase()
@@ -889,6 +1181,51 @@ export class ToolExecutor {
       success: true,
       data: `Dependencies (${outgoingRelations.length}):\n${deps.join('\n')}`,
     };
+  }
+
+  private async handleGetDependenciesFallback(
+    symbolId: string
+  ): Promise<{ success: boolean; data?: string; error?: string }> {
+    let filePath: string;
+    if (symbolId.startsWith('fs:')) {
+      const parts = symbolId.split(':');
+      filePath = parts.slice(1, -2).join(':');
+    } else {
+      return {
+        success: false,
+        error: `Symbol ID "${symbolId}" looks like a graph ID but no project graph is available. Use find_symbol first to get a valid ID.`,
+      };
+    }
+
+    const absPath = path.resolve(this.projectRoot, filePath);
+    let content: string;
+    try {
+      content = fs.readFileSync(absPath, 'utf8');
+    } catch {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+
+    const importLines: string[] = [];
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (
+        trimmed.startsWith('import ') ||
+        trimmed.startsWith('from ') ||
+        trimmed.includes('require(') ||
+        trimmed.startsWith('import(')
+      ) {
+        importLines.push(trimmed);
+      }
+    }
+
+    if (importLines.length === 0) {
+      return { success: true, data: 'No dependencies found.' };
+    }
+
+    const deps = importLines.slice(0, 15).map((line) => `  ${line} [IMPORTS]`);
+    const output = `Dependencies (${importLines.length}):\n${deps.join('\n')}\n\nNote: showing file-level imports only. Build project graph (\`aide reindex\`) for function-level call dependencies.`;
+    return { success: true, data: output };
   }
 
   // =========================================================================
@@ -1351,6 +1688,27 @@ export class ToolExecutor {
   }
 
   /**
+   * Discover project source files using fast-glob with proper ignore patterns.
+   * Optionally filter to files whose content includes a given string.
+   */
+  private async findProjectFiles(contentFilter?: string): Promise<string[]> {
+    const files = await fg(SOURCE_FILE_PATTERNS, {
+      cwd: this.projectRoot,
+      ignore: FALLBACK_IGNORE_PATTERNS,
+      absolute: true,
+    });
+    if (!contentFilter) return files;
+    return files.filter((f) => {
+      try {
+        const content = fs.readFileSync(f, 'utf8');
+        return content.includes(contentFilter);
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  /**
    * List files recursively up to a max depth
    */
   private listFilesRecursive(dir: string, maxDepth: number): string[] {
@@ -1381,6 +1739,71 @@ export class ToolExecutor {
 
     walk(dir, 0);
     return results;
+  }
+
+  /**
+   * Deduplicate overlapping blocks from graph search.
+   * If a small block is fully contained within a larger block in the same file,
+   * drop the larger one because the specific match is more useful.
+   */
+  private deduplicateBlocks<T extends { fileId: string; startLine: number; endLine: number; content: string }>(
+    blocks: T[]
+  ): T[] {
+    const deduped: T[] = [];
+    for (const b of blocks) {
+      const dominated = deduped.some(
+        (existing) =>
+          existing.fileId === b.fileId &&
+          existing.startLine >= b.startLine &&
+          existing.endLine <= b.endLine &&
+          existing.content.length < b.content.length
+      );
+      if (dominated) continue;
+
+      for (let i = deduped.length - 1; i >= 0; i--) {
+        const existing = deduped[i];
+        if (
+          existing.fileId === b.fileId &&
+          b.startLine >= existing.startLine &&
+          b.endLine <= existing.endLine &&
+          b.content.length < existing.content.length
+        ) {
+          deduped.splice(i, 1);
+        }
+      }
+      deduped.push(b);
+    }
+    return deduped;
+  }
+
+  /**
+   * Deduplicate overlapping content matches from fallback search.
+   */
+  private deduplicateContentMatches(
+    matches: Array<{ file: string; startLine: number; endLine: number; content: string }>
+  ): Array<{ file: string; startLine: number; endLine: number; content: string }> {
+    const deduped: typeof matches = [];
+    for (const m of matches) {
+      const dominated = deduped.some(
+        (existing) =>
+          existing.file === m.file &&
+          existing.startLine <= m.startLine &&
+          existing.endLine >= m.endLine
+      );
+      if (dominated) continue;
+
+      for (let i = deduped.length - 1; i >= 0; i--) {
+        if (
+          deduped[i].file === m.file &&
+          m.startLine <= deduped[i].startLine &&
+          m.endLine >= deduped[i].endLine
+        ) {
+          deduped.splice(i, 1);
+        }
+      }
+      deduped.push(m);
+    }
+    return deduped;
   }
 
   /**

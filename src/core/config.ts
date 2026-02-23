@@ -43,6 +43,7 @@ export const AIDE_DEFAULTS = {
     | 'hybrid'
     | 'graph'
     | 'semantic'
+    | 'semanticandgraph'
     | 'auto',
   maxBlocks: 10,
   maxDepth: 2,
@@ -197,7 +198,7 @@ export interface RetrievalSettings {
   maxBlocks: number;
   maxDepth: number;
   maxFanout: number;
-  strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto';
+  strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'semanticandgraph' | 'auto';
   hybridMode: 'code' | 'hints';
   historyMode: 'direct' | 'tools';
   historyLimit: number;

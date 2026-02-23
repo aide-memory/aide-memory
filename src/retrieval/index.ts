@@ -38,8 +38,7 @@ export {
   createRetrievalStrategy,
   CreateRetrievalOptions,
 } from './hybridRetrieval';
-export { GraphRetrieval } from './graphRetrieval';
-export { SemanticRetrieval } from './semanticRetrieval';
+export { SemanticAndGraphRetrieval } from './semanticAndGraphRetrieval';
 export {
   SemanticSearchEngine,
   SemanticSearchResult,

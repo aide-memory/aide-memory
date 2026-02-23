@@ -53,7 +53,7 @@ export interface RetrievalResult {
   relations: Relation[];
 
   /** Which strategy produced this result */
-  strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic';
+  strategy: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'semanticandgraph';
 
   /** Estimated token count for the content */
   tokenEstimate: number;
@@ -120,7 +120,7 @@ export interface RetrievalStrategy {
 // ============================================================================
 
 /** Strategy type including both old and new names */
-export type StrategyType = 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto';
+export type StrategyType = 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'semanticandgraph' | 'auto';
 
 export interface RetrievalConfig {
   /** Strategy to use */

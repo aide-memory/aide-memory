@@ -20,12 +20,12 @@ import { TokenBudgetManager } from '../core/tokenBudget';
 import { TokenTracker } from '../core/tokenTracker';
 import { SimpleGraphRetrieval } from './simpleGraphRetrieval';
 import { ToolBasedRetrieval, ToolRetrievalOptions } from './toolBasedRetrieval';
-import { GraphRetrieval } from './graphRetrieval';
-import { SemanticRetrieval } from './semanticRetrieval';
+import { SemanticAndGraphRetrieval } from './semanticAndGraphRetrieval';
 import { SemanticSearchEngine } from './semanticSearch';
 import { ToolCapableRuntime, ModelRuntimes, EmbeddingRuntime } from '../models/types';
 import { VerboseLogger } from '../orchestration/orchestrator';
 import { verbose as verboseUI } from '../cli/ui';
+import { logWarn } from '../core/logger';
 
 // ============================================================================
 // HybridRetrieval
@@ -146,7 +146,13 @@ export interface CreateRetrievalOptions {
   sqliteStore?: SQLiteBrainStore;
   /** Current session ID for conversation embedding lookup */
   sessionId?: string;
+  /** Force filesystem fallbacks even when graph is available */
+  noGraph?: boolean;
 }
+
+const KNOWN_STRATEGIES = new Set([
+  'simple', 'tools', 'hybrid', 'graph', 'semantic', 'semanticandgraph', 'auto',
+]);
 
 /**
  * Create a retrieval strategy based on configuration
@@ -163,6 +169,22 @@ export function createRetrievalStrategy(
   options?: CreateRetrievalOptions
 ): RetrievalStrategy {
   const strategyType = config.strategy || DEFAULT_RETRIEVAL_CONFIG.strategy;
+
+  if (!KNOWN_STRATEGIES.has(strategyType)) {
+    logWarn(
+      `Unknown strategy "${strategyType}". Valid options: ${[...KNOWN_STRATEGIES].join(', ')}. Falling back to "auto".`
+    );
+  }
+
+  const sagrOpts = {
+    verbose: options?.verbose,
+    tokenTracker: options?.tokenTracker,
+    logger: options?.logger,
+    projectRoot: options?.projectRoot,
+    embeddingRuntime: options?.embeddingRuntime,
+    sqliteStore: options?.sqliteStore,
+    sessionId: options?.sessionId,
+  };
 
   switch (strategyType) {
     case 'simple':
@@ -184,20 +206,13 @@ export function createRetrievalStrategy(
         );
         return new HybridRetrieval(runtime ?? null, config, budget, options);
       }
-      return new GraphRetrieval(
+      logWarn('[aide] "graph" strategy is deprecated. Use "semanticandgraph" or "auto" instead.');
+      return new SemanticAndGraphRetrieval(
         options.searchEngine,
         options.modelRuntimes,
         config,
         budget,
-        {
-          verbose: options.verbose,
-          tokenTracker: options.tokenTracker,
-          logger: options.logger,
-          projectRoot: options.projectRoot,
-          embeddingRuntime: options.embeddingRuntime,
-          sqliteStore: options.sqliteStore,
-          sessionId: options.sessionId,
-        }
+        sagrOpts
       );
 
     case 'semantic':
@@ -207,45 +222,40 @@ export function createRetrievalStrategy(
         );
         return new SimpleGraphRetrieval(config, budget, options);
       }
-      return new SemanticRetrieval(
+      logWarn('[aide] "semantic" strategy is deprecated. Use "semanticandgraph --no-graph" or "auto" instead.');
+      return new SemanticAndGraphRetrieval(
         options.searchEngine,
         options.modelRuntimes,
         config,
         budget,
-        {
-          verbose: options.verbose,
-          tokenTracker: options.tokenTracker,
-          logger: options.logger,
-          projectRoot: options.projectRoot,
-          embeddingRuntime: options.embeddingRuntime,
-          sqliteStore: options.sqliteStore,
-          sessionId: options.sessionId,
-        }
+        { ...sagrOpts, noGraph: true }
+      );
+
+    case 'semanticandgraph':
+      if (!options?.searchEngine || !options?.modelRuntimes) {
+        console.warn(
+          '[aide] semanticandgraph strategy requires SemanticSearchEngine and ModelRuntimes. Falling back to hybrid.'
+        );
+        return new HybridRetrieval(runtime ?? null, config, budget, options);
+      }
+      return new SemanticAndGraphRetrieval(
+        options.searchEngine,
+        options.modelRuntimes,
+        config,
+        budget,
+        { ...sagrOpts, noGraph: options?.noGraph }
       );
 
     case 'auto':
-      // Auto: pick best available
-      // Graph + embeddings -> graph strategy
-      // Embeddings only -> semantic strategy
-      // Neither -> fall back to hybrid/tools
       if (options?.searchEngine?.hasEmbeddings() && options?.modelRuntimes) {
-        return new GraphRetrieval(
+        return new SemanticAndGraphRetrieval(
           options.searchEngine,
           options.modelRuntimes,
           config,
           budget,
-          {
-            verbose: options.verbose,
-            tokenTracker: options.tokenTracker,
-            logger: options.logger,
-            projectRoot: options.projectRoot,
-            embeddingRuntime: options.embeddingRuntime,
-            sqliteStore: options.sqliteStore,
-            sessionId: options.sessionId,
-          }
+          { ...sagrOpts, noGraph: options?.noGraph }
         );
       }
-      // Fall through to hybrid
       return new HybridRetrieval(runtime ?? null, config, budget, options);
 
     case 'hybrid':

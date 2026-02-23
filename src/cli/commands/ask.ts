@@ -95,6 +95,9 @@ export interface AskOptions {
 
   /** Print debug info */
   debug?: boolean;
+
+  /** Force filesystem fallbacks even when graph is available */
+  noGraph?: boolean;
 }
 
 export async function askQuestion(
@@ -174,6 +177,7 @@ export async function askQuestion(
       embeddingRuntime: modelRuntimes.embedding,
       sqliteStore: store,
       sessionId: session.getId(),
+      noGraph: options.noGraph,
     }
   );
 
@@ -233,7 +237,10 @@ export async function askQuestion(
   // The orchestrator does planning -> tool execution -> context evaluation -> answering.
   // Legacy strategies (simple, tools, hybrid) return raw blocks for assembly.
   // =====================================================================
-  const isOrchestrated = result.strategy === 'graph' || result.strategy === 'semantic';
+  const isOrchestrated =
+    result.strategy === 'graph' ||
+    result.strategy === 'semantic' ||
+    result.strategy === 'semanticandgraph';
 
   // Add user message to session and save
   session.setLastQuestion(question);

@@ -33,7 +33,7 @@ export interface ReplOptions {
   /** Clear chat history before starting (keeps focus) */
   clearHistory?: boolean;
   /** Retrieval strategy to use */
-  strategy?: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto';
+  strategy?: 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'semanticandgraph' | 'auto';
   /** Hybrid mode: 'code' (full code upfront) or 'hints' (entry points only) */
   hybridMode?: 'code' | 'hints';
   /** History mode: 'direct' includes history in prompt, 'tools' provides on-demand access */
@@ -44,6 +44,8 @@ export interface ReplOptions {
   maxBlocks?: number;
   /** Log full context sent to model */
   verbose?: boolean;
+  /** Force filesystem fallbacks even when graph is available */
+  noGraph?: boolean;
 }
 
 /**
@@ -198,6 +200,7 @@ export async function startRepl(
       embeddingRuntime: modelRuntimes.embedding,
       sqliteStore: store,
       sessionId: session.getId(),
+      noGraph: options.noGraph,
     }
   );
 
@@ -230,10 +233,14 @@ export async function startRepl(
   let resolvedNote = '';
   if (settings.strategy === 'auto') {
     if (searchEngine.hasEmbeddings()) {
-      resolvedNote = ' (resolved to: graph)';
+      resolvedNote = options.noGraph
+        ? ' (resolved to: semanticandgraph, no-graph)'
+        : ' (resolved to: semanticandgraph)';
     } else {
-      resolvedNote = ' (resolved to: semantic)';
+      resolvedNote = ' (resolved to: hybrid)';
     }
+  } else if (options.noGraph) {
+    resolvedNote = ' (no-graph)';
   }
   console.log(
     ui.info(
@@ -515,8 +522,10 @@ ${ui.heading('Index Statistics:')}
           );
         }
 
-        // Check if orchestrated strategy (graph/semantic) returned a final answer
-        const isOrchestrated = result.strategy === 'graph' || result.strategy === 'semantic';
+        const isOrchestrated =
+          result.strategy === 'graph' ||
+          result.strategy === 'semantic' ||
+          result.strategy === 'semanticandgraph';
         let responseContent: string;
 
         if (isOrchestrated && result.blocks.length > 0) {

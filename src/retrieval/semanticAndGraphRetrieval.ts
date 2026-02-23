@@ -1,12 +1,16 @@
 /**
- * Graph Retrieval Strategy
+ * Semantic and Graph Retrieval Strategy
  *
- * Uses semantic search to find entry points, then the orchestration loop
- * uses project graph tools to expand context via relationships.
- * This is the most powerful strategy: semantic search eliminates wasteful
- * top-down exploration, and the graph enables relationship-based expansion.
+ * Unified retrieval that uses semantic search to find entry points,
+ * then leverages graph tools (find_symbol, get_references, etc.) to
+ * expand context via relationships. When no project graph is available
+ * (or --no-graph is set), the same tools are offered but backed by
+ * filesystem + tree-sitter fallbacks instead of the graph index.
  *
- * Default when both project graph and embeddings exist.
+ * This is the default strategy. It adapts automatically:
+ *   - With graph: SQL indexed symbols, FTS5 content search, relations
+ *   - Without graph: fast-glob file discovery, tree-sitter symbol
+ *     extraction, text-based reference search
  */
 
 import {
@@ -27,7 +31,7 @@ import { ToolExecutor } from '../orchestration/toolExecutor';
 import { OrchestratorConfig } from '../orchestration/types';
 import { logInfo } from '../core/logger';
 
-export interface GraphRetrievalOptions {
+export interface SemanticAndGraphRetrievalOptions {
   verbose?: boolean;
   tokenTracker?: TokenTracker;
   orchestration?: Partial<OrchestratorConfig>;
@@ -36,9 +40,10 @@ export interface GraphRetrievalOptions {
   embeddingRuntime?: EmbeddingRuntime;
   sqliteStore?: SQLiteBrainStore;
   sessionId?: string;
+  noGraph?: boolean;
 }
 
-export class GraphRetrieval implements RetrievalStrategy {
+export class SemanticAndGraphRetrieval implements RetrievalStrategy {
   private searchEngine: SemanticSearchEngine;
   private runtimes: ModelRuntimes;
   private config: RetrievalConfig;
@@ -51,13 +56,14 @@ export class GraphRetrieval implements RetrievalStrategy {
   private embeddingRuntime?: EmbeddingRuntime;
   private sqliteStore?: SQLiteBrainStore;
   private sessionId?: string;
+  private noGraph: boolean;
 
   constructor(
     searchEngine: SemanticSearchEngine,
     runtimes: ModelRuntimes,
     config: Partial<RetrievalConfig> = {},
     budget?: TokenBudgetManager,
-    options?: GraphRetrievalOptions
+    options?: SemanticAndGraphRetrievalOptions
   ) {
     this.searchEngine = searchEngine;
     this.runtimes = runtimes;
@@ -71,19 +77,23 @@ export class GraphRetrieval implements RetrievalStrategy {
     this.embeddingRuntime = options?.embeddingRuntime;
     this.sqliteStore = options?.sqliteStore;
     this.sessionId = options?.sessionId;
+    this.noGraph = options?.noGraph ?? false;
   }
 
   async retrieve(
     query: RetrievalQuery,
     graph: ProjectGraph
   ): Promise<RetrievalResult> {
+    const useGraph = !this.noGraph;
+    const graphForTools = useGraph ? graph : null;
+    const mode = graphForTools ? 'graph+semantic' : 'semantic-only';
+
     if (this.verbose) {
-      logInfo('[graph-retrieval] Starting graph retrieval with semantic entry points');
+      logInfo(`[retrieval] Starting retrieval (${mode})`);
     }
 
-    // Create tool executor with graph, semantic search, conversation history, and embedding support
     const toolExecutor = new ToolExecutor(
-      graph,
+      graphForTools,
       this.searchEngine,
       this.projectRoot,
       query.conversationHistory,
@@ -92,12 +102,9 @@ export class GraphRetrieval implements RetrievalStrategy {
       this.sessionId
     );
 
-    // Get available tools (graph + embeddings + conversation if history exists)
-    const hasGraph = true;
     const hasEmbeddings = this.searchEngine.hasEmbeddings();
-    const availableTools = toolExecutor.getAvailableTools(hasGraph, hasEmbeddings);
+    const availableTools = toolExecutor.getAvailableTools(hasEmbeddings);
 
-    // Create orchestrator
     const orchestrator = new Orchestrator(
       this.runtimes,
       toolExecutor,
@@ -106,19 +113,16 @@ export class GraphRetrieval implements RetrievalStrategy {
       { verbose: this.verbose, logger: this.logger }
     );
 
-    // Run the orchestration loop
     const result = await orchestrator.answer(query.question, {
       availableTools,
     });
 
     if (this.verbose) {
       logInfo(
-        `[graph-retrieval] Done: ${result.iterations} iterations, ${result.totalToolCalls} tool calls`
+        `[retrieval] Done: ${result.iterations} iterations, ${result.totalToolCalls} tool calls`
       );
     }
 
-    // Convert orchestrator result to RetrievalResult
-    // The orchestrator returns the final answer; we wrap it in a synthetic block
     return {
       symbols: [],
       blocks: result.answer
@@ -136,7 +140,7 @@ export class GraphRetrieval implements RetrievalStrategy {
         : [],
       files: [],
       relations: [],
-      strategy: 'graph',
+      strategy: 'semanticandgraph',
       tokenEstimate: Math.ceil(result.answer.length / 4),
     };
   }

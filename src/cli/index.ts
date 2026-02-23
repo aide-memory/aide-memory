@@ -118,8 +118,9 @@ program
   .option('--max-blocks <blocks>', 'Max code blocks to include', '10')
   .option(
     '-s, --strategy <strategy>',
-    'Retrieval strategy: auto, graph, semantic, simple, tools, hybrid'
+    'Retrieval strategy: auto, semanticandgraph, simple, tools, hybrid'
   )
+  .option('--no-graph', 'Force filesystem fallbacks even when graph is available')
   .option(
     '--hybrid-mode <mode>',
     'Hybrid mode: code (full code upfront) or hints (entry points only)'
@@ -143,6 +144,7 @@ program
         tokenBudget?: string;
         maxBlocks?: string;
         strategy?: string;
+        graph?: boolean;
         hybridMode?: string;
         historyMode?: string;
         debug?: boolean;
@@ -181,10 +183,11 @@ program
           fanout: parseInt(options.fanout || '5', 10),
           tokenBudget,
           maxBlocks,
-          strategy: options.strategy as 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto',
+          strategy: options.strategy as 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'semanticandgraph' | 'auto',
           hybridMode: options.hybridMode as 'code' | 'hints',
           historyMode: options.historyMode as 'direct' | 'tools',
           debug: options.debug,
+          noGraph: options.graph === false,
         });
       } catch (err) {
         logError('Ask failed', err);
@@ -304,8 +307,9 @@ program
   .option('--context <model>', 'Override context model for this session')
   .option(
     '--strategy <strategy>',
-    'Retrieval strategy: auto, graph, semantic, simple, tools, hybrid'
+    'Retrieval strategy: auto, semanticandgraph, simple, tools, hybrid'
   )
+  .option('--no-graph', 'Force filesystem fallbacks even when graph is available')
   .option(
     '--hybrid-mode <mode>',
     'Hybrid mode: code (full code upfront) or hints (entry points only)'
@@ -331,6 +335,7 @@ program
         reasoning?: string;
         context?: string;
         strategy?: string;
+        graph?: boolean;
         hybridMode?: string;
         historyMode?: string;
         tokenBudget?: string;
@@ -370,7 +375,7 @@ program
         await startRepl(config, {
           newSession: options.new,
           clearHistory: options.clearHistory,
-          strategy: options.strategy as 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'auto',
+          strategy: options.strategy as 'simple' | 'tools' | 'hybrid' | 'graph' | 'semantic' | 'semanticandgraph' | 'auto',
           hybridMode: options.hybridMode as 'code' | 'hints',
           historyMode: options.historyMode as 'direct' | 'tools',
           tokenBudget: options.tokenBudget
@@ -380,6 +385,7 @@ program
             ? parseInt(options.maxBlocks, 10)
             : undefined,
           verbose: options.verbose,
+          noGraph: options.graph === false,
         });
       } catch (err) {
         logError('Startup failed', err);
