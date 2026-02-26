@@ -320,6 +320,68 @@ Build `aide review` (GitHub App) + CI/CD integration. This is the monetization l
 
 ---
 
+## Sustainability & Moat Strategy
+
+### The Honest Assessment
+Technical features alone (graph, tree-sitter, multi-language analysis) are NOT moats. Any well-funded competitor can replicate features in weeks. The architecture tools (scan/rules/check) as designed are a **feature play** — a good one, but features get copied.
+
+**What's stopping Anthropic, OpenAI, Cursor from building this?** Nothing — technically. But:
+- SonarQube survived **17 years** against GitHub, Microsoft, and Google — not because of better technology, but because it became infrastructure
+- The moat isn't the tool, it's what accumulates through usage
+
+### Layered Moat Strategy
+Design the product from day one to accumulate defensibility:
+
+| Layer | What | Moat Type | Timeline |
+|-------|------|-----------|----------|
+| **Entry** | aide scan/rules/check CLI | Feature (no moat) | Month 1-2 |
+| **Data** | Anonymized scan data across codebases | Data moat (compounding) | Month 3-6 |
+| **Switching** | Architecture Decision Records + rule history | Switching cost | Month 4-8 |
+| **Compliance** | SOC2/HIPAA/ISO rule mappings | Regulatory lock-in | Month 6-12 |
+| **Network** | Cross-company benchmarking | Network effects | Month 12+ |
+
+### Phase Integration
+- **Phase 1** (Weeks 1-6): Build tools, design data collection from day one
+- **Phase 2** (Months 2-4): Aggregate anonymized scan data, publish "State of Architecture" reports with real data from real codebases
+- **Phase 3** (Months 4-8): Add compliance framework mappings (SOC2, HIPAA) — once tied to audit workflows, switching means re-certification
+- **Phase 4** (Month 8+): Cross-company benchmarking ("Your architecture health vs. industry median for your team size")
+
+### What Creates Real Lock-In
+1. **Accumulated scan data** — every `aide scan` feeds a growing dataset competitors can't shortcut. Year 2: "Teams that fixed pattern X saw 40% fewer production incidents." Year 3: "Based on 10,000 codebases analyzed, repository-pattern teams ship 2x faster."
+2. **Architecture decisions with "why"** — not just rules but the reasoning behind them. Over 2 years, AIDE becomes the institutional memory: "This boundary was added because of the Q3 2025 incident." Like Notion for architecture — once invested, can't leave.
+3. **Compliance mappings** — "Your architecture meets SOC2 control CC7.1." Once a company uses AIDE for compliance, switching means re-doing security reviews and re-certifying.
+4. **Benchmarking data** — "Your codebase scores 73/100. The median for teams your size is 81." Each company joining makes benchmarks more valuable for everyone (network effect).
+
+### The SonarQube Precedent (How a Small Tool Survived 17 Years)
+SonarQube survived against GitHub, Microsoft, and Google because it became infrastructure:
+- 17 years of accumulated code quality data (compounding advantage)
+- Embedded in CI/CD workflows (switching cost — nearly 40% of engineering time spent on integrations)
+- Used for compliance/audit (regulatory moat)
+- Enterprise procurement friction (once approved through security review, switching requires new approvals)
+- NOT because of "better technology"
+
+### What Will NOT Create a Moat
+- CLI tools alone (get copied in weeks)
+- MCP server alone (Cursor/Claude Code will build their own)
+- "Better graph technology" (nobody cares about your tech stack)
+- Open source community without data/enterprise layer
+- "Better AI" claims (models improve constantly across all vendors)
+- UI/UX excellence alone (AI + component libraries make good UI table stakes)
+
+### The Bottom Line
+The architecture tools are the **entry point** — the feature that gets you in the door. The moat **emerges from usage**: accumulated data, workflow embeddedness, compliance lock-in. The first 12-18 months are a **window, not a moat** — use that window to accumulate the data and workflows that BECOME the moat.
+
+### Research Sources for Moat Analysis
+- [The "SaaSpocalypse" Versus Real-World Moats](https://alignba.com/2026/02/05/the-saaspocalypse-versus-real-world-moats/amp/)
+- [The Tech Moat Is Dead: How to Build Real Defensibility in 2026](https://www.everything.design/blog/build-real-moat-2026)
+- [The New New Moats — Greylock](https://greylock.com/greymatter/the-new-new-moats/)
+- [Are There Any Moats in Software Anymore?](https://www.swe2vc.com/p/are-there-any-moats-in-software-anymore)
+- [Data and Defensibility — Pivotal](https://pivotal.substack.com/p/data-and-defensibility)
+- [Cloud Ecosystem Lock-In: Platform Dependency Economics](https://www.francescatabor.com/articles/2026/2/4/cloud-ecosystem-lock-in-platform-dependency-economics-developer-network-effects-and-switching-costs-in-enterprise-it)
+- [Specialized Dominators in AI — FourWeekMBA](https://fourweekmba.com/specialized-dominators-in-ai/)
+
+---
+
 ## Sources
 
 - [OpenCode](https://github.com/opencode-ai/opencode) | [GitHub Copilot Agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent) | [Warp Oz](https://www.warp.dev/blog/oz-orchestration-platform-cloud-agents)
