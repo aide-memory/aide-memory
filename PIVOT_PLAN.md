@@ -322,43 +322,89 @@ Build `aide review` (GitHub App) + CI/CD integration. This is the monetization l
 
 ## Sustainability & Moat Strategy
 
-### The Honest Assessment
-Technical features alone (graph, tree-sitter, multi-language analysis) are NOT moats. Any well-funded competitor can replicate features in weeks. The architecture tools (scan/rules/check) as designed are a **feature play** — a good one, but features get copied.
+### The New Problem: "Works With My Agent"
 
-**What's stopping Anthropic, OpenAI, Cursor from building this?** Nothing — technically. But:
-- SonarQube survived **17 years** against GitHub, Microsoft, and Google — not because of better technology, but because it became infrastructure
-- The moat isn't the tool, it's what accumulates through usage
+A decade ago, the hardest coordination problem in software was **"works on my machine"** — Docker solved it by creating a standard format (Dockerfile) that made environments reproducible and enforceable.
 
-### Layered Moat Strategy
-Design the product from day one to accumulate defensibility:
+In 2026, the new coordination problem is **"works with my agent."** AI coding agents write 35% more code but create 30% more defects, 8x more duplication, and ignore architecture conventions that live in markdown files. Every team is asking the same question: *how do I get my AI agent to follow my architecture rules consistently?*
 
-| Layer | What | Moat Type | Timeline |
-|-------|------|-----------|----------|
-| **Entry** | aide scan/rules/check CLI | Feature (no moat) | Month 1-2 |
-| **Data** | Anonymized scan data across codebases | Data moat (compounding) | Month 3-6 |
-| **Switching** | Architecture Decision Records + rule history | Switching cost | Month 4-8 |
-| **Compliance** | SOC2/HIPAA/ISO rule mappings | Regulatory lock-in | Month 6-12 |
-| **Network** | Cross-company benchmarking | Network effects | Month 12+ |
+- `.cursorrules` tells the AI "try to follow these" — the model acknowledges them, then drifts toward task completion. No enforcement.
+- `CLAUDE.md` loads instructions at session start — users on [GitHub issue #18660](https://github.com/anthropics/claude-code/issues/18660) beg for enforcement mechanisms. Anthropic hasn't addressed it.
+- GitHub Copilot structurally **cannot block code** — it suggests, reviews, explains, but creates no hard gates.
 
-### Phase Integration
-- **Phase 1** (Weeks 1-6): Build tools, design data collection from day one
-- **Phase 2** (Months 2-4): Aggregate anonymized scan data, publish "State of Architecture" reports with real data from real codebases
-- **Phase 3** (Months 4-8): Add compliance framework mappings (SOC2, HIPAA) — once tied to audit workflows, switching means re-certification
-- **Phase 4** (Month 8+): Cross-company benchmarking ("Your architecture health vs. industry median for your team size")
+**AIDE's answer**: `.aide/rules.yaml` — a cross-language, git-versionable, CI-enforceable standard for architecture rules. Not suggestions. Not documentation. **Infrastructure.**
 
-### What Creates Real Lock-In
-1. **Accumulated scan data** — every `aide scan` feeds a growing dataset competitors can't shortcut. Year 2: "Teams that fixed pattern X saw 40% fewer production incidents." Year 3: "Based on 10,000 codebases analyzed, repository-pattern teams ship 2x faster."
-2. **Architecture decisions with "why"** — not just rules but the reasoning behind them. Over 2 years, AIDE becomes the institutional memory: "This boundary was added because of the Q3 2025 incident." Like Notion for architecture — once invested, can't leave.
-3. **Compliance mappings** — "Your architecture meets SOC2 control CC7.1." Once a company uses AIDE for compliance, switching means re-doing security reviews and re-certifying.
-4. **Benchmarking data** — "Your codebase scores 73/100. The median for teams your size is 81." Each company joining makes benchmarks more valuable for everyone (network effect).
+Just as Docker didn't need to be the only container runtime — it defined the FORMAT — AIDE doesn't need to be the only architecture tool. It needs to define the format that other tools integrate with.
 
-### The SonarQube Precedent (How a Small Tool Survived 17 Years)
-SonarQube survived against GitHub, Microsoft, and Google because it became infrastructure:
-- 17 years of accumulated code quality data (compounding advantage)
-- Embedded in CI/CD workflows (switching cost — nearly 40% of engineering time spent on integrations)
-- Used for compliance/audit (regulatory moat)
-- Enterprise procurement friction (once approved through security review, switching requires new approvals)
-- NOT because of "better technology"
+---
+
+### Why Big Players Structurally Can't Do This
+
+This isn't hope — it's their architecture and incentive structure:
+
+**1. Enforcement is friction. Their business model is velocity.**
+Anthropic sells API tokens. Cursor sells IDE subscriptions. GitHub sells platform usage. Their growth metric is "help developers write MORE code." Architecture enforcement tells agents "STOP — you're violating a rule." That's counter to every growth metric they optimize for.
+
+**2. Architecture is team-specific. They build for the general case.**
+Claude Code can ship generic best practices. But YOUR team's module boundaries, dependency rules, and pattern conventions are unique to YOUR codebase. Big players won't build tooling for "your specific architecture vision" — that's inherently a niche product they can't generalize.
+
+**3. AI tools are stateless per session. Enforcement requires persistent state.**
+Cursor processes context, generates output, forgets. Architecture enforcement requires persistent, network-wide rules that survive across sessions, developers, and agents. Enterprise teams already discovered this pattern: Copilot = helpful suggestions, GitHub Actions + CodeQL = actual enforcement. Two different tools for two different jobs.
+
+**4. Specific evidence they're NOT building this:**
+- Cursor's 2026 roadmap mentions enterprise features (access controls, audit logs) but **zero mention** of architecture enforcement or pattern detection
+- Anthropic's CLAUDE.md has **no roadmap** for machine-readable enforcement — the [GitHub issue](https://github.com/anthropics/claude-code/issues/18660) remains open
+- GitHub Copilot Code Review (1M users) checks code quality and security, **not architecture structure**
+
+---
+
+### The Four Layers of Defensibility
+
+Design the product from day one so each layer compounds on the previous:
+
+| Layer | What | Moat Type | How It Locks In | Timeline |
+|-------|------|-----------|----------------|----------|
+| **1. Format** | `.aide/rules.yaml` as the standard | Standard moat | Other tools read/enforce the same format — AIDE defined it | Month 1-3 |
+| **2. Pipeline** | `aide check` in CI/CD | Infrastructure lock-in | Once wired into GitHub Actions/GitLab CI, removing means rewriting gate logic across every repo | Month 2-4 |
+| **3. Memory** | Architecture Decision Records + rule history with "why" | Switching cost | After 12 months, AIDE is the institutional memory. Switching = losing a year of decisions | Month 4-8 |
+| **4. Intelligence** | Learning from corrections + cross-codebase benchmarks | Data moat + network effects | Tool gets better with use; benchmarks get more valuable with more users | Month 6-12+ |
+
+#### Layer 1: Become the Architecture Rule FORMAT
+
+How Docker, Terraform, ESLint became unkillable — three ingredients:
+1. **Solves a painful coordination problem** — Docker: "works on my machine." AIDE: "works with my agent."
+2. **Becomes the contract you can't avoid** — you can't ship containers without Dockerfile. Every CI pipeline needs `.aide/rules.yaml`.
+3. **Other tools build around it** — 1000s of tools assume Docker format exists. If Cursor/Claude Code start READING `.aide/rules.yaml`, that's a WIN not a loss.
+
+**No standard format exists for architecture rules.** ArchUnit = Java only. dependency-cruiser = JS/TS only. `.cursorrules` = AI suggestions, not enforcement. There's no cross-language, CI-enforceable, git-versionable architecture rule format. AIDE creates it.
+
+#### Layer 2: Hard Enforcement in CI/CD (The SonarQube Position)
+
+SonarQube survived **17 years** against GitHub, Microsoft, and Google. Not because of better technology. Because:
+- **Quality Gates that BLOCK merges** — PRs literally cannot merge if rules are violated. Not suggestions. Not warnings. BLOCKED.
+- **CI/CD pipeline integration lock** — once wired into Jenkins/GitHub Actions/GitLab CI, switching means rewriting gate logic. Nearly 40% of engineering time is spent on integrations; nobody wants to redo that.
+- **Enterprise procurement friction** — once approved through security review, switching requires new approvals ($500K-$1M+ contracts).
+
+`aide check --fail-below 75` returns exit code 1 in your GitHub Action. That's infrastructure, not a feature.
+
+#### Layer 3: Architecture Decision Memory (The Scattered ADR Problem)
+
+Architecture Decision Records (ADRs) are being adopted at serious scale — the UK government mandates them, Thoughtworks placed them in "Adopt," AWS and Microsoft both have frameworks. But the tooling is **terrible**: decisions scattered across spreadsheets, email threads, wikis, Confluence.
+
+AIDE solves this: every rule links to a WHY. Over time:
+- "This boundary was added after the Q3 2025 production incident"
+- "We chose repository-pattern because direct DB access caused 3 outages"
+- "Module X cannot import from Module Y — decision made by @lead on 2025-11-15"
+
+After 12 months, switching to another tool means losing a year of architectural decision history. That's the Notion/Confluence effect — once you're invested, you can't leave.
+
+#### Layer 4: Learning From Corrections (What Nobody Else Does)
+
+Current state of "codebase-aware" tools: Tabnine stuffs more context into prompts. Cody uses embeddings for search. CodeScene analyzes file complexity. **None of them get BETTER over time on your specific codebase.** When a developer rejects a suggestion or manually fixes a violation, the tool doesn't remember.
+
+AIDE can be different: when a developer overrides a rule, AIDE learns. "Team X considers this pattern acceptable in test files but not production." When violations are consistently dismissed for certain modules, rules adapt. After 6 months of corrections, AIDE understands YOUR team's architecture philosophy — not generic best practices. Starting over means retraining from scratch.
+
+---
 
 ### What Will NOT Create a Moat
 - CLI tools alone (get copied in weeks)
@@ -368,17 +414,37 @@ SonarQube survived against GitHub, Microsoft, and Google because it became infra
 - "Better AI" claims (models improve constantly across all vendors)
 - UI/UX excellence alone (AI + component libraries make good UI table stakes)
 
+### Honest Risk Assessment
+
+| Risk | Likelihood | Mitigation |
+|------|-----------|------------|
+| Cursor adds architecture enforcement to IDE | Medium (2-3 years, IDE-only) | AIDE works in CI/CD — IDE enforcement is complementary, not competing |
+| SonarQube adds graph-based architecture analysis | Medium (they have resources) | AIDE is lighter, open source, AI-native, designed for agents |
+| Anthropic makes CLAUDE.md enforceable | Low (structural conflict with growth metrics) | AIDE is tool-agnostic, works with ANY agent via MCP |
+| Someone else creates the rule format standard | Medium | Move fast, get adoption first, make it open |
+| Market doesn't care about architecture enforcement | Low (SonarQube = $242M/yr proves it) | Start with consulting to validate demand |
+
 ### The Bottom Line
-The architecture tools are the **entry point** — the feature that gets you in the door. The moat **emerges from usage**: accumulated data, workflow embeddedness, compliance lock-in. The first 12-18 months are a **window, not a moat** — use that window to accumulate the data and workflows that BECOME the moat.
+
+The first 12-18 months are a **window, not a moat**. Use that window to:
+1. Define the format (`.aide/rules.yaml` = the Dockerfile of architecture)
+2. Get into CI/CD pipelines (infrastructure lock-in)
+3. Accumulate decision history (switching cost)
+4. Learn from corrections (data moat)
+
+The architecture tools get you in the door. What keeps you there is being **too embedded to remove** — the same reason SonarQube survived 17 years despite every big player having the resources to replace it.
 
 ### Research Sources for Moat Analysis
+- [Claude Code Issue #18660 — enforcement mechanisms](https://github.com/anthropics/claude-code/issues/18660)
+- [Cursor Rules Guide 2026](https://promptxl.com/cursor-ai-rules-guide-2026/) | [Cursor Changelog](https://blog.promptlayer.com/cursor-changelog-whats-coming-next-in-2026/)
+- [SonarQube Gartner Reviews](https://www.gartner.com/reviews/market/application-security-testing/vendor/sonarsource/product/sonarqube)
+- [UK Gov ADR Framework](https://technology.blog.gov.uk/2025/12/08/the-architecture-decision-record-adr-framework-making-better-technology-decisions-across-the-public-sector/)
+- [Microsoft ADR Framework](https://learn.microsoft.com/en-us/azure/well-architected/architect-role/architecture-decision-record)
 - [The "SaaSpocalypse" Versus Real-World Moats](https://alignba.com/2026/02/05/the-saaspocalypse-versus-real-world-moats/amp/)
-- [The Tech Moat Is Dead: How to Build Real Defensibility in 2026](https://www.everything.design/blog/build-real-moat-2026)
 - [The New New Moats — Greylock](https://greylock.com/greymatter/the-new-new-moats/)
-- [Are There Any Moats in Software Anymore?](https://www.swe2vc.com/p/are-there-any-moats-in-software-anymore)
 - [Data and Defensibility — Pivotal](https://pivotal.substack.com/p/data-and-defensibility)
-- [Cloud Ecosystem Lock-In: Platform Dependency Economics](https://www.francescatabor.com/articles/2026/2/4/cloud-ecosystem-lock-in-platform-dependency-economics-developer-network-effects-and-switching-costs-in-enterprise-it)
-- [Specialized Dominators in AI — FourWeekMBA](https://fourweekmba.com/specialized-dominators-in-ai/)
+- [dependency-cruiser GitHub](https://github.com/sverweij/dependency-cruiser)
+- [GitHub Copilot Policies](https://docs.github.com/en/copilot/concepts/policies)
 
 ---
 
@@ -395,6 +461,242 @@ The architecture tools are the **entry point** — the feature that gets you in 
 - [Developer Onboarding 3-6 Months](https://www.growin.com/blog/developer-retention-costs-onboarding/) | [20 Workdays Lost/Year](https://www.itpro.com/software/development/clunky-tech-is-costing-developers-20-working-days-a-year-these-are-the-leading-productivity-drains-impacting-teams)
 - [AI Agent Governance — Microsoft](https://www.microsoft.com/en-us/security/blog/2026/02/10/80-of-fortune-500-use-active-ai-agents-observability-governance-and-security-shape-the-new-frontier/)
 - [Agent READMEs Study (arxiv)](https://arxiv.org/html/2511.12884v1) | [Context Engineering for Multi-Agent Systems (arxiv)](https://arxiv.org/html/2508.08322v1)
+
+---
+
+## Product Refinements & Competitive Positioning
+
+Each product below has been evaluated against existing tools to identify where AIDE fills a genuine gap vs. where the market is already saturated. Products are classified as **Essential** (build first), **Valuable** (build after core works), or **Premium** (monetization/expansion layer).
+
+---
+
+### Product 1: `aide scan` — Architecture Health Score | ESSENTIAL
+
+**The "Lighthouse for codebases" — but nobody's built this yet.**
+
+**Closest competitors and why they're not the same:**
+
+| Tool | What It Does | What It Doesn't Do |
+|------|-------------|-------------------|
+| [Lighthouse](https://developer.chrome.com/docs/lighthouse) | Weighted scoring for web performance (6 metrics, percentile distribution) | Web only — doesn't touch code architecture |
+| [CodeScene](https://codescene.com/) | Hotspot analysis, change coupling, knowledge distribution | File-level metrics, not architecture-level. Observational/historical, not predictive |
+| [CodeCharta](https://github.com/MaibornWolff/codecharta) | 3D visualization of code metrics (LoC, complexity, churn) | No health score, no pattern detection, visualization only |
+| [Teamscale](https://teamscale.com/) | Architecture conformance checking vs. a pre-defined model | Requires manual architecture modeling — doesn't auto-detect from code |
+
+**The specific gap**: No tool auto-detects architecture patterns AND produces a weighted health score in one command. Lighthouse's scoring model (percentile-based log-normal distribution) doesn't exist for codebases. CodeScene is observational; AIDE is prescriptive (detects patterns → generates enforceable rules).
+
+**Refinements from research:**
+- Implement Lighthouse-style percentile scoring (0-100, log-normal distribution)
+- Core metrics: Module Coupling, Dependency Health (layering violations), Cycle Risk, Pattern Consistency
+- Show trends (↑↓→) like CodeScene, but tied to explicit rules not just historical observation
+- Output auto-generated `.aide/rules.yaml` from detected patterns — this is what no competitor does
+- Support `--json` output for CI integration from day one
+
+**Phase**: Week 1-4. This is THE entry point — everything else depends on it.
+
+---
+
+### Product 2: `aide rules` — Architecture as Code | ESSENTIAL
+
+**The Dockerfile of architecture — a format that becomes a standard.**
+
+**Closest competitors and why they're incomplete:**
+
+| Tool | Format | Language Support | Enforcement | Auto-Detection |
+|------|--------|-----------------|-------------|----------------|
+| [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) | `.dependency-cruiser.json` | JS/TS only | CI-enforceable | No — manual rules |
+| [ArchUnit](https://github.com/TNG/ArchUnit) | Java test classes | Java/Kotlin only | JUnit test failures | No — manual test writing |
+| [Teamscale](https://teamscale.com/) | Visual diagrams in UI | Multi-language | UI-based checking | No — manual diagramming |
+| `.cursorrules` | Markdown in `.cursor/rules/` | Language-agnostic | **None** — AI suggestions only | No — manual writing |
+| `CLAUDE.md` | Markdown | Language-agnostic | **None** — AI may or may not follow | No — manual writing |
+| **`.aide/rules.yaml`** | **YAML in repo** | **Language-agnostic** | **CI-enforceable** | **Yes — auto-detected from graph** |
+
+**The specific gap**: No architecture-as-code format exists that is simultaneously language-agnostic, lives in the repository (version-controlled), is CI-enforceable, AND auto-detected from the actual codebase. dependency-cruiser comes closest but is JS/TS-only and requires manual rule definition.
+
+**Refinements from research:**
+- Three rule types: **boundaries** (module import restrictions), **patterns** (code conventions like error handling style), **constraints** (metric thresholds like max coupling)
+- Support [SARIF output](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) so VS Code/IntelliJ can show violations inline in editor
+- Include decision records: every rule has an optional `reason:` field — "Added after Q3 production incident"
+- Make the spec open so other tools can read `.aide/rules.yaml` — this is the format play
+
+**Phase**: Week 2-4, parallel with scan development.
+
+---
+
+### Product 3: `aide check` — Architecture Enforcement | ESSENTIAL
+
+**The CI gate. Where SonarQube's actual moat lives.**
+
+**Closest competitors and the critical difference:**
+
+| Tool | What It Gates | Architecture-Aware? | In Repo? |
+|------|--------------|--------------------|---------|
+| [SonarQube Quality Gates](https://docs.sonarsource.com/sonarqube-server/quality-standards-administration/managing-quality-gates/) | Bugs, coverage, duplication, security | No — code quality, not architecture | Config in SonarQube server |
+| GitHub Branch Protection | Required approvals, code owners | No — file-path based (CODEOWNERS) | Partial (CODEOWNERS in repo) |
+| dependency-cruiser CI | Dependency rule violations | Partial — JS/TS only | Yes |
+| [Checkov](https://github.com/bridgecrewio/checkov) | Infrastructure-as-code security | No — IaC only | Yes |
+
+**The specific gap**: No tool enforces architecture rules as a primary CI gate. SonarQube gates on code quality metrics (bugs, coverage). GitHub gates on approvals. dependency-cruiser is the closest but JS/TS only. Nobody gates on "does this PR violate our module boundary rules?"
+
+**Refinements from research:**
+- Three enforcement modes: `--fail-on error` (strict), `--report-only` (warnings in PR), `--auto-fix` (suggest fixes)
+- Output SARIF format for GitHub Advanced Security / GitLab SAST integration
+- Show violations with diff context: "This import in `api/controller.ts:15` violates boundary rule `api.cannot_import: [ui]`"
+- Native GitHub Action: `aide-check@v1` (minimal setup)
+- Score delta reporting: "This PR would change score from 82 → 76 (threshold: 70)"
+
+**Phase**: Week 4-6. Depends on scan and rules being functional.
+
+---
+
+### Product 4: `aide mcp` — Architecture-Aware AI Agent Layer | PREMIUM
+
+**The bridge between enforcement and AI agents. Unique positioning but not core.**
+
+**Market context:**
+
+| MCP Category | Examples | AIDE's Position |
+|-------------|---------|----------------|
+| Utility MCPs | File ops, API calls, data lookups | Not competing here |
+| Code context MCPs | [Serena](https://github.com/oraios/serena), [Potpie](https://github.com/potpie-ai/potpie) | Adjacent — they provide context, AIDE provides enforcement |
+| Code health MCPs | [CodeScene MCP](https://github.com/codescene-oss/codescene-mcp-server) | Different — CodeScene scores file complexity, AIDE enforces architecture rules |
+| Architecture MCPs | **None exist** | **Open field** |
+
+**MCP monetization landscape** (nascent, 2026):
+- [Apify](https://apify.com/mcp/developers): Pay-per-event, 130K+ monthly signups
+- [MCP Hive](https://mcp-hive.com/): Transparent pricing, providers earn per response
+- Outcome-based pricing emerging ([Moesif](https://www.moesif.com/)): charge only for successful/valuable responses
+
+**Refinements from research:**
+- Three MCP tools exposed: `check_architecture` (pass/fail), `find_similar` (duplicate detection), `get_rules` (what's allowed here?)
+- Monetization: Freemium (basic checks free, advanced analysis paid)
+- Consider outcome-based pricing: charge when agent follows a rule that prevents a violation
+- Target all MCP-compatible agents (Cursor, Claude Code, OpenCode, Copilot)
+
+**Phase**: Week 4-6 (parallel, ~2-3 days on top of core). The core tools must work first — MCP just wraps them.
+
+---
+
+### Product 5: `aide review` — PR Architecture Gate | VALUABLE (but watch redundancy)
+
+**GitHub App for friction-free enforcement. Market is saturated for CODE review — but NOT for ARCHITECTURE review.**
+
+**Market saturation warning:**
+
+| Tool | Users/Scale | Focus |
+|------|-----------|-------|
+| [GitHub Copilot Code Review](https://docs.github.com/en/copilot) | 1M+ users (first month of GA) | Code quality, security, style |
+| [CodeRabbit](https://www.coderabbit.ai/) | 2M+ repos, 13M+ PRs | Code quality, security, performance |
+| [Greptile](https://www.greptile.com/) | $25M raised, $180M valuation | Org-wide rule application (closest to AIDE) |
+| [Graphite](https://graphite.dev/) | Shopify: 33% more PRs merged/dev | PR workflow optimization |
+
+**The nuance**: The PR review bot market is SATURATED for code quality review. AIDE should NOT compete on "we review your code better." But architecture-specific enforcement in PRs is an open niche — Greptile is closest but uses AI opinions, not deterministic graph-based rules.
+
+**Refinements from research:**
+- **Don't compete on code review** — you can't beat Copilot's scale or CodeRabbit's coverage
+- **Architecture-only enforcement**: Show boundary violations, coupling increases, pattern drift
+- Position as complementary to existing review tools, not replacing them
+- Score delta in PR comment: "Architecture health: 82 → 76 (⚠️ dropped below threshold)"
+- Consider: if `aide check` runs in CI, this is UI sugar. Value is making violations visible in the PR conversation rather than buried in CI logs.
+
+**Phase**: Month 2-3. Build AFTER `aide check` proves valuable — this is the paid wrapper.
+
+---
+
+### Product 6: `aide map` — Dependency Visualization | VALUABLE (heavily de-scope)
+
+**Market is saturated with visualization tools. AIDE's angle: enforcement-aware visualization.**
+
+**What already exists (too many to compete with on features):**
+
+| Tool | Languages | Unique Feature |
+|------|----------|---------------|
+| [Madge](https://github.com/pahen/madge) | JS/TS | Fast, SVG/DOT output, circular dep detection |
+| [Emerge](https://github.com/glato/emerge) | 12+ languages | Browser-based interactive, code quality metrics |
+| [NX Graph](https://nx.dev/docs/features/explore-graph) | Monorepo | Interactive workspace graph, composite nodes |
+| [CodeCharta](https://github.com/MaibornWolff/codecharta) | Multi-language | 3D interactive architecture maps |
+| [CodeSee](https://www.codesee.io/) | Multi-language | Function-level flowcharts, requires SDK |
+
+**Refinements from research:**
+- **Don't build a standalone visualization tool** — the market doesn't need another one
+- **Instead**: Overlay rule violations on the dependency graph. Show which edges are violations (red), allowed (green), auto-detected patterns (blue)
+- Integrate with `aide scan` output — "here's your architecture, here's what's broken"
+- Use interactive HTML (similar to Madge/Emerge) — not a separate app
+- Keep it minimal: one command (`aide map --open`) generates an HTML file
+
+**Phase**: Month 3-4. Nice-to-have for understanding, but enforcement matters more.
+
+---
+
+### Product 7: `aide onboard` — Auto-Generated Architecture Guide | VALUABLE (emerging category)
+
+**Most underserved category. Few tools do architecture-specific onboarding.**
+
+**What exists (and why it's insufficient):**
+
+| Tool | What It Generates | Architecture-Aware? |
+|------|------------------|-------------------|
+| [Swimm](https://swimm.io/) | Repo overview docs via GenAI + static analysis | Partial — relational ranking but not architecture-focused |
+| [DocuWriter.ai](https://www.docuwriter.ai/) | Swagger-compliant API docs | No — API docs only |
+| [Doxygen](https://www.doxygen.nl/) | Docs from code comments | No — comment-based, not architecture |
+| [DAUT](https://github.com/daut/daut) | AI-powered docs with MCP | No — general documentation |
+
+**The specific gap**: No tool generates architecture-specific onboarding docs that include module boundaries, dependency rules, patterns, conventions, and decision rationale — all from code analysis, not manual writing.
+
+**Refinements from research:**
+- Generate structured onboarding guide: Module map → Rules & boundaries → Patterns (how we handle X) → Conventions → Decision history (why we do it this way)
+- Output as Markdown in repo (not a separate tool/wiki)
+- Use LLM to write narrative explanations; AIDE provides the structural facts
+- Auto-update when rules or patterns change (not a one-time doc)
+
+**Phase**: Month 3-4. Works best AFTER scan + rules are established — needs data to generate from.
+
+---
+
+### Revised Phase Plan (Incorporating Refinements)
+
+| Phase | Products | Timeline | Key Deliverable |
+|-------|----------|----------|-----------------|
+| **Phase 0** | Fix `inferRelations()` blocker | Week 0-1 | IMPORTS/CALLS/EXTENDS actually populated in graph |
+| **Phase 1a** | `aide scan` + `aide rules` | Week 1-4 | `npx aide-arch scan` produces score + `.aide/rules.yaml` |
+| **Phase 1b** | `aide check` | Week 4-6 | `aide check --fail-below 75` works in CI |
+| **Phase 1c** | `aide mcp` (parallel) | Week 4-6 | MCP tools wrap scan/check for AI agents |
+| **Phase 1d** | Consulting revenue (parallel) | Week 1+ | Architecture audits using AIDE manually ($5K-20K) |
+| **Phase 2** | `aide review` (GitHub App) | Month 2-3 | Paid PR enforcement layer ($30-50/repo/mo) |
+| **Phase 3a** | `aide onboard` | Month 3-4 | Auto-generated architecture guide |
+| **Phase 3b** | `aide map` (minimal) | Month 3-4 | Enforcement-aware dependency visualization |
+| **Phase 4** | Decision memory + learning | Month 4-8 | ADR tracking, correction learning (moat layers 3-4) |
+| **Phase 5** | Benchmarking + compliance | Month 6-12 | Cross-company benchmarks, SOC2/HIPAA mappings |
+
+### Product Priority Matrix
+
+```
+                    HIGH UNIQUENESS
+                         │
+          aide rules ────┤──── aide scan
+          aide check     │
+                         │
+   LOW VALUE ────────────┼──────────── HIGH VALUE
+                         │
+          aide map ──────┤──── aide onboard
+          (saturated)    │    aide review
+                         │    aide mcp
+                         │
+                    LOW UNIQUENESS
+```
+
+**Essential (build first)**: scan → rules → check
+**Valuable (build after core)**: onboard, review
+**Premium (monetization)**: mcp, review (paid tier)
+**De-scoped (minimal effort)**: map (just overlay violations on graph, don't build a full viz tool)
+
+### Competitive Positioning Sources
+- [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) | [ArchUnit](https://github.com/TNG/ArchUnit) | [Teamscale](https://teamscale.com/features/architecture-conformance-analysis)
+- [Madge](https://github.com/pahen/madge) | [Emerge](https://github.com/glato/emerge) | [NX Graph](https://nx.dev/docs/features/explore-graph) | [CodeCharta](https://github.com/MaibornWolff/codecharta)
+- [SonarQube Quality Gates](https://docs.sonarsource.com/sonarqube-server/quality-standards-administration/managing-quality-gates/) | [Checkov](https://github.com/bridgecrewio/checkov)
+- [Swimm](https://swimm.io/) | [CodeRabbit](https://www.coderabbit.ai/) | [Greptile](https://www.greptile.com/)
+- [Apify MCP](https://apify.com/mcp/developers) | [MCP Hive](https://mcp-hive.com/) | [SARIF Spec](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
+- [GitHub Copilot Code Review](https://docs.github.com/en/copilot) | [Lighthouse Scoring](https://developer.chrome.com/docs/lighthouse/performance/performance-scoring)
 
 ---
 
