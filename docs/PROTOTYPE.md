@@ -307,18 +307,20 @@ CREATE INDEX idx_memories_context ON memories(context_label);
 
 ### E2E Test Plan (Real Scenarios on AIDE Codebase)
 
-Use the AIDE codebase itself as the test project. Each scenario gets run **6 ways** across **2 platforms**:
+Use the AIDE codebase itself as the test project. Each scenario gets run **8 ways** across **2 platforms**, testing each competitor separately:
 
 | # | Setup | Platform |
 |---|-------|----------|
 | A | No memory tools (bare) | Claude Code |
 | B | No memory tools (bare) | Cursor |
-| C | ConPort or mcp-memory-service installed | Claude Code |
-| D | ConPort or mcp-memory-service installed | Cursor |
-| E | AIDE memory installed | Claude Code |
-| F | AIDE memory installed | Cursor |
+| C | ConPort installed | Claude Code |
+| D | ConPort installed | Cursor |
+| E | mcp-memory-service installed | Claude Code |
+| F | mcp-memory-service installed | Cursor |
+| G | AIDE memory installed | Claude Code |
+| H | AIDE memory installed | Cursor |
 
-This gives us the full picture: does AIDE improve on the baseline, does it improve on existing MCP memory tools, and does any of this even matter across different platforms? Cursor has its own built-in memory/rules features — if bare Cursor already handles most of this, MCP memory tools aren't needed regardless.
+This gives us the full picture: AIDE vs each competitor individually, across both platforms. We can see if ConPort's structured approach or mcp-memory-service's semantic approach or our path-scoped approach actually wins — and whether any of it matters vs bare Cursor.
 
 #### Scenario 1: Style Continuity Across Sessions
 
@@ -333,8 +335,8 @@ This gives us the full picture: does AIDE improve on the baseline, does it impro
 
 **What tells us something useful:**
 - If **B (Cursor bare)** already gets this right because it looks at existing file patterns → the problem isn't memory, it's code-reading. Building a memory tool wouldn't help.
-- If **C/D (ConPort)** gets this right because the agent stored preferences in session 1 → ConPort solves this already. We'd need to be better, not just different.
-- If **C/D (ConPort)** fails because the agent didn't know to store preferences or couldn't retrieve them for the right area → that's the gap we're filling.
+- If **C/D (ConPort)** or **E/F (mcp-memory-service)** gets this right because the agent stored preferences in session 1 → existing tools solve this already. We'd need to be better, not just different.
+- If **C-F (both competitors)** fail because the agent didn't know to store preferences or couldn't retrieve them for the right area → that's the gap we're filling.
 
 #### Scenario 2: Planning Details Survive Context Loss
 
@@ -353,8 +355,8 @@ This gives us the full picture: does AIDE improve on the baseline, does it impro
 
 **What tells us something useful:**
 - If **A (Claude Code bare)** remembers via auto-memory → Claude's built-in memory is already handling this. We lose the reason to build.
-- If **C/D (ConPort)** remembers because agent logged decisions → ConPort's decision logging works. Do we add anything?
-- If nobody remembers except **E/F (AIDE)** → we've found our value.
+- If **C/D (ConPort)** or **E/F (mcp-memory-service)** remembers because agent logged decisions → existing tools handle this. Do we add anything?
+- If nobody remembers except **G/H (AIDE)** → we've found our value.
 
 #### Scenario 3: Technical Knowledge Retention
 
@@ -387,7 +389,7 @@ This gives us the full picture: does AIDE improve on the baseline, does it impro
 
 **What tells us something useful:**
 - An agent can figure out the `server.tool()` pattern by reading existing code. If **A** gets this right → memory doesn't help for pattern matching, only for non-obvious constraints.
-- The real test: does the agent call the memory tool unprompted? If even **E/F (AIDE)** doesn't call `aide_recall` without being told → we have a tool adoption problem, not a data problem.
+- The real test: does the agent call the memory tool unprompted? If even **G/H (AIDE)** doesn't call `aide_recall` without being told → we have a tool adoption problem, not a data problem.
 
 #### Scenario 5: New Contributor Simulation
 
@@ -416,11 +418,12 @@ For each scenario × setup combination, score on 1-5:
 | Proactive surfacing | Agent waits to be told everything | Agent flags relevant discoveries |
 
 **Decision criteria:**
-- If **E/F (AIDE)** scores ≤ **C/D (ConPort)** on most scenarios → don't build, just use ConPort
-- If **E/F (AIDE)** scores ≤ **A/B (bare)** → memory tools don't help for this problem, rethink the whole approach
-- If **E/F (AIDE)** scores meaningfully higher than C/D on path-scoped scenarios (1, 2, 4) → path scoping justifies building
-- If **B (Cursor bare)** scores close to **E/F** → platform-native features are already solving this, MCP memory tools aren't needed
-- If **D (ConPort on Cursor)** scores close to **F (AIDE on Cursor)** → our value-add is marginal, path scoping isn't enough
+- If **G/H (AIDE)** scores ≤ **C/D (ConPort)** AND ≤ **E/F (mcp-memory-service)** → don't build, use one of them
+- If **G/H (AIDE)** scores ≤ **A/B (bare)** → memory tools don't help for this problem, rethink the whole approach
+- If **G/H (AIDE)** scores meaningfully higher than C-F on path-scoped scenarios (1, 2, 4) → path scoping justifies building
+- If **B (Cursor bare)** scores close to **G/H** → platform-native features are already solving this, MCP memory tools aren't needed
+- If **E/F (mcp-memory-service)** beats **C/D (ConPort)** significantly → semantic search matters more than structured storage
+- If **C/D (ConPort)** beats **E/F (mcp-memory-service)** → structured storage matters more than semantic search
 
 ---
 
