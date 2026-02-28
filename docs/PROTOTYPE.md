@@ -203,16 +203,23 @@ What does each tool actually feel like to use day-to-day? Not schemas and column
 
 ### The Honest Bottom Line
 
-**Are we building something genuinely different, or just worse ConPort?**
+**Are we building something genuinely different, or just ConPort with a path parameter?**
 
-The honest answer: it depends on whether path-scoped recall matters more than semantic search in practice.
+Being straight: once we add semantic search (which is the plan), we'd have semantic search + path filter + contributor column + 5 opinionated tools. ConPort has semantic search + tag filter + 31 general-purpose tools. The layering is different naming. The layer ordering is a sort order.
 
-- If developers mostly work in specific areas and want "everything relevant to this part of the codebase" → path scoping is a better retrieval model and worth building.
-- If developers mostly ask vague questions like "what do we know about authentication?" → semantic search wins and ConPort/mcp-memory-service are better.
+**Path scoping is a feature, not a product.** ConPort could add `scope TEXT` and close the gap with one column. mcp-memory-service could add a path parameter. Neither has done it yet — but it's not hard to do.
 
-Our bet is that the codebase-aware, path-scoped model matches how developers actually work (you open a file, you're in a directory, you want context for that area). But this is an assumption we need to validate with the e2e tests below.
+**So what could make this a product instead of a feature?**
 
-**Could you get 80% of AIDE's value by using ConPort with consistent tagging?** Probably yes, if you're disciplined about tags. The question is whether anyone actually is. Path scoping removes the discipline requirement — it works based on where you're working, not how carefully you tagged things.
+1. **Opinionated simplicity** — 5 tools vs 31 means agents call ours more reliably. This is a UX argument, not a technical moat. Real but fragile.
+
+2. **Contributor-aware preferences flowing across developers** — neither competitor has this concept. If this creates a real multi-developer workflow (meky's preferences for `src/components/` flow to whoever works there next), that's defensible. But unvalidated — we don't know if agents use contributor-attributed preferences differently.
+
+3. **Codebase intelligence connected to memory** — if memory is informed by code analysis (the tree-sitter/graph stuff we shelved), then we have something neither can replicate easily. A memory layer that knows "this module has high coupling, here's why, and here's what to do about it" because it analyzed the code — not because someone typed it in. **This is the real differentiator, but it's not in v1.**
+
+4. **Could you just use ConPort with good tagging?** Yes, probably 80% of the way. Path scoping removes the tagging discipline requirement — it works based on where you're working, not how carefully you tagged things. But that's convenience, not a moat.
+
+**The uncomfortable truth:** As a pure memory-only tool, we'd be a slightly more opinionated, slightly narrower version of ConPort. The path to a real product is either (a) nail the UX so hard that simplicity wins, or (b) connect memory to codebase analysis so the memories aren't just agent-written text — they're grounded in actual code understanding. Option (b) is harder but more defensible.
 
 ### Risk: Platform-Native Memory
 
@@ -300,16 +307,18 @@ CREATE INDEX idx_memories_context ON memories(context_label);
 
 ### E2E Test Plan (Real Scenarios on AIDE Codebase)
 
-Use the AIDE codebase itself as the test project. Each scenario gets run **4 ways** across **2 platforms**:
+Use the AIDE codebase itself as the test project. Each scenario gets run **6 ways** across **2 platforms**:
 
 | # | Setup | Platform |
 |---|-------|----------|
 | A | No memory tools (bare) | Claude Code |
 | B | No memory tools (bare) | Cursor |
 | C | ConPort or mcp-memory-service installed | Claude Code |
-| D | AIDE memory installed | Claude Code |
+| D | ConPort or mcp-memory-service installed | Cursor |
+| E | AIDE memory installed | Claude Code |
+| F | AIDE memory installed | Cursor |
 
-This gives us the real comparison: does AIDE improve on the baseline, does it improve on existing MCP memory tools, and does any of this even matter if Cursor's built-in features already handle it?
+This gives us the full picture: does AIDE improve on the baseline, does it improve on existing MCP memory tools, and does any of this even matter across different platforms? Cursor has its own built-in memory/rules features — if bare Cursor already handles most of this, MCP memory tools aren't needed regardless.
 
 #### Scenario 1: Style Continuity Across Sessions
 
@@ -324,8 +333,8 @@ This gives us the real comparison: does AIDE improve on the baseline, does it im
 
 **What tells us something useful:**
 - If **B (Cursor bare)** already gets this right because it looks at existing file patterns → the problem isn't memory, it's code-reading. Building a memory tool wouldn't help.
-- If **C (ConPort)** gets this right because the agent stored preferences in session 1 → ConPort solves this already. We'd need to be better, not just different.
-- If **C (ConPort)** fails because the agent didn't know to store preferences or couldn't retrieve them for the right area → that's the gap we're filling.
+- If **C/D (ConPort)** gets this right because the agent stored preferences in session 1 → ConPort solves this already. We'd need to be better, not just different.
+- If **C/D (ConPort)** fails because the agent didn't know to store preferences or couldn't retrieve them for the right area → that's the gap we're filling.
 
 #### Scenario 2: Planning Details Survive Context Loss
 
@@ -344,8 +353,8 @@ This gives us the real comparison: does AIDE improve on the baseline, does it im
 
 **What tells us something useful:**
 - If **A (Claude Code bare)** remembers via auto-memory → Claude's built-in memory is already handling this. We lose the reason to build.
-- If **C (ConPort)** remembers because agent logged decisions → ConPort's decision logging works. Do we add anything?
-- If nobody remembers except **D (AIDE)** → we've found our value.
+- If **C/D (ConPort)** remembers because agent logged decisions → ConPort's decision logging works. Do we add anything?
+- If nobody remembers except **E/F (AIDE)** → we've found our value.
 
 #### Scenario 3: Technical Knowledge Retention
 
@@ -378,7 +387,7 @@ This gives us the real comparison: does AIDE improve on the baseline, does it im
 
 **What tells us something useful:**
 - An agent can figure out the `server.tool()` pattern by reading existing code. If **A** gets this right → memory doesn't help for pattern matching, only for non-obvious constraints.
-- The real test: does the agent call the memory tool unprompted? If even **D (AIDE)** doesn't call `aide_recall` without being told → we have a tool adoption problem, not a data problem.
+- The real test: does the agent call the memory tool unprompted? If even **E/F (AIDE)** doesn't call `aide_recall` without being told → we have a tool adoption problem, not a data problem.
 
 #### Scenario 5: New Contributor Simulation
 
@@ -407,10 +416,11 @@ For each scenario × setup combination, score on 1-5:
 | Proactive surfacing | Agent waits to be told everything | Agent flags relevant discoveries |
 
 **Decision criteria:**
-- If **D (AIDE)** scores ≤ **C (ConPort)** on most scenarios → don't build, just use ConPort
-- If **D (AIDE)** scores ≤ **A/B (bare)** → memory tools don't help for this problem, rethink the whole approach
-- If **D (AIDE)** scores meaningfully higher than C on path-scoped scenarios (1, 2, 4) → path scoping justifies building
-- If **B (Cursor bare)** scores close to **D** → platform-native features are already solving this, MCP memory tools aren't needed
+- If **E/F (AIDE)** scores ≤ **C/D (ConPort)** on most scenarios → don't build, just use ConPort
+- If **E/F (AIDE)** scores ≤ **A/B (bare)** → memory tools don't help for this problem, rethink the whole approach
+- If **E/F (AIDE)** scores meaningfully higher than C/D on path-scoped scenarios (1, 2, 4) → path scoping justifies building
+- If **B (Cursor bare)** scores close to **E/F** → platform-native features are already solving this, MCP memory tools aren't needed
+- If **D (ConPort on Cursor)** scores close to **F (AIDE on Cursor)** → our value-add is marginal, path scoping isn't enough
 
 ---
 
