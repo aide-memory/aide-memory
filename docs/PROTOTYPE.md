@@ -123,76 +123,100 @@ aide_import({ source: "docs/TESTING_GUIDELINES.md", layer: "guidelines" })
 
 ---
 
-## Competitive Landscape (Honest Assessment)
+## Competitive Landscape (End-User Experience)
 
-### The Field
+What does each tool actually feel like to use day-to-day? Not schemas and columns — what happens when you sit down, open your editor, and start working?
 
-| Tool | What it actually does | Scoping | Contributor tracking |
-|------|----------------------|---------|---------------------|
-| **ConPort** | Structured SQLite + MCP. 9 entity types (decisions, patterns, custom_data, etc.), 31 tools. FTS5 + ChromaDB semantic search. Markdown import/export. | Workspace-level only. One DB per project. No path/area scoping within a project. | None. Explicitly single-user. |
-| **mcp-memory-service** | Semantic memory store. 5 base types / 25 subtypes. SQLite-vec for vectors, hybrid BM25+semantic retrieval. Knowledge graph with 6 edge types. Dashboard UI. | Global store with optional `proj:` tag. No path scoping. | None. `client_hostname` only. |
-| **Claude Code Auto-Memory** | Flat markdown summary, prompt-injected | Per-project MEMORY.md | None |
-| **Cursor rules / Memory Bank** | Manual markdown files | Per-project | None |
-| **Windsurf Cascade Memories** | Auto-capture of style, commands, edits. Best auto-learning. | Workspace-locked | Black box |
-| **Mem0 OpenMemory** | Semantic vector store via MCP | Global | None |
+### The Developer Experience Comparison
 
-### ConPort Deep Dive (Closest Competitor)
+#### Claude Code Auto-Memory / Cursor Rules (What You Have Today)
 
-ConPort is the most similar tool. Same foundational stack: SQLite, MCP, structured entities, workspace-scoped DB. We'd be building a more opinionated version of the same infrastructure approach. Being honest about what's the same and what's different:
+**What it feels like:** You write a MEMORY.md or .cursorrules file manually. The agent reads it at the start of each session. It helps for broad stuff ("use vitest not jest") but:
+- You have to write and maintain it yourself
+- It's one flat file — everything for the whole project in one blob
+- No structure — the agent gets the whole thing every time, even stuff irrelevant to what you're working on
+- When it's too long, the agent starts ignoring parts of it
+- Nothing gets stored automatically — if you correct the agent 5 times about the same thing, you still have to manually add it to the file
 
-**What ConPort already does that we'd also do:**
-- Structured memory with typed categories (decisions, patterns, custom_data ≈ our layers)
-- SQLite storage per project
-- MCP tool interface
-- Seedable from docs (`import_markdown_to_conport`)
-- FTS search across stored content
+**Honest take:** This is free and already works. For a solo dev on a small project, it might be enough. The question is whether something structured actually improves on "I wrote some notes in a markdown file."
 
-**What we'd do that ConPort doesn't:**
-1. **Path-scoped recall with glob inheritance** — the biggest real differentiator. `aide_recall({ paths: ["src/components/dashboard/"] })` returns everything relevant to that subtree, with parent scope inheritance. ConPort has no mechanism for this — everything is workspace-flat. You'd have to manually tag things "dashboard" and hope you're consistent.
-2. **Contributor-aware preferences** — who stored what matters for the preferences layer. "meky built src/components/ so new contributors get meky's style preferences for that area." ConPort has zero attribution.
-3. **Layer-ordered retrieval** — area_context first, then technical, then preferences, then guidelines. ConPort returns results sorted by semantic similarity. Ours is intentionally ordered by relevance type.
+#### ConPort (Closest MCP Competitor)
 
-**Where our differentiation is weaker than it sounds:**
-- Our 4 layers vs. ConPort's entity types are different vocabularies for similar concepts. `decisions` ≈ `area_context`. `system_patterns` ≈ `guidelines`. The structure is similar; the naming is different.
-- ConPort could add a `scope TEXT` column and close the path-scoping gap in an afternoon. The schema isn't the moat.
+**What it feels like:** You install it as an MCP server. The agent gets 31 tools. You (or the agent) can log decisions, patterns, progress, and custom data. It persists across sessions.
 
-### mcp-memory-service Deep Dive
+**Day-to-day experience:**
+- You're working on the dashboard. You tell the agent "skeleton loading replaces all legacy loaders." The agent calls `log_decision({ summary: "skeleton replaces legacy loaders", tags: ["dashboard"] })`. Good — it's stored.
+- Next session, you're working on dashboard again. Does the agent know to search for dashboard-related decisions? **Only if it searches by tag or does a semantic search.** There's no "give me everything about this code area" — the agent has to know what to search for.
+- You correct the agent about component style. Does it store that as a preference? **Not really** — it would go into `custom_data` or `system_patterns`, but there's no concept of "this is meky's preference for this area." It's just another entry in the same flat bucket.
+- A new dev starts working in your area. **They get nothing area-specific.** They'd have to know to search for the right tags.
 
-Genuinely different from what we're building. They're a flat semantic store with a great taxonomy but no structure that maps to how codebases are organized.
+**Where ConPort is better than us (honestly):**
+- It exists and works today. 31 tools, battle-tested, active development.
+- Semantic search (ChromaDB embeddings) — can find related context even with vague queries. We'd start with keyword matching only.
+- Import/export to markdown — can seed from existing docs. (We'd have this too, but they have it now.)
+- Knowledge graph with explicit links between items — richer relationship modeling.
+- More general purpose — can track progress, link items together, version history on project context.
 
-- `retrieve_memory("dashboard skeleton loading")` returns similar-sounding text from anywhere
-- `aide_recall({ paths: ["src/components/dashboard/"] })` returns everything scoped to that subtree
+**Where ConPort falls short (the actual user pain):**
+- When you say "I'm working in `src/components/dashboard/`", ConPort can't give you everything scoped to that subtree. It's workspace-flat. You have to tag things consistently and search by tag. In practice, tags are inconsistent and things get lost.
+- No concept of "who built this area" — if meky's preferences should flow to the next person working in that area, ConPort can't express that.
+- 31 tools is a lot of surface area for an agent to navigate. More tools = more chances for the agent to call the wrong one or not call any.
 
-These are different retrieval models. mcp-memory-service is closer to a general-purpose AI memory; we'd be codebase-specific.
+#### mcp-memory-service (General-Purpose MCP Memory)
 
-Their strengths over us: mature embedding pipeline, hybrid BM25+semantic search, knowledge graph with typed edges, autonomous consolidation of old memories, dashboard UI. If we later need semantic search, we'd be rebuilding what they already have.
+**What it feels like:** A smarter notebook. You store memories with types (observation, decision, learning, error, pattern) and tags. It finds related memories via embeddings.
 
-### Where We Actually Win
+**Day-to-day experience:**
+- You tell the agent about WAL mode in SQLite. It stores a "learning" with tags. Good.
+- Next session, you ask it to add a migration. Does it recall the WAL mode note? **Only if the agent queries something semantically similar.** "Add a migration" might not surface "use WAL mode" because they're not semantically close. You'd need "SQLite" in the query.
+- It has great taxonomy (25 subtypes) and auto-consolidation of old memories. But it's not codebase-aware — it doesn't know that `src/brain/sqliteStore.ts` is related to SQLite memories.
 
-1. **Path-based scoping** — novel retrieval model for code context. Neither competitor has it.
-2. **Contributor attribution** — real for multi-developer teams. Neither has it.
-3. **Opinionated layer ordering** — small but meaningful UX improvement on retrieval.
-4. **Focused scope** — we solve one problem (agent memory for code) vs. general-purpose memory. This means simpler tool descriptions, which means agents call them more reliably.
+**Where mcp-memory-service is better than us:**
+- Mature embedding pipeline — hybrid BM25 + semantic search with quality scoring. Finds fuzzy matches we'd miss.
+- Knowledge graph with typed edges (causes, fixes, contradicts). Richer model than flat memories.
+- Auto-consolidation — old memories get compressed automatically. We'd have manual pruning.
+- Dashboard UI for browsing and managing memories.
 
-### Where We Don't Win
+**Where it falls short:**
+- It's a general-purpose memory tool, not a codebase tool. Asking "what should I know about the dashboard area?" returns semantically similar text, not path-scoped context. Two very different retrieval models.
+- No structure that maps to how code is organized. Everything is global with optional project tags.
 
-- **Taxonomy breadth** — mcp-memory-service has 25 subtypes, knowledge graph edges, consolidation. We'd be simpler.
-- **Seedable from docs** — ConPort already does this. Not a differentiator from them.
-- **Semantic search** — both competitors are ahead. We'd start with keyword matching and add embeddings later.
-- **Maturity** — ConPort has 31 tools, battle-tested. We'd have 5.
+#### AIDE Memory (What We'd Build)
 
-### The Real Moat Question
+**What it would feel like:** You install one MCP server. The agent gets 5 tools. When you start working in an area, the agent calls `aide_recall` with the file paths — and gets back everything relevant to that specific part of the codebase, organized by type.
 
-The moat isn't the schema — it's:
-1. **Adoption** — do agents reliably call the tools?
-2. **Quality of stored content** — does useful stuff actually get captured?
-3. **Tool descriptions** — are they specific enough that agents use them at the right time?
+**Day-to-day experience:**
+- You start working on `src/components/dashboard/`. Agent calls `aide_recall({ paths: ["src/components/dashboard/"] })`. It gets back: your style preferences for that area, the skeleton loading decision, the fact that DashboardSkeleton is split into its own file, and the project-wide guideline about composition over conditionals. **Automatically, without the agent having to know what to search for.**
+- You correct the agent's approach — "split that into a separate file." Agent calls `aide_remember` — stores it as a preference scoped to that area, attributed to you.
+- New dev works in the same area next week. Their agent calls `aide_recall` on the same paths — gets your preferences. They benefit from your decisions without ever talking to you.
 
-ConPort could add path scoping easily. mcp-memory-service could add codebase structure. The question is whether our focused, opinionated approach gets adopted faster than their general-purpose flexibility.
+**Where we'd be better:**
+- The recall experience. "What do I need to know to work here?" is the natural question, and path-based scoping answers it directly. No tag hunting, no semantic query crafting.
+- Simpler — 5 tools, not 31. Easier for agents to learn and call reliably.
+- Contributor-aware — preferences track who established them and flow to whoever works in that area next.
 
-### Real Risk
+**Where we'd be worse (honestly):**
+- **No semantic search at launch.** If someone stores "use composition pattern" and the agent queries about "component structure," we might miss it. ConPort and mcp-memory-service would catch it via embeddings.
+- **Less mature.** Both competitors have been in production, have communities, have edge cases ironed out. We'd be starting fresh.
+- **Less general purpose.** If you want to track task progress, link decisions together, or build a knowledge graph — use ConPort. We're narrowly focused on the recall-at-a-path problem.
+- **Noise management is unsolved.** After 100 sessions, how many memories per path? We don't have auto-consolidation like mcp-memory-service.
 
-**Platform-native memory** (Claude's auto-memory, Windsurf's Cascade Memories) is the actual long-term threat, not ConPort. When Claude/Cursor/Windsurf build structured persistent memory natively, every MCP memory tool becomes less relevant. Mitigation: cross-platform, user-controlled, structured in ways platform memory won't be (platforms optimize for general use, not codebase-specific scoping).
+### The Honest Bottom Line
+
+**Are we building something genuinely different, or just worse ConPort?**
+
+The honest answer: it depends on whether path-scoped recall matters more than semantic search in practice.
+
+- If developers mostly work in specific areas and want "everything relevant to this part of the codebase" → path scoping is a better retrieval model and worth building.
+- If developers mostly ask vague questions like "what do we know about authentication?" → semantic search wins and ConPort/mcp-memory-service are better.
+
+Our bet is that the codebase-aware, path-scoped model matches how developers actually work (you open a file, you're in a directory, you want context for that area). But this is an assumption we need to validate with the e2e tests below.
+
+**Could you get 80% of AIDE's value by using ConPort with consistent tagging?** Probably yes, if you're disciplined about tags. The question is whether anyone actually is. Path scoping removes the discipline requirement — it works based on where you're working, not how carefully you tagged things.
+
+### Risk: Platform-Native Memory
+
+The real long-term threat isn't ConPort or mcp-memory-service — it's Claude/Cursor/Windsurf building structured persistent memory natively. When that happens, every MCP memory tool loses relevance. Mitigation: cross-platform, user-controlled, codebase-structured in ways platform memory won't be (platforms optimize for general use).
 
 ---
 
@@ -209,7 +233,7 @@ ConPort could add path scoping easily. mcp-memory-service could add codebase str
 - These could come back as a "codebase intelligence" layer if memory alone isn't enough
 
 ### Branch
-New branch `ideas` off `main` (clean, no existing pivot code).
+`feature/agent-memory` off `main`.
 
 ### Storage
 
@@ -276,92 +300,104 @@ CREATE INDEX idx_memories_context ON memories(context_label);
 
 ### E2E Test Plan (Real Scenarios on AIDE Codebase)
 
-Use the AIDE codebase itself as the test project. Run each scenario 3 ways:
-- **Baseline:** Agent with no memory tools (plain Claude Code / Cursor)
-- **Existing tools:** Agent with ConPort or mcp-memory-service installed
-- **AIDE memory:** Agent with aide_recall / aide_remember
+Use the AIDE codebase itself as the test project. Each scenario gets run **4 ways** across **2 platforms**:
+
+| # | Setup | Platform |
+|---|-------|----------|
+| A | No memory tools (bare) | Claude Code |
+| B | No memory tools (bare) | Cursor |
+| C | ConPort or mcp-memory-service installed | Claude Code |
+| D | AIDE memory installed | Claude Code |
+
+This gives us the real comparison: does AIDE improve on the baseline, does it improve on existing MCP memory tools, and does any of this even matter if Cursor's built-in features already handle it?
 
 #### Scenario 1: Style Continuity Across Sessions
 
-**Setup:** In session 1, work on a feature in `src/rules/`. During the work, establish preferences: "keep files under 150 lines," "split checker functions into separate files even if used once," "composition over conditionals for rule matching." Correct the agent 2-3 times to establish the pattern.
+**Session 1:** Work on a feature in `src/rules/`. During the work, establish preferences: "keep files under 150 lines," "split checker functions into separate files even if used once," "composition over conditionals for rule matching." Correct the agent 2-3 times to establish the pattern.
 
-**Test:** Start session 2. Ask the agent to add a new rule type (e.g., "naming conventions") to `src/rules/`.
+**Session 2 (new session, no prior conversation):** Ask the agent to add a new rule type (e.g., "naming conventions") to `src/rules/`.
 
-**Measure:**
-- Does the agent propose splitting the new checker into its own file? (Baseline: probably puts it all in rulesChecker.ts)
+**What to measure:**
+- Does the agent propose splitting the new checker into its own file?
 - Does it keep the implementation under 150 lines?
 - How many corrections needed before the agent matches the style?
 
-**What we expect:**
-- Baseline: 3-5 corrections, agent defaults to monolithic approach
-- Existing tools: depends on whether agent stored the preferences in session 1 (likely didn't without prompting)
-- AIDE memory: 0-1 corrections — `aide_recall({ paths: ["src/rules/"] })` returns the stored preferences
+**What tells us something useful:**
+- If **B (Cursor bare)** already gets this right because it looks at existing file patterns → the problem isn't memory, it's code-reading. Building a memory tool wouldn't help.
+- If **C (ConPort)** gets this right because the agent stored preferences in session 1 → ConPort solves this already. We'd need to be better, not just different.
+- If **C (ConPort)** fails because the agent didn't know to store preferences or couldn't retrieve them for the right area → that's the gap we're filling.
 
 #### Scenario 2: Planning Details Survive Context Loss
 
-**Setup:** Start planning a refactor of `src/analysis/treeSitterAnalyzer.ts` (1100+ lines). During planning, agree on specific decisions:
+**Session 1:** Plan a refactor of `src/analysis/treeSitterAnalyzer.ts` (1100+ lines). Agree on specific decisions:
 1. "Split into 3 files: parser, relation-extractor, symbol-analyzer"
 2. "Keep the TreeSitterAnalyzer class as a facade that delegates"
 3. "Don't change the public API — same function signatures"
 
-Let the agent write the plan. Then simulate context compaction by starting a new session.
+**Session 2 (new session):** Say "continue the treeSitterAnalyzer refactor we planned."
 
-**Test:** In the new session, say "continue the treeSitterAnalyzer refactor we planned."
-
-**Measure:**
+**What to measure:**
 - Does the agent know the 3-file split decision?
 - Does it preserve the facade pattern decision?
 - Does it remember the "don't change public API" constraint?
 - How much re-explaining is needed?
 
-**What we expect:**
-- Baseline: agent has no idea, re-explores the file, proposes its own split strategy
-- Existing tools: partial recall if agent happened to log decisions
-- AIDE memory: `aide_recall({ paths: ["src/analysis/"] })` returns all 3 decisions as area_context
+**What tells us something useful:**
+- If **A (Claude Code bare)** remembers via auto-memory → Claude's built-in memory is already handling this. We lose the reason to build.
+- If **C (ConPort)** remembers because agent logged decisions → ConPort's decision logging works. Do we add anything?
+- If nobody remembers except **D (AIDE)** → we've found our value.
 
 #### Scenario 3: Technical Knowledge Retention
 
-**Setup:** Work in the AIDE codebase. During session 1, the agent should learn (or be told):
+**Session 1:** During work, the agent should learn (or be told):
 - "SQLite uses WAL mode — never switch to DELETE journal mode"
 - "better-sqlite3 is synchronous, not async — don't use await"
 - "Vitest, not Jest — use `describe`/`it` from vitest, not `@jest` globals"
 
-**Test:** In a new session, ask the agent to "add a migration to the SQLite store for a new table."
+**Session 2 (new session):** Ask the agent to "add a migration to the SQLite store for a new table."
 
-**Measure:**
+**What to measure:**
 - Does it use synchronous better-sqlite3 API? (Not `await db.run(...)`)
 - Does it respect WAL mode?
 - If it writes a test, does it use vitest patterns?
 
-**What we expect:**
-- Baseline: 50/50 — might guess right on some, wrong on others
-- AIDE memory: `aide_recall({ paths: ["src/brain/"] })` returns technical context about SQLite patterns
+**What tells us something useful:**
+- Good agents might get vitest and better-sqlite3 right just by reading existing code (no memory needed). If **A** and **B** pass → this isn't a memory problem.
+- WAL mode is the harder test — it's a constraint that's not always obvious from reading code. If only memory-equipped setups catch it → memory adds value for non-obvious technical context.
 
 #### Scenario 4: Proactive Discovery
 
-**Setup:** Seed the memory with area context for `src/mcp/server.ts`: "MCP server uses stdio transport. When adding tools, register them with `server.tool()` not `server.setRequestHandler()`."
+**Session 1:** Seed context (however each tool supports it) about `src/mcp/server.ts`: "MCP server uses stdio transport. When adding tools, register them with `server.tool()` not `server.setRequestHandler()`."
 
-**Test:** Ask the agent to "add a new MCP tool called `get_memory_stats`."
+**Session 2 (new session):** Ask the agent to "add a new MCP tool called `get_memory_stats`."
 
-**Measure:**
-- Does the agent call `aide_recall` before starting?
+**What to measure:**
+- Does the agent recall the stored context before starting?
 - Does it use `server.tool()` instead of the raw handler pattern?
-- Does it proactively flag anything it discovers during exploration (e.g., "I noticed the existing tools don't validate input schemas — should I add validation to the new one?")?
+- Does it proactively flag anything it discovers during exploration?
+
+**What tells us something useful:**
+- An agent can figure out the `server.tool()` pattern by reading existing code. If **A** gets this right → memory doesn't help for pattern matching, only for non-obvious constraints.
+- The real test: does the agent call the memory tool unprompted? If even **D (AIDE)** doesn't call `aide_recall` without being told → we have a tool adoption problem, not a data problem.
 
 #### Scenario 5: New Contributor Simulation
 
-**Setup:** Over several sessions, build up memory for `src/cli/commands/`: preferences (imperative style, commander.js action pattern), technical context (commands auto-register via index.ts import), area context (each command gets its own file, options defined inline not in separate config).
+**Setup:** Over several sessions on setups C and D, build up memories for `src/cli/commands/`: style preferences, technical context (commands auto-register via index.ts import), area decisions (each command gets its own file, options defined inline).
 
-**Test:** Give a fresh agent (no prior conversation) access to the AIDE memory. Ask it to "add a new CLI command `aide prune` that removes old memories."
+**Test:** Give a completely fresh agent (no prior conversation, different user) access to the same memory store. Ask it to "add a new CLI command `aide prune` that removes old memories."
 
-**Measure:**
+**What to measure:**
 - Does it follow the file-per-command pattern without being told?
 - Does it match the option definition style?
-- Compare output quality vs. an agent that only has the source code to reference
+- How does it compare to **A** (agent that just reads the existing code)?
 
-#### Comparison Framework
+**What tells us something useful:**
+- This is the multi-developer test. If the fresh agent with memory produces better code than one without → memory transfers knowledge between contributors. That's real value.
+- If reading existing code gets the agent 90% of the way → the 10% memory adds isn't worth the complexity.
 
-For each scenario, score on 1-5 scale:
+#### Scoring & Comparison Matrix
+
+For each scenario × setup combination, score on 1-5:
 
 | Dimension | 1 (Bad) | 5 (Good) |
 |-----------|---------|----------|
@@ -369,9 +405,12 @@ For each scenario, score on 1-5 scale:
 | Context retained | No prior context visible | All decisions/prefs recalled |
 | Style match | Generic/wrong style | Matches established patterns |
 | Proactive surfacing | Agent waits to be told everything | Agent flags relevant discoveries |
-| Tool usage | Never calls memory tools | Calls recall before planning, remember after decisions |
 
-**Pass threshold:** AIDE memory should score 4+ on at least 4/5 scenarios to justify building this over just using ConPort with good prompting.
+**Decision criteria:**
+- If **D (AIDE)** scores ≤ **C (ConPort)** on most scenarios → don't build, just use ConPort
+- If **D (AIDE)** scores ≤ **A/B (bare)** → memory tools don't help for this problem, rethink the whole approach
+- If **D (AIDE)** scores meaningfully higher than C on path-scoped scenarios (1, 2, 4) → path scoping justifies building
+- If **B (Cursor bare)** scores close to **D** → platform-native features are already solving this, MCP memory tools aren't needed
 
 ---
 
