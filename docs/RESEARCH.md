@@ -1,6 +1,7 @@
 # AIDE — Problems & Research
 
 > All the problems we explored, the research behind them, and why we landed where we did.
+> This is a summary. Full detail (72K+) is in `docs/archive/` — see CONSOLIDATED_RESEARCH.md, PIVOT_PLAN.md, PRODUCT_EVALUATION.md, PRODUCT_CHANGES_SUMMARY.md, IMPLEMENTATION_REPORT.md.
 
 ---
 

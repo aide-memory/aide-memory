@@ -11,20 +11,28 @@ We've pivoted from "architecture scanning/linting tool" to "persistent memory la
 
 ## Current State
 
-- **Branch:** `ideas` (off `main`, clean start)
-- **Working doc:** `docs/PROTOTYPE.md` — the thing we're building
-- **No code written yet** — still refining the idea
+- **Branch:** `main` has all up-to-date docs
+- **Feature branch:** `feature/agent-memory` (off main, for implementation)
+- **Working doc:** `docs/PROTOTYPE.md` — full spec with honest competitive analysis + e2e test plan
+- **No code written yet** — still refining the idea and validating differentiation
 
-## Key Decisions Made in This Session
+## Key Decisions Made
 
 1. **AIDE is a memory layer, not a linter/scanner.** Health scores, rules.yaml, config generation deprioritized.
 2. **MCP server is the primary interface.** CLI is secondary.
 3. **Four memory layers:** preferences, technical context, area context, guidelines.
 4. **Start simple:** path + keyword matching for recall. Add embeddings later if needed.
-5. **New branch off main.** Don't carry the 17 existing commands.
+5. **Clean branch off main.** Don't carry the 17 existing commands.
 6. **Existing AIDE infra to reuse:** SQLite, MCP framework, CLI (commander.js).
 7. **Set aside for now:** Tree-sitter, knowledge graph, rules engine, orchestrator, health scoring.
-8. **Codebase graph is additive, not essential for v1.** Could come back as "codebase intelligence" layer.
+8. **Branch strategy:** `main` holds docs, `feature/agent-memory` for implementation.
+
+## Competitive Position (Honest)
+
+- **ConPort** is the closest competitor — same approach (structured SQLite + MCP), similar entity types. Our real differentiators: **path-scoped recall** (they're workspace-flat) and **contributor awareness** (they have none). Our layering is similar to their entity types under different names. They could add path scoping easily — the moat isn't the schema.
+- **mcp-memory-service** is genuinely different — flat semantic store, great taxonomy but no codebase structure. Better embeddings than us.
+- **Platform-native memory** (Claude, Windsurf) is the real long-term threat.
+- **Key question still open:** Is our focused, opinionated approach enough to justify building vs. using ConPort with good prompting?
 
 ## Founder's Primary Pain Point
 
@@ -38,16 +46,16 @@ Specific things the agent should retain:
 
 ## What's Next
 
-1. Review PROTOTYPE.md for completeness
-2. Validate: does the tool design / memory layer structure make sense?
-3. Start building — schema, recall tool, remember tool, MCP registration
-4. Test with real work sessions
+1. **Validate differentiation** — does path-scoped recall actually matter in practice? Consider quick test with ConPort to see if workspace-flat recall is "good enough"
+2. **If differentiation holds:** Start building — schema, recall tool, remember tool, MCP registration
+3. **Run e2e test scenarios** from PROTOTYPE.md on the AIDE codebase itself
+4. **Test with real work sessions** — use it during actual development
 
 ## Doc Map
 
 | Doc | Purpose |
 |-----|---------|
 | `docs/SESSION_CONTEXT.md` | This file — active context for session continuity |
-| `docs/PROTOTYPE.md` | The idea, problems, solution, competitive landscape, implementation spec |
-| `docs/RESEARCH.md` | All problems explored + market research + competitive analysis |
-| `docs/archive/` | Original docs from earlier exploration (PIVOT_PLAN, NEXT_STEPS, etc.) |
+| `docs/PROTOTYPE.md` | Full spec: problems, solution, tools, competitive landscape, implementation, e2e test plan |
+| `docs/RESEARCH.md` | Summary of all problems explored + market research (archive has full detail) |
+| `docs/archive/` | Original docs: PIVOT_PLAN, NEXT_STEPS, PRODUCT_EVALUATION, PRODUCT_CHANGES_SUMMARY, IMPLEMENTATION_REPORT, CONSOLIDATED_RESEARCH |
