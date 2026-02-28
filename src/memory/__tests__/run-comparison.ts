@@ -212,7 +212,7 @@ async function testMcpMemory() {
   let transport: StdioClientTransport;
   try {
     transport = new StdioClientTransport({
-      command: 'python3',
+      command: '/Users/meky/.mcp-memory-venv/bin/python',
       args: ['-m', 'mcp_memory_service.server'],
       env: {
         ...process.env,
