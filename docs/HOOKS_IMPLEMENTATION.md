@@ -5,7 +5,19 @@
 
 ---
 
-## Why Hooks?
+## Why Hooks? (And Why Not Sooner?)
+
+### Why we should have considered hooks earlier
+
+The agent adoption problem was identified in Round 1 (0/6 proactive calls). Our response was rules (`.claude/rules/aide-memory.md`), which partially worked for aide_recall (75%) but completely failed for aide_remember (0%). Hooks were mentioned in the IMPLEMENTATION_PROGRESS doc as a "Tier 2 fix" but we deprioritized them in favor of running a Round 2 intra-session comparison test.
+
+**In hindsight, this was a sequencing mistake.** The Round 2 intra-session comparison proved code quality is equivalent with or without aide_recall — a real finding, but one that doesn't test aide-memory's actual value prop (cross-session persistence). We could have:
+1. Implemented hooks immediately after Round 1 (fix aide_remember)
+2. Jumped straight to cross-session tests (prove the value prop)
+
+Instead we spent time proving something we could have predicted: agents that can read code directly don't need aide_recall for intra-session work. The Round 2 results are still useful (confirmed rules fix recall adoption, confirmed equivalent quality) but the hooks should have come first.
+
+### What Round 2 proved
 
 Round 2 E2E testing (Run A bare vs Run B with AIDE+rules, **separate sessions, same prompts**) proved:
 
@@ -57,18 +69,68 @@ Claude Code has native hook support. Configuration lives in:
 
 We'll use **project-level** (`.claude/settings.json`) so hooks travel with the repo.
 
-### Cursor (No Hook Support)
+### Cursor (Also Has Hook Support)
 
-Cursor does not have a hooks system. For Cursor, aide-memory works via MCP only — the agent must call aide_recall/aide_remember explicitly. Cursor has:
-- **MCP server support** — aide-memory tools are available
-- **Rules files** — `.cursorrules` can encourage tool usage
-- **No event hooks** — can't auto-inject context or nudge remembering
+Cursor has hooks too — similar event model to Claude Code. Config lives in `.cursor/hooks.json` (project-level) or `~/.cursor/hooks.json` (user-level).
 
-**Cursor strategy:** Stronger tool descriptions + rules. Accept lower adoption rate. Consider a Cursor-specific MCP tool that combines recall+remember in one call (agent calls `aide_context` which returns memories AND prompts "store anything new").
+**Cursor hook events relevant to aide-memory:**
+
+| Cursor Event | Claude Code Equivalent | Our Use |
+|-------------|----------------------|---------|
+| `preToolUse` | `PreToolUse` | Auto-inject aide_recall before Read/Edit |
+| `postToolUse` | `PostToolUse` | Nudge aide_remember after Edit |
+| `stop` | `Stop` | End-of-task reflection for aide_remember |
+| `beforeSubmitPrompt` | `UserPromptSubmit` | Detect corrections, auto-store |
+| `beforeReadFile` | (no direct equiv) | Inject context before any file read |
+| `afterFileEdit` | (no direct equiv) | Post-edit nudge |
+| `sessionStart` | `SessionStart` | Inject `additional_context` at start |
+| `beforeMCPExecution` | `PreToolUse` (matcher) | Observe/modify MCP calls |
+
+**Cursor hook config format (`.cursor/hooks.json`):**
+```json
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "bash scripts/hooks/stop-remember.sh",
+        "type": "command",
+        "timeout": 30
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "bash scripts/hooks/detect-correction.sh",
+        "type": "command"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "node scripts/hooks/recall-for-path.js",
+        "type": "command"
+      }
+    ]
+  }
+}
+```
+
+**Key differences from Claude Code:**
+- Config file: `.cursor/hooks.json` (not `.claude/settings.json`)
+- Cursor has `beforeReadFile` (fires on file reads specifically, separate from tool use)
+- Cursor has `afterFileEdit` (fires after edits specifically)
+- Cursor's `stop` hook can return `followup_message` to auto-submit a next prompt — could auto-trigger aide_remember call
+- Cursor has `beforeMCPExecution` — fires before any MCP tool call, useful for logging/analytics
+- Cursor hooks support `"type": "prompt"` — LLM-evaluated conditions (e.g., "was this a design decision?")
+
+**Strategy:** Write hooks as tool-agnostic shell/node scripts in `scripts/hooks/`. Create separate config files for each tool:
+- `.claude/settings.json` — Claude Code hooks config
+- `.cursor/hooks.json` — Cursor hooks config
+
+Both point to the same scripts. One implementation, two configs.
 
 ### Other Tools (VS Code + Continue, Windsurf, etc.)
 
-Any tool supporting MCP gets the base 6 tools. Hooks are Claude Code-specific. For broader adoption, the MCP tools themselves should be self-sufficient — hooks are an enhancement layer, not a requirement.
+Tools without hooks rely on MCP tools only. The MCP tools should be self-sufficient — hooks are an enhancement layer that boosts adoption from ~75% to ~100%. Without hooks, the tool descriptions and any rules files (`.cursorrules`, `.claude/rules/`) carry the load.
 
 ---
 
@@ -224,14 +286,20 @@ if (result.memories.length > 0) {
 | 1 | Create `scripts/hooks/` directory structure | — | 5 min |
 | 2 | Implement Stop hook (`stop-remember.sh`) | — | 30 min |
 | 3 | Add `.claude/settings.json` with Stop hook config | Step 2 | 5 min |
-| 4 | **Test: Run 1 prompt, verify aide_remember fires** | Steps 2-3 | 15 min |
-| 5 | Implement correction detection hook (`detect-correction.sh`) | — | 30 min |
-| 6 | Add UserPromptSubmit hook to settings | Step 5 | 5 min |
-| 7 | **Test: Send correction, verify detection + storage** | Steps 5-6 | 15 min |
-| 8 | Build `recall-for-path.js` (direct store access) | `npm run build` | 45 min |
-| 9 | Implement PreToolUse Read hook (`pre-read-recall.sh`) | Step 8 | 30 min |
-| 10 | **Test: Verify auto-recall injection before Read** | Steps 8-9 | 15 min |
-| 11 | Full E2E test (see below) | Steps 1-10 | 1-2 hrs |
+| 4 | Add `.cursor/hooks.json` with stop hook config | Step 2 | 5 min |
+| 5 | **Test: Run 1 prompt in Claude Code, verify aide_remember fires** | Steps 2-3 | 15 min |
+| 6 | Implement correction detection hook (`detect-correction.sh`) | — | 30 min |
+| 7 | Add UserPromptSubmit / beforeSubmitPrompt hooks to configs | Step 6 | 5 min |
+| 8 | **Test: Send correction, verify detection + storage** | Steps 6-7 | 15 min |
+| 9 | Build `recall-for-path.js` (direct store access, no MCP) | `npm run build` | 45 min |
+| 10 | Implement PreToolUse / beforeReadFile hooks | Step 9 | 30 min |
+| 11 | **Test: Verify auto-recall injection before Read** | Steps 9-10 | 15 min |
+| 12 | Full E2E test — Claude Code (see below) | Steps 1-11 | 1-2 hrs |
+| 13 | Full E2E test — Cursor (same prompts, `.cursor/hooks.json`) | Steps 1-11 | 1-2 hrs |
+
+**Scripts are tool-agnostic.** Same shell/node scripts in `scripts/hooks/`, just different config files:
+- Claude Code: `.claude/settings.json` (hooks nested under `"hooks"` key)
+- Cursor: `.cursor/hooks.json` (dedicated hooks file, `"version": 1` format)
 
 ---
 
@@ -388,21 +456,12 @@ Measure:
 
 ## Cursor Testing
 
-Cursor doesn't support hooks. For Cursor, the strategy is MCP-only:
-
-1. **Stronger tool descriptions** — make aide_recall/aide_remember descriptions more compelling
-2. **`.cursorrules`** — equivalent to `.claude/rules/aide-memory.md`
-3. **Combined tool** — consider adding `aide_context` that returns recall AND prompts for remember in one call
-
-**Cursor E2E plan:**
-- Same prompts as Test Suite 1 (H-1, H-2)
-- Same prompts as Test Suite 2 (Session 1 + Session 2)
-- Measure: does Cursor agent call aide_recall proactively? Does it ever call aide_remember?
-- Compare with Claude Code + hooks results
+Cursor **does** support hooks (`.cursor/hooks.json`). The same hook scripts work for both tools — only the config file format differs.
 
 **Cursor setup:**
+
+1. **MCP config** (`.cursor/mcp.json`):
 ```json
-// .cursor/mcp.json (or equivalent)
 {
   "mcpServers": {
     "aide-memory": {
@@ -413,6 +472,54 @@ Cursor doesn't support hooks. For Cursor, the strategy is MCP-only:
   }
 }
 ```
+
+2. **Hooks config** (`.cursor/hooks.json`):
+```json
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "bash scripts/hooks/stop-remember.sh",
+        "type": "command",
+        "timeout": 30
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "bash scripts/hooks/detect-correction.sh",
+        "type": "command"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "node scripts/hooks/recall-for-path.js",
+        "type": "command"
+      }
+    ]
+  }
+}
+```
+
+3. **Rules** (`.cursorrules`):
+```
+# aide-memory: Persistent project memory
+Call `aide_recall` with file paths before working on new areas.
+Call `aide_remember` when user corrects approach, decisions made, constraints discovered.
+Don't over-use: skip for already-recalled areas, trivial changes.
+```
+
+**Cursor-specific advantages:**
+- `beforeReadFile` hook fires on all file reads (not just tool calls) — more granular than Claude Code's `PreToolUse`
+- `stop` hook supports `followup_message` — can auto-submit an aide_remember prompt
+- `"type": "prompt"` hooks — can use LLM to decide if something is worth remembering (e.g., "Did the agent just make a design decision? Respond with {ok: true/false}")
+
+**Cursor E2E plan:**
+- Run same Test Suites 1-3 as Claude Code (same prompts, separate sessions)
+- Use `.cursor/hooks.json` instead of `.claude/settings.json`
+- Compare aide_remember adoption rates between Claude Code and Cursor
+- Test `beforeReadFile` vs Claude Code's `PreToolUse` Read for auto-recall injection
+- Note: Cursor sessions are composer-based, not CLI — extraction method differs (no JSONL, need to check Cursor's transcript format)
 
 ---
 
