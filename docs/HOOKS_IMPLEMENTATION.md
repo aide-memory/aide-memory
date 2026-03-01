@@ -458,30 +458,51 @@ Results:
 
 | Dimension | Result |
 |-----------|--------|
-| Called `aide_recall` before coding? | Y/N — proactive? |
-| Used sync API (no `await`)? | Y/N |
-| Test uses vitest (not jest)? | Y/N |
-| Respected WAL mode? | Y/N |
-| Corrections needed | count |
-| **Stop hook fired?** | **Y/N — Gate 1** |
-| **aide_remember called?** | **Y/N — Gate 2** |
-| **What was stored (paste)?** | |
-| **Layer + scope correct?** | **Y/N — Gate 3** |
-| Notes | |
+| Session ID | `d40efe75-a6da-4a07-8e8f-c89480e3ed90` |
+| Called `aide_recall` before coding? | **N** — not proactive, read files directly |
+| Used sync API (no `await`)? | **Y** — `this.db.prepare().run(cutoff)` |
+| Test uses vitest (not jest)? | **Y** — imports from vitest |
+| Respected WAL mode? | **Y** — inherited from MemoryStore constructor |
+| Corrections needed | **0** |
+| **Stop hook fired?** | **Y — Gate 1 PASS** (JSONL line 29: `hookCount: 1`, `hasOutput: true`) |
+| **Loop prevention worked?** | **Y** — second stop (line 32) had `hasOutput: false`, exited cleanly |
+| **aide_remember called?** | **N — Gate 2 FAIL** — agent saw hook, chose not to store |
+| **What was stored (paste)?** | N/A — nothing stored |
+| **Layer + scope correct?** | N/A |
+| **PreToolUse hook fired?** | **Y** — `hook_progress` entries for both Read calls (`PreToolUse:Read`) |
+| **PreToolUse injected context?** | **N** — hook fired but no memories matched (DB may have been empty for those paths) |
+| Tool calls | Read(store.ts) → Glob(test files) → Read(store.test.ts) → Edit(store.ts) → Edit(store.test.ts) → Bash(vitest) |
+| Tests passing | 26/26 (23 existing + 3 new archiveOld tests) |
+| Duration | 39s (`turn_duration`: 39098ms) |
+| Notes | Agent response to Stop hook: "Nothing non-obvious to store here — the method followed the existing `pruneOld` pattern directly, and the test conventions were already well-documented in memory." |
 
 **aide_recall output received by agent (paste):**
 ```
-(paste aide_recall output here)
+None — aide_recall was not called proactively.
+PreToolUse hook fired for both Read calls but injected no context (no matching memories in DB for src/memory/store.ts or src/memory/__tests__/store.test.ts at time of test).
 ```
 
 **Code produced (paste key method):**
 ```ts
-(paste archiveOld method here)
+archiveOld(days: number): number {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const result = this.db.prepare(
+    "UPDATE memories SET status = 'archived' WHERE created_at < ? AND status != 'archived'"
+  ).run(cutoff);
+  return result.changes;
+}
 ```
 
 **aide_remember input (paste if called):**
 ```json
-(paste aide_remember call input here)
+Not called. Agent acknowledged Stop hook but decided nothing was worth storing.
+```
+
+**Stop hook JSONL evidence:**
+```
+Line 29 (first stop): hookCount=1, hasOutput=true, hookErrors=["Before finishing: Did you learn anything non-obvious..."]
+Line 30 (agent response): "Nothing non-obvious to store here — the method followed the existing pruneOld pattern directly"
+Line 32 (second stop): hookCount=1, hasOutput=false (loop prevention via stop_hook_active=true)
 ```
 
 **If Gate 2 fails (aide_remember not called):** STOP. Fix the Stop hook prompt text. Try stronger language, try `"type": "prompt"` hook, try Cursor's `followup_message`. Do not proceed to H-2.
@@ -499,33 +520,91 @@ Add a method `duplicateCheck()` to MemoryStore that finds memories with very sim
 After agent writes first version, send this correction:
 
 ```
-No, don't use exact string match — use SQL LIKE with wildcard matching instead.
+No, don't use bigram similarity in JS — use SQL LIKE with wildcard matching instead so it stays in the database layer.
 ```
+
+*(Original plan said "exact string match" but agent used Dice coefficient bigram similarity instead, so correction was adapted.)*
 
 Results:
 
 | Dimension | Result |
 |-----------|--------|
-| Used sync API (no `await`)? | Y/N |
-| Test uses vitest? | Y/N |
-| Agent adapted code to correction? | Y/N |
-| Corrections needed (beyond the intentional one) | count |
-| **UserPromptSubmit hook detected correction?** | **Y/N** |
-| **aide_remember called after correction?** | **Y/N** |
-| **Correction content stored accurately?** | **Y/N** |
-| **Stop hook fired after H-2?** | **Y/N** |
-| **aide_remember called on stop (H-2)?** | **Y/N** |
-| Notes | |
+| Used sync API (no `await`)? | **Y** — `this.db.prepare().all()` |
+| Test uses vitest? | **Y** — vitest, 31/31 tests pass |
+| Agent adapted code to correction? | **Y** — rewrote from Dice bigrams to SQL LIKE self-join |
+| Corrections needed (beyond the intentional one) | **0** |
+| **UserPromptSubmit hook detected correction?** | **UNKNOWN** — no `UserPromptSubmit` hook_progress in JSONL. Hook may have fired but doesn't log progress entries, OR pattern didn't match (message started with `"No, don't use..."` which should match `no,? (don.t)` regex) |
+| **aide_remember called after correction?** | **N** — not called inline after correction |
+| **Correction content stored accurately?** | **N/A** |
+| **Stop hook fired after H-2?** | **Y** — line 101: `hookCount=1`, `hasOutput=true` |
+| **aide_remember called on stop (H-2)?** | **ATTEMPTED but FAILED** — agent tried via Bash MCP client workaround (see below). Memory NOT in DB. |
+| Notes | Agent said "Yes — the user's preference to keep logic in the database layer is worth storing" but used `node -e` with `@modelcontextprotocol/sdk` to call aide_remember via Bash instead of using the MCP tool directly. The Bash command ran in background and failed silently. Loop prevention: 2nd stop at line 114 had `hasOutput=false`. |
 
-**Code produced (paste key method):**
+**Code produced — BEFORE correction (Dice bigram similarity):**
 ```ts
-(paste duplicateCheck method here — before and after correction)
+// Created src/memory/similarity.ts with diceSimilarity(a, b) function
+// Then in store.ts:
+duplicateCheck(threshold = 0.8): Array<{ a: Memory; b: Memory; similarity: number }> {
+  const memories = this.list({ status: 'active' });
+  const results: Array<{ a: Memory; b: Memory; similarity: number }> = [];
+  for (let i = 0; i < memories.length; i++) {
+    for (let j = i + 1; j < memories.length; j++) {
+      const similarity = diceSimilarity(memories[i].what, memories[j].what);
+      if (similarity >= threshold) {
+        results.push({ a: memories[i], b: memories[j], similarity });
+      }
+    }
+  }
+  return results.sort((x, y) => y.similarity - x.similarity);
+}
 ```
 
-**aide_remember input (paste if called):**
-```json
-(paste aide_remember call input here)
+**Code produced — AFTER correction (SQL LIKE self-join):**
+```ts
+duplicateCheck(): Array<{ a: Memory; b: Memory }> {
+  const rows = this.db.prepare(`
+    SELECT a.id AS a_id, b.id AS b_id
+    FROM memories a
+    JOIN memories b ON a.id < b.id
+    WHERE a.status = 'active' AND b.status = 'active'
+      AND (
+        LOWER(TRIM(a.what)) = LOWER(TRIM(b.what))
+        OR LOWER(a.what) LIKE '%' || LOWER(b.what) || '%'
+        OR LOWER(b.what) LIKE '%' || LOWER(a.what) || '%'
+      )
+    ORDER BY a.id, b.id
+  `).all() as Array<{ a_id: number; b_id: number }>;
+  return rows.map(row => ({
+    a: this.rowToMemory(this.db.prepare('SELECT * FROM memories WHERE id = ?').get(row.a_id)),
+    b: this.rowToMemory(this.db.prepare('SELECT * FROM memories WHERE id = ?').get(row.b_id)),
+  }));
+}
 ```
+
+**aide_remember attempt (via Bash — FAILED silently):**
+```javascript
+// Agent used this Bash command instead of calling MCP tool directly:
+node -e "
+const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
+const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
+async function run() {
+  const transport = new StdioClientTransport({ command: 'node', args: ['dist/memory/mcp-server.js'] });
+  const client = new Client({ name: 'test', version: '1.0.0' });
+  await client.connect(transport);
+  await client.callTool({ name: 'aide_remember', arguments: {
+    what: 'Keep comparison/matching logic in the SQL/database layer — avoid doing string similarity in JS when SQL LIKE or self-joins can handle it',
+    why: 'User corrected bigram-based JS similarity approach in favor of SQL LIKE with wildcard matching for duplicateCheck',
+    layer: 'preferences',
+    scope: 'src/memory/**'
+  }});
+  await client.close();
+}
+run().catch(() => {});
+"
+// Result: ran in background, failed silently. Memory NOT in DB.
+```
+
+**Critical finding:** The agent WANTED to store the correction (Gate 2 intent = PASS) but couldn't execute it. It used a Bash workaround to spin up an MCP client instead of calling `aide_remember` as an MCP tool. This suggests the agent doesn't realize MCP tools are available during stop hook responses, or the MCP connection wasn't established in this session.
 
 ---
 
@@ -536,15 +615,28 @@ sqlite3 ~/.aide/projects/*/memory.db \
   "SELECT id, layer, scope, substr(what,1,80), source FROM memories WHERE source='conversation' ORDER BY id DESC LIMIT 10"
 ```
 
-**MCP Tool Call Summary (Suite 1):**
+**MCP Tool Call Summary (Suite 1 — H-1 + H-2):**
 
 | Call # | Tool | Trigger | Proactive? |
 |--------|------|---------|------------|
-| 1 | | | |
-| 2 | | | |
-| ... | | | |
+| — | (no MCP tool calls in H-1 or H-2) | — | — |
 
-**Total MCP calls: _. Proactive calls: _. aide_remember calls: _ (was 0/10 in all prior rounds).**
+**Total MCP calls: 0. Proactive calls: 0. aide_remember calls: 0 (was 0/10 in all prior rounds — still 0).**
+**aide_remember ATTEMPTED via Bash in H-2: 1 (failed silently — agent couldn't/didn't use MCP tool directly).**
+
+**Hooks activity (Suite 1 — H-1 + H-2):**
+
+| Hook | Prompt | Fired? | Output? | Effect |
+|------|--------|--------|---------|--------|
+| PreToolUse:Read (store.ts) | H-1 | Y | N (no matching memories) | No context injected |
+| PreToolUse:Read (store.test.ts) | H-1 | Y | N (no matching memories) | No context injected |
+| Stop (1st) | H-1 | Y | Y (block + nudge) | Agent saw nudge, chose not to store |
+| Stop (2nd) | H-1 | Y | N (loop prevention) | Exited cleanly |
+| PreToolUse:Read (store.ts) | H-2 | Y | N (no matching memories) | No context injected |
+| PreToolUse:Read (store.test.ts) | H-2 | Y | N (no matching memories) | No context injected |
+| UserPromptSubmit (correction) | H-2 | **?** | **?** | No hook_progress in JSONL — unclear if fired |
+| Stop (1st) | H-2 | Y | Y (block + nudge) | Agent tried aide_remember via Bash (failed) |
+| Stop (2nd) | H-2 | Y | N (loop prevention) | Exited cleanly |
 
 **Reset code changes (we're not keeping test code):**
 
