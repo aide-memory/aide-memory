@@ -8,16 +8,24 @@
   "hooks": {
     "Stop": [
       {
-        "type": "command",
-        "command": "bash scripts/hooks/stop-remember.sh",
-        "timeout": 30
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/stop-remember.sh",
+            "timeout": 30
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
-        "type": "command",
-        "command": "bash scripts/hooks/detect-correction.sh",
-        "timeout": 5
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/detect-correction.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreToolUse": [
