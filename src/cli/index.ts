@@ -19,6 +19,7 @@ import { initProject } from './commands/init';
 import { reindexProject } from './commands/reindex';
 import { watchProject } from './commands/watch';
 import { askQuestion } from './commands/ask';
+import { searchMemories } from './commands/search';
 import { startRepl } from './repl';
 import { startWebServer } from '../web/server';
 
@@ -191,6 +192,38 @@ program
         });
       } catch (err) {
         logError('Ask failed', err);
+        process.exit(1);
+      }
+    }
+  );
+
+// aide search <keyword> - Search memories
+program
+  .command('search')
+  .description('Search memories by keyword')
+  .argument('<keyword>', 'Text to search for in memory content')
+  .option('-p, --path <path>', 'Project root path', process.cwd())
+  .option('-l, --layer <layer>', 'Filter by layer (preferences, technical, area_context, guidelines)')
+  .option('--limit <limit>', 'Max results (default 50)')
+  .action(
+    async (
+      keyword: string,
+      options: { path?: string; layer?: string; limit?: string }
+    ) => {
+      try {
+        const rootPath = path.resolve(options.path || process.cwd());
+        const { MemoryStore } = await import('../memory/store');
+        const store = new MemoryStore(rootPath);
+        try {
+          searchMemories(store, keyword, {
+            layer: options.layer,
+            limit: options.limit ? parseInt(options.limit, 10) : undefined,
+          });
+        } finally {
+          store.close();
+        }
+      } catch (err) {
+        logError('Search failed', err);
         process.exit(1);
       }
     }

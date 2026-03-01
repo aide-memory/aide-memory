@@ -36,10 +36,10 @@ describe('MCP Server', () => {
     if (fs.existsSync(dir)) fs.rmdirSync(dir);
   });
 
-  it('lists all 5 tools', async () => {
+  it('lists all 6 tools', async () => {
     const tools = await client.listTools();
     const names = tools.tools.map(t => t.name).sort();
-    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember']);
+    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember', 'aide_search']);
   });
 
   describe('aide_remember + aide_recall', () => {
@@ -173,6 +173,79 @@ describe('MCP Server', () => {
       const text = (result.content as any[])[0].text;
       expect(text).toContain('pref');
       expect(text).not.toContain('| tech');
+    });
+  });
+
+  describe('aide_search', () => {
+    beforeEach(async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'Use vitest for all tests', layer: 'guidelines', why: 'Team standard' },
+      });
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'Keep components under 150 lines', layer: 'preferences', scope: 'src/components/**' },
+      });
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'WAL mode for SQLite', layer: 'technical' },
+      });
+    });
+
+    it('finds memories by keyword in what field', async () => {
+      const result = await client.callTool({
+        name: 'aide_search',
+        arguments: { keyword: 'vitest' },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Use vitest for all tests');
+      expect(text).not.toContain('WAL mode');
+    });
+
+    it('finds memories by keyword in why field', async () => {
+      const result = await client.callTool({
+        name: 'aide_search',
+        arguments: { keyword: 'standard' },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Use vitest for all tests');
+    });
+
+    it('is case-insensitive', async () => {
+      const result = await client.callTool({
+        name: 'aide_search',
+        arguments: { keyword: 'VITEST' },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Use vitest for all tests');
+    });
+
+    it('filters by layer', async () => {
+      const result = await client.callTool({
+        name: 'aide_search',
+        arguments: { keyword: 'vitest', layer: 'technical' },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('No memories found');
+    });
+
+    it('returns no-match message when nothing found', async () => {
+      const result = await client.callTool({
+        name: 'aide_search',
+        arguments: { keyword: 'nonexistent-xyz' },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('No memories found matching "nonexistent-xyz"');
+    });
+
+    it('groups results by layer in markdown', async () => {
+      const result = await client.callTool({
+        name: 'aide_search',
+        arguments: { keyword: 'e' },
+      });
+      const text = (result.content as any[])[0].text;
+      // Should have layer headers
+      expect(text).toMatch(/## (Preferences|Technical|Guidelines)/);
     });
   });
 

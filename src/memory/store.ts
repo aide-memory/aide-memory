@@ -207,6 +207,37 @@ export class MemoryStore {
     return row.count;
   }
 
+  search(keyword: string, options?: { layer?: MemoryLayer; status?: MemoryStatus; limit?: number }): Memory[] {
+    const conditions: string[] = ['(what LIKE ? OR why LIKE ?)'];
+    const like = `%${keyword}%`;
+    const params: any[] = [like, like];
+
+    if (options?.layer) {
+      conditions.push('layer = ?');
+      params.push(options.layer);
+    }
+
+    const status = options?.status ?? 'active';
+    conditions.push('status = ?');
+    params.push(status);
+
+    let sql = 'SELECT * FROM memories WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY created_at DESC, id DESC';
+
+    const limit = options?.limit ?? 50;
+    sql += ' LIMIT ?';
+    params.push(limit);
+
+    const rows = this.db.prepare(sql).all(...params) as any[];
+    return rows.map(r => this.rowToMemory(r));
+  }
+
+  pruneOld(days: number): number {
+    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+    const result = this.db.prepare('DELETE FROM memories WHERE created_at < ?').run(cutoff);
+    return result.changes;
+  }
+
   close(): void {
     this.db.close();
   }

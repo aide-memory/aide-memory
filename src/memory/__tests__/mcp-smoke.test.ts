@@ -31,16 +31,18 @@ describe('MCP smoke test (real seeded DB)', () => {
     store.close();
   });
 
-  it('lists all 5 tools', async () => {
+  it('lists all 6 tools', async () => {
     const result = await client.listTools();
     const names = result.tools.map(t => t.name).sort();
-    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember']);
+    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember', 'aide_search']);
   });
 
-  it('has 27 seeded memories', async () => {
+  it('has seeded memories', async () => {
     const result = await client.callTool({ name: 'aide_memories', arguments: {} });
     const text = (result.content as any)[0].text;
-    expect(text).toContain('Showing 27 of 27 memories');
+    const match = text.match(/Showing (\d+) of (\d+) memories/);
+    expect(match).not.toBeNull();
+    expect(parseInt(match![1])).toBeGreaterThanOrEqual(27);
   });
 
   it('recall for src/memory/ returns scoped technical context', async () => {

@@ -1093,16 +1093,16 @@ Paste this:
 Add a new method `pruneOld(days: number)` to MemoryStore in src/memory/store.ts that deletes memories older than N days. Write a vitest test for it too.
 ```
 
-Fill this after:
+Results:
 
 | Dimension | Result |
 |-----------|--------|
-| Used sync API (no `await`)? | |
-| Used `datetime()` SQL (not JS Date)? | |
-| Test uses vitest (not jest)? | |
-| Respected WAL mode? | |
-| Corrections needed | |
-| Notes | |
+| Used sync API (no `await`)? | **YES** — `this.db.prepare(...).run(cutoff)` — pure sync, identical to Run B. |
+| Used `datetime()` SQL (not JS Date)? | **NO** — Used `new Date(Date.now() - days * 86_400_000).toISOString()` — identical to Run B. |
+| Test uses vitest (not jest)? | **YES** — `describe`/`it`/`expect` from vitest. |
+| Respected WAL mode? | **YES** — no journal mode changes. |
+| Corrections needed | **0** — self-corrected same `days=0` edge case as Run B. 23 tests pass. |
+| Notes | **Preflight confirmed: no MCP tools available.** Code is nearly identical to Run B's B-1: same method signature, same ISO string approach, same edge case bug + fix. Bare agent read `store.ts` and `store.test.ts` directly (no aide_recall). Used `(store as any).db` to access private field in tests (Run B used `store.database` getter that existed from round 1). 3 tests, all passing. The sync API and vitest patterns are discoverable from reading existing code — aide_recall didn't add value here. |
 
 ---
 
@@ -1118,12 +1118,12 @@ Fill this after:
 
 | Dimension | Result |
 |-----------|--------|
-| File under 150 lines? | |
-| Used composition (not conditionals)? | |
-| Split if too large? | |
-| Test uses vitest? | |
-| Corrections needed | |
-| Notes | |
+| File under 150 lines? | Yes — 133 lines (vs B-2's 57 lines). More verbose but still reasonable. |
+| Used composition (not conditionals)? | Mixed — `validate()` uses sequential guard clauses, `resolve()` uses if/else branching for plain path vs glob. `expand()` uses `Promise.all` composition. |
+| Split if too large? | No split needed. Single file with class + helper. |
+| Test uses vitest? | Yes — 29 tests (vs B-2's 24). All passing. |
+| Corrections needed | 1 fix: `fast-glob` tried to scan a file path as directory; added `suppressErrors: true`. Same type of self-correction as B-2. |
+| Notes | **Entered PlanMode same as B-2** — spawned Explore agent (examined full src/memory/), spawned Plan agent (designed ScopeResolver). Wrote plan to `elegant-jingling-barto.md`, user approved. More comprehensive implementation: includes `DEFAULT_IGNORE_PATTERNS` (18 patterns), `ESCAPE_PATTERNS` for path traversal protection, `MAX_PATTERN_LENGTH` validation, `ValidationResult` interface. Uses async `fast-glob` API vs B-2 also used `fast-glob`. A-2 has `validate()` that B-2 also has. 29 tests cover: validation (empty, null bytes, path traversal, max length), resolve (glob, directory, file), expand (merge, dedup). Updated `index.ts` exports. Verified existing store tests still pass (23 pass). |
 
 ---
 
@@ -1139,12 +1139,12 @@ Fill this after:
 
 | Dimension | Result |
 |-----------|--------|
-| Used `server.tool()` pattern? | |
-| Used zod schemas for params? | |
-| Followed existing tool style? | |
-| Test uses vitest? | |
-| Corrections needed | |
-| Notes | |
+| Used `server.tool()` pattern? | **YES** — `server.tool('aide_search', description, { keyword, layer, limit }, handler)`. Learned from reading server.ts directly. |
+| Used zod schemas for params? | **YES** — `z.string()`, `z.enum(LAYER_VALUES).optional()`, `z.number().optional()`. Same pattern as existing tools. |
+| Followed existing tool style? | **YES** — same structure: name, description, zod schema, async handler returning `{ content: [{ type: 'text', text }] }`. Added `store.search()` method to store.ts (same as B-3). |
+| Test uses vitest? | **YES** — added tests to `server.test.ts` (not a separate file). Updated tool count to 6. Added `aide_search` describe block with `beforeEach` seeding 3 memories + 3 test cases. 15 total server tests pass. |
+| Corrections needed | **0** — all tests passed first try. Also verified store tests (23 pass). |
+| Notes | **No aide_recall (bare run).** Agent read `server.ts`, `types.ts`, `server.test.ts`, and `store.ts` directly — 4 file reads to understand patterns. B-3 called `aide_recall` with `paths: [server.ts], query: "MCP tool registration pattern"` and got the pattern in one call. Both produced functionally identical code: `store.search()` with `LIKE %keyword%` on `what` and `why` columns, optional layer filter, status default `active`, limit 50. Same `server.tool()` registration. A-3 added tests to existing `server.test.ts` (cleaner); B-3 created separate file with 12 tests. A-3 was more efficient — 0 corrections vs B-3's 0 corrections, but A-3 used existing test file while B-3 added a new one. |
 
 ---
 
@@ -1160,12 +1160,12 @@ Fill this after:
 
 | Dimension | Result |
 |-----------|--------|
-| Own file in src/cli/commands/? | |
-| Followed Commander.js pattern? | |
-| Didn't reference memory internals? | |
-| Test uses vitest? | |
-| Corrections needed | |
-| Notes | |
+| Own file in src/cli/commands/? | **YES** — `src/cli/commands/search.ts` (61 lines). Same as B-4 (52 lines). |
+| Followed Commander.js pattern? | **YES** — `.command('search').description().argument().option().action()`. Import in `index.ts`, export in `commands/index.ts`. Learned from reading `reindex.ts`, `ask.ts`, `ui.ts`, `index.ts`. |
+| Didn't reference memory internals? | **YES** — uses `store.search()` public API, no direct SQL. |
+| Test uses vitest? | **YES** — 7 vitest tests with temp DB, console.log spy, proper cleanup. B-4 had NO vitest tests (used CLI smoke testing). A-4 is better here. |
+| Corrections needed | **0** — all 7 tests passed first try. Also ran `tsc --noEmit` (only pre-existing error in e2e-comparison.test.ts). |
+| Notes | **No aide_recall (bare run).** Agent read 5 files to understand CLI patterns: `commands/*.ts` glob, `commands/index.ts`, `cli/index.ts`, `reindex.ts`, `ui.ts`, `ask.ts`. B-4 called `aide_recall` with `paths: [src/cli/commands/, src/cli/index.ts], query: "CLI command registration pattern"` and got the pattern in one call. Both produced functionally identical CLI commands with chalk formatting, grouped-by-layer output. **A-4 wrote vitest tests (7) while B-4 did not** — bare agent was actually better on testing here. Both followed Commander.js pattern, both created own file. |
 
 ---
 
@@ -1175,11 +1175,17 @@ Run `/context` and fill:
 
 | Category | Tokens | % |
 |----------|--------|---|
-| System prompt | | |
-| System tools | | |
-| MCP tools | | |
-| Messages | | |
-| Free space | | |
+| System prompt | 3.4k | 1.7% |
+| System tools | 17.4k | 8.7% |
+| MCP tools | n/a (bare) | — |
+| Memory files | 727 | 0.4% |
+| Skills | 164 | 0.1% |
+| Messages | 63k | 31.5% |
+| Free space | 82k | 41.1% |
+| Autocompact buffer | 33k | 16.5% |
+| **Total used** | **83k / 200k** | **41%** |
+
+Run A used 83k tokens (41%) vs Run B's 76k (38%). Run A used slightly more — 63k messages vs 52k. The extra 11k likely comes from reading more files directly (A-4 read 5 files vs B-4's 1 aide_recall call).
 
 **Reset for Run B:**
 
@@ -1443,43 +1449,75 @@ Run `/context` and fill:
 
 | Category | Tokens | % |
 |----------|--------|---|
-| System prompt | | |
-| System tools | | |
-| MCP tools | | |
-| Messages | | |
-| Free space | | |
+| System prompt | 3.4k | 1.7% |
+| System tools | 17.4k | 8.7% |
+| MCP tools | included in system tools | — |
+| Memory files | 727 | 0.4% |
+| Skills | 164 | 0.1% |
+| Messages | 52k | 26.0% |
+| Free space | 93k | 46.6% |
+| Autocompact buffer | 33k | 16.5% |
+| **Total used** | **76k / 200k** | **38%** |
+
+Note: Run B used 76k tokens across 4 prompts (38% of context). Round 1 used 70k across 6 prompts. Memory files cost only 727 tokens (0.4%) — negligible overhead.
 
 ---
 
 #### Side-by-Side Comparison
 
-Fill this after both runs:
-
 | Dimension | Run A (Bare) | Run B (AIDE + Rules) | Round 1 S3 (AIDE no rules) |
 |-----------|-------------|---------------------|---------------------------|
-| Total corrections needed | | | 0 |
-| Used sync API correctly | /4 | /4 | 4/4 (from Test A recall) |
-| Used vitest correctly | /4 | /4 | 4/4 |
-| Proactive aide_recall calls | n/a | /4 | 0/4 |
-| Proactive aide_remember calls | n/a | count | 0 |
-| Code quality (1-5 avg) | | | |
-| Token usage (total) | | | 70k |
+| Total corrections needed | 0 (4 self-corrections) | 0 (4 self-corrections) | 0 |
+| Used sync API correctly | 4/4 | 4/4 | 4/4 (from Test A recall) |
+| Used vitest correctly | 4/4 | 3/4 (B-4 skipped) | 4/4 |
+| Proactive aide_recall calls | n/a | 3/4 (75%) | 0/4 (0%) |
+| Proactive aide_remember calls | n/a | 0/4 (0%) | 0 |
+| Code quality (1-5 avg) | 4.0 | 3.75 | — |
+| Token usage (total) | 83k (41%) | 76k (38%) | 70k |
+| Extra code produced | — | TagStore, aide_stats (bonus) | — |
+| Test coverage | 7 CLI tests (A-4) | 0 CLI tests (B-4) | — |
 
-#### Decision Criteria
+Notes on scoring: A-4 scores higher than B-4 because bare agent wrote vitest tests while AIDE agent didn't. B-3 and A-3 are identical. A-2 is more defensive (133 vs 57 lines) — could be better or over-engineered depending on preference.
 
-After filling the comparison:
+#### Decision Criteria — Verdicts
 
-- **Rules fix adoption?** → Run B has >0 proactive `aide_recall` calls (vs 0 in round 1 S3)
-- **Adoption still broken?** → Run B still has 0 proactive calls → need hooks/wrapper approach (Tier 2)
-- **Memory tools add value?** → Run B produces measurably fewer corrections or better code than Run A
-- **Memory tools don't matter?** → Run A and Run B have similar quality → code-reading is enough, reconsider product
-- **Go/no-go:** If Run B is clearly better than Run A AND rules drive proactive usage, aide-memory justifies itself. Otherwise, pivot to hooks or stop.
+| Question | Answer |
+|----------|--------|
+| **Rules fix adoption?** | **YES.** Run B: 3/4 proactive aide_recall (75%). Round 1 without rules: 0/6 (0%). Rules are the fix. |
+| **Adoption still broken?** | **Partially.** aide_recall works (3/4). aide_remember is completely broken (0/4 across all rounds). PlanMode bypasses aide_recall (1/4). |
+| **Memory tools add value?** | **Not proven.** Run A and Run B produced equivalent or identical code in all 4 prompts. Run A even scored better on A-4 (wrote vitest tests). |
+| **Memory tools don't matter?** | **Cannot conclude yet.** This test design has a fatal flaw (see below). |
+| **Go/no-go** | **Inconclusive — need better test.** Rules fixed adoption, but code-quality difference is not measurable with this test design. |
+
+#### Why This Test Design Can't Prove Value
+
+The test asked agents to add features to a codebase they were already working in, within a single session. By prompt 3, both agents had already read `store.ts`, `server.ts`, `types.ts` from earlier prompts. The bare agent's conversation history contained the same information that aide_recall would have returned.
+
+**This is not a flaw in aide-memory — it's a flaw in the test.** aide_memory's value proposition is:
+1. **Cross-session persistence** — "I told you X last week, don't make me repeat it"
+2. **Cold-start context** — New agent session gets team knowledge without reading every file
+3. **Contributor preferences** — "I prefer X" survives session boundaries
+4. **Scaling beyond context window** — When the codebase is too big to read everything
+
+None of these were tested. All 4 prompts ran in the same session against a small codebase where the agent could read everything.
+
+#### What Tests Would Actually Prove Value
+
+| Test | What It Proves | Effort |
+|------|----------------|--------|
+| **Cold-start per prompt** | Each prompt in its own fresh session. Bare agent starts cold each time. AIDE agent gets recall. Shows whether recall saves file-reading time and catches context bare agent misses. | Medium — 8 separate sessions |
+| **Cross-session memory** | Session 1: user teaches preferences. Session 2: new session, same task. Does AIDE agent remember? Bare agent can't. | Medium — 2 sessions per run |
+| **Large codebase** | Run against a real 50K+ line project where the agent can't read everything. AIDE agent gets scoped recall; bare agent has to choose what to read. | High — need a big codebase |
+| **Correction persistence** | Session 1: "Don't use moment.js, use date-fns." Session 2: "Add date formatting." Does AIDE agent avoid moment.js? | Low — 2 sessions per run |
+| **New contributor simulation** | Configure aide_remember with team preferences. New agent session (simulating new team member) gets context. Bare agent gets nothing. | Low — 1 session per run |
+
+**Recommended next test:** Cold-start per prompt (4 fresh sessions for bare, 4 for AIDE) OR correction persistence (2 sessions, most directly tests the value prop).
 
 **What are hooks?** Claude Code hooks are shell commands that fire on events like `PreToolUse` (before agent calls Read/Edit), `PostToolUse`, or `UserPromptSubmit`. Configured in `.claude/settings.json`. If rules don't fix adoption, hooks could auto-inject `aide_recall` results before every file read — the agent gets context without having to call anything. That's a Tier 2 fix if rules aren't enough.
 
 #### Round 2 — Observations
 
-> Run B (AIDE + Rules) complete. Run A (Bare) not yet tested.
+> **Both runs complete.** Run B (AIDE + Rules): 4/4. Run A (Bare): 4/4.
 
 **MCP Tool Call Summary (Run B so far):**
 
@@ -1517,6 +1555,27 @@ After filling the comparison:
 4. **Recalled context → code quality: confirmed.** B-3 (`server.tool()`) and B-4 (file-per-command, Commander.js) both used recalled patterns.
 5. **PlanMode competes with aide_recall.** Complex tasks bypass memory. This limits aide_recall to direct tasks (the majority, but not all).
 6. **No test file for B-4.** Agent used smoke testing instead of vitest for CLI command. Minor gap.
+
+**Run A Progress (Bare — no MCP, no rules):**
+
+| Prompt | Result |
+|--------|--------|
+| A-1: pruneOld | **Identical to B-1.** Same approach, same edge case, same self-fix. 23 tests. Code-reading was sufficient. |
+| A-2: ScopeResolver | **More verbose than B-2.** 133 lines vs B-2's 57 lines. 29 tests vs B-2's 24. Same PlanMode + Explore/Plan pattern. More defensive (18 ignore patterns, path traversal protection, max length validation). Both used fast-glob. |
+| A-3: aide_search | **Identical to B-3.** Same `store.search()` with `LIKE %keyword%`, same `server.tool()` pattern. 0 corrections. Read 4 files directly vs B-3's 1 aide_recall call. Added tests to existing file (cleaner than B-3's separate file). 15 server + 23 store tests pass. |
+| A-4: aide search CLI | **Better than B-4 on testing.** Same CLI command (61 vs 52 lines), same Commander.js pattern. But A-4 wrote 7 vitest tests while B-4 wrote none (used smoke testing). 0 corrections. Read 5 files vs B-4's 1 aide_recall call. |
+
+**A-1 vs B-1 takeaway:** For simple "add a method" tasks, bare agent matches AIDE agent perfectly. The existing code provides all the context needed.
+
+**A-2 vs B-2 takeaway:** Both entered PlanMode. Neither called aide_recall (B-2 because PlanMode bypassed it, A-2 because no MCP available). A-2 is more comprehensive/defensive (133 vs 57 lines) — debatable whether that's better or over-engineered. Both chose fast-glob, both had a test failure and self-corrected.
+
+**A-3 vs B-3 takeaway:** Functionally identical code. Both produced `store.search()` with `LIKE %keyword%`, same `server.tool()` registration. 0 corrections each. Bare agent read 4 files; AIDE agent used 1 aide_recall call. No quality difference.
+
+**A-4 vs B-4 takeaway:** Bare agent was actually *better* — wrote 7 vitest tests vs B-4's 0. Both followed Commander.js pattern. B-4's recalled "Vitest not Jest" preference didn't translate into writing tests, while A-4 just wrote them naturally.
+
+**Overall Run A vs Run B:** Code quality is equivalent across all 4 prompts. aide_recall didn't produce measurably better code in any case. The intra-session context (prior file reads accumulating in conversation) means the bare agent already "knows" the codebase by A-3/A-4.
+
+**Critical confound: intra-session context.** All 4 prompts ran in one session. By A-3, the bare agent had already read `store.ts`, `server.ts`, `types.ts`, etc. from prior prompts. It didn't need aide_recall because the conversation history contained the same information. A true test of aide_recall's value would need **fresh sessions per prompt** where the agent starts cold each time.
 
 #### Recommendations — Fixing the Remaining Issues
 
@@ -1604,6 +1663,57 @@ After both runs, compare:
 - File structure (own files vs inline?)
 
 This is a stronger signal than pass/fail scorecards because it shows the actual code difference.
+
+#### Git Diff Analysis: Run A vs Run B Code
+
+`git diff round2-run-b..run-a -- src/` reveals:
+
+**What Run B produced that Run A didn't:**
+- `src/memory/tags.ts` — TagStore class (60 lines, 128 test lines). Bonus feature not requested. Good code but scope creep.
+- `src/cli/commands/stats.ts` — aide stats CLI command (73 lines). Also bonus, not prompted.
+- `src/memory/store.ts` — Extra methods: `getStats()`, `mostRecalled()`, `leastRecentlyUsed()`, `database` getter. More surface area.
+- `src/memory/server.ts` — `aide_stats` tool (bonus MCP tool). Updated tool descriptions.
+- Weakened smoke tests — changed exact assertions to `toContain`/`toBeGreaterThanOrEqual` (accommodating the extra tools).
+
+**What Run A produced that Run B didn't:**
+- `src/cli/commands/__tests__/search.test.ts` — 7 vitest tests for the search CLI command. Run B had 0.
+- `src/memory/scopes.ts` — More defensive: 18 ignore patterns, path traversal protection, null byte checks, max length validation. 133 vs 57 lines.
+- `src/memory/__tests__/scopes.test.ts` — 29 tests (vs B's 24). More thorough coverage of edge cases.
+
+**Functionally identical across both:**
+- `store.pruneOld()` — same method, same approach, same self-corrected edge case
+- `store.search()` — same LIKE %keyword% approach, same fields, same defaults
+- `aide_search` MCP tool — same registration pattern, same handler structure
+- `aide search` CLI command — same Commander.js pattern, same chalk output
+
+**Verdict:** Run B produced more code (tags, stats — unrequested), Run A produced better tests. Neither is clearly "better" — they're different. The aide_recall context didn't produce measurably superior code for the same prompts.
+
+#### Round 2 Overall Conclusion
+
+**What we proved:**
+1. **Rules fix aide_recall adoption** — 0% → 75%. This is a real, confirmed finding.
+2. **aide_remember is completely broken** — 0% across all tests. Rules aren't enough.
+3. **Cross-area isolation works** — path-scoped recall returns only relevant context.
+4. **aide_recall overhead is negligible** — 727 tokens (0.4%). No measurable cost.
+5. **Run B used slightly fewer tokens** — 76k vs 83k (bare). aide_recall may save token budget by replacing multiple file reads with one tool call.
+
+**What we didn't prove:**
+1. **Code quality improvement from aide_recall** — same quality with or without it for intra-session tasks.
+2. **Learning loop** — agent never stores knowledge. aide_remember is dead.
+
+**Where we are:**
+- aide_recall works mechanically (adoption + isolation + low overhead) ✓
+- aide_recall doesn't prove value in same-session tests ✗
+- aide_remember is broken ✗
+- The right test hasn't been run yet
+
+**What to do next (in priority order):**
+1. **Run the correction persistence test** — Session 1: teach a correction. Session 2: see if AIDE agent remembers, bare agent doesn't. This directly tests the value prop and is low effort (2 sessions per run). Use the Fill Test plan already written below.
+2. **Fix aide_remember** — Try end-of-task reflection prompt in rules. Without this, the learning loop is dead.
+3. **Skip additional same-session tests** — they won't prove anything new. The design flaw is fundamental.
+4. **Consider hooks for aide_recall** — PreToolUse on Read would make adoption 100% and eliminate the PlanMode bypass. Worth prototyping even though rules work at 75%.
+
+---
 
 ### Fill Test — Claude Code (empty DB, measure what agent stores)
 

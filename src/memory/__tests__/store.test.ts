@@ -203,6 +203,57 @@ describe('MemoryStore', () => {
     });
   });
 
+  describe('pruneOld', () => {
+    it('deletes memories older than N days', () => {
+      // Insert memories with backdated created_at via raw SQL
+      const db = (store as any).db;
+      const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
+      const recent = new Date().toISOString();
+
+      db.prepare(
+        `INSERT INTO memories (layer, what, status, source, created_at, recalled_count)
+         VALUES ('preferences', 'old memory', 'active', 'conversation', ?, 0)`
+      ).run(old);
+      db.prepare(
+        `INSERT INTO memories (layer, what, status, source, created_at, recalled_count)
+         VALUES ('preferences', 'recent memory', 'active', 'conversation', ?, 0)`
+      ).run(recent);
+
+      expect(store.count()).toBe(2);
+
+      const deleted = store.pruneOld(30);
+
+      expect(deleted).toBe(1);
+      expect(store.count()).toBe(1);
+      expect(store.list()[0].what).toBe('recent memory');
+    });
+
+    it('returns 0 when nothing to prune', () => {
+      store.add({ layer: 'preferences', what: 'fresh' });
+      expect(store.pruneOld(30)).toBe(0);
+      expect(store.count()).toBe(1);
+    });
+
+    it('deletes all old memories when days is 0', () => {
+      const db = (store as any).db;
+      const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+
+      db.prepare(
+        `INSERT INTO memories (layer, what, status, source, created_at, recalled_count)
+         VALUES ('preferences', 'one', 'active', 'conversation', ?, 0)`
+      ).run(yesterday);
+      db.prepare(
+        `INSERT INTO memories (layer, what, status, source, created_at, recalled_count)
+         VALUES ('technical', 'two', 'active', 'conversation', ?, 0)`
+      ).run(yesterday);
+
+      const deleted = store.pruneOld(0);
+
+      expect(deleted).toBe(2);
+      expect(store.count()).toBe(0);
+    });
+  });
+
   describe('persistence', () => {
     it('data survives close and reopen', () => {
       store.add({ layer: 'preferences', what: 'survives restart' });

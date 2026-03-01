@@ -205,6 +205,49 @@ export function createServer(store: MemoryStore): McpServer {
     }
   );
 
+  // aide_search — find memories by keyword
+  server.tool(
+    'aide_search',
+    'Search memories by keyword substring match. Use when looking for specific knowledge that may be stored — e.g. "what do we know about authentication?" or "any memories about testing?"',
+    {
+      keyword: z.string().describe('Text to search for in memory content (case-insensitive substring match on what and why fields).'),
+      layer: z.enum(LAYER_VALUES).optional().describe('Filter to a specific layer.'),
+      limit: z.number().optional().describe('Max results (default 50).'),
+    },
+    async (params) => {
+      const memories = store.search(params.keyword, {
+        layer: params.layer as MemoryLayer | undefined,
+        limit: params.limit,
+      });
+
+      if (memories.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `No memories found matching "${params.keyword}".`,
+          }],
+        };
+      }
+
+      const grouped = groupByLayer(memories);
+      let output = `Found ${memories.length} matching "${params.keyword}":\n`;
+
+      for (const [layer, mems] of grouped) {
+        output += `\n## ${formatLayerName(layer)}\n`;
+        for (const m of mems) {
+          output += `- [${m.id}] ${m.what}`;
+          if (m.scope && m.scope !== 'project') output += ` [${m.scope}]`;
+          output += '\n';
+          if (m.why) output += `  _Why: ${m.why}_\n`;
+        }
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: output.trim() }],
+      };
+    }
+  );
+
   return server;
 }
 
