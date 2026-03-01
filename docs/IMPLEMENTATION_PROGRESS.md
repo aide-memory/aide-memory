@@ -41,34 +41,234 @@ No dependencies on old AIDE modules (brain, analysis, orchestration, etc.). Clea
 
 ---
 
-## How to Run
+## Setup & Operations
 
-### As MCP server (for Claude Code, Cursor, etc.)
+### Prerequisites
 
-Add to your MCP config:
+- Node.js >= 18
+- `npm install` in the aide-v0 repo (installs `ts-node`, `better-sqlite3`, `@modelcontextprotocol/sdk`, `zod`)
+
+### How the MCP server works
+
+aide-memory runs as a **stdio MCP server** — the host application (Claude Code, Cursor) spawns it as a child process and communicates over stdin/stdout using JSON-RPC. You don't run it manually in a terminal. The host manages the process lifecycle.
+
+```
+Host (Claude Code / Cursor)
+  └── spawns: npx ts-node src/memory/cli.ts <project-path>
+        └── opens SQLite DB at ~/.aide/projects/<hash>/memory.db
+        └── listens on stdin for JSON-RPC tool calls
+        └── responds on stdout with results
+```
+
+The `<project-path>` argument determines which SQLite database to use. Each project gets its own DB, keyed by a SHA-1 hash of the absolute path:
+
+```
+~/.aide/projects/<sha1-hash-first-12-chars>/memory.db
+```
+
+For this repo: `~/.aide/projects/f126df15177d/memory.db`
+
+### Setup for Claude Code
+
+Add a `.claude/settings.json` file at the project root (already done for this repo):
 
 ```json
 {
   "mcpServers": {
     "aide-memory": {
       "command": "npx",
-      "args": ["ts-node", "/path/to/aide-v0/src/memory/cli.ts", "/path/to/your/project"]
+      "args": ["ts-node", "/Users/meky/code/aide-v0/src/memory/cli.ts", "/Users/meky/code/aide-v0"]
     }
   }
 }
 ```
 
-### Tools available to agents
+When Claude Code opens a session in this directory, it reads `.claude/settings.json` and auto-starts the MCP server. The agent then sees 5 new tools: `aide_recall`, `aide_remember`, `aide_forget`, `aide_memories`, `aide_import`.
 
+**To verify it's running:** Start a new Claude Code session in this repo and ask "what tools do you have?" — you should see the aide-memory tools listed.
 
-| Tool            | Purpose                                            |
-| --------------- | -------------------------------------------------- |
-| `aide_recall`   | Get context for a code area (paths, query, layers) |
-| `aide_remember` | Store a decision, preference, or fact              |
-| `aide_forget`   | Archive or delete a memory                         |
-| `aide_memories` | List what's stored                                 |
-| `aide_import`   | Seed from markdown docs                            |
+**To remove it:** Delete `.claude/settings.json` or remove the `aide-memory` key from `mcpServers`.
 
+### Setup for Cursor
+
+Add a `.cursor/mcp.json` file at the project root (already done for this repo):
+
+```json
+{
+  "mcpServers": {
+    "aide-memory": {
+      "command": "npx",
+      "args": ["ts-node", "/Users/meky/code/aide-v0/src/memory/cli.ts", "/Users/meky/code/aide-v0"]
+    }
+  }
+}
+```
+
+After adding this file, restart Cursor or open the MCP settings panel (Settings > MCP) to see the server. Cursor manages startup/shutdown automatically.
+
+**To remove it:** Delete `.cursor/mcp.json` or remove the `aide-memory` key from `mcpServers`.
+
+### Starting, stopping, restarting
+
+You **do not** start or stop the server manually. The host manages it:
+
+| Action | Claude Code | Cursor |
+|--------|-------------|--------|
+| **Start** | Automatic when session opens in project dir | Automatic when project opens |
+| **Stop** | Automatic when session ends / Claude Code exits | Automatic when Cursor closes |
+| **Restart** | Start a new Claude Code session (`claude` in terminal) | Settings > MCP > click restart icon |
+| **Disable temporarily** | Rename `.claude/settings.json` → `.claude/settings.json.bak` | Toggle off in Settings > MCP |
+
+If you need to test the server manually (e.g., to debug startup):
+
+```bash
+# Starts the server on stdio — type JSON-RPC messages to test
+npx ts-node src/memory/cli.ts /Users/meky/code/aide-v0
+
+# Ctrl+C to stop (sends SIGINT, server closes DB cleanly)
+```
+
+### Seeding memories
+
+The seed script populates the DB with project knowledge before using aide-memory in sessions:
+
+```bash
+npx ts-node src/memory/__tests__/seed-project.ts
+```
+
+This writes 27 memories covering technical facts, preferences, area context, and guidelines. It's idempotent-ish — running it again adds duplicates. To start fresh:
+
+```bash
+# Delete the DB and re-seed
+rm ~/.aide/projects/f126df15177d/memory.db
+npx ts-node src/memory/__tests__/seed-project.ts
+```
+
+### Database management
+
+The SQLite database lives at `~/.aide/projects/<hash>/memory.db`. You can inspect it directly:
+
+```bash
+# Count memories
+sqlite3 ~/.aide/projects/f126df15177d/memory.db "SELECT count(*) FROM memories WHERE status='active'"
+
+# List all memories
+sqlite3 ~/.aide/projects/f126df15177d/memory.db "SELECT id, layer, scope, substr(what,1,80) FROM memories WHERE status='active'"
+
+# Delete everything (nuclear option)
+rm ~/.aide/projects/f126df15177d/memory.db
+```
+
+The DB uses WAL mode. It's safe to read while the MCP server is running. Don't write to it directly while the server is running — use the MCP tools instead.
+
+### Using a different project
+
+To use aide-memory on a different codebase, change the project path argument:
+
+```json
+{
+  "mcpServers": {
+    "aide-memory": {
+      "command": "npx",
+      "args": ["ts-node", "/Users/meky/code/aide-v0/src/memory/cli.ts", "/path/to/other/project"]
+    }
+  }
+}
+```
+
+Each project gets its own DB automatically. No config beyond the path.
+
+---
+
+## Tool Reference
+
+### `aide_recall` — Get context for a code area
+
+The primary tool. Agent calls this when starting work on files to get everything relevant.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `paths` | `string[]` | No | File/directory paths being worked on. Returns memories scoped to these areas + project-wide. |
+| `query` | `string` | No | Text to boost relevant results (e.g. "skeleton loading"). |
+| `layers` | `string[]` | No | Filter to specific layers: `preferences`, `technical`, `area_context`, `guidelines`. |
+| `limit` | `number` | No | Max memories to return (default 20). |
+
+**Example call:**
+```json
+{ "paths": ["src/memory/store.ts", "src/memory/recall.ts"], "query": "SQLite" }
+```
+
+**Example output:**
+```markdown
+## Area Context
+- aide-memory is a standalone module — no dependencies on old AIDE modules [src/memory/**]
+- Path-scoped recall is the core retrieval model [src/memory/**]
+
+## Technical Context
+- SQLite uses WAL mode — never switch to DELETE journal mode [src/memory/**]
+- better-sqlite3 is synchronous — do not use await with db calls [src/memory/**]
+- Vitest not Jest — use describe/it from vitest, not @jest globals
+
+## Guidelines
+- Separate variants into their own files
+```
+
+**How scoping works:** A query for `src/memory/store.ts` matches:
+- Memories scoped to `src/memory/store.ts` (exact match)
+- Memories scoped to `src/memory/**` (parent glob match)
+- Memories scoped to `project` (project-wide)
+- Does NOT match `src/components/**` or `src/cli/**`
+
+### `aide_remember` — Store knowledge
+
+Agent calls this when the developer corrects its approach, makes a decision, or teaches something.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `what` | `string` | **Yes** | The specific knowledge to store. |
+| `layer` | `string` | **Yes** | One of: `preferences`, `technical`, `area_context`, `guidelines`. |
+| `scope` | `string` | No | Glob pattern for the code area (e.g. `src/components/**`). Omit for project-wide. |
+| `why` | `string` | No | Context for why this matters. |
+| `context_label` | `string` | No | Feature grouping (e.g. "dashboard skeleton loading"). |
+| `contributor` | `string` | No | Who this came from (for preferences). |
+| `source` | `string` | No | `conversation` (default), `import`, `agent_discovery`, `elevated`. |
+
+**Example call:**
+```json
+{
+  "what": "Use zod schemas for all MCP tool parameter validation",
+  "layer": "technical",
+  "scope": "src/memory/server.ts",
+  "why": "MCP SDK requires zod schemas for tool registration"
+}
+```
+
+### `aide_forget` — Remove or archive a memory
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | `number` | **Yes** | The memory ID to forget. |
+| `mode` | `string` | No | `archive` (default) hides from recall. `delete` removes permanently. |
+
+### `aide_memories` — List what's stored
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `layer` | `string` | No | Filter by layer. |
+| `status` | `string` | No | `active` (default), `completed`, `archived`. |
+| `scope` | `string` | No | Filter by exact scope. |
+| `limit` | `number` | No | Max results (default 50). |
+
+### `aide_import` — Seed from markdown
+
+Parses markdown content into individual memories. Each bullet point, numbered item, or paragraph becomes a separate memory.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `content` | `string` | **Yes** | The markdown text to parse and import. |
+| `layer` | `string` | **Yes** | Which layer to import into. |
+| `scope` | `string` | No | Scope for all imported memories. |
+| `context_label` | `string` | No | Label for the import batch. |
 
 ---
 
@@ -429,11 +629,254 @@ The risk is that the gap between "flat MEMORY.md" and "structured queryable data
 
 ---
 
+## Cursor E2E Test Plan (Manual)
+
+> For executing later. Each scenario runs 4 ways in Cursor. Score each on a 1-5 scale.
+
+### Setups
+
+| Setup | Config | What to do |
+|-------|--------|------------|
+| **B** — Bare Cursor | No MCP servers, just default Cursor Memories + `.cursor/rules/` | Delete or rename `.cursor/mcp.json` |
+| **D** — ConPort | `.cursor/mcp.json` pointing to ConPort server | `pip install conport`, add MCP config |
+| **F** — mcp-memory-service | `.cursor/mcp.json` pointing to mcp-memory-service | Python venv setup (see notes below) |
+| **H** — AIDE Memory | `.cursor/mcp.json` pointing to aide-memory (already committed) | Use existing `.cursor/mcp.json` |
+
+### Pre-test: Seed each tool
+
+Before running scenarios on D/F/H, seed with the same 10 memories from the programmatic comparison (see E2E Comparison section above). For B, do nothing — let bare Cursor work from code alone.
+
+### Scenario 1: Style Continuity
+
+**Session 1:** Open `src/memory/` in Cursor. Chat: "I want to add a new module `src/memory/stats.ts` for tracking memory usage statistics. Keep it under 150 lines, split into separate files if it grows, use composition over conditionals." Correct the agent 2x if it doesn't follow the style.
+
+**Session 2 (new chat, no prior context):** "Add a `getPopularScopes()` function to the memory stats module."
+
+**Score:** Does the agent match the 150-line / split / composition style without being re-told?
+
+### Scenario 2: Planning Details Survive
+
+**Session 1:** Chat: "Let's plan a refactor of `src/analysis/treeSitterAnalyzer.ts`. Split into 3 files: parser, relation-extractor, symbol-analyzer. Keep TreeSitterAnalyzer as a facade. Don't change public API signatures."
+
+**Session 2 (new chat):** "Continue the treeSitterAnalyzer refactor we planned."
+
+**Score:** Does the agent know the 3-file split, facade pattern, and API constraint?
+
+### Scenario 3: Technical Knowledge
+
+**Session 1:** Work in `src/memory/`. Mention: "SQLite uses WAL mode — never switch. better-sqlite3 is synchronous — no await. Vitest not Jest."
+
+**Session 2 (new chat):** "Add a migration to the memory store for a `tags` column."
+
+**Score:** Does it use sync API? Respect WAL mode? Write vitest tests?
+
+### Scenario 4: Proactive Discovery
+
+**Session 1:** Seed the fact: "MCP tools registered with server.tool() not server.setRequestHandler()."
+
+**Session 2 (new chat):** "Add a new MCP tool called `aide_stats` that returns memory count per layer."
+
+**Score:** Does the agent recall the pattern before coding? Does it use `server.tool()`?
+
+### Scenario 5: New Contributor Simulation
+
+**Setup:** Use the seeded memories. Open a fresh Cursor window (no prior chats).
+
+**Prompt:** "Add a new CLI command `aide prune` that removes memories older than 30 days."
+
+**Score:** Does it follow file-per-command pattern? Match the option definition style?
+
+### Scoring Rubric
+
+| Dimension | 1 (Bad) | 3 (OK) | 5 (Good) |
+|-----------|---------|--------|----------|
+| Corrections needed | 5+ corrections | 1-2 corrections | 0 corrections |
+| Context retained | No prior context | Partial recall | All decisions/prefs |
+| Style match | Generic/wrong | Mostly right | Exact match |
+| Proactive surfacing | Waits to be told | Partially proactive | Flags relevant discoveries |
+
+### Results Template
+
+| Scenario | B (Bare) | D (ConPort) | F (mcp-memory) | H (AIDE) |
+|----------|----------|-------------|-----------------|----------|
+| 1. Style Continuity | /5 | /5 | /5 | /5 |
+| 2. Planning Survival | /5 | /5 | /5 | /5 |
+| 3. Technical Knowledge | /5 | /5 | /5 | /5 |
+| 4. Proactive Discovery | /5 | /5 | /5 | /5 |
+| 5. New Contributor | /5 | /5 | /5 | /5 |
+| **Total** | /25 | /25 | /25 | /25 |
+
+### ConPort setup for Cursor
+
+```bash
+pip install conport
+```
+
+`.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "conport": {
+      "command": "python",
+      "args": ["-m", "conport.mcp_server"]
+    }
+  }
+}
+```
+
+### mcp-memory-service setup for Cursor
+
+Requires Homebrew Python 3.12 on macOS (system Python 3.11 breaks sqlite-vec):
+
+```bash
+brew install python@3.12
+python3.12 -m venv ~/.venvs/mcp-memory
+source ~/.venvs/mcp-memory/bin/activate
+pip install mcp-memory-service 'transformers<5.0' 'sentence-transformers<4.0'
+```
+
+`.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "mcp-memory-service": {
+      "command": "/Users/meky/.venvs/mcp-memory/bin/python",
+      "args": ["-m", "mcp_memory_service"]
+    }
+  }
+}
+```
+
+---
+
+## Claude Code E2E Test Script
+
+> Run these in a fresh `claude` session in the aide-v0 directory. The `.claude/settings.json` MCP config auto-loads aide-memory.
+> **Pre-flight check:** Start a session and ask "what MCP tools do you have?" — you should see aide_recall, aide_remember, aide_forget, aide_memories, aide_import.
+
+### Test A: Recall works (warm-up)
+
+**Prompt:**
+```
+I'm about to work on src/memory/store.ts. Before I start, call aide_recall with that path to get any relevant context.
+```
+
+**What to check:**
+- [ ] Agent calls `aide_recall` with `paths: ["src/memory/store.ts"]`
+- [ ] Output includes: "better-sqlite3 is synchronous", "WAL mode", "Vitest not Jest"
+- [ ] Output does NOT include CLI or analysis context
+- [ ] Agent acknowledges the context before proceeding
+
+### Test B: Technical knowledge retention (Scenario 3)
+
+**Prompt:**
+```
+Add a new method to the MemoryStore class in src/memory/store.ts called `getStats()` that returns { totalActive, totalArchived, memoriesByLayer, memoriesByScope }. Write a vitest test for it too.
+```
+
+**What to check:**
+- [ ] Agent calls `aide_recall` for `src/memory/store.ts` before writing code (or uses context from Test A)
+- [ ] Uses synchronous `this.db.prepare(...).get()` — NOT `await`
+- [ ] Test file uses `describe`/`it`/`expect` from vitest, NOT jest
+- [ ] Does NOT accidentally switch journal mode
+- [ ] Keeps implementation reasonable (no over-engineering)
+
+### Test C: Style continuity (Scenario 1)
+
+**Prompt:**
+```
+I want to add a new module src/memory/tags.ts for tagging memories with user-defined labels. Include a TagStore class with add, remove, list, and getByMemoryId methods.
+```
+
+**What to check:**
+- [ ] Keeps file under 150 lines (preference memory is seeded)
+- [ ] If it grows, splits into separate files (seeded preference)
+- [ ] Follows composition pattern, not conditionals (seeded preference)
+- [ ] Doesn't tie into old AIDE terminology (seeded preference)
+
+### Test D: Proactive discovery (Scenario 4)
+
+**Prompt:**
+```
+Add a new MCP tool called aide_stats that returns memory statistics (count per layer, most recalled, least recently used).
+```
+
+**What to check:**
+- [ ] Agent calls `aide_recall` for `src/memory/server.ts` area
+- [ ] Gets context: "MCP tools registered with server.tool() not server.setRequestHandler()"
+- [ ] Uses `server.tool()` pattern (not raw handler)
+- [ ] Uses zod schemas for parameter validation (matching existing pattern)
+
+### Test E: Remember works (store + recall loop)
+
+**Prompt:**
+```
+Remember this for future sessions: "The tags module uses a separate SQLite table joined to memories via memory_id. Never store tags inline as JSON in the memories table." Scope it to src/memory/tags.ts.
+```
+
+Then in the same session:
+```
+I'm about to work on src/memory/tags.ts. Call aide_recall for that path.
+```
+
+**What to check:**
+- [ ] Agent calls `aide_remember` with the fact
+- [ ] `aide_recall` for `src/memory/tags.ts` returns the just-stored memory
+- [ ] Also returns parent-scope memories for `src/memory/**`
+
+### Test F: Cross-area isolation (critical)
+
+**Prompt:**
+```
+I want to add a new CLI command `aide stats`. Call aide_recall for src/cli/commands/stats.ts to get context.
+```
+
+**What to check:**
+- [ ] Returns: "Each CLI command gets its own file in src/cli/commands/"
+- [ ] Returns: Commander.js technical context
+- [ ] Does NOT return: SQLite WAL mode, better-sqlite3, MCP server.tool() pattern
+- [ ] Agent follows the file-per-command pattern
+
+### Scoring
+
+| Test | Pass/Fail | Notes |
+|------|-----------|-------|
+| A: Recall works | | |
+| B: Technical knowledge | | |
+| C: Style continuity | | |
+| D: Proactive discovery | | |
+| E: Remember loop | | |
+| F: Cross-area isolation | | |
+
+**Key questions after testing:**
+1. Did the agent call `aide_recall` proactively, or only when told?
+2. Did the recalled context visibly change the agent's code output?
+3. Would the agent have gotten the same result by just reading existing code?
+
+---
+
+## MCP Smoke Tests
+
+**55 tests passing** (47 original + 8 new smoke tests against seeded DB).
+
+```
+src/memory/__tests__/
+├── store.test.ts        # 20 tests — CRUD, migrations, WAL mode
+├── recall.test.ts       # 18 tests — path scoping, glob inheritance, keyword boost
+├── server.test.ts       # 9 tests  — tool registration, input validation
+└── mcp-smoke.test.ts    # 8 tests  — full stack against real seeded DB (27 memories)
+```
+
+Run: `npm test -- --run src/memory/__tests__/`
+
+---
+
 ## What's Next
 
-1. **Self-host aide-memory on this codebase** — add to Claude Code MCP config, seed with real project knowledge, use it in coding sessions
-2. **Real agent testing** — run the 5 original scenarios with aide-memory installed vs bare CLAUDE.md, document actual agent behavior differences
-3. **Cursor testing** — set up MCP configs for Cursor, provide instructions for manual testing
-4. **Semantic discovery** — add cross-scope semantic search for entry-point queries ("what similar work exists?")
-5. **Decision point** — after real testing, decide go/no-go based on measurable agent behavior improvement
+1. ~~Self-host aide-memory on this codebase~~ — Done (`.claude/settings.json`, `.cursor/mcp.json`, 27 memories seeded)
+2. ~~MCP smoke tests~~ — Done (8 tests, full stack verified against seeded DB)
+3. **Real agent testing (Claude Code)** — Run the Claude Code E2E Test Script above in a fresh session
+4. **Real agent testing (Cursor)** — Execute the Cursor E2E Test Plan above manually
+5. **Semantic discovery** — add cross-scope semantic search for entry-point queries ("what similar work exists?")
+6. **Decision point** — after real testing, decide go/no-go based on measurable agent behavior improvement
 
