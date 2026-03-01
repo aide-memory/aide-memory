@@ -787,4 +787,15 @@ Don't over-use: skip for already-recalled areas, trivial changes.
 
 > Fill this as we implement. Each entry: date, what was done, result.
 
-_(Empty — implementation not yet started)_
+| Date | What | Result |
+|------|------|--------|
+| Mar 1 | Created `feature/hooks` branch off `feature/agent-memory` | Clean branch, all 180 tests passing |
+| Mar 1 | Implemented `scripts/hooks/stop-remember.sh` (Stop hook) | Blocks first stop with reflection prompt, exits on `stop_hook_active=true`. Tested: outputs valid JSON, loop prevention works. |
+| Mar 1 | Implemented `scripts/hooks/detect-correction.sh` (UserPromptSubmit hook) | Detects correction patterns (no/don't/instead/actually/wrong/prefer/always/never). Silent for normal prompts. Tested with both correction and non-correction inputs. |
+| Mar 1 | Implemented `scripts/hooks/recall-for-path.js` (direct store access) | Node script imports `dist/memory/store` and `dist/memory/recall` directly. Takes file path + project path args. Returns formatted memory lines. Tested with scoped path (gets area memories) and generic path (gets project-wide). |
+| Mar 1 | Implemented `scripts/hooks/pre-read-recall.sh` (PreToolUse hook) | Parses `tool_input.file_path` from JSON stdin, calls `recall-for-path.js`, outputs `hookSpecificOutput.additionalContext` with proper JSON escaping via `jq`. Tested: injects 10+ memories for `src/memory/store.ts`. |
+| Mar 1 | Configured `.claude/settings.json` with all 3 hooks | Stop, UserPromptSubmit, PreToolUse (matcher: Read). Preserved existing mcpServers config. |
+| Mar 1 | Configured `.cursor/hooks.json` (version 1 format) | stop, beforeSubmitPrompt, beforeReadFile. Same scripts as Claude Code. |
+| Mar 1 | Created `.claude/rules/aide-memory.md` | Concise rules for aide_recall/aide_remember usage. Notes that PreToolUse handles auto-recall. |
+| Mar 1 | Fixed pre-existing TS error in `e2e-comparison.test.ts` | `process.env` spread had `undefined` values incompatible with `Record<string, string>`. Fixed with explicit filter. |
+| Mar 1 | Build + test pass | `tsc` clean, 180/184 tests pass (4 failures are external tool connection tests — ConPort/mcp-memory-service not installed). |

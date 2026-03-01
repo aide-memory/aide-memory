@@ -110,7 +110,11 @@ async function connectStdioMcp(command: string, args: string[], env?: Record<str
     setTimeout(async () => {
       try {
         const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
-        const transport = new StdioClientTransport({ command, args, env: { ...process.env, ...env } });
+        const mergedEnv: Record<string, string> = {};
+        for (const [k, v] of Object.entries({ ...process.env, ...env })) {
+          if (v !== undefined) mergedEnv[k] = v;
+        }
+        const transport = new StdioClientTransport({ command, args, env: mergedEnv });
         await client.connect(transport);
         resolve({
           client,
