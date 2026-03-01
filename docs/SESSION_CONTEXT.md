@@ -12,7 +12,7 @@ aide-memory MVP is built and tested. MCP server with 6 tools (aide_recall, aide_
 ## Current State
 
 - **Branch:** `feature/agent-memory` — all implementation + test results
-- **Round 2 E2E results:** `docs/IMPLEMENTATION_PROGRESS.md` — comprehensive analysis
+- **Round 2 E2E results:** `docs/MVP_IMPLEMENTATION.md` — comprehensive analysis
 - **Hooks implementation plan:** `docs/HOOKS_IMPLEMENTATION.md` — next phase
 - **82 tests passing** (74 unit + 8 smoke)
 - **round2-run-b branch** preserved at `c7435d6` (Run B code: tags, stats, extra methods)
@@ -35,7 +35,7 @@ aide-memory MVP is built and tested. MCP server with 6 tools (aide_recall, aide_
 
 1. **Implement hooks** — `Stop` hook for aide_remember nudge, `UserPromptSubmit` for correction detection, `PreToolUse` on Read for automatic aide_recall injection. See `docs/HOOKS_IMPLEMENTATION.md`.
 2. **Run cross-session correction persistence test** — Session 1: teach corrections + verify aide_remember fires. Session 2: new session, does agent use stored knowledge?
-3. **Test with Cursor** — hooks are Claude Code specific. Cursor integration needs different approach (MCP-only, no hooks).
+3. **Test with Cursor** — Cursor also has hooks (`.cursor/hooks.json`). See `docs/HOOKS_IMPLEMENTATION.md` for Cursor-specific config.
 
 ## Code on feature/agent-memory (committed, worth keeping)
 
@@ -56,7 +56,7 @@ From round2-run-b (preserved but NOT merged — has extra unrequested code):
 | Doc | Purpose |
 |-----|---------|
 | `docs/SESSION_CONTEXT.md` | This file — active context |
-| `docs/IMPLEMENTATION_PROGRESS.md` | Full implementation report: MVP build + Round 1 + Round 2 E2E results |
+| `docs/MVP_IMPLEMENTATION.md` | Full implementation report: MVP build + Round 1 + Round 2 E2E results |
 | `docs/HOOKS_IMPLEMENTATION.md` | **NEW** — Hooks phase: plan, implementation, testing |
 | `docs/PROTOTYPE.md` | Original spec: problems, solution, competitive landscape |
 | `docs/RESEARCH.md` | Market research summary |

@@ -1,7 +1,17 @@
 # Hooks Implementation — aide-memory Adoption Layer
 
 > Created Mar 1, 2026. This doc covers the hooks phase: why, what, how, testing.
-> Previous phase: `docs/IMPLEMENTATION_PROGRESS.md` (MVP + Round 2 E2E)
+
+## Background
+
+The previous phase built the aide-memory MVP (MCP server, 6 tools, SQLite store, path-scoped recall) and ran two rounds of E2E testing. Full details in **`docs/MVP_IMPLEMENTATION.md`** — that doc covers:
+- MVP build (store, recall, server, CLI, 82 tests)
+- Round 1 E2E: 0/6 proactive tool calls without rules
+- Round 2 E2E: Run A (bare) vs Run B (AIDE+rules) across **separate sessions**, same 4 prompts
+- Key finding: aide_recall adoption fixed by rules (75%), but **code quality was equivalent** — bare agent reads code directly and matches AIDE agent for intra-session tasks
+- aide_remember: 0% adoption across all 10 test prompts
+
+This doc picks up where MVP_IMPLEMENTATION.md left off. The MVP works mechanically. The problem is adoption (aide_remember) and proving cross-session value.
 
 ---
 
@@ -9,7 +19,7 @@
 
 ### Why we should have considered hooks earlier
 
-The agent adoption problem was identified in Round 1 (0/6 proactive calls). Our response was rules (`.claude/rules/aide-memory.md`), which partially worked for aide_recall (75%) but completely failed for aide_remember (0%). Hooks were mentioned in the IMPLEMENTATION_PROGRESS doc as a "Tier 2 fix" but we deprioritized them in favor of running a Round 2 intra-session comparison test.
+The agent adoption problem was identified in Round 1 (0/6 proactive calls). Our response was rules (`.claude/rules/aide-memory.md`), which partially worked for aide_recall (75%) but completely failed for aide_remember (0%). Hooks were mentioned in the MVP_IMPLEMENTATION doc as a "Tier 2 fix" but we deprioritized them in favor of running a Round 2 intra-session comparison test.
 
 **In hindsight, this was a sequencing mistake.** The Round 2 intra-session comparison proved code quality is equivalent with or without aide_recall — a real finding, but one that doesn't test aide-memory's actual value prop (cross-session persistence). We could have:
 1. Implemented hooks immediately after Round 1 (fix aide_remember)
@@ -305,92 +315,192 @@ if (result.memories.length > 0) {
 
 ## E2E Testing Plan
 
-### Test Design Principles (Lessons from Round 2)
+### Lessons from Round 2 (What NOT to Repeat)
 
-1. **Separate sessions per comparison** — Run A and Run B MUST be different sessions (verified in Round 2).
-2. **Cross-session tests are essential** — intra-session tests can't prove aide_memory's value because agents accumulate context from file reads within a session.
-3. **Measure adoption rates AND quality** — adoption without quality improvement isn't enough.
-4. **Record everything** — fill tables as we go, paste session IDs, extract from JSONL.
+Round 2 ran 4 prompts in a single session, bare vs AIDE, and found equivalent code quality. See `docs/MVP_IMPLEMENTATION.md` for full results. Key takeaways for this round:
+
+| Lesson | What We Learned | How We Avoid Repeating |
+|--------|----------------|----------------------|
+| **Intra-session quality comparison is pointless** | Agent reads code directly, matches AIDE agent. Both produce same code. | Don't compare code quality within a single session. Only compare across sessions. |
+| **Adoption is measurable** | JSONL session files show exact MCP calls. Can extract programmatically. | Keep using JSONL extraction. Define "proactive" precisely. |
+| **Token tracking matters** | Run B (76k) used fewer tokens than Run A (83k). aide_recall replaces file reads. | Record `/context` after every test. Compare message tokens specifically. |
+| **Both runs must be separate sessions** | Verified in Round 2 — session IDs confirmed different. | Always note session IDs. |
+| **Code changes from tests should be kept or discarded deliberately** | Round 2 Run A code was committed (useful). Run B extra code (tags, stats) preserved on separate branch. | Decide BEFORE testing: will we keep the code? Branch accordingly. |
+
+### What We're Actually Testing This Time
+
+**Round 2 tested:** Does aide_recall improve code quality? (Answer: No, for intra-session work.)
+
+**This round tests three different questions:**
+
+| # | Question | How We Test | What Proves It |
+|---|----------|-------------|----------------|
+| 1 | **Does the Stop hook make aide_remember fire?** | Single session, 1 prompt + 1 correction. Check JSONL for `aide_remember` calls. | aide_remember call count > 0 (was 0/10 in all prior tests) |
+| 2 | **Does stored knowledge survive to a new session?** | Session 1: teach + correct. Session 2 (fresh): similar task. Compare output. | AIDE agent in session 2 uses patterns taught in session 1. Bare agent doesn't. |
+| 3 | **Does PreToolUse hook make aide_recall 100% automatic?** | Single session with hook. Check if recall context appears before file reads. | Context injected on every Read, including inside PlanMode subagents. |
+
+**Question 2 is the money test.** If it passes, aide-memory has proven cross-session value. If it fails, we need to understand why (aide_remember didn't store? aide_recall didn't return? agent ignored the context?).
+
+### Decision Gates (Stop-and-Fix Before Proceeding)
+
+```
+Gate 1: Does Stop hook fire?
+├── YES → Proceed to Gate 2
+└── NO → Fix hook config. Don't run any E2E tests yet.
+
+Gate 2: Does aide_remember get called?
+├── YES → Proceed to Gate 3
+└── NO → Hook fires but agent ignores nudge. Fix prompt text / try
+│         Cursor's followup_message approach. Don't run cross-session test.
+
+Gate 3: Is stored knowledge correct and scoped?
+├── YES → Proceed to Test Suite 2 (cross-session)
+└── NO → Memories stored but wrong layer/scope/content. Fix and re-test.
+
+Gate 4: Does session 2 agent use session 1 knowledge?
+├── YES → aide-memory proves cross-session value. Ship it.
+└── NO → Recall returns knowledge but agent ignores it. Investigate why.
+         Is it context injection format? Relevance? Token budget?
+```
+
+**Do NOT skip gates.** Each depends on the previous. Running cross-session tests before aide_remember works is a waste of time.
 
 ### Branch Strategy
 
 ```
-feature/agent-memory          ← current, has MVP + Run A code
-  └── feature/hooks           ← NEW branch for hooks implementation
-       └── hooks-test-run-a   ← bare test results (after hooks tests)
-       └── hooks-test-run-b   ← AIDE+hooks test results
+feature/agent-memory              ← current, has MVP + Round 2 code
+  └── feature/hooks               ← hooks implementation (scripts + configs)
 ```
 
-**Before testing:**
+We do NOT create separate branches for test runs this time. Code changes from test prompts are **not kept** — we're testing hooks behavior, not generating production code. After each test, `git checkout -- src/` to reset.
+
 ```bash
-# Create hooks branch off feature/agent-memory
+# Setup
 git checkout feature/agent-memory
 git checkout -b feature/hooks
 
-# Implement hooks (steps 1-10 above)
+# Implement hooks (steps 1-11 from Implementation Order)
 # Commit implementation
-
-# For Run B (AIDE + hooks): hooks are active
-# For Run A (bare): disable hooks + MCP
+# Then run tests on this branch, resetting code changes between tests
 ```
 
-### Test Suite 1: aide_remember Adoption (Single Session)
+### Test Suite 1: aide_remember Adoption (Gates 1-3)
 
-**Purpose:** Does the Stop hook make aide_remember fire?
+**What this tests:** Do hooks make aide_remember fire? (Was 0% in all prior rounds.)
 
-**Setup — Run B (AIDE + hooks):**
-- `.mcp.json` active (aide-memory MCP server)
-- `.claude/settings.json` with Stop hook + UserPromptSubmit hook
-- `.claude/rules/aide-memory.md` active
-- Fresh session: `claude`
+**What this does NOT test:** Code quality comparison. We already proved that's equivalent.
 
-**Setup — Run A (bare baseline):**
-- `mv .mcp.json .mcp.json.bak`
-- `mv .claude/rules/aide-memory.md .claude/rules/aide-memory.md.bak`
-- Remove hooks from `.claude/settings.json` (or back up the file)
-- Fresh session: `claude`
+**Setup (AIDE + hooks):**
+```bash
+# On feature/hooks branch with hooks implemented
+# Verify:
+cat .mcp.json                           # aide-memory MCP active
+cat .claude/settings.json               # hooks configured
+cat .claude/rules/aide-memory.md        # rules active
+```
 
-**Prompts (same for both runs):**
+**Session:** Fresh `claude` session. Note session ID from JSONL filename.
 
-**Prompt H-1: Simple task with discoverable constraint**
+---
+
+**Prompt H-1: Simple task (tests Gate 1 + 2)**
 ```
 Add a method `archiveOld(days: number)` to MemoryStore in src/memory/store.ts — like pruneOld but sets status to 'archived' instead of deleting. Write a vitest test.
 ```
 
-Measure:
-| Dimension | Run A (Bare) | Run B (AIDE+Hooks) |
-|-----------|-------------|-------------------|
-| aide_recall called? | n/a | Y/N (auto via hook or proactive) |
-| aide_remember called? | n/a | Y/N — **this is the key metric** |
-| What was remembered? | n/a | (paste content) |
-| Used sync API? | Y/N | Y/N |
-| Test uses vitest? | Y/N | Y/N |
-| Corrections needed | count | count |
+Wait for agent to complete. The Stop hook should fire and nudge aide_remember.
 
-**Prompt H-2: Task with user correction mid-stream**
+**Extract from JSONL after:**
+```bash
+# Find session file
+ls -t ~/.claude/projects/-Users-meky-code-aide-v0/*.jsonl | head -1
+
+# Check if Stop hook fired
+python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    for line in f:
+        obj = json.loads(line)
+        msg = obj.get('message', {})
+        for c in msg.get('content', []):
+            if isinstance(c, dict) and c.get('type') == 'tool_use' and 'remember' in c.get('name', ''):
+                print(f'aide_remember CALLED: {json.dumps(c.get(\"input\", {}))[:200]}')
+" <session-file>
+```
+
+**Fill:**
+| Metric | Result |
+|--------|--------|
+| Session ID | |
+| Stop hook fired? | Y/N |
+| aide_remember called? | Y/N — **Gate 2** |
+| What was stored (paste)? | |
+| Layer + scope correct? | Y/N — **Gate 3** |
+| Token usage (`/context`) | k / 200k (%) |
+| Message tokens specifically | k |
+
+**If Gate 2 fails (aide_remember not called):** STOP. Fix the Stop hook prompt text. Try stronger language, try `"type": "prompt"` hook, try Cursor's `followup_message`. Do not proceed to H-2.
+
+---
+
+**Prompt H-2: User correction (tests correction detection hook)**
+
+In the SAME session, paste:
 ```
 Add a method `duplicateCheck()` to MemoryStore that finds memories with very similar `what` text. Use string comparison.
 ```
 
-After agent writes first version, **correct it:** "No, don't use exact string match — use Levenshtein distance or SQL LIKE with fuzzy matching."
+After agent writes first version, send this correction:
+```
+No, don't use exact string match — use SQL LIKE with wildcard matching instead.
+```
 
-Measure:
-| Dimension | Run A (Bare) | Run B (AIDE+Hooks) |
-|-----------|-------------|-------------------|
-| Correction detected by hook? | n/a | Y/N |
-| aide_remember called after correction? | n/a | Y/N |
-| What was stored? | n/a | (paste content) |
-| Agent adapted to correction? | Y/N | Y/N |
+**Fill:**
+| Metric | Result |
+|--------|--------|
+| UserPromptSubmit hook detected correction? | Y/N |
+| aide_remember called after correction? | Y/N |
+| Correction content stored accurately? | Y/N |
+| Agent adapted code to correction? | Y/N |
 
-### Test Suite 2: Cross-Session Persistence (Two Sessions)
+**After Suite 1, verify the DB:**
+```bash
+sqlite3 ~/.aide/projects/*/memory.db \
+  "SELECT id, layer, scope, substr(what,1,80), source FROM memories WHERE source='conversation' ORDER BY id DESC LIMIT 10"
+```
 
-**Purpose:** Does knowledge stored in session 1 survive to session 2?
+**Reset code changes (we're not keeping test code):**
+```bash
+git checkout -- src/
+```
 
-**This is the test that proves aide_memory's value.** It requires aide_remember to work (hence hooks first).
+**Record `/context`:**
+| Category | Tokens | % |
+|----------|--------|---|
+| System prompt | | |
+| System tools | | |
+| Memory files | | |
+| Messages | | |
+| Free space | | |
+| **Total used** | | |
 
-**Session 1 — Teaching session:**
+---
 
-Setup: AIDE + hooks active. Fresh session.
+### Test Suite 2: Cross-Session Persistence (The Money Test)
+
+**Prerequisite:** Suite 1 passed Gates 1-3. aide_remember works and stores correct knowledge.
+
+**What this tests:** Does knowledge taught in session 1 survive to session 2 and influence the agent's code?
+
+**What makes this different from Round 2:** Round 2 tested intra-session (agent already had context). This tests cross-session (agent starts cold, gets context only from aide_recall).
+
+**Why we need a bare comparison this time:** Unlike Round 2 (where bare matched AIDE because code was readable), a bare agent in session 2 has NO way to know what was taught in session 1. There's no code to read that contains the preferences. This is where aide_memory should clearly win.
+
+---
+
+**Session 1 — AIDE+Hooks: Teaching + Coding**
+
+Fresh session. AIDE + hooks active.
 
 ```
 I'm working on src/memory/store.ts. Some things to know:
@@ -401,56 +511,194 @@ I'm working on src/memory/store.ts. Some things to know:
 Now add an `expireCompleted(days: number)` method that moves completed memories older than N days to archived status.
 ```
 
-Then correct: "Also, always log the count of affected rows when doing bulk operations."
-
-After session 1, verify storage:
-```bash
-sqlite3 ~/.aide/projects/*/memory.db "SELECT id, layer, substr(what,1,80) FROM memories WHERE source='conversation' ORDER BY id DESC LIMIT 10"
+After agent writes code, correct:
+```
+Also, always log the count of affected rows when doing bulk operations — use logInfo from src/core/logger.
 ```
 
-**Session 2 — Recall session (NEW session, same project):**
+**After session 1, check what was stored:**
+```bash
+sqlite3 ~/.aide/projects/*/memory.db \
+  "SELECT id, layer, scope, substr(what,1,100) FROM memories WHERE source='conversation' ORDER BY id DESC LIMIT 10"
+```
 
-Close session 1. Start fresh: `claude`
+**Fill:**
+| Metric | Result |
+|--------|--------|
+| Session 1 ID | |
+| aide_remember calls | count |
+| Memories stored (list) | |
+| `datetime()` preference stored? | Y/N |
+| Index preference stored? | Y/N |
+| Status transition rule stored? | Y/N |
+| Logging correction stored? | Y/N |
+| Token usage session 1 | k / 200k (%) |
+
+**If key preferences were NOT stored:** STOP. aide_remember still broken. Go back to Suite 1 and fix hooks.
+
+**Reset code (don't keep session 1's code):**
+```bash
+git checkout -- src/
+```
+
+**Close session 1 completely.** Wait 5 seconds.
+
+---
+
+**Session 2A — AIDE+Hooks: Fresh session, recall test**
+
+Start fresh: `claude`. AIDE + hooks active. Note new session ID.
 
 ```
 Add a method `purgeArchived(days: number)` to MemoryStore that permanently deletes archived memories older than N days. Write a vitest test.
 ```
 
-Measure:
-| Dimension | With AIDE+Hooks | Without AIDE (bare) |
-|-----------|----------------|-------------------|
-| Used `datetime()` SQL pattern? | Y/N | Y/N |
-| Logged affected row count? | Y/N | Y/N |
-| Used vitest? | Y/N | Y/N |
-| Corrections needed | count | count |
-| aide_recall returned session 1 knowledge? | Y/N | n/a |
-| Token usage | — | — |
+**Do NOT mention any preferences.** The agent should get them from aide_recall only.
 
-**This is the money test.** If the AIDE agent uses `datetime()` and logs row counts (both taught in session 1) while the bare agent doesn't — aide_memory has proven its value.
+**Fill:**
+| Metric | Session 2A (AIDE+Hooks) |
+|--------|------------------------|
+| Session 2A ID | |
+| aide_recall fired (hook or proactive)? | Y/N |
+| Session 1 memories returned? | Y/N (paste what was recalled) |
+| Used `datetime()` SQL? | **Y/N — key signal** |
+| Logged affected row count? | **Y/N — key signal** |
+| Added index? | Y/N |
+| Used vitest? | Y/N |
+| Corrections needed | count |
+| Token usage session 2A | k / 200k (%) |
+| Message tokens specifically | k |
+
+**Reset code:**
+```bash
+git checkout -- src/
+```
+
+---
+
+**Session 2B — Bare: Fresh session, same prompt, no memory**
+
+```bash
+# Disable everything
+mv .mcp.json .mcp.json.bak
+mv .claude/rules/aide-memory.md .claude/rules/aide-memory.md.bak
+# Remove hooks from .claude/settings.json (or back it up)
+cp .claude/settings.json .claude/settings.json.bak
+# Edit to remove hooks section, or:
+echo '{}' > .claude/settings.json
+```
+
+Start fresh: `claude`. Note session ID.
+
+Same prompt:
+```
+Add a method `purgeArchived(days: number)` to MemoryStore that permanently deletes archived memories older than N days. Write a vitest test.
+```
+
+**Fill:**
+| Metric | Session 2B (Bare) |
+|--------|------------------|
+| Session 2B ID | |
+| Used `datetime()` SQL? | **Y/N — key comparison** |
+| Logged affected row count? | **Y/N — key comparison** |
+| Added index? | Y/N |
+| Used vitest? | Y/N |
+| Corrections needed | count |
+| Token usage session 2B | k / 200k (%) |
+| Message tokens specifically | k |
+
+**Restore after:**
+```bash
+mv .mcp.json.bak .mcp.json
+mv .claude/rules/aide-memory.md.bak .claude/rules/aide-memory.md
+mv .claude/settings.json.bak .claude/settings.json
+```
+
+**Reset code:**
+```bash
+git checkout -- src/
+```
+
+---
+
+**Suite 2 Side-by-Side Comparison:**
+
+| Dimension | Session 2A (AIDE+Hooks) | Session 2B (Bare) | Proves Value? |
+|-----------|------------------------|--------------------|--------------|
+| Used `datetime()` SQL | | | If AIDE=Y, Bare=N → **YES** |
+| Logged row count | | | If AIDE=Y, Bare=N → **YES** |
+| Added index | | | If AIDE=Y, Bare=N → **YES** |
+| Used vitest | | | Likely both Y (readable from code) |
+| Used sync API | | | Likely both Y (readable from code) |
+| Corrections needed | | | Fewer for AIDE → value |
+| Message tokens | | | Lower for AIDE → efficiency |
+
+**Interpreting results:**
+- **AIDE uses taught patterns, Bare doesn't** → aide-memory proves cross-session value. This is the win condition.
+- **Both use the patterns** → Agent discovers them from reading code. aide-memory doesn't add value for these patterns. Try with patterns that AREN'T discoverable from code (e.g., "use X library, not Y").
+- **Neither uses the patterns** → Session 1 knowledge wasn't stored or wasn't recalled. Debug: check DB, check aide_recall output, check if context was injected.
+
+---
 
 ### Test Suite 3: Auto-Recall via Hook (PreToolUse)
 
-**Purpose:** Does the PreToolUse Read hook make aide_recall 100% automatic?
+**Prerequisite:** Suites 1-2 done. This is an optimization test, not a value test.
 
-**Setup:** AIDE + hooks (including PreToolUse Read hook). Fresh session.
+**What this tests:** Does PreToolUse hook make aide_recall 100% automatic? Does it work inside PlanMode subagents?
 
-**Prompt HR-1: Direct task (should auto-recall)**
+**What this does NOT test:** Code quality (already proved equivalent for intra-session).
+
+**Setup:** AIDE + hooks (including PreToolUse/beforeReadFile hook). Fresh session.
+
+**Prompt HR-1: Direct task**
 ```
 Add a new method `mergeMemories(id1: number, id2: number)` to MemoryStore that combines two memories into one. Keep the most recent created_at.
 ```
 
-**Prompt HR-2: PlanMode task (should ALSO auto-recall via hook)**
+**Prompt HR-2: PlanMode-triggering task**
 ```
 Add a new module src/memory/dedup.ts — a DedupEngine class that finds and merges duplicate memories. Include detect, merge, and report methods. Write vitest tests.
 ```
 
-Measure:
-| Dimension | HR-1 (Direct) | HR-2 (PlanMode) |
-|-----------|---------------|-----------------|
-| Auto-recall injected via hook? | Y/N | Y/N |
+**Fill:**
+| Metric | HR-1 (Direct) | HR-2 (PlanMode) |
+|--------|---------------|-----------------|
+| Hook injected recall context before Read? | Y/N | Y/N |
 | Agent also called aide_recall manually? | Y/N | Y/N |
 | PlanMode subagents got recall context? | n/a | Y/N |
-| Context was relevant to task? | Y/N | Y/N |
+| Duplicate recall (hook + manual)? | Y/N | Y/N |
+| Token overhead from hook injection | estimate | estimate |
+
+**If hook doesn't fire for subagent reads:** This confirms the PlanMode bypass is structural (hooks may not fire inside subagent processes). Document and accept — rules handle 75%, hook handles the remaining direct reads. This is not a blocker.
+
+**Reset code:**
+```bash
+git checkout -- src/
+```
+
+**Record `/context`:**
+| Category | Tokens | % |
+|----------|--------|---|
+| Messages | | |
+| **Total used** | | |
+
+---
+
+### Token Budget Comparison (All Suites)
+
+After all tests, fill this summary:
+
+| Session | Prompts | Total Tokens | Message Tokens | aide_recall calls | aide_remember calls |
+|---------|---------|-------------|----------------|-------------------|---------------------|
+| Suite 1 (AIDE+Hooks) | 2 | | | | |
+| Suite 2 Session 1 (AIDE+Hooks) | 1 + correction | | | | |
+| Suite 2A (AIDE+Hooks, recall) | 1 | | | | |
+| Suite 2B (Bare) | 1 | | | | |
+| Suite 3 (AIDE+Hooks) | 2 | | | | |
+| **Round 2 Run A (bare, 4 prompts)** | **4** | **83k** | **63k** | **n/a** | **n/a** |
+| **Round 2 Run B (AIDE+rules, 4 prompts)** | **4** | **76k** | **52k** | **3** | **0** |
+
+This shows whether hooks add token overhead vs rules-only vs bare.
 
 ---
 
