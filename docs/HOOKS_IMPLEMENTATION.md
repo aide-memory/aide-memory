@@ -644,19 +644,9 @@ sqlite3 ~/.aide/projects/*/memory.db \
 git checkout -- src/
 ```
 
-**Token usage (`/context` after Suite 1):**
+**Token usage (`/context` after Suite 1) — see Suite 1 Observations section below for full breakdown.**
 
-| Category | Tokens | % of context |
-|----------|--------|------------|
-| System prompt | | |
-| System tools (built-in) | | |
-| MCP tools (aide-memory) | | |
-| Memory files (MEMORY.md) | | |
-| Skills | | |
-| Messages (conversation) | | |
-| Free space | | |
-| Autocompact buffer | | |
-| **Total used** | **k / 200k** | **%** |
+**46k / 200k (23%). Notable: NO MCP tools category listed — aide-memory MCP server likely not connected.**
 
 ---
 
@@ -1107,5 +1097,136 @@ Don't over-use: skip for already-recalled areas, trivial changes.
 | Mar 1 | Build + test pass                                                        | `tsc` clean, 180/184 tests pass (4 failures are external tool connection tests — ConPort/mcp-memory-service not installed).                                                                                                        |
 | Mar 1 | Fixed hooks config format                                                | All events need nested `{"hooks": [...]}` array inside the matcher group, not flat handler objects. Stop and UserPromptSubmit were rejected by Claude Code validator. Fixed and confirmed working — PreToolUse hook fires on every Read call in live session. |
 | Mar 1 | Aligned E2E test format with MVP doc                                     | Per-prompt tables now include code quality dimensions (sync API, vitest, corrections), paste areas for code/recall/remember output, MCP Tool Call Summary tables, and full token category breakdowns matching `docs/MVP_IMPLEMENTATION.md`. |
+| Mar 1 | Ran H-1 (simple task) + H-2 (correction) in session `d40efe75`          | See Suite 1 results above. Gate 1 PASS (stop hook fires). Gate 2: H-1 agent dismissed nudge; H-2 agent TRIED aide_remember via Bash MCP client workaround — failed silently. 0 memories stored. |
+
+---
+
+## Suite 1 Observations (H-1 + H-2)
+
+### Token Usage (Suite 1 — `/context` after H-2)
+
+| Category | Tokens | % of context |
+|----------|--------|------------|
+| System prompt | 3.4k | 1.7% |
+| System tools (built-in) | 17.4k | 8.7% |
+| MCP tools (aide-memory) | — | — (not listed separately; may not have connected) |
+| Memory files (MEMORY.md + aide-memory.md) | 1.1k | 0.5% |
+| Skills | 164 | 0.1% |
+| Messages (conversation) | 25.1k | 12.6% |
+| Free space | 120k | 59.9% |
+| Autocompact buffer | 33k | 16.5% |
+| **Total used** | **46k / 200k** | **23%** |
+
+**Notable:** MCP tools are not listed as a separate category. This strongly suggests the aide-memory MCP server **was not connected** in this session. The agent had no MCP tools available, which explains why it tried to call aide_remember via a Bash workaround instead of as an MCP tool.
+
+### UI Issues Observed
+
+The Stop hook output displays as an error in Claude Code's UI:
+```
+⏺ Ran 1 stop hook
+  ⎿  bash scripts/hooks/stop-remember.sh
+  ⎿  Stop hook error: Before finishing: Did you learn anything non-obvious during this task?...
+```
+
+The word "error" is misleading — the hook is working correctly. This happens because our hook uses `"decision": "block"` which Claude Code surfaces as `hookErrors` in JSONL and "Stop hook error:" in the UI. This is cosmetic but could confuse users.
+
+### UserPromptSubmit Hook: No Evidence It Fired
+
+Zero `UserPromptSubmit` hook_progress events in the entire session JSONL. Only PreToolUse, PostToolUse (built-in callbacks), and Stop events appear. The correction message (`"No, don't use bigram similarity..."`) should have matched the regex pattern `no[, ]+(don.t)` but:
+
+- No context injection visible in the user message (line 73 in JSONL is plain text)
+- No system-reminder or additionalContext between user message and assistant response
+- The agent responded to the correction without mentioning aide_remember
+
+Possible causes:
+1. UserPromptSubmit hooks don't generate hook_progress entries in JSONL (different telemetry path)
+2. The hook fired but its output format was wrong (our `hookSpecificOutput` format may not be correct for UserPromptSubmit)
+3. The hook genuinely didn't fire for this session
+
+**Contrast with current session:** The same hook fires correctly in THIS session (analyzing H-2 results), injecting "The user appears to be correcting you..." context. The difference may be that MCP server connectivity affects hook execution, or the hook was only working after the config format fix.
+
+### What Went Well
+
+1. **Stop hook mechanics work perfectly.** Fires on every task completion. Loop prevention (`stop_hook_active`) works — second stop always exits cleanly. The nudge text reaches the agent and it considers the question seriously.
+
+2. **PreToolUse:Read hook fires reliably.** Every Read tool call triggers `pre-read-recall.sh`. The hook correctly parses `tool_input.file_path` and calls `recall-for-path.js`. The mechanism is sound.
+
+3. **Code quality remains excellent.** Both H-1 and H-2 produced correct sync API code, vitest tests, all passing. Zero unintended corrections needed. The agent adapted to the H-2 correction cleanly (Dice bigrams → SQL LIKE self-join).
+
+4. **Agent shows genuine judgment.** H-1: "Nothing non-obvious to store" was arguably correct for a copy-paste-modify task. H-2: "Yes — the user's preference to keep logic in the database layer is worth storing" — the agent identified the right thing to remember.
+
+### What Went Mid
+
+1. **Stop hook convinces but can't execute.** The H-2 agent clearly wanted to call aide_remember. It identified the correct memory (SQL-first preference, preferences layer, `src/memory/**` scope). But it used a Bash MCP client workaround that failed silently — `.catch(() => {})` swallowed the error, `exit code 0` was misleading.
+
+2. **PreToolUse hook fires but has nothing to inject.** All 6 Read calls triggered the hook, but no memories matched (the DB had no memories scoped to `src/memory/store.ts` or `src/memory/__tests__/store.test.ts` specifically — existing memories use broader scopes like `src/memory/**`). The recall path-matching may need to resolve glob scopes against specific file paths.
+
+3. **H-2 test prompt was poorly designed.** Said "Use string comparison" expecting exact match, but agent used Dice coefficient bigram similarity instead. The planned correction didn't apply; we had to adapt it. Future test prompts need to be more constraining if they rely on the agent making a specific mistake.
+
+### What Went Bad
+
+1. **MCP server appears to not have been connected.** The `/context` output shows no MCP tools category. This is the root cause of Gate 2 failure — the agent literally could not call aide_remember as an MCP tool because the tool wasn't available. The hook nudge worked, but the agent had no way to act on it.
+
+2. **aide_remember adoption is still 0%.** Zero memories stored across both H-1 and H-2. The H-2 Bash workaround attempt doesn't count — the memory is not in the DB. We went from "agent ignores memory tools" to "agent wants to use memory tools but can't find them."
+
+3. **UserPromptSubmit correction detection is unverified.** No evidence it fired in the H-2 session. Without this hook working, the only path to aide_remember is the Stop hook, which fires too late (after the agent already forgot the context of the correction).
+
+### Root Cause Analysis
+
+The most likely root cause is **MCP server not connected in the test session**. Evidence:
+- `/context` shows no MCP tools category
+- Agent used Bash workaround instead of MCP tool call
+- Agent tool list shows only Read/Edit/Bash/Write/Glob — no aide_* tools
+
+Why wasn't MCP connected? The `.claude/settings.json` has the MCP server config:
+```json
+"mcpServers": {
+  "aide-memory": {
+    "command": "npx",
+    "args": ["ts-node", "/Users/meky/code/aide-v0/src/memory/cli.ts", "/Users/meky/code/aide-v0"]
+  }
+}
+```
+
+Possible reasons:
+- MCP server failed to start (ts-node compilation error? dependency issue?)
+- Session started before the config was properly saved
+- Claude Code MCP connection is unreliable/timing-dependent
+
+### Connection to Original Question: Should We Continue?
+
+The original question from `docs/PROTOTYPE.md` competitive analysis: *"Is path-scoped recall enough to justify building vs. using ConPort?"*
+
+**Suite 1 results don't answer this yet, but they reveal a prerequisite problem:**
+
+1. **The hooks architecture is sound.** Stop hook fires, PreToolUse fires, loop prevention works, agent judgment is good. The MECHANISM works.
+
+2. **The MCP connection is the bottleneck.** If the MCP server isn't connected, nothing else matters — aide_remember can't be called, aide_recall can't be called proactively, and the PreToolUse hook has no memories to inject.
+
+3. **We haven't yet tested the actual value proposition.** Cross-session persistence (Suite 2) is "the money test." We can't run it until Suite 1 works end-to-end.
+
+**Decision: Continue, but fix MCP first.** The hooks work. The agent wants to use memory. The MCP connection is the broken link. Fix that, re-run Suite 1, and if Gate 2 passes, proceed to Suite 2.
+
+### Next Steps
+
+1. **Diagnose MCP connection failure.** Run `claude` with verbose output, check if aide-memory MCP server starts. Test: `npx ts-node src/memory/cli.ts /Users/meky/code/aide-v0` manually — does it respond to JSON-RPC?
+
+2. **Re-run Suite 1 with confirmed MCP connection.** Before sending any test prompts, verify MCP tools appear in `/context` output. If they don't, fix MCP config first.
+
+3. **Consider alternative aide_remember path.** If MCP connection is inherently unreliable, the Stop hook could call `recall-for-path.js` (direct store access) to WRITE as well as read — bypassing MCP entirely for the store path.
+
+4. **Test UserPromptSubmit hook independently.** Send a known correction pattern and check if the context injection appears. May need to fix the hook output format.
+
+### Potential Mitigations
+
+| Problem | Mitigation | Effort |
+|---------|-----------|--------|
+| MCP server not connected | Add health check at session start (PreToolUse hook checks MCP, warns if down) | Low |
+| Agent uses Bash instead of MCP tool | Update Stop hook prompt to explicitly say "use the aide_remember MCP tool" | Low |
+| Agent dismisses Stop hook nudge (H-1) | Make prompt stronger: "You MUST call aide_remember if any of these apply: ..." | Low |
+| PreToolUse has no memories to inject | Seed DB with base memories; fix recall glob matching for specific file paths | Medium |
+| UserPromptSubmit hook not firing | Debug output format; test with `claude --debug` or manual hook execution | Medium |
+| MCP connection inherently unreliable | Direct store access for both read AND write (bypass MCP in hooks) | High |
+| Stop hook "error" display confusing | Can't fix — Claude Code's UI decision. Consider using `"decision": "approve"` + just outputting text | Low |
 
 
