@@ -1485,35 +1485,102 @@ Notes on scoring: A-4 scores higher than B-4 because bare agent wrote vitest tes
 |----------|--------|
 | **Rules fix adoption?** | **YES.** Run B: 3/4 proactive aide_recall (75%). Round 1 without rules: 0/6 (0%). Rules are the fix. |
 | **Adoption still broken?** | **Partially.** aide_recall works (3/4). aide_remember is completely broken (0/4 across all rounds). PlanMode bypasses aide_recall (1/4). |
-| **Memory tools add value?** | **Not proven.** Run A and Run B produced equivalent or identical code in all 4 prompts. Run A even scored better on A-4 (wrote vitest tests). |
-| **Memory tools don't matter?** | **Cannot conclude yet.** This test design has a fatal flaw (see below). |
-| **Go/no-go** | **Inconclusive — need better test.** Rules fixed adoption, but code-quality difference is not measurable with this test design. |
+| **Memory tools add value for intra-session work?** | **No.** Run A and Run B produced equivalent or identical code in all 4 prompts. Run A even scored better on A-4 (wrote vitest tests). For tasks within a single session, the agent can read code directly and gets the same result. |
+| **Does this mean aide-memory is useless?** | **No — but it means the value is cross-session, not intra-session.** Both runs used separate sessions. Within each session, the agent accumulated context naturally. aide_recall's real value is when the agent starts cold (new session, new contributor, forgotten context). |
+| **Go/no-go** | **Continue — but pivot testing to cross-session scenarios.** Rules fixed adoption (confirmed). Intra-session code quality is equivalent (confirmed). The untested value prop is persistence across sessions. |
 
-#### Why This Test Design Can't Prove Value
+#### What This Test Proved vs What's Still Untested
 
-The test asked agents to add features to a codebase they were already working in, within a single session. By prompt 3, both agents had already read `store.ts`, `server.ts`, `types.ts` from earlier prompts. The bare agent's conversation history contained the same information that aide_recall would have returned.
+**Proved (fair comparison, separate sessions):**
+- aide_recall adoption works with rules (0% → 75%)
+- aide_recall doesn't improve code quality for intra-session tasks — agent reads code directly and gets same result
+- aide_recall saves token budget slightly (76k vs 83k) — 1 tool call replaces 4-5 file reads
+- Cross-area isolation works perfectly
+- aide_remember adoption is 0% with current rules
 
-**This is not a flaw in aide-memory — it's a flaw in the test.** aide_memory's value proposition is:
-1. **Cross-session persistence** — "I told you X last week, don't make me repeat it"
-2. **Cold-start context** — New agent session gets team knowledge without reading every file
-3. **Contributor preferences** — "I prefer X" survives session boundaries
-4. **Scaling beyond context window** — When the codebase is too big to read everything
-
-None of these were tested. All 4 prompts ran in the same session against a small codebase where the agent could read everything.
-
-#### What Tests Would Actually Prove Value
+**Untested (need different test design):**
 
 | Test | What It Proves | Effort |
 |------|----------------|--------|
-| **Cold-start per prompt** | Each prompt in its own fresh session. Bare agent starts cold each time. AIDE agent gets recall. Shows whether recall saves file-reading time and catches context bare agent misses. | Medium — 8 separate sessions |
-| **Cross-session memory** | Session 1: user teaches preferences. Session 2: new session, same task. Does AIDE agent remember? Bare agent can't. | Medium — 2 sessions per run |
-| **Large codebase** | Run against a real 50K+ line project where the agent can't read everything. AIDE agent gets scoped recall; bare agent has to choose what to read. | High — need a big codebase |
-| **Correction persistence** | Session 1: "Don't use moment.js, use date-fns." Session 2: "Add date formatting." Does AIDE agent avoid moment.js? | Low — 2 sessions per run |
-| **New contributor simulation** | Configure aide_remember with team preferences. New agent session (simulating new team member) gets context. Bare agent gets nothing. | Low — 1 session per run |
+| **Cross-session correction persistence** | Session 1: user corrects agent. Session 2: new session, similar task. Does AIDE agent remember the correction? Bare agent can't. | Low — 2 sessions per run |
+| **Cold-start per prompt** | Each prompt in its own fresh session. AIDE agent gets recall context instantly; bare agent must read files from scratch. | Medium — 8 separate sessions |
+| **New contributor simulation** | Seed memories with team preferences. New agent session gets context immediately. Bare agent gets nothing. | Low — 1 session per run |
+| **Large codebase** | Run against a 50K+ line project where the agent can't read everything. Scoped recall gives focused context. | High — need a big codebase |
 
-**Recommended next test:** Cold-start per prompt (4 fresh sessions for bare, 4 for AIDE) OR correction persistence (2 sessions, most directly tests the value prop).
+**Recommended next test:** Cross-session correction persistence (already designed as "Fill Test" below). This directly tests the value prop with minimal effort.
 
-**What are hooks?** Claude Code hooks are shell commands that fire on events like `PreToolUse` (before agent calls Read/Edit), `PostToolUse`, or `UserPromptSubmit`. Configured in `.claude/settings.json`. If rules don't fix adoption, hooks could auto-inject `aide_recall` results before every file read — the agent gets context without having to call anything. That's a Tier 2 fix if rules aren't enough.
+#### Fixing aide_remember Adoption with Hooks
+
+aide_remember is 0% across all tests. Rules say "call aide_remember when you discover constraints" but the agent ignores it — completing the coding task takes priority. The fix is **hooks**: automatic triggers at moments where remembering makes sense.
+
+**Claude Code hooks** are shell commands configured in `.claude/settings.json` that fire on specific events. They receive JSON on stdin (tool name, input, file paths) and can inject context back into the conversation via stdout.
+
+**Hook strategy for aide_remember:**
+
+| Hook Event | Trigger | What It Does |
+|------------|---------|--------------|
+| **`Stop`** | Agent finishes responding | Inject: "Before finishing, review what you learned. Call aide_remember for any non-obvious insights, corrections, or decisions made." End-of-task reflection. |
+| **`PostToolUse` on `Edit`** | After every file edit | Inject: "You just modified code. Did you discover a constraint or make a decision worth remembering? If so, call aide_remember." Nudge at moment of action. |
+| **`UserPromptSubmit`** | User sends a message | Script scans for correction patterns ("no, use X", "actually...", "don't do Y"). If detected, auto-injects: "The user just corrected you. Store this correction with aide_remember." Captures highest-value knowledge. |
+
+**Example `.claude/settings.json` for aide_remember nudge:**
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Before finishing: if you discovered non-obvious constraints, patterns, or received corrections during this task, call aide_remember to persist them for future sessions.'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/detect-correction.js"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Hook strategy for aide_recall (100% adoption, no rules needed):**
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/inject-recall.js"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+This fires before every file Read/Edit/Write, calls aide_recall with the file path, and injects scoped memory context via `additionalContext`. The agent never needs to call aide_recall — context arrives automatically. Eliminates PlanMode bypass, eliminates rules dependency, makes adoption 100%.
+
+**Key hook capabilities:**
+- `PreToolUse` can **block** tool calls (exit 2), **modify inputs** (modifiedInput), or **inject context** (additionalContext)
+- `PostToolUse` fires after success — good for nudges, can't modify the action
+- `Stop` fires when agent finishes — good for end-of-task reflection
+- `UserPromptSubmit` fires on user messages — good for correction detection
+- Hooks receive JSON stdin with `tool_name`, `tool_input`, `session_id`, `cwd`
+- stdout from hooks is injected as context into the conversation
 
 #### Round 2 — Observations
 
@@ -1703,15 +1770,16 @@ This is a stronger signal than pass/fail scorecards because it shows the actual 
 
 **Where we are:**
 - aide_recall works mechanically (adoption + isolation + low overhead) ✓
-- aide_recall doesn't prove value in same-session tests ✗
-- aide_remember is broken ✗
-- The right test hasn't been run yet
+- aide_recall doesn't improve intra-session code quality (agent reads code directly) — honest finding ✓
+- aide_recall may save tokens (76k vs 83k) — minor but real ✓
+- aide_remember is broken (0% adoption) ✗
+- Cross-session value prop is untested ✗
 
 **What to do next (in priority order):**
-1. **Run the correction persistence test** — Session 1: teach a correction. Session 2: see if AIDE agent remembers, bare agent doesn't. This directly tests the value prop and is low effort (2 sessions per run). Use the Fill Test plan already written below.
-2. **Fix aide_remember** — Try end-of-task reflection prompt in rules. Without this, the learning loop is dead.
-3. **Skip additional same-session tests** — they won't prove anything new. The design flaw is fundamental.
-4. **Consider hooks for aide_recall** — PreToolUse on Read would make adoption 100% and eliminate the PlanMode bypass. Worth prototyping even though rules work at 75%.
+1. **Prototype hooks for aide_remember** — `Stop` hook for end-of-task reflection + `UserPromptSubmit` hook for correction detection. This fixes the 0% adoption problem. Low effort, high impact.
+2. **Run the correction persistence test (Fill Test below)** — Session 1: teach corrections + seed memories. Session 2: new session, similar task. Does AIDE agent use the stored knowledge? This directly tests the cross-session value prop.
+3. **Prototype hooks for aide_recall** — `PreToolUse` on `Read|Edit` to auto-inject scoped context. Makes adoption 100%, eliminates PlanMode bypass, eliminates rules dependency. This is the long-term architecture.
+4. **Skip additional intra-session comparison tests** — proved equivalent quality, won't learn anything new.
 
 ---
 
