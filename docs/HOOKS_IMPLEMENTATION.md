@@ -9,7 +9,7 @@ The previous phase built the aide-memory MVP (MCP server, 6 tools, SQLite store,
 - MVP build (store, recall, server, CLI, 82 tests)
 - Round 1 E2E: 0/6 proactive tool calls without rules
 - Round 2 E2E: Run A (bare) vs Run B (AIDE+rules) across **separate sessions**, same 4 prompts
-- Key finding: aide_recall adoption fixed by rules (75%), but **code quality was equivalent** — bare agent reads code directly and matches AIDE agent for intra-session tasks
+- Key finding: aide_recall adoption fixed by rules (75%), but **code quality comparison was inconclusive** — MVP implementation testing had issues (see `docs/MVP_IMPLEMENTATION.md`). Cross-tool code quality comparison still needs proper testing.
 - aide_remember: 0% adoption across all 10 test prompts
 
 This doc picks up where MVP_IMPLEMENTATION.md left off. The MVP works mechanically. The problem is adoption (aide_remember) and proving cross-session value.
@@ -22,12 +22,12 @@ This doc picks up where MVP_IMPLEMENTATION.md left off. The MVP works mechanical
 
 The agent adoption problem was identified in Round 1 (0/6 proactive calls). Our response was rules (`.claude/rules/aide-memory.md`), which partially worked for aide_recall (75%) but completely failed for aide_remember (0%). Hooks were mentioned in the MVP_IMPLEMENTATION doc as a "Tier 2 fix" but we deprioritized them in favor of running a Round 2 intra-session comparison test.
 
-**In hindsight, this was a sequencing mistake.** The Round 2 intra-session comparison proved code quality is equivalent with or without aide_recall — a real finding, but one that doesn't test aide-memory's actual value prop (cross-session persistence). We could have:
+**In hindsight, this was a sequencing mistake.** The Round 2 intra-session comparison suggested code quality may be similar with or without aide_recall, but the MVP testing had issues and this isn't conclusively proven. Either way, intra-session comparison doesn't test aide-memory's actual value prop (cross-session persistence). We could have:
 
 1. Implemented hooks immediately after Round 1 (fix aide_remember)
 2. Jumped straight to cross-session tests (prove the value prop)
 
-Instead we spent time proving something we could have predicted: agents that can read code directly don't need aide_recall for intra-session work. The Round 2 results are still useful (confirmed rules fix recall adoption, confirmed equivalent quality) but the hooks should have come first.
+Instead we spent time on intra-session comparison when the real question is cross-session persistence. The Round 2 results are still useful (confirmed rules fix recall adoption) but the hooks should have come first. Code quality comparison across tools vs no tools still needs proper testing — the MVP round had methodology issues.
 
 ### What Round 2 proved
 
@@ -37,7 +37,7 @@ Round 2 E2E testing (Run A bare vs Run B with AIDE+rules, **separate sessions, s
 | Finding                                                | Data                                          |
 | ------------------------------------------------------ | --------------------------------------------- |
 | Rules fix aide_recall adoption                         | 0% → 75% (3/4 proactive calls)                |
-| aide_recall doesn't improve intra-session code quality | Both runs produced equivalent code            |
+| aide_recall intra-session code quality impact unclear | MVP testing had issues; needs proper re-test  |
 | aide_remember is completely broken                     | 0% across 10 test prompts (Round 1 + Round 2) |
 | Cross-session value is untested                        | Can't test until aide_remember works          |
 
@@ -334,7 +334,7 @@ if (result.memories.length > 0) {
 
 ### Lessons from Round 2 (What NOT to Repeat)
 
-Round 2 ran 4 prompts in a single session, bare vs AIDE, and found equivalent code quality. See `docs/MVP_IMPLEMENTATION.md` for full results. Key takeaways for this round:
+Round 2 ran 4 prompts in a single session, bare vs AIDE. MVP implementation testing had issues — code quality comparison was inconclusive. See `docs/MVP_IMPLEMENTATION.md` for full results. Key takeaways for this round:
 
 
 | Lesson                                                               | What We Learned                                                                                         | How We Avoid Repeating                                                            |
@@ -409,7 +409,7 @@ git checkout -b feature/hooks
 
 **What this tests:** Do hooks make aide_remember fire? (Was 0% in all prior rounds.)
 
-**What this does NOT test:** Intra-session code quality comparison. We already proved that's equivalent in Round 2.
+**What this does NOT test:** Intra-session code quality comparison (MVP round was inconclusive — still needs proper testing, but not the focus here).
 
 **Pre-flight checklist (MUST verify before running):**
 - [ ] `.mcp.json` exists at project root with aide-memory config
@@ -810,7 +810,7 @@ git checkout -- src/
 
 **What this tests:** Does PreToolUse hook make aide_recall 100% automatic? Does it work inside PlanMode subagents?
 
-**What this does NOT test:** Code quality (already proved equivalent for intra-session).
+**What this does NOT test:** Code quality comparison (MVP round was inconclusive; future follow-up needed).
 
 **Setup:** AIDE + hooks (including PreToolUse/beforeReadFile hook). Fresh session.
 
