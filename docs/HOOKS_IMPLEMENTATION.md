@@ -717,7 +717,16 @@ Discovered during Suite 2 Session 2A: Claude Code passes absolute paths to hooks
 
 **Future hardening needed:** `scopeMatchesPath()` should be more robust — handle absolute paths natively, trailing slashes, case-insensitive matching on macOS/Windows, symlinks, monorepo subpaths. The current prefix-matching approach is fragile. This is a good candidate for proper glob matching (e.g., `minimatch` or `picomatch`) rather than hand-rolled string ops.
 
-**5. Hook recall fallback to MCP aide_recall**
+**Scope isolation model:** Memory DBs are project-specific (keyed by hash of project root path), so `src/utils/**` in project A won't collide with `src/utils/**` in project B. However, within a single project (especially monorepos), relative scopes can be ambiguous — `src/utils/**` would match `packages/app-a/src/utils/` AND `packages/app-b/src/utils/` if the project root is the monorepo root. Scopes need to be stored with enough path depth to be unambiguous within the project. The agent storing the memory controls the scope string, so this depends on agent behavior. Additionally, `projectPath` comes from `cwd` at session start — if the user starts `claude` from different directories within the same repo, the DB hash (and thus the entire memory store) changes. This means memories stored from the monorepo root aren't visible when starting from a subdirectory, and vice versa.
+
+**5. Recall visibility — user can't see injected memories**
+
+PreToolUse hook injects recalled memories as a system-reminder that the model sees but the user doesn't. In Session 2A re-run, the agent used `datetime()` and `logInfo` from recalled memories, but the user had no visibility that memories were injected — only behavioral evidence (the agent searching for `logInfo` import, using `datetime()` without being told). This is a UX gap:
+- User can't verify what the agent "knows" from past sessions
+- User can't debug when recall fails (as happened with the absolute path bug — invisible failure)
+- Mitigations: show recalled memories in a collapsible UI section (like "1 PostToolUse hook ran" but for PreToolUse), or log them to a sidecar file, or have the agent explicitly mention "I'm using these recalled preferences: ..."
+
+**6. Hook recall fallback to MCP aide_recall**
 
 If the PreToolUse hook returns no scoped memories (only project-wide), the hook could add guidance like "No specific memories found for this path — consider calling aide_recall with related paths if you need more context." This would give the agent a chance to use the MCP tool as a fallback. Currently the agent trusts the hook injection and doesn't independently call aide_recall — if the hook fails silently (as it did with the absolute path bug), the agent has no safety net.
 
@@ -988,40 +997,74 @@ Results:
 
 | Dimension | Session 2A Re-run (AIDE+Hooks) |
 |-----------|-------------------------------|
-| Session 2A Re-run ID | |
-| aide_recall fired (hook or proactive)? | Y/N |
-| Session 1 memories returned? | **Y/N — key validation of fix** |
-| Used sync API (no `await`)? | Y/N |
-| Used `datetime()` SQL? | **Y/N — key signal** |
-| Logged affected row count? | **Y/N — key signal** |
-| Added index? | Y/N |
-| Used vitest? | Y/N |
-| Corrections needed | count |
-| Stop hook fired? | Y/N |
-| aide_remember called? | Y/N (count) |
-| Notes | |
+| Session 2A Re-run ID | `21418cd2-927e-44c6-9115-fdd7929f9be7` |
+| aide_recall fired (hook or proactive)? | Y — PreToolUse hook fired for both Read calls. Agent did NOT call aide_recall as MCP tool. |
+| Session 1 memories returned? | **Y — fix validated.** Memories #39-42 now included in recall output. |
+| Used sync API (no `await`)? | Y — `.prepare().run()` sync |
+| Used `datetime()` SQL? | **Y** — `datetime('now', '-' \|\| ? \|\| ' days')` ✅ (taught in Session 1, never mentioned in 2A prompt) |
+| Logged affected row count? | **Y** — `logInfo(\`purgeArchived: deleted ${result.changes}...\`)` ✅ (taught in Session 1 correction, never mentioned in 2A prompt) |
+| Added index? | N/A (no new tables) |
+| Used vitest? | Y — 26 tests pass (3 new) |
+| Corrections needed | 0 |
+| Stop hook fired? | Y — agent said "conventions I followed were already captured in existing memories" |
+| aide_remember called? | N (0) — correctly judged nothing new to store |
+| Notes | Agent proactively searched for `logInfo` in `src/core/logger.ts` to find the import — it knew to use logInfo from recalled memories even though store.ts had no existing logInfo usage. Duration: 44,139ms. |
 
-**aide_recall output received by agent (paste — should now include session 1 memories):**
+**aide_recall output received by agent (injected via PreToolUse hook, not visible in user UI):**
+
+The hook injected 20 memories including Session 1 memories:
 ```
-(paste here)
+- [area_context] (src/memory/store.ts) `pruneOld` uses `new Date()` — violates project rule
+- [technical] (src/memory/**) Never use `new Date()` for SQLite date comparison — use `datetime('now', '-N days')`
+- [technical] (src/memory/**) SQLite uses WAL mode — never switch to DELETE journal mode
+- [technical] (src/memory/**) better-sqlite3 is synchronous — do not use await with db calls
+- [preferences] (src/memory/**) Keep data operations in the database layer — use SQL (LIKE, self-joins)
+- [guidelines] (src/memory/**) Always log the count of affected rows — use `logInfo` from `src/core/logger`
+... plus 14 project-wide memories (branching, file size, vitest, etc.)
 ```
 
-**Code produced (paste purgeArchived method):**
+Note: recalled memories are invisible to the user in the chat UI. The only evidence is behavioral — agent searched for `logInfo` import and used `datetime()` without being told.
+
+**Code produced:**
 ```ts
-(paste here)
+import { logInfo } from '../core/logger';
+
+purgeArchived(days: number): number {
+  const result = this.db.prepare(
+    "DELETE FROM memories WHERE status = 'archived' AND created_at < datetime('now', '-' || ? || ' days')"
+  ).run(days);
+  logInfo(`purgeArchived: deleted ${result.changes} archived memories older than ${days} days`);
+  return result.changes;
+}
 ```
+
+Tests: 3 new (deletes old archived keeping active/recent, returns 0 when nothing qualifies, batch purge).
+
+**Comparison: Voided 2A vs Re-run 2A (same prompt, same codebase):**
+
+| Dimension | Voided 2A (broken recall) | Re-run 2A (fixed recall) |
+|-----------|--------------------------|--------------------------|
+| `datetime()` SQL | **NO** — `new Date(Date.now() - ...)` | **YES** — `datetime('now', '-' \|\| ? \|\| ' days')` |
+| `logInfo` logging | **NO** — no import, no logging | **YES** — imported + used |
+| Searched for logInfo? | No | Yes — `Grep('logInfo', 'src/core/logger.ts')` |
+| Code pattern | Copied `pruneOld` verbatim | Wrote new pattern following taught rules |
+| Duration | 54,716ms | 44,139ms (faster with right context) |
+
+**This is the cross-session persistence proof.** The only difference between the two runs was the recall fix — same prompt, same codebase, same model. With correct recall, the agent applied Session 1 teachings without being told.
 
 **Token usage session 2A re-run (`/context`):**
 
 | Category | Tokens | % of context |
 |----------|--------|------------|
-| System prompt | | |
-| System tools (built-in) | | |
-| MCP tools (aide-memory) | | |
-| Memory files (MEMORY.md) | | |
-| Messages (conversation) | | |
-| Free space | | |
-| **Total used** | **k / 200k** | **%** |
+| System prompt | 3.5k | 1.7% |
+| System tools (built-in) | 17.4k | 8.7% |
+| MCP tools (aide-memory) | 1.4k | 0.7% |
+| Memory files (MEMORY.md + rules) | 1.1k | 0.5% |
+| Skills | 164 | 0.1% |
+| Messages (conversation) | 11.8k | 5.9% |
+| Free space | 132k | 65.8% |
+| Autocompact buffer | 33k | 16.5% |
+| **Total used** | **34k / 200k** | **17%** |
 
 **Reset code:**
 
@@ -1034,13 +1077,15 @@ git checkout -- src/
 **Session 2B — Bare: Fresh session, same prompt, no memory**
 
 ```bash
-# Disable everything
+# Disable hooks + MCP
 cp .claude/settings.json .claude/settings.json.bak
 echo '{}' > .claude/settings.json
-# settings.json had MCP server + hooks, so this disables both
+mv .mcp.json .mcp.json.bak
+# Also reset src/ from 2A
+git checkout -- src/
 ```
 
-Start fresh: `claude`. Note session ID.
+Start fresh: `claude`. No hooks, no MCP, no aide-memory. Note session ID.
 
 Same prompt:
 
