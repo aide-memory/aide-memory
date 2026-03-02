@@ -765,7 +765,24 @@ Currently memories live in SQLite, only viewable via `sqlite3` queries. This is 
 - **Stack:** SQLite stays as the storage layer regardless. UI/export layers sit on top. Don't change the storage stack just for presentation.
 - **Priority:** After cross-session persistence is validated. No point building a dashboard for a feature that might not work.
 
-**5. Expand memory scope beyond corrections**
+**5. Read/write quality at scale — not thoroughly tested**
+
+Our testing covered specific scenarios but did NOT stress-test the full read/write loop at scale:
+
+**Write (aide_remember) — what we tested vs what we didn't:**
+- ✅ Tested: agent stores corrections when prompted (Suite 1 H-2), stores taught rules proactively (Suite 2 Session 1), stores tech debt observations (Suite 2 Session 1 #41)
+- ❌ Not tested: does the agent over-write? As the memory DB grows, does it store redundant/noisy entries? How well does the agent judge "this is worth remembering" vs "this is trivial"? In our tests the agent correctly said "nothing to store" for simple tasks — but we only ran 2-3 tasks. Over 50+ sessions, memory quality could degrade.
+- ❌ Not tested: what happens when a stored memory becomes wrong? (code refactored, convention changed). Does the agent know to update/archive old memories, or does stale knowledge accumulate?
+
+**Read (aide_recall) — what we tested vs what we didn't:**
+- ✅ Tested: hook-injected recall influences agent behavior (Session 2A re-run proved this conclusively)
+- ❌ Not tested: recall quality as DB grows. With 20 memories it works. With 200? 2000? Does the limit (currently 20) become a bottleneck? Do important memories get crowded out by less relevant ones?
+- ❌ Not tested: agent proactively calling aide_recall as an MCP tool. In all our tests, the agent relied on the PreToolUse hook — it never called aide_recall independently. We don't know if the agent would use aide_recall proactively without hooks.
+- ❌ Not tested: recall precision. Does the agent correctly apply recalled preferences, or does it sometimes misinterpret them? We saw correct application in our tests but the sample size is tiny.
+
+**Bottom line:** We proved the read/write loop works mechanically and influences behavior. We have NOT proven it works well at scale, with growing/stale knowledge, or across diverse task types. This needs longitudinal testing — use aide-memory for real work over weeks and monitor memory quality.
+
+**6. Expand memory scope beyond corrections**
 
 Currently memories are mostly corrections and taught rules. Could expand to:
 - **Conversation history:** Store summaries of past sessions (what was worked on, key decisions). Would help agents understand "what happened last time" without full context replay.
@@ -1097,39 +1114,35 @@ Results:
 
 | Dimension | Session 2B (Bare) |
 |-----------|-------------------|
-| Session 2B ID | |
-| Used sync API (no `await`)? | Y/N |
-| Used `datetime()` SQL? | **Y/N — key comparison** |
-| Logged affected row count? | **Y/N — key comparison** |
-| Added index? | Y/N |
-| Used vitest? | Y/N |
-| Corrections needed | count |
-| Notes | |
+| Session 2B ID | `ea04e979-869a-427a-980f-645ccc45e680` |
+| Used sync API (no `await`)? | Y — `.prepare().run()` sync |
+| Used `datetime()` SQL? | **N** — `new Date(Date.now() - days * 86_400_000).toISOString()` |
+| Logged affected row count? | **N** — no logInfo, no logging at all |
+| Added index? | N/A (no new tables) |
+| Used vitest? | Y — 26 tests pass (3 new) |
+| Corrections needed | 0 |
+| Notes | Bare agent copied `pruneOld` pattern exactly (same `new Date()` approach). No hooks fired (none configured). No stop hook, no recall. `/mcp` confirmed "No MCP servers configured." Duration: 62,743ms. |
 
-**Code produced (paste purgeArchived method):**
+**Code produced:**
 ```ts
-(paste here)
+purgeArchived(days: number): number {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const result = this.db.prepare(
+    "DELETE FROM memories WHERE status = 'archived' AND created_at < ?"
+  ).run(cutoff);
+  return result.changes;
+}
 ```
 
-**Token usage session 2B (`/context`):**
+No `logInfo` import, no logging. Identical pattern to voided Session 2A (which also had broken recall).
 
-| Category | Tokens | % of context |
-|----------|--------|------------|
-| System prompt | | |
-| System tools (built-in) | | |
-| Messages (conversation) | | |
-| Free space | | |
-| **Total used** | **k / 200k** | **%** |
+**Token usage session 2B:** User did not run `/context`. No MCP tools, no memory files, no hooks — baseline would be ~21k (system prompt + tools + messages only).
 
 **Restore after:**
 
 ```bash
 mv .claude/settings.json.bak .claude/settings.json
-```
-
-**Reset code:**
-
-```bash
+mv .mcp.json.bak .mcp.json
 git checkout -- src/
 ```
 
@@ -1137,31 +1150,62 @@ git checkout -- src/
 
 **Suite 2 Side-by-Side Comparison:**
 
-| Dimension | Session 2A (AIDE+Hooks) | Session 2B (Bare) | Proves Value? |
-|-----------|------------------------|--------------------|--------------|
-| Used `datetime()` SQL | | | If AIDE=Y, Bare=N → **YES** |
-| Logged row count | | | If AIDE=Y, Bare=N → **YES** |
-| Added index | | | If AIDE=Y, Bare=N → **YES** |
-| Used vitest | | | Likely both Y (readable from code) |
-| Used sync API | | | Likely both Y (readable from code) |
-| Corrections needed | | | Fewer for AIDE → value |
-| Message tokens | | | Lower for AIDE → efficiency |
-| Code quality (1-5) | | | |
-| Total tokens | | | |
+| Dimension | Session 2A Re-run (AIDE+Hooks) | Session 2B (Bare) | Proves Value? |
+|-----------|-------------------------------|-------------------|--------------|
+| Used `datetime()` SQL | **YES** — `datetime('now', '-' \|\| ? \|\| ' days')` | **NO** — `new Date(Date.now() - ...)` | **YES — clear signal** |
+| Logged row count | **YES** — `logInfo(...)` | **NO** — no logging | **YES — clear signal** |
+| Added index | N/A | N/A | N/A |
+| Used vitest | Y | Y | Both Y (readable from code) |
+| Used sync API | Y | Y | Both Y (readable from code) |
+| Corrections needed | 0 | 0 | Tie |
+| Duration | 44,139ms | 62,743ms | AIDE faster (with right context) |
+| Total tokens | 34k / 200k (17%) | ~21k estimated (no MCP/memory overhead) | Bare uses less (no MCP tools) |
+
+**Key finding:** The two key signals (`datetime()` and `logInfo`) both differentiate. The AIDE+Hooks agent applied preferences taught in a previous session that the bare agent had no way to know about. The bare agent defaulted to copying the existing `pruneOld` code pattern — a reasonable approach, but one that perpetuates the `new Date()` anti-pattern the user specifically taught against.
 
 **MCP Tool Call Summary (Suite 2 — all sessions):**
 
 | Call # | Session | Tool | Trigger | Proactive? |
 |--------|---------|------|---------|------------|
-| 1 | S1 | | | |
-| 2 | S1 | | | |
-| ... | S2A | | | |
+| 1 | S1 | `aide_remember` | On receiving taught rules (before coding) | **Yes** |
+| 2 | S1 | `aide_remember` | Stop hook nudge (tech debt observation) | Stop-triggered |
+| 3 | S1 | `aide_remember` | On receiving correction (before adapting) | **Yes** |
+| — | S2A re-run | (none) | Relied on PreToolUse hook for recall | Hook-driven |
+
+**Total MCP calls: 3 (all in Session 1). aide_remember: 3. aide_recall via MCP: 0 (all recall via hooks).**
 
 **Interpreting results:**
 
 - **AIDE uses taught patterns, Bare doesn't** → aide-memory proves cross-session value. This is the win condition.
 - **Both use the patterns** → Agent discovers them from reading code. aide-memory doesn't add value for these patterns. Try with patterns that AREN'T discoverable from code (e.g., "use X library, not Y").
 - **Neither uses the patterns** → Session 1 knowledge wasn't stored or wasn't recalled. Debug: check DB, check aide_recall output, check if context was injected.
+
+**Result: Outcome 1 confirmed.** AIDE+Hooks agent used `datetime()` and `logInfo` from Session 1 memories. Bare agent copied `pruneOld`'s `new Date()` pattern with no logging. Cross-session persistence value prop validated.
+
+### Suite 2 Observations
+
+**What went well:**
+- Cross-session persistence works end-to-end: teach → store → recall → apply.
+- Agent applied 2/3 taught preferences without being told (`datetime()`, `logInfo`). The third (index on WHERE columns) was N/A for this task.
+- Agent was faster with recalled context (44s vs 63s) — less exploration needed when you already know the conventions.
+- Session 1 stored 3 well-structured memories across 3 different layers (technical, area_context, guidelines) with correct scoping.
+
+**What went wrong (and was fixed):**
+- **Critical bug:** absolute vs relative path matching in recall hook. Voided Session 2A entirely. Fixed by converting absolute → relative in `recall-for-path.js`.
+- **Recall limit:** 10 was too low — guidelines layer got truncated. Bumped to 20.
+- Both bugs meant the first Session 2A attempt was essentially a bare run despite having hooks enabled — scoped memories were invisible.
+
+**What's uncertain:**
+- Bare agent was slower (63s vs 44s) but also used a subagent for exploration. The speed difference may be coincidental rather than caused by memory availability.
+- Agent never called `aide_recall` as an MCP tool — relied entirely on PreToolUse hook injection. If the hook fails, there's no fallback.
+- Token overhead of aide-memory: ~3.5k (1.4k MCP tools + 1.1k memory files + ~1k hook-injected recall). Not significant at current scale.
+- This test used preferences that ARE somewhat discoverable from code (the `new Date()` pattern exists in `pruneOld`). A stronger test would use preferences that can't be inferred from reading the codebase at all.
+
+**Strategic answer: Should we continue building aide-memory?**
+
+Suite 2 proves the core value loop works: knowledge taught in session 1 persists to session 2 and measurably changes agent behavior. The bare agent has no way to access cross-session preferences — it defaults to copying existing code patterns even when those patterns are exactly what the user taught against.
+
+This is the differentiation. Platform-native memory (Claude's built-in) and competitors (ConPort) could replicate the storage, but the path-scoped recall + hook-driven injection is what makes it work without requiring agent cooperation. The agent doesn't need to "decide" to recall — the hook does it automatically.
 
 ---
 
