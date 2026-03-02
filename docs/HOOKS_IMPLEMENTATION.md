@@ -1193,7 +1193,7 @@ git checkout -- src/
 | Used sync API | Y | Y | Both Y (readable from code) |
 | Corrections needed | 0 | 0 | Tie |
 | Duration | 44,139ms | 62,743ms | AIDE faster (with right context) |
-| Total tokens | 34k / 200k (17%) | ~21k estimated (no MCP/memory overhead) | Bare uses less (no MCP tools) |
+| Total tokens | 34k / 200k (17%) | 32k / 200k (16%) | Similar — MCP overhead is only ~1.4k |
 
 **Key finding:** The two key signals (`datetime()` and `logInfo`) both differentiate. The AIDE+Hooks agent applied preferences taught in a previous session that the bare agent had no way to know about. The bare agent defaulted to copying the existing `pruneOld` code pattern — a reasonable approach, but one that perpetuates the `new Date()` anti-pattern the user specifically taught against.
 
