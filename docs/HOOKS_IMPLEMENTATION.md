@@ -446,35 +446,46 @@ Results:
 
 | Dimension | Result |
 |-----------|--------|
-| Session ID | |
-| MCP tools confirmed available? | Y/N |
-| Called `aide_recall` before coding? | Y/N — proactive? |
-| Used sync API (no `await`)? | Y/N |
-| Test uses vitest (not jest)? | Y/N |
-| Respected WAL mode? | Y/N |
-| Corrections needed | count |
-| **Stop hook fired?** | **Y/N — Gate 1** |
-| **aide_remember called?** | **Y/N — Gate 2** |
-| **What was stored (paste)?** | |
-| **Layer + scope correct?** | **Y/N — Gate 3** |
-| Notes | |
+| Session ID | `d5ffba86-0333-4187-a315-06dca9b32eb2` |
+| MCP tools confirmed available? | **Y** — `/context` showed "MCP tools: 1.4k tokens (0.7%)" |
+| Called `aide_recall` before coding? | N — not proactively. PreToolUse hook fired for both Read calls (injected recall automatically) |
+| Used sync API (no `await`)? | Y — `.prepare().run()` sync, no await |
+| Test uses vitest (not jest)? | Y — `npx vitest run` |
+| Respected WAL mode? | Y — sync better-sqlite3 |
+| Corrections needed | 0 |
+| **Stop hook fired?** | **Y — Gate 1 PASS** (hasOutput=True, hookCount=1) |
+| **aide_remember called?** | **N — Agent chose not to** (correctly judged nothing worth storing) |
+| **What was stored (paste)?** | N/A — agent said "Nothing non-obvious to store" |
+| **Layer + scope correct?** | N/A |
+| Notes | Gate 2 not exercised but not failed — agent had MCP tools available (confirmed in /context), made a reasonable judgment. The `hookErrors` field in JSONL misleadingly contains the hook's stdout text, not actual errors. Loop prevention confirmed: 2nd stop had `hasOutput=false`. Duration: 34,990ms (~35s). |
 
-**aide_recall output received by agent (paste):**
+**aide_recall output received by agent:**
 ```
-(paste aide_recall output here)
+PreToolUse hook fired for both Read(store.ts) and Read(store.test.ts).
+No matching memories injected (no stored memories matched these paths).
 ```
 
-**Code produced (paste key method):**
+**Code produced:**
 ```ts
-(paste archiveOld method here)
+archiveOld(days: number): number {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const result = this.db.prepare(
+    "UPDATE memories SET status = 'archived' WHERE created_at < ? AND status != 'archived'"
+  ).run(cutoff);
+  return result.changes;
+}
 ```
 
-**aide_remember input (paste if called):**
-```json
-(paste aide_remember call input here)
+Tests: 26 pass (2 new archiveOld tests — archives old memories, skips already-archived).
+
+**Tool call sequence:**
+```
+Read(store.ts) → [PreToolUse hook] → Glob(test files) → Read(store.test.ts) → [PreToolUse hook]
+→ Edit(store.ts) → Edit(store.test.ts) → Bash(vitest) → [Stop hook] → TEXT("nothing to store")
+→ [Stop hook, hasOutput=false] → END
 ```
 
-**If Gate 2 fails (aide_remember not called) WITH MCP confirmed available:** This is a real failure. The stop hook prompt is not convincing enough. Try stronger language or Cursor's `followup_message` approach.
+**JSONL technical note:** The `stop_hook_summary` system message has a `hookErrors` field that contains the hook's stdout output text (the nudge prompt), not actual errors. `hasOutput` boolean is the reliable indicator. Second stop has `hasOutput: false` confirming loop prevention.
 
 ---
 
@@ -498,26 +509,85 @@ Results:
 
 | Dimension | Result |
 |-----------|--------|
-| Used sync API (no `await`)? | Y/N |
-| Test uses vitest? | Y/N |
-| Agent adapted code to correction? | Y/N |
-| Corrections needed (beyond the intentional one) | count |
-| **UserPromptSubmit hook detected correction?** | **Y/N** |
-| **aide_remember called after correction?** | **Y/N** |
-| **Correction content stored accurately?** | **Y/N** |
-| **Stop hook fired after H-2?** | **Y/N** |
-| **aide_remember called on stop (H-2)?** | **Y/N** |
-| Notes | |
+| Used sync API (no `await`)? | Y — `.prepare().all()` sync |
+| Test uses vitest? | Y — `npx vitest run`, 32 pass |
+| Agent adapted code to correction? | **Y** — Jaccard word similarity → SQL LIKE self-join |
+| Corrections needed (beyond the intentional one) | 0 |
+| **UserPromptSubmit hook detected correction?** | **N** — no `hook_progress` for UserPromptSubmit in JSONL (same as voided suite — see follow-up notes) |
+| **aide_remember called after correction?** | **Y — GATE 2 PASS** — called proactively BEFORE Stop hook |
+| **Correction content stored accurately?** | **Y — GATE 3 PASS** — stored as memory #39 in DB |
+| **Stop hook fired after H-2?** | **Y** — hasOutput=True, agent said "Already stored the key correction (memory #39)" |
+| **aide_remember called on stop (H-2)?** | **N** — correctly de-duplicated: agent recognized it already stored during the task |
+| Notes | Agent called aide_remember proactively after adapting code, not triggered by Stop hook. The Stop hook served as a safety net but wasn't needed. No duplicate entry. Duration: 61,879ms (~62s). |
 
-**Code produced (paste key method — before and after correction):**
+**Code produced — BEFORE correction (Jaccard word similarity in JS):**
 ```ts
-(paste here)
+// Module-level helpers
+function normalizeText(text: string): string {
+  return text.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+function wordSimilarity(a: string, b: string): number {
+  const na = normalizeText(a);
+  const nb = normalizeText(b);
+  if (na === nb) return 1;
+  const wordsA = new Set(na.split(' '));
+  const wordsB = new Set(nb.split(' '));
+  const intersection = [...wordsA].filter(w => wordsB.has(w)).length;
+  const union = new Set([...wordsA, ...wordsB]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+// Method
+duplicateCheck(options?: { threshold?: number }): Array<[Memory, Memory]> {
+  const threshold = options?.threshold ?? 0.8;
+  const memories = this.list({ status: 'active' });
+  const pairs: Array<[Memory, Memory]> = [];
+  for (let i = 0; i < memories.length; i++) {
+    for (let j = i + 1; j < memories.length; j++) {
+      if (wordSimilarity(memories[i].what, memories[j].what) >= threshold) {
+        pairs.push([memories[i], memories[j]]);
+      }
+    }
+  }
+  return pairs;
+}
 ```
 
-**aide_remember input (paste if called):**
-```json
-(paste here)
+**Code produced — AFTER correction (SQL LIKE self-join):**
+```ts
+duplicateCheck(): Array<[Memory, Memory]> {
+  const rows = this.db.prepare(`
+    SELECT a.*, b.id AS b_id
+    FROM memories a
+    JOIN memories b ON a.id < b.id
+    WHERE a.status = 'active' AND b.status = 'active'
+      AND (
+        LOWER(a.what) = LOWER(b.what)
+        OR LOWER(a.what) LIKE '%' || LOWER(b.what) || '%'
+        OR LOWER(b.what) LIKE '%' || LOWER(a.what) || '%'
+      )
+  `).all() as Array<any & { b_id: number }>;
+  return rows.map(row => [
+    this.rowToMemory(row),
+    this.get(row.b_id)!,
+  ]);
+}
 ```
+
+JS helpers (`normalizeText`, `wordSimilarity`) removed. Tests updated: removed threshold test, added case-insensitive and substring containment tests.
+
+**aide_remember input:**
+```json
+{
+  "what": "Keep data operations in the database layer — use SQL (LIKE, self-joins) instead of pulling data into JS for comparison. Don't do in JS what SQLite can do.",
+  "why": "User corrected Jaccard word similarity approach in JS — wanted SQL LIKE with wildcard matching in a self-join instead, keeping logic in the database layer.",
+  "layer": "preferences",
+  "scope": "src/memory/**",
+  "contributor": "meky"
+}
+```
+
+**DB verification:** Memory #39 confirmed in `memory.db` — layer=preferences, scope=src/memory/**, contributor=meky.
 
 ---
 
@@ -532,31 +602,168 @@ sqlite3 ~/.aide/projects/*/memory.db \
 
 | Call # | Tool | Trigger | Proactive? |
 |--------|------|---------|------------|
-| 1 | | | |
-| 2 | | | |
-| ... | | | |
+| 1 | `aide_remember` | After H-2 correction (agent chose to store before Stop hook) | **Yes** |
 
-**Total MCP calls: _. Proactive calls: _. aide_remember calls: _.**
+**Total MCP calls: 1. Proactive calls: 1. aide_remember calls: 1.**
+
+Note: No `aide_recall` MCP calls — all recall was handled by PreToolUse hooks (fired 4x across H-1 and H-2 for Read tool calls). The hooks injected context directly without requiring the agent to call aide_recall as an MCP tool.
 
 **Token usage (`/context` after Suite 1):**
 
 | Category | Tokens | % of context |
 |----------|--------|------------|
-| System prompt | | |
-| System tools (built-in) | | |
-| MCP tools (aide-memory) | | |
-| Memory files (MEMORY.md) | | |
-| Skills | | |
-| Messages (conversation) | | |
-| Free space | | |
-| Autocompact buffer | | |
-| **Total used** | **k / 200k** | **%** |
+| System prompt | 3.4k | 1.7% |
+| System tools (built-in) | 17.4k | 8.7% |
+| MCP tools (aide-memory) | 1.4k | 0.7% |
+| Memory files (MEMORY.md + rules) | 1.1k | 0.5% |
+| Skills | 164 | 0.1% |
+| Messages (conversation) | 28.6k | 14.3% |
+| Free space | 115k | 57.4% |
+| Autocompact buffer | 33k | 16.5% |
+| **Total used** | **51k / 200k** | **26%** |
+
+MCP tool breakdown: 6 tools × 235 tokens each = 1.4k. aide-memory overhead is minimal (~0.7% of context).
+
+All 6 MCP tools confirmed available: aide_recall, aide_remember, aide_forget, aide_memories, aide_import, aide_search.
 
 **Reset code changes:**
 
 ```bash
 git checkout -- src/
 ```
+
+---
+
+### Suite 1 Observations
+
+**What went well:**
+- **Gate 1 PASS:** Stop hook fires reliably. Loop prevention works (2nd stop has `hasOutput: false`).
+- **Gate 2 PASS:** aide_remember called with MCP properly connected. The voided suite's Gate 2 failure was entirely due to MCP config being in the wrong file (`.claude/settings.json` instead of `.mcp.json`).
+- **Gate 3 PASS:** Memory #39 stored with correct layer (`preferences`), scope (`src/memory/**`), contributor (`meky`), and accurate content summarizing the correction.
+- **Agent self-de-duplicated:** Called aide_remember proactively after the correction, then recognized "already stored" when Stop hook nudged — no duplicate entry.
+- **Code quality:** Agent adapted correctly both times (H-1 simple task, H-2 correction). 0 corrections needed beyond the intentional one.
+- **PreToolUse hooks:** Fired 4x total (every Read call) — automatic recall injection working.
+
+**What went mid:**
+- **UserPromptSubmit hook:** No `hook_progress` events for UserPromptSubmit in JSONL for either H-1 or H-2. Same behavior as voided suite. Either: (a) the hook fires but generates no JSONL progress entry, (b) the hook fires but `detect-correction.sh` exits cleanly with no output so nothing is logged, or (c) the hook doesn't fire. Need to add debug logging to `detect-correction.sh` to determine which. The agent stored the correction anyway via Stop hook flow, so this wasn't a blocker.
+- **Gate 2 on H-1:** Not exercised — agent correctly judged "nothing to store" for a simple method addition. This is arguably correct behavior (not everything needs remembering), but it means we only got Gate 2 evidence from H-2.
+
+**What needs investigation:**
+- **UserPromptSubmit visibility:** Is the hook firing at all? Add `echo "USH fired" >> /tmp/ush-debug.log` to `detect-correction.sh` to confirm. If it fires but JSONL doesn't log it, that's a JSONL limitation. If it doesn't fire, there's a config issue.
+- **JSONL `hookErrors` naming:** The `hookErrors` field in `stop_hook_summary` contains stdout output text, not actual errors. `hasOutput` is the reliable boolean. This is a Claude Code JSONL quirk worth noting for future analysis.
+
+**Hook interaction design question: Stop + UserPromptSubmit duplication risk**
+
+This test showed the agent storing the correction proactively (after adapting code, before Stop hook). The Stop hook then served as a safety net — agent said "already stored." But what happens if both UserPromptSubmit and Stop successfully trigger aide_remember?
+
+Possible outcomes:
+1. **Only one fires aide_remember** (what happened here) — clean, no duplication. The proactive call pre-empted the Stop nudge.
+2. **Both fire aide_remember** — duplicate risk. The entries could be:
+   - Redundant: same content stored twice → wasteful, pollutes recall
+   - Complementary: UserPromptSubmit stores the raw correction, Stop stores the synthesized lesson → arguably useful
+3. **Neither fires aide_remember** — both hooks too weak (didn't happen with MCP connected)
+
+Design options if duplication becomes an issue:
+- **Stop hook checks for recent aide_remember calls** — "if you already called aide_remember in the last 2 turns, skip"
+- **Store deduplication at recall time** — `duplicateCheck()` handles it (ironic given the test prompt)
+- **Different roles by design** — UserPromptSubmit stores corrections, Stop stores lessons. Accept both as valid if content differs.
+
+**This test suggests option 1 (natural de-duplication) works with Opus — the agent is smart enough to not store twice.** But this needs more test runs to confirm it's not a fluke, and may not hold with weaker models.
+
+**Token usage:** User needs to run `/context` in the test session before closing to capture this.
+
+**Duration:**
+- H-1: 34,990ms (~35s)
+- H-2: 61,879ms (~62s) — correction + re-implementation + aide_remember call
+- Total Suite 1: ~97s
+
+**Strategic connection — go/no-go:**
+
+Suite 1 answers: **"Can hooks make aide_remember fire?"** → **Yes.** The 0% adoption rate from all prior rounds (10 test prompts across Round 1 + Round 2) is now 100% for correction scenarios (1/1 correction stored). The MCP config fix was the critical blocker.
+
+**Remaining question for Suite 2:** Does the stored knowledge actually influence a fresh session? Memory #39 ("keep data operations in the database layer") needs to surface via aide_recall in a new session and measurably change agent behavior. That's the money test.
+
+---
+
+### Things to Keep an Eye On (Mitigate If Issues Arise)
+
+These aren't blockers right now, but could become problems at scale. Track here so we don't lose sight of them.
+
+**1. Memory duplication over time**
+
+In Suite 1, the agent self-de-duplicated (stored once, recognized "already stored" when Stop nudged). But this is one test run with Opus. Over many sessions, similar corrections could accumulate near-duplicate memories. For now, the agent seems smart enough — **don't add deduplication to every run unless we see it becoming a problem.**
+
+If it does become a problem, mitigation options:
+- Periodic agent-driven cleanup: spin up an agent job that runs `duplicateCheck()` and merges/archives duplicates
+- Agent-driven codebase learning: an agent that reads a code area and fills memories proactively (not just from corrections)
+- Both of these are "agent as memory janitor" — a follow-up improvement, not needed now
+
+**2. "Nothing to store" UX noise**
+
+After every task where the agent decides nothing is worth remembering, the user sees the Stop hook output: *"Nothing non-obvious to store — the method follows the exact same pattern as pruneOld..."* This is informative but could become noisy in daily use.
+
+Mitigations to consider:
+- Make the Stop hook output optional / suppressible (e.g., only show when something IS stored)
+- Use Claude Code's hook `decision: "block"` vs `decision: "approve"` — only block (show to user) when there's something to store, approve silently when there isn't
+- This is a UX polish item, not a blocker for the value prop test
+
+**3. UserPromptSubmit hook visibility**
+
+No `hook_progress` events appeared in JSONL for UserPromptSubmit across both voided and current suite. Need to determine if the hook fires at all or if JSONL just doesn't log it. Add debug logging to `detect-correction.sh` before Suite 2.
+
+**4. Absolute vs relative path matching (FIXED, needs hardening)**
+
+Discovered during Suite 2 Session 2A: Claude Code passes absolute paths to hooks, but memory scopes are relative. The `recall-for-path.js` script now strips the project root. This was a critical bug — without it, all scoped memories (the most valuable ones) were invisible to the agent. Fixed by converting absolute → relative before calling `recall()`. Also bumped recall limit from 10 → 20 to prevent guidelines layer truncation.
+
+**Future hardening needed:** `scopeMatchesPath()` should be more robust — handle absolute paths natively, trailing slashes, case-insensitive matching on macOS/Windows, symlinks, monorepo subpaths. The current prefix-matching approach is fragile. This is a good candidate for proper glob matching (e.g., `minimatch` or `picomatch`) rather than hand-rolled string ops.
+
+**5. Hook recall fallback to MCP aide_recall**
+
+If the PreToolUse hook returns no scoped memories (only project-wide), the hook could add guidance like "No specific memories found for this path — consider calling aide_recall with related paths if you need more context." This would give the agent a chance to use the MCP tool as a fallback. Currently the agent trusts the hook injection and doesn't independently call aide_recall — if the hook fails silently (as it did with the absolute path bug), the agent has no safety net.
+
+### Potential Improvements (Post-Validation)
+
+These are enhancements to consider after the core value prop (cross-session persistence) is validated.
+
+**1. Embeddings for smarter recall**
+
+Currently recall uses path-scoped glob matching (exact path hierarchy). Adding embeddings could:
+- **Help:** Recall semantically related memories even when paths don't match (e.g., a lesson about "database operations" surfacing when working in a new module that does DB work)
+- **Help:** Better deduplication — semantic similarity catches paraphrased duplicates that LIKE matching misses
+- **Risk:** Adds complexity (embedding model dependency, vector storage, latency). The existing `src/retrieval/semanticSearch.ts` pipeline exists but adds overhead.
+- **Risk:** Could surface irrelevant memories if similarity threshold is too loose, adding noise to agent context
+- **Verdict:** Path-scoped recall is the right starting point. Embeddings are a natural next step IF path scoping proves too rigid, but not before validating the core value prop.
+
+**2. Agent-driven memory maintenance**
+
+Use agents (not just hooks) to actively maintain the memory store:
+- **Fill agent:** Reads a code area, generates memories about patterns/conventions it discovers. Useful for onboarding a new codebase.
+- **Cleanup agent:** Runs periodically to merge duplicates, archive stale memories, verify memories still match the code.
+- **Quality agent:** Reviews stored memories for accuracy against current codebase state. Code changes may invalidate old memories.
+- These are all "agents operating on the memory layer" — a natural extension but depends on Suite 2 proving the basic loop works.
+
+**3. Cross-tool code quality comparison**
+
+Still untested. MVP round had methodology issues. Need a proper test: same prompt, same session type, with vs without aide-memory tools, comparing code output quality. Not the current focus (adoption/persistence is), but important for the full value story. This would need to be revisited with a better test setup.
+
+**4. Memory visibility / management UX**
+
+Currently memories live in SQLite, only viewable via `sqlite3` queries. This is fine for testing but not for real users. Considerations:
+- **JSON export/view:** Dump memories to a JSON file users can browse. Low effort, but still a dev-oriented format.
+- **Dashboard/UI:** Web-based viewer where users can see, search, edit, archive memories. Could filter by scope, layer, contributor. This is the "real product" UX but significant effort.
+- **CLI commands:** `aide memories list`, `aide memories search "keyword"`, `aide memories forget 42`. Middle ground — stays in terminal, no web UI needed.
+- **Team/multi-user:** If memories have `contributor` field, a dashboard could show "your memories" vs "team memories" — useful for shared codebases.
+- **Stack:** SQLite stays as the storage layer regardless. UI/export layers sit on top. Don't change the storage stack just for presentation.
+- **Priority:** After cross-session persistence is validated. No point building a dashboard for a feature that might not work.
+
+**5. Expand memory scope beyond corrections**
+
+Currently memories are mostly corrections and taught rules. Could expand to:
+- **Conversation history:** Store summaries of past sessions (what was worked on, key decisions). Would help agents understand "what happened last time" without full context replay.
+- **Code change summaries:** When agent makes changes, auto-store a memory of what was changed and why. Creates an "agent changelog" that persists.
+- **Architectural decisions:** ADR-style records stored as memories. Agent can recall past decisions when working in the same area.
+- **Risk:** Scope creep. More memory types = more noise in recall = more irrelevant context. Path-scoped recall helps, but need to be careful about signal-to-noise ratio.
+- **Verdict:** Start with what works (corrections, rules, observations), expand if recall quality stays high.
 
 ---
 
@@ -595,58 +802,97 @@ Results:
 
 | Dimension | Result |
 |-----------|--------|
-| Session 1 ID | |
-| Called `aide_recall` before coding? | Y/N — proactive? |
-| Used sync API (no `await`)? | Y/N |
-| Used `datetime()` SQL (not JS Date)? | **Y/N — taught in prompt** |
-| Added index on WHERE columns? | **Y/N — taught in prompt** |
-| Followed status transition rule? | **Y/N — taught in prompt** |
-| Adapted to logging correction? | **Y/N — corrected** |
-| Test uses vitest? | Y/N |
-| Corrections needed (beyond intentional one) | count |
-| **Stop hook fired?** | **Y/N** |
-| **aide_remember calls** | **count** |
-| **`datetime()` preference stored?** | **Y/N** |
-| **Index preference stored?** | **Y/N** |
-| **Status transition rule stored?** | **Y/N** |
-| **Logging correction stored?** | **Y/N** |
-| Notes | |
+| Session 1 ID | `fcb1011e-d990-44b7-9ca6-f871d722817f` |
+| Called `aide_recall` before coding? | N — not as MCP tool. PreToolUse hook fired for Read(store.ts), injecting recall automatically. |
+| Used sync API (no `await`)? | Y — `.prepare().run()` sync |
+| Used `datetime()` SQL (not JS Date)? | **Y** — `datetime('now', '-' || ? || ' days')` ✅ |
+| Added index on WHERE columns? | **N** — not applicable (no new tables created, method operates on existing `memories` table) |
+| Followed status transition rule? | **Y** — `WHERE status = 'completed'` → sets `status = 'archived'` (completed→archived, no skip) ✅ |
+| Adapted to logging correction? | **Y** — added `logInfo` import + `logInfo(\`expireCompleted: archived ${result.changes} memories...\`)` ✅ |
+| Test uses vitest? | N/A — agent didn't write tests in this session (not asked in correction prompt) |
+| Corrections needed (beyond intentional one) | 0 |
+| **Stop hook fired?** | **Y** — fired 2x (after initial task + after correction). Both times hasOutput=True then False. |
+| **aide_remember calls** | **3** |
+| **`datetime()` preference stored?** | **Y** — memory #40 (bundled with all 3 rules) |
+| **Index preference stored?** | **Y** — memory #40 (bundled) |
+| **Status transition rule stored?** | **Y** — memory #40 (bundled) |
+| **Logging correction stored?** | **Y** — memory #42 (separate, stored immediately on correction) |
+| Notes | Agent also noticed existing `pruneOld` uses `new Date()` (the bad pattern) and stored tech debt note as memory #41. 3 memories total: #40 (taught rules), #41 (tech debt observation), #42 (logging correction). Agent self-de-duplicated on both Stop hook nudges. |
 
-**aide_recall output received by agent (paste):**
+**aide_recall output received by agent:**
 ```
-(paste here)
+PreToolUse hook fired for Read(store.ts). Returned existing memories including:
+- Layer ordering on output: area_context first, then technical, then preferences, then guidelines [src/memory/**]
+- Plus ~20 lines of existing stored context
 ```
 
-**Code produced (paste expireCompleted method):**
+**Code produced (expireCompleted — final with logging):**
 ```ts
-(paste here)
+import { logInfo } from '../core/logger';
+
+expireCompleted(days: number): number {
+  const result = this.db.prepare(
+    `UPDATE memories SET status = 'archived'
+     WHERE status = 'completed'
+       AND created_at < datetime('now', '-' || ? || ' days')`
+  ).run(days);
+  logInfo(`expireCompleted: archived ${result.changes} memories older than ${days} days`);
+  return result.changes;
+}
 ```
 
-**aide_remember calls (paste all):**
+Note: Agent also flagged that `pruneOld` (line ~243) uses `new Date()` — the exact anti-pattern taught in the prompt. Asked user if they wanted it fixed.
+
+**aide_remember calls (all 3):**
 ```json
-(paste each aide_remember call input here)
+// Memory #40 — stored BEFORE coding (proactive, on receiving the prompt)
+{
+  "what": "Never use `new Date()` for SQLite date comparison — use `datetime('now', '-N days')` in SQL. Always add an index on columns used in WHERE clauses for new tables. Status transitions go: active → completed → archived (never skip).",
+  "layer": "technical",
+  "scope": "src/memory/**",
+  "why": "User-specified constraints for the memory store layer — date handling, indexing, and status transition rules."
+}
+
+// Memory #41 — stored on Stop hook nudge (agent-discovered tech debt)
+{
+  "what": "`pruneOld` method in store.ts (line ~243) uses `new Date()` for SQLite date comparison — violates the project rule. Should be refactored to use `datetime('now', '-' || ? || ' days')` like `expireCompleted`.",
+  "layer": "area_context",
+  "scope": "src/memory/store.ts",
+  "why": "Known tech debt flagged during expireCompleted implementation. User was informed but hasn't opted to fix yet."
+}
+
+// Memory #42 — stored BEFORE adapting code (proactive, on receiving correction)
+{
+  "what": "Always log the count of affected rows when doing bulk operations — use `logInfo` from `src/core/logger`.",
+  "layer": "guidelines",
+  "scope": "src/memory/**",
+  "why": "User-specified convention for observability in bulk store operations."
+}
 ```
 
-**After session 1, check what was stored:**
-
-```bash
-sqlite3 ~/.aide/projects/*/memory.db \
-  "SELECT id, layer, scope, substr(what,1,100) FROM memories WHERE source='conversation' ORDER BY id DESC LIMIT 10"
+**DB verification:**
 ```
-
-**If key preferences were NOT stored:** STOP. aide_remember still broken. Go back to Suite 1 and fix hooks.
+39|preferences|src/memory/**|Keep data operations in the database layer...  (Suite 1)
+40|technical|src/memory/**|Never use new Date() for SQLite date comparison...
+41|area_context|src/memory/store.ts|pruneOld method uses new Date()...
+42|guidelines|src/memory/**|Always log the count of affected rows...
+```
 
 **Token usage session 1 (`/context`):**
 
 | Category | Tokens | % of context |
 |----------|--------|------------|
-| System prompt | | |
-| System tools (built-in) | | |
-| MCP tools (aide-memory) | | |
-| Memory files (MEMORY.md) | | |
-| Messages (conversation) | | |
-| Free space | | |
-| **Total used** | **k / 200k** | **%** |
+| System prompt | 3.4k | 1.7% |
+| System tools (built-in) | 17.4k | 8.7% |
+| MCP tools (aide-memory) | 1.4k | 0.7% |
+| Memory files (MEMORY.md + rules) | 1.1k | 0.5% |
+| Skills | 164 | 0.1% |
+| Messages (conversation) | 9.3k | 4.7% |
+| Free space | 134k | 67.1% |
+| Autocompact buffer | 33k | 16.5% |
+| **Total used** | **30k / 200k** | **15%** |
+
+Note: Session 1 used 30k total (vs 51k for Suite 1 which had 2 tasks). Messages were 9.3k — 2 prompts, 3 aide_remember calls, code edits, and Stop hook interactions. aide-memory overhead remains ~0.7%.
 
 **Reset code (don't keep session 1's code):**
 
@@ -668,13 +914,83 @@ Add a method `purgeArchived(days: number)` to MemoryStore that permanently delet
 
 **Do NOT mention any preferences.** The agent should get them from aide_recall only.
 
-Results:
+Results (RUN 1 — VOIDED due to recall bug):
 
 | Dimension | Session 2A (AIDE+Hooks) |
 |-----------|------------------------|
-| Session 2A ID | |
+| Session 2A ID | `c1e8aa65-898a-4aa2-bb37-917d45f69654` |
+| aide_recall fired (hook or proactive)? | Y — PreToolUse hook fired for both Read calls |
+| Session 1 memories returned? | **NO — BUG** (see below) |
+| Used sync API (no `await`)? | Y |
+| Used `datetime()` SQL? | **N** — used `new Date(Date.now() - days * 86_400_000).toISOString()` |
+| Logged affected row count? | **N** — no logInfo |
+| Added index? | N/A (no new tables) |
+| Used vitest? | Y — 26 tests pass (3 new) |
+| Corrections needed | 0 |
+| Stop hook fired? | Y — agent said "nothing to store" |
+| aide_remember called? | N (0) |
+| Notes | **VOIDED** — recall bug meant Session 1 memories weren't injected. Agent followed existing `pruneOld` pattern (which uses `new Date()`). |
+
+**ROOT CAUSE: absolute vs relative path bug in `recall-for-path.js`**
+
+The PreToolUse hook passes the file path from Claude Code's Read tool, which is **absolute** (e.g., `/Users/meky/code/aide-v0/src/memory/store.ts`). But memory scopes are stored as **relative** (e.g., `src/memory/**`). The `scopeMatchesPath()` function does prefix matching, so `src/memory/` never matches `/Users/meky/.../src/memory/store.ts`.
+
+Result: recall returned only 11 generic `project`-scoped memories (branching, file size limits, etc.) — NOT the 9 scoped memories including #40 (datetime rule), #41 (pruneOld tech debt), #42 (logInfo guideline), #39 (SQL preference).
+
+**Fix applied:** `recall-for-path.js` now strips the project root from absolute paths before calling `recall()`. Also bumped limit from 10 → 20 (guidelines layer was getting truncated at limit 10).
+
+```js
+// Convert absolute path to relative for scope matching
+let relativePath = filePath;
+if (path.isAbsolute(filePath) && filePath.startsWith(projectPath)) {
+  relativePath = path.relative(projectPath, filePath);
+}
+```
+
+**Verified fix:** After the fix, recall for `src/memory/store.ts` returns 20 memories including all Session 1 memories (#39-42).
+
+**Code produced (for the record — doesn't reflect taught preferences due to bug):**
+```ts
+purgeArchived(days: number): number {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const result = this.db.prepare(
+    'DELETE FROM memories WHERE status = ? AND created_at < ?'
+  ).run('archived', cutoff);
+  return result.changes;
+}
+```
+
+**Session 2A needs to be re-run with the recall fix.** Reset code and start fresh.
+
+**Reset code:**
+
+```bash
+git checkout -- src/
+```
+
+---
+
+**Session 2A (Re-run) — AIDE+Hooks: Fresh session, recall fix applied**
+
+Bug fix applied to `recall-for-path.js`:
+- Convert absolute → relative path before calling `recall()`
+- Bumped recall limit 10 → 20 (guidelines layer was truncated)
+
+Additional finding from voided run: agent did NOT call `aide_recall` as an MCP tool — relied entirely on PreToolUse hook injection. This means the hook is the only recall pathway for non-proactive agents.
+
+Start fresh: `claude`. AIDE + hooks active. Same prompt:
+
+```
+Add a method `purgeArchived(days: number)` to MemoryStore that permanently deletes archived memories older than N days. Write a vitest test.
+```
+
+Results:
+
+| Dimension | Session 2A Re-run (AIDE+Hooks) |
+|-----------|-------------------------------|
+| Session 2A Re-run ID | |
 | aide_recall fired (hook or proactive)? | Y/N |
-| Session 1 memories returned? | Y/N |
+| Session 1 memories returned? | **Y/N — key validation of fix** |
 | Used sync API (no `await`)? | Y/N |
 | Used `datetime()` SQL? | **Y/N — key signal** |
 | Logged affected row count? | **Y/N — key signal** |
@@ -685,7 +1001,7 @@ Results:
 | aide_remember called? | Y/N (count) |
 | Notes | |
 
-**aide_recall output received by agent (paste — should include session 1 memories):**
+**aide_recall output received by agent (paste — should now include session 1 memories):**
 ```
 (paste here)
 ```
@@ -695,7 +1011,7 @@ Results:
 (paste here)
 ```
 
-**Token usage session 2A (`/context`):**
+**Token usage session 2A re-run (`/context`):**
 
 | Category | Tokens | % of context |
 |----------|--------|------------|

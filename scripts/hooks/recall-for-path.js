@@ -17,8 +17,16 @@ try {
   const { MemoryStore } = require(path.join(distPath, 'store'));
   const { recall } = require(path.join(distPath, 'recall'));
 
+  // Convert absolute path to relative for scope matching
+  // Scopes are stored as relative (e.g. "src/memory/**") but Claude Code
+  // passes absolute paths (e.g. "/Users/.../src/memory/store.ts")
+  let relativePath = filePath;
+  if (path.isAbsolute(filePath) && filePath.startsWith(projectPath)) {
+    relativePath = path.relative(projectPath, filePath);
+  }
+
   const store = new MemoryStore(projectPath);
-  const result = recall(store, { paths: [filePath], limit: 10 });
+  const result = recall(store, { paths: [relativePath], limit: 20 });
   store.close();
 
   if (result.memories.length > 0) {
