@@ -405,6 +405,26 @@ git checkout -b feature/hooks
 # Then run tests on this branch, resetting code changes between tests
 ```
 
+### Why These Test Suites — The User Pain Points
+
+The core user problem: **"I taught my agent something yesterday, and today it forgot."** Every new session starts cold. Corrections, preferences, and conventions don't persist. The user repeats themselves across sessions, or worse, the agent silently makes the same mistakes it was corrected for before.
+
+The three test suites map directly to the three things that need to work for this pain to go away:
+
+| Suite | Pain Point | Question Answered |
+|-------|-----------|-------------------|
+| **Suite 1: Adoption** | Agent never stores knowledge voluntarily (0% in 10 prior tests) | Can hooks make the agent actually call aide_remember? |
+| **Suite 2: Persistence** | Knowledge taught in session 1 is invisible in session 2 | Does stored knowledge survive to a new session AND change agent behavior? |
+| **Suite 3: Automation** | User shouldn't have to ask "did you check your memories?" | Does the PreToolUse hook make recall 100% automatic without agent cooperation? |
+
+If Suite 1 fails, nothing works — the agent never stores.
+If Suite 2 fails, storage is pointless — knowledge doesn't influence future sessions.
+If Suite 3 fails, recall depends on agent cooperation — fragile, same problem as rules-only approach.
+
+**Results so far:** Suite 1 PASS (3 gates cleared). Suite 2 PASS (cross-session persistence proven — AIDE agent used taught preferences, bare agent didn't). Suite 3 partially answered by Suite 2 (PreToolUse hooks drove recall successfully), full edge-case testing below.
+
+---
+
 ### Test Suite 1: aide_remember Adoption (Gates 1-3)
 
 **What this tests:** Do hooks make aide_remember fire? (Was 0% in all prior rounds.)
@@ -1136,7 +1156,21 @@ purgeArchived(days: number): number {
 
 No `logInfo` import, no logging. Identical pattern to voided Session 2A (which also had broken recall).
 
-**Token usage session 2B:** User did not run `/context`. No MCP tools, no memory files, no hooks — baseline would be ~21k (system prompt + tools + messages only).
+**Token usage session 2B (`/context`):**
+
+| Category | Tokens | % of context |
+|----------|--------|------------|
+| System prompt | 3.5k | 1.7% |
+| System tools (built-in) | 17.4k | 8.7% |
+| MCP tools | — | — (none configured) |
+| Memory files (MEMORY.md + rules) | 1.1k | 0.5% |
+| Skills | 164 | 0.1% |
+| Messages (conversation) | 11.4k | 5.7% |
+| Free space | 133k | 66.7% |
+| Autocompact buffer | 33k | 16.5% |
+| **Total used** | **32k / 200k** | **16%** |
+
+Note: Memory files still loaded (MEMORY.md + aide-memory.md rules) even in bare mode — these are auto-loaded from `.claude/rules/` and memory directory regardless of MCP/hooks config. No MCP tools category (aide-memory server not connected).
 
 **Restore after:**
 
