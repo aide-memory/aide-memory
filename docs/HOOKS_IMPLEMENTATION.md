@@ -405,26 +405,29 @@ git checkout -b feature/hooks
 # Then run tests on this branch, resetting code changes between tests
 ```
 
-### Test Suite 1 — VOIDED (MCP Server Not Connected)
-
-> **These results are invalid.** The MCP server was configured in `.claude/settings.json` under `mcpServers`, but Claude Code only loads MCP servers from `.mcp.json` at the project root. The aide-memory MCP tools (aide_recall, aide_remember, etc.) were never available to the agent. All Gate 2 failures below are explained by this — the agent literally could not call aide_remember. See "Suite 1 Observations" section for full analysis.
->
-> **Fix applied:** Created `.mcp.json` with aide-memory config, removed `mcpServers` from `settings.json`. See Test Suite 1 (Re-run) below for valid results.
-
-#### Original Test Suite 1: aide_remember Adoption (Gates 1-3)
+### Test Suite 1: aide_remember Adoption (Gates 1-3)
 
 **What this tests:** Do hooks make aide_remember fire? (Was 0% in all prior rounds.)
 
 **What this does NOT test:** Intra-session code quality comparison. We already proved that's equivalent in Round 2.
 
-**Setup (AIDE + hooks):**
+**Pre-flight checklist (MUST verify before running):**
+- [ ] `.mcp.json` exists at project root with aide-memory config
+- [ ] `settings.json` has hooks only (no `mcpServers` key)
+- [ ] Start fresh `claude` session
+- [ ] Run `/mcp` — verify aide-memory server is connected
+- [ ] Run `/context` — verify MCP tools appear in token breakdown
+- [ ] Only proceed if MCP tools are confirmed available
+
+**Setup:**
 
 ```bash
 # On feature/hooks branch with hooks implemented
 # Verify:
-cat .claude/settings.json               # hooks configured + MCP server
-cat .claude/rules/aide-memory.md        # rules active
-sqlite3 ~/.aide/projects/*/memory.db "SELECT count(*) FROM memories WHERE status='active'"  # memories seeded
+cat .mcp.json                          # MCP server config (NOT in settings.json)
+cat .claude/settings.json              # hooks only
+cat .claude/rules/aide-memory.md       # rules active
+sqlite3 ~/.aide/projects/*/memory.db "SELECT count(*) FROM memories WHERE status='active'"
 ```
 
 **Session:** Fresh `claude` session. Note session ID from JSONL filename.
@@ -439,79 +442,39 @@ Add a method `archiveOld(days: number)` to MemoryStore in src/memory/store.ts �
 
 Wait for agent to complete. The Stop hook should fire and nudge aide_remember.
 
-**Extract from JSONL after:**
-
-```bash
-# Find session file
-ls -t ~/.claude/projects/-Users-meky-code-aide-v0/*.jsonl | head -1
-
-# Extract all MCP tool calls (aide_recall, aide_remember, etc.)
-python3 -c "
-import json, sys
-with open(sys.argv[1]) as f:
-    for line in f:
-        obj = json.loads(line)
-        msg = obj.get('message', {})
-        for c in msg.get('content', []):
-            if isinstance(c, dict) and c.get('type') == 'tool_use':
-                name = c.get('name', '')
-                if 'aide' in name or 'remember' in name or 'recall' in name:
-                    print(f'{name}: {json.dumps(c.get(\"input\", {}))[:200]}')
-" <session-file>
-```
-
 Results:
 
 | Dimension | Result |
 |-----------|--------|
-| Session ID | `d40efe75-a6da-4a07-8e8f-c89480e3ed90` |
-| Called `aide_recall` before coding? | **N** — not proactive, read files directly |
-| Used sync API (no `await`)? | **Y** — `this.db.prepare().run(cutoff)` |
-| Test uses vitest (not jest)? | **Y** — imports from vitest |
-| Respected WAL mode? | **Y** — inherited from MemoryStore constructor |
-| Corrections needed | **0** |
-| **Stop hook fired?** | **Y — Gate 1 PASS** (JSONL line 29: `hookCount: 1`, `hasOutput: true`) |
-| **Loop prevention worked?** | **Y** — second stop (line 32) had `hasOutput: false`, exited cleanly |
-| **aide_remember called?** | **N — Gate 2 FAIL** — agent saw hook, chose not to store |
-| **What was stored (paste)?** | N/A — nothing stored |
-| **Layer + scope correct?** | N/A |
-| **PreToolUse hook fired?** | **Y** — `hook_progress` entries for both Read calls (`PreToolUse:Read`) |
-| **PreToolUse injected context?** | **N** — hook fired but no memories matched (DB may have been empty for those paths) |
-| Tool calls | Read(store.ts) → Glob(test files) → Read(store.test.ts) → Edit(store.ts) → Edit(store.test.ts) → Bash(vitest) |
-| Tests passing | 26/26 (23 existing + 3 new archiveOld tests) |
-| Duration | 39s (`turn_duration`: 39098ms) |
-| Notes | Agent response to Stop hook: "Nothing non-obvious to store here — the method followed the existing `pruneOld` pattern directly, and the test conventions were already well-documented in memory." |
+| Session ID | |
+| MCP tools confirmed available? | Y/N |
+| Called `aide_recall` before coding? | Y/N — proactive? |
+| Used sync API (no `await`)? | Y/N |
+| Test uses vitest (not jest)? | Y/N |
+| Respected WAL mode? | Y/N |
+| Corrections needed | count |
+| **Stop hook fired?** | **Y/N — Gate 1** |
+| **aide_remember called?** | **Y/N — Gate 2** |
+| **What was stored (paste)?** | |
+| **Layer + scope correct?** | **Y/N — Gate 3** |
+| Notes | |
 
 **aide_recall output received by agent (paste):**
 ```
-None — aide_recall was not called proactively.
-PreToolUse hook fired for both Read calls but injected no context (no matching memories in DB for src/memory/store.ts or src/memory/__tests__/store.test.ts at time of test).
+(paste aide_recall output here)
 ```
 
 **Code produced (paste key method):**
 ```ts
-archiveOld(days: number): number {
-  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
-  const result = this.db.prepare(
-    "UPDATE memories SET status = 'archived' WHERE created_at < ? AND status != 'archived'"
-  ).run(cutoff);
-  return result.changes;
-}
+(paste archiveOld method here)
 ```
 
 **aide_remember input (paste if called):**
 ```json
-Not called. Agent acknowledged Stop hook but decided nothing was worth storing.
+(paste aide_remember call input here)
 ```
 
-**Stop hook JSONL evidence:**
-```
-Line 29 (first stop): hookCount=1, hasOutput=true, hookErrors=["Before finishing: Did you learn anything non-obvious..."]
-Line 30 (agent response): "Nothing non-obvious to store here — the method followed the existing pruneOld pattern directly"
-Line 32 (second stop): hookCount=1, hasOutput=false (loop prevention via stop_hook_active=true)
-```
-
-**If Gate 2 fails (aide_remember not called):** STOP. Fix the Stop hook prompt text. Try stronger language, try `"type": "prompt"` hook, try Cursor's `followup_message`. Do not proceed to H-2.
+**If Gate 2 fails (aide_remember not called) WITH MCP confirmed available:** This is a real failure. The stop hook prompt is not convincing enough. Try stronger language or Cursor's `followup_message` approach.
 
 ---
 
@@ -529,88 +492,32 @@ After agent writes first version, send this correction:
 No, don't use bigram similarity in JS — use SQL LIKE with wildcard matching instead so it stays in the database layer.
 ```
 
-*(Original plan said "exact string match" but agent used Dice coefficient bigram similarity instead, so correction was adapted.)*
+*(If agent doesn't use bigram/JS similarity, adapt correction to whatever approach it chose.)*
 
 Results:
 
 | Dimension | Result |
 |-----------|--------|
-| Used sync API (no `await`)? | **Y** — `this.db.prepare().all()` |
-| Test uses vitest? | **Y** — vitest, 31/31 tests pass |
-| Agent adapted code to correction? | **Y** — rewrote from Dice bigrams to SQL LIKE self-join |
-| Corrections needed (beyond the intentional one) | **0** |
-| **UserPromptSubmit hook detected correction?** | **UNKNOWN** — no `UserPromptSubmit` hook_progress in JSONL. Hook may have fired but doesn't log progress entries, OR pattern didn't match (message started with `"No, don't use..."` which should match `no,? (don.t)` regex) |
-| **aide_remember called after correction?** | **N** — not called inline after correction |
-| **Correction content stored accurately?** | **N/A** |
-| **Stop hook fired after H-2?** | **Y** — line 101: `hookCount=1`, `hasOutput=true` |
-| **aide_remember called on stop (H-2)?** | **ATTEMPTED but FAILED** — agent tried via Bash MCP client workaround (see below). Memory NOT in DB. |
-| Notes | Agent said "Yes — the user's preference to keep logic in the database layer is worth storing" but used `node -e` with `@modelcontextprotocol/sdk` to call aide_remember via Bash instead of using the MCP tool directly. The Bash command ran in background and failed silently. Loop prevention: 2nd stop at line 114 had `hasOutput=false`. |
+| Used sync API (no `await`)? | Y/N |
+| Test uses vitest? | Y/N |
+| Agent adapted code to correction? | Y/N |
+| Corrections needed (beyond the intentional one) | count |
+| **UserPromptSubmit hook detected correction?** | **Y/N** |
+| **aide_remember called after correction?** | **Y/N** |
+| **Correction content stored accurately?** | **Y/N** |
+| **Stop hook fired after H-2?** | **Y/N** |
+| **aide_remember called on stop (H-2)?** | **Y/N** |
+| Notes | |
 
-**Code produced — BEFORE correction (Dice bigram similarity):**
+**Code produced (paste key method — before and after correction):**
 ```ts
-// Created src/memory/similarity.ts with diceSimilarity(a, b) function
-// Then in store.ts:
-duplicateCheck(threshold = 0.8): Array<{ a: Memory; b: Memory; similarity: number }> {
-  const memories = this.list({ status: 'active' });
-  const results: Array<{ a: Memory; b: Memory; similarity: number }> = [];
-  for (let i = 0; i < memories.length; i++) {
-    for (let j = i + 1; j < memories.length; j++) {
-      const similarity = diceSimilarity(memories[i].what, memories[j].what);
-      if (similarity >= threshold) {
-        results.push({ a: memories[i], b: memories[j], similarity });
-      }
-    }
-  }
-  return results.sort((x, y) => y.similarity - x.similarity);
-}
+(paste here)
 ```
 
-**Code produced — AFTER correction (SQL LIKE self-join):**
-```ts
-duplicateCheck(): Array<{ a: Memory; b: Memory }> {
-  const rows = this.db.prepare(`
-    SELECT a.id AS a_id, b.id AS b_id
-    FROM memories a
-    JOIN memories b ON a.id < b.id
-    WHERE a.status = 'active' AND b.status = 'active'
-      AND (
-        LOWER(TRIM(a.what)) = LOWER(TRIM(b.what))
-        OR LOWER(a.what) LIKE '%' || LOWER(b.what) || '%'
-        OR LOWER(b.what) LIKE '%' || LOWER(a.what) || '%'
-      )
-    ORDER BY a.id, b.id
-  `).all() as Array<{ a_id: number; b_id: number }>;
-  return rows.map(row => ({
-    a: this.rowToMemory(this.db.prepare('SELECT * FROM memories WHERE id = ?').get(row.a_id)),
-    b: this.rowToMemory(this.db.prepare('SELECT * FROM memories WHERE id = ?').get(row.b_id)),
-  }));
-}
+**aide_remember input (paste if called):**
+```json
+(paste here)
 ```
-
-**aide_remember attempt (via Bash — FAILED silently):**
-```javascript
-// Agent used this Bash command instead of calling MCP tool directly:
-node -e "
-const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
-const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
-async function run() {
-  const transport = new StdioClientTransport({ command: 'node', args: ['dist/memory/mcp-server.js'] });
-  const client = new Client({ name: 'test', version: '1.0.0' });
-  await client.connect(transport);
-  await client.callTool({ name: 'aide_remember', arguments: {
-    what: 'Keep comparison/matching logic in the SQL/database layer — avoid doing string similarity in JS when SQL LIKE or self-joins can handle it',
-    why: 'User corrected bigram-based JS similarity approach in favor of SQL LIKE with wildcard matching for duplicateCheck',
-    layer: 'preferences',
-    scope: 'src/memory/**'
-  }});
-  await client.close();
-}
-run().catch(() => {});
-"
-// Result: ran in background, failed silently. Memory NOT in DB.
-```
-
-**Critical finding:** The agent WANTED to store the correction (Gate 2 intent = PASS) but couldn't execute it. It used a Bash workaround to spin up an MCP client instead of calling `aide_remember` as an MCP tool. This suggests the agent doesn't realize MCP tools are available during stop hook responses, or the MCP connection wasn't established in this session.
 
 ---
 
@@ -621,38 +528,35 @@ sqlite3 ~/.aide/projects/*/memory.db \
   "SELECT id, layer, scope, substr(what,1,80), source FROM memories WHERE source='conversation' ORDER BY id DESC LIMIT 10"
 ```
 
-**MCP Tool Call Summary (Suite 1 — H-1 + H-2):**
+**MCP Tool Call Summary (Suite 1):**
 
 | Call # | Tool | Trigger | Proactive? |
 |--------|------|---------|------------|
-| — | (no MCP tool calls in H-1 or H-2) | — | — |
+| 1 | | | |
+| 2 | | | |
+| ... | | | |
 
-**Total MCP calls: 0. Proactive calls: 0. aide_remember calls: 0 (was 0/10 in all prior rounds — still 0).**
-**aide_remember ATTEMPTED via Bash in H-2: 1 (failed silently — agent couldn't/didn't use MCP tool directly).**
+**Total MCP calls: _. Proactive calls: _. aide_remember calls: _.**
 
-**Hooks activity (Suite 1 — H-1 + H-2):**
+**Token usage (`/context` after Suite 1):**
 
-| Hook | Prompt | Fired? | Output? | Effect |
-|------|--------|--------|---------|--------|
-| PreToolUse:Read (store.ts) | H-1 | Y | N (no matching memories) | No context injected |
-| PreToolUse:Read (store.test.ts) | H-1 | Y | N (no matching memories) | No context injected |
-| Stop (1st) | H-1 | Y | Y (block + nudge) | Agent saw nudge, chose not to store |
-| Stop (2nd) | H-1 | Y | N (loop prevention) | Exited cleanly |
-| PreToolUse:Read (store.ts) | H-2 | Y | N (no matching memories) | No context injected |
-| PreToolUse:Read (store.test.ts) | H-2 | Y | N (no matching memories) | No context injected |
-| UserPromptSubmit (correction) | H-2 | **?** | **?** | No hook_progress in JSONL — unclear if fired |
-| Stop (1st) | H-2 | Y | Y (block + nudge) | Agent tried aide_remember via Bash (failed) |
-| Stop (2nd) | H-2 | Y | N (loop prevention) | Exited cleanly |
+| Category | Tokens | % of context |
+|----------|--------|------------|
+| System prompt | | |
+| System tools (built-in) | | |
+| MCP tools (aide-memory) | | |
+| Memory files (MEMORY.md) | | |
+| Skills | | |
+| Messages (conversation) | | |
+| Free space | | |
+| Autocompact buffer | | |
+| **Total used** | **k / 200k** | **%** |
 
-**Reset code changes (we're not keeping test code):**
+**Reset code changes:**
 
 ```bash
 git checkout -- src/
 ```
-
-**Token usage (`/context` after Suite 1) — see Suite 1 Observations section below for full breakdown.**
-
-**46k / 200k (23%). Notable: NO MCP tools category listed — aide-memory MCP server likely not connected.**
 
 ---
 
@@ -1108,7 +1012,11 @@ Don't over-use: skip for already-recalled areas, trivial changes.
 
 ---
 
-## Suite 1 Observations (H-1 + H-2)
+## Archive: Voided Suite 1 Results (MCP Not Connected)
+
+> **These results are invalid.** MCP config was in `.claude/settings.json` instead of `.mcp.json`. The agent never had aide_remember/aide_recall available as MCP tools. All Gate 2 failures are explained by this. See Test Suite 1 above for the valid re-run.
+
+### Voided Suite 1 Observations (H-1 + H-2)
 
 ### Token Usage (Suite 1 — `/context` after H-2)
 
@@ -1185,20 +1093,9 @@ The most likely root cause is **MCP server not connected in the test session**. 
 - Agent used Bash workaround instead of MCP tool call
 - Agent tool list shows only Read/Edit/Bash/Write/Glob — no aide_* tools
 
-Why wasn't MCP connected? The `.claude/settings.json` has the MCP server config:
-```json
-"mcpServers": {
-  "aide-memory": {
-    "command": "npx",
-    "args": ["ts-node", "/Users/meky/code/aide-v0/src/memory/cli.ts", "/Users/meky/code/aide-v0"]
-  }
-}
-```
+Why wasn't MCP connected? **Root cause found:** Claude Code loads MCP servers from `.mcp.json` at the project root, NOT from `mcpServers` in `.claude/settings.json`. The `enabledMcpjsonServers` in `settings.local.json` is a permission flag for `.mcp.json` servers. We had the config in the wrong file — the MCP server was never loaded.
 
-Possible reasons:
-- MCP server failed to start (ts-node compilation error? dependency issue?)
-- Session started before the config was properly saved
-- Claude Code MCP connection is unreliable/timing-dependent
+**Fix applied:** Created `.mcp.json` at project root, removed `mcpServers` from `settings.json`. See new Suite 1 above for re-run with correct config.
 
 ### Connection to Original Question: Should We Continue?
 
@@ -1235,147 +1132,5 @@ The original question from `docs/PROTOTYPE.md` competitive analysis: *"Is path-s
 | UserPromptSubmit hook not firing | Debug output format; test with `claude --debug` or manual hook execution | Medium |
 | MCP connection inherently unreliable | Direct store access for both read AND write (bypass MCP in hooks) | High |
 | Stop hook "error" display confusing | Can't fix — Claude Code's UI decision. Consider using `"decision": "approve"` + just outputting text | Low |
-
----
-
-### Test Suite 1 (Re-run): aide_remember Adoption (Gates 1-3)
-
-**What changed:** MCP server now correctly configured in `.mcp.json` (was wrongly in `settings.json`). Agent should now have `aide_recall`, `aide_remember`, etc. available as MCP tools.
-
-**Pre-flight checklist (MUST verify before running):**
-- [ ] `.mcp.json` exists at project root with aide-memory config
-- [ ] `settings.json` has hooks only (no `mcpServers` key)
-- [ ] Start fresh `claude` session
-- [ ] Run `/mcp` — verify aide-memory server is connected
-- [ ] Run `/context` — verify MCP tools appear in token breakdown
-- [ ] Only proceed if MCP tools are confirmed available
-
-**Session:** Fresh `claude` session. Note session ID from JSONL filename.
-
----
-
-**Prompt H-1 (re-run): Simple task (tests Gate 1 + 2)**
-
-```
-Add a method `archiveOld(days: number)` to MemoryStore in src/memory/store.ts — like pruneOld but sets status to 'archived' instead of deleting. Write a vitest test.
-```
-
-Wait for agent to complete. The Stop hook should fire and nudge aide_remember.
-
-Results:
-
-| Dimension | Result |
-|-----------|--------|
-| Session ID | |
-| MCP tools confirmed available? | Y/N |
-| Called `aide_recall` before coding? | Y/N — proactive? |
-| Used sync API (no `await`)? | Y/N |
-| Test uses vitest (not jest)? | Y/N |
-| Respected WAL mode? | Y/N |
-| Corrections needed | count |
-| **Stop hook fired?** | **Y/N — Gate 1** |
-| **aide_remember called?** | **Y/N — Gate 2** |
-| **What was stored (paste)?** | |
-| **Layer + scope correct?** | **Y/N — Gate 3** |
-| Notes | |
-
-**aide_recall output received by agent (paste):**
-```
-(paste aide_recall output here)
-```
-
-**Code produced (paste key method):**
-```ts
-(paste archiveOld method here)
-```
-
-**aide_remember input (paste if called):**
-```json
-(paste aide_remember call input here)
-```
-
-**If Gate 2 fails (aide_remember not called) WITH MCP confirmed available:** This is a real failure. The stop hook prompt is not convincing enough. Try stronger language or Cursor's `followup_message` approach.
-
----
-
-**Prompt H-2 (re-run): User correction (tests correction detection hook)**
-
-In the SAME session, paste:
-
-```
-Add a method `duplicateCheck()` to MemoryStore that finds memories with very similar `what` text. Use string comparison.
-```
-
-After agent writes first version, send this correction:
-
-```
-No, don't use bigram similarity in JS — use SQL LIKE with wildcard matching instead so it stays in the database layer.
-```
-
-*(If agent doesn't use bigram/JS similarity, adapt correction to whatever approach it chose.)*
-
-Results:
-
-| Dimension | Result |
-|-----------|--------|
-| Used sync API (no `await`)? | Y/N |
-| Test uses vitest? | Y/N |
-| Agent adapted code to correction? | Y/N |
-| Corrections needed (beyond the intentional one) | count |
-| **UserPromptSubmit hook detected correction?** | **Y/N** |
-| **aide_remember called after correction?** | **Y/N** |
-| **Correction content stored accurately?** | **Y/N** |
-| **Stop hook fired after H-2?** | **Y/N** |
-| **aide_remember called on stop (H-2)?** | **Y/N** |
-| Notes | |
-
-**Code produced (paste key method — before and after correction):**
-```ts
-(paste here)
-```
-
-**aide_remember input (paste if called):**
-```json
-(paste here)
-```
-
----
-
-**After Suite 1 re-run, verify the DB:**
-
-```bash
-sqlite3 ~/.aide/projects/*/memory.db \
-  "SELECT id, layer, scope, substr(what,1,80), source FROM memories WHERE source='conversation' ORDER BY id DESC LIMIT 10"
-```
-
-**MCP Tool Call Summary (Suite 1 re-run):**
-
-| Call # | Tool | Trigger | Proactive? |
-|--------|------|---------|------------|
-| 1 | | | |
-| 2 | | | |
-| ... | | | |
-
-**Total MCP calls: _. Proactive calls: _. aide_remember calls: _.**
-
-**Token usage (`/context` after Suite 1 re-run):**
-
-| Category | Tokens | % of context |
-|----------|--------|------------|
-| System prompt | | |
-| System tools (built-in) | | |
-| MCP tools (aide-memory) | | |
-| Memory files (MEMORY.md) | | |
-| Skills | | |
-| Messages (conversation) | | |
-| Free space | | |
-| Autocompact buffer | | |
-| **Total used** | **k / 200k** | **%** |
-
-**Reset code changes:**
-
-```bash
-git checkout -- src/
-```
 
 
