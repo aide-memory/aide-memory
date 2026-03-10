@@ -330,6 +330,90 @@ if (result.memories.length > 0) {
 
 ---
 
+## How It Works Today — The Full Loop
+
+### Components
+
+| Component | File | Role |
+|-----------|------|------|
+| MCP Server | `src/memory/cli.ts` | Exposes 6 tools (aide_recall, aide_remember, aide_forget, aide_memories, aide_import, aide_search) via stdio JSON-RPC |
+| Memory Store | `src/memory/store.ts` | SQLite CRUD — create, get, list, search, remove, archive, merge |
+| Recall Engine | `src/memory/recall.ts` | Path-scoped retrieval with glob matching, layer-sorted output |
+| Pre-read Hook | `scripts/hooks/pre-read-recall.sh` + `recall-for-path.js` | Direct SQLite query (no MCP), injects memories as `additionalContext` |
+| Stop Hook | `scripts/hooks/stop-remember.sh` | Nudges agent to call aide_remember after task completion |
+| Correction Hook | `scripts/hooks/detect-correction.sh` | Detects correction language in user prompts, tells agent to store |
+| Rules | `.claude/rules/aide-memory.md` | Tells agent when/how to use MCP tools |
+| Config | `.claude/settings.json` + `.mcp.json` | Hook definitions + MCP server config |
+
+### The Memory Lifecycle
+
+```
+Session Start
+│
+├─ Agent sees: rules file (aide-memory.md) + MCP tools available + MEMORY.md
+│  └─ This is static context — same every session, ~2.5k tokens
+│
+├─ Developer sends a prompt
+│
+│  ┌─ Agent calls Read("src/memory/store.ts")
+│  │
+│  ├─ HOOK: PreToolUse:Read fires automatically
+│  │   └─ pre-read-recall.sh → recall-for-path.js
+│  │   └─ Queries SQLite: "give me memories matching src/memory/**"
+│  │   └─ Returns up to 20 memories, sorted by layer:
+│  │       area_context → technical → preferences → guidelines
+│  │   └─ Injected as <system-reminder> — agent sees it, user doesn't
+│  │
+│  ├─ Agent reads file + recalled memories together
+│  │   └─ Writes code influenced by recalled patterns
+│  │   └─ Zero effort from developer — no "check your memories" needed
+│  │
+│  ├─ Agent finishes task
+│  │
+│  ├─ HOOK: Stop fires
+│  │   └─ "Did you learn anything non-obvious?"
+│  │   └─ Agent decides: store something (aide_remember) or "nothing new"
+│  │   └─ If stored → Stop fires again → hasOutput: false → exits
+│  │   └─ If nothing → exits immediately
+│  │
+│  └─ Done.
+│
+├─ Developer sends a correction
+│
+│  ├─ HOOK: UserPromptSubmit fires
+│  │   └─ detect-correction.sh sees correction language
+│  │   └─ Tells agent: "User is correcting you — call aide_remember"
+│  │
+│  ├─ Agent fixes code + calls aide_remember (MCP tool)
+│  │   └─ Stores correction with layer, scope, why
+│  │   └─ Persisted to SQLite → survives session end
+│  │
+│  └─ Next session: PreToolUse hook recalls this correction automatically
+│
+Session End
+```
+
+### When Does the Agent Make MCP Tool Calls?
+
+The agent has 6 MCP tools available at all times. Here's when it actually uses them:
+
+**aide_recall (read memories):**
+- **With hooks:** Agent NEVER calls this manually. Across all test sessions (Suites 1-3), 0 manual aide_recall calls. The PreToolUse hook handles it automatically — the agent gets memories injected before every Read, so it has no reason to ask for more.
+- **Without hooks (rules only):** Agent calls aide_recall 75% of the time (3/4 prompts in Round 2). The 25% miss rate is why we added the hook.
+- **Could it call aide_recall mid-task?** Yes — the MCP tool is always available. The agent could call `aide_recall` with different paths or a query string to get more specific context. It just never does, because the hook already provides relevant memories before each file read. This is an untested flow — we don't know if the agent would use it if the hook returned insufficient context.
+
+**aide_remember (write memories):**
+- **With hooks:** Agent calls this proactively when the Stop hook nudges or when UserPromptSubmit detects a correction. 4 total calls across Suites 1-2. In Suite 3, agent correctly said "patterns already stored" — no redundant writes.
+- **Without hooks (rules only):** 0% — agent never called aide_remember in 10 test prompts across Rounds 1-2.
+- **Mid-task aide_remember?** Yes, this happened. In Suite 1 HR-2, the agent called aide_remember BEFORE the Stop hook fired — it proactively stored a correction during the task, then told the Stop hook "already stored." The Stop hook is a safety net, not the only trigger.
+
+**aide_search / aide_memories / aide_forget / aide_import:**
+- Never called in any test session. These are available for manual/advanced use but the hooks don't trigger them. An agent could theoretically call `aide_search("authentication")` mid-task to find relevant memories by keyword, but this hasn't been observed.
+
+**Summary: the agent is passive on reads (hook handles it) and reactive on writes (hook nudges it). It never proactively seeks more context beyond what the hook provides.**
+
+---
+
 ## E2E Testing Plan
 
 ### Lessons from Round 2 (What NOT to Repeat)
@@ -802,7 +886,39 @@ Our testing covered specific scenarios but did NOT stress-test the full read/wri
 
 **Bottom line:** We proved the read/write loop works mechanically and influences behavior. We have NOT proven it works well at scale, with growing/stale knowledge, or across diverse task types. This needs longitudinal testing — use aide-memory for real work over weeks and monitor memory quality.
 
-**6. Expand memory scope beyond corrections**
+**6. Hook injection not captured in JSONL — observability gap**
+
+Discovered in Suite 3: PreToolUse hook `additionalContext` output is **not recorded in JSONL session files**. The `hook_progress` entry confirms the hook ran, but the actual injected content (what the agent sees as a `<system-reminder>`) doesn't appear in `tool_result` entries. This makes post-hoc analysis and debugging harder.
+
+**Impact:**
+- Can't prove *what* the agent saw from recall — only that the hook ran
+- Can't measure token overhead from injections (injected text size is invisible)
+- Debugging recall failures requires manual testing (`node recall-for-path.js <path>`) instead of replaying the session
+- Test result verification relies on behavioral evidence (agent referencing recalled patterns) rather than direct proof
+
+**Mitigations:**
+- **Self-logging hook:** Have `pre-read-recall.sh` tee its output to a sidecar log file (e.g., `.aide/hooks/recall-log.jsonl`) before returning it to Claude Code. Each entry records timestamp, file path, and injected content. Zero impact on hook behavior — just adds a write.
+- **Replay script:** Build a post-hoc tool that reads a JSONL session, finds all `PreToolUse:Read` hook_progress entries, extracts the file paths from preceding `Read` tool calls, and re-runs `recall-for-path.js` against each. Produces a "reconstructed recall" report. Won't be exact (DB state may have changed since the session), but close enough for analysis.
+- **Feature request:** Ask Anthropic to include `hookSpecificOutput` content in JSONL entries. This would fix the root cause — hooks are a new feature and this may simply be an oversight.
+- **Agent self-reporting:** Add a guideline memory telling the agent to briefly mention which recalled memories it's applying (e.g., "Using recalled preference: datetime() for SQL dates"). Makes behavioral evidence explicit rather than implicit. Trade-off: adds tokens to output.
+
+**Priority:** Low blocker, medium UX impact. The self-logging hook is cheap to implement and solves 80% of the debugging problem. Feature request to Anthropic solves it properly.
+
+**7. Reconsider hook injection strategy — dump vs nudge**
+
+The current PreToolUse hook dumps up to 20 path-matched memories on every Read call. This was the simplest path to 100% recall coverage, but we skipped a middle-ground approach:
+
+| Strategy | Coverage | Token cost | Relevance | Round-trips |
+|----------|----------|------------|-----------|-------------|
+| Rules only ("call aide_recall yourself") | 75% | Low (agent decides) | Agent-filtered | 0 extra |
+| **Nudge hook** ("memories exist for this path, call aide_recall if needed") | ~100% | Low (agent decides) | Agent-filtered | 1 extra per read |
+| **Dump hook** (current — inject all matching memories) | 100% | High (20 per read) | Unfiltered | 0 extra |
+
+We went from row 1 straight to row 3 without trying row 2. As memory count grows, the dump approach will increasingly waste tokens on irrelevant context. The nudge approach lets the agent decide what's relevant — but adds latency (one extra MCP call per read).
+
+**When this matters:** Currently ~20 memories per path is fine. At 100+ memories per path, dumping everything becomes a real token/noise problem. Revisit when memory DB exceeds ~50 scoped memories per common path.
+
+**8. Expand memory scope beyond corrections**
 
 Currently memories are mostly corrections and taught rules. Could expand to:
 - **Conversation history:** Store summaries of past sessions (what was worked on, key decisions). Would help agents understand "what happened last time" without full context replay.
@@ -1247,7 +1363,7 @@ This is the differentiation. Platform-native memory (Claude's built-in) and comp
 
 **Prerequisite:** Suites 1-2 done. This is an optimization test, not a value test.
 
-**What this tests:** Does PreToolUse hook make aide_recall 100% automatic? Does it work inside PlanMode subagents?
+**What this tests:** Does PreToolUse hook make aide_recall 100% automatic? Does it work inside PlanMode subagents? Three prompts test a gradient: direct task (HR-1), complex task that may implicitly trigger plan mode (HR-2), and explicit plan mode request (HR-3).
 
 **What this does NOT test:** Code quality comparison (MVP round was inconclusive; future follow-up needed).
 
@@ -1259,46 +1375,242 @@ This is the differentiation. Platform-native memory (Claude's built-in) and comp
 Add a new method `mergeMemories(id1: number, id2: number)` to MemoryStore that combines two memories into one. Keep the most recent created_at.
 ```
 
-**Prompt HR-2: PlanMode-triggering task**
+**Prompt HR-2: Complex task (implicit plan mode)**
 
 ```
 Add a new module src/memory/dedup.ts — a DedupEngine class that finds and merges duplicate memories. Include detect, merge, and report methods. Write vitest tests.
 ```
 
+This prompt is complex enough that the agent *may* choose to enter plan mode on its own. Whether it does or doesn't is itself a data point — we don't force it.
+
+**Prompt HR-3: Explicit plan mode**
+
+```
+Before writing any code, enter plan mode to explore the codebase and propose an approach. Then implement: Add a `MemoryMaintenance` class in src/memory/maintenance.ts that provides scheduled cleanup — methods for pruning stale memories, archiving old completed items, and generating a health report (total count, stale count, duplicate estimate). Write vitest tests.
+```
+
+This prompt explicitly requests plan mode. The agent MUST enter plan mode, read multiple files in `src/memory/`, and propose an approach before implementing. This gives us:
+- Guaranteed plan-mode subagent spawning
+- Multiple Read calls during planning (each should trigger PreToolUse hook)
+- The agent will read `store.ts` where Suite 2 taught preferences (datetime, logInfo) apply
+- We can verify if recalled context shapes the *plan* (not just the code)
+
+**Important JSONL observation:** Hook recall injection (`additionalContext`) is **not captured in JSONL session files**. The `hook_progress` entries confirm the hook fires, and the recall script returns results when tested manually, but the injected context doesn't appear in tool_result entries. Verification must rely on **behavioral evidence** (agent referencing "memory context", using taught patterns like logInfo, SQL patterns).
+
 Results:
 
-| Dimension | HR-1 (Direct) | HR-2 (PlanMode) |
-|-----------|---------------|-----------------|
-| Used sync API (no `await`)? | Y/N | Y/N |
-| Test uses vitest? | Y/N | Y/N |
-| Corrections needed | count | count |
-| Hook injected recall context before Read? | Y/N | Y/N |
-| Agent also called aide_recall manually? | Y/N | Y/N |
-| PlanMode subagents got recall context? | n/a | Y/N |
-| Duplicate recall (hook + manual)? | Y/N | Y/N |
-| Stop hook fired? | Y/N | Y/N |
-| aide_remember called? | Y/N (count) | Y/N (count) |
-| Token overhead from hook injection | estimate | estimate |
-| Notes | | |
+| Dimension | HR-1 (Direct) | HR-2 (Implicit) | HR-3 (Explicit Plan) |
+|-----------|---------------|-----------------|----------------------|
+| Used sync API (no `await`)? | **Y** | **Y** | **Y** |
+| Used `datetime()` (not `new Date()`)? | N/A (no dates) | N/A (no dates) | **Y** (pruneStale + archiveCompleted) |
+| Used `logInfo`? | No | **Y** (detect + merge) | **Y** (pruneStale + archiveCompleted) |
+| Test uses vitest? | N/A (no tests asked) | **Y** (13 pass) | **Y** (13 pass) |
+| Corrections needed | **0** | **0** | **0** |
+| Hook injected recall context before Read? | **Y** (behavioral) | **Y** (behavioral) | **Y** (1 direct read; subagent reads unknown) |
+| Agent also called aide_recall manually? | **No** | **No** | **No** |
+| Agent entered plan mode? | n/a | **No** | **Y** (EnterPlanMode → Explore + Plan agents → ExitPlanMode) |
+| PlanMode subagents got recall context? | n/a | n/a (no plan mode) | **No** — 0 hook_progress entries during subagent phase |
+| Duplicate recall (hook + manual)? | **No** | **No** | **No** |
+| Stop hook fired? | **Y** | **Y** | **Y** |
+| aide_remember called? | **No** (0) | **No** (0) | **No** (0) — "all patterns already stored" |
+| Token overhead from hook injection | not measurable from JSONL | not measurable from JSONL | not measurable from JSONL |
+| Turn duration | 32s | 89s | 187s |
+| Notes | Agent said "Based on the memory context" — confirms recall seen. No tests requested in prompt. | Used SQL self-join + logInfo (both recalled patterns). Did NOT enter plan mode despite multi-file task. 13 vitest tests pass. | Entered plan mode, spawned Explore + Plan subagents. Subagents read 5+ files but NO hooks fired for their reads. Plan explicitly used `datetime()` in SQL examples. 13 vitest tests pass. |
 
-**Code produced HR-1 (paste key method):**
+**Behavioral evidence of recall in HR-1:**
+- Agent said: *"Based on the memory context, I should keep logic in SQL where possible and use the existing patterns."*
+- Hook fired once: `store.ts` read (line 9 in JSONL)
+
+**Behavioral evidence of recall in HR-2:**
+- Agent explicitly searched for `logInfo` in `src/core/logger.ts` — this is a recalled guideline ("Always log count of affected rows using logInfo")
+- Used SQL self-join for duplicate detection — recalled preference ("keep data operations in database layer, use SQL not JS")
+- Agent said at Stop hook: *"The dedup module follows established patterns: SQL self-join for data operations (already stored preference), logInfo for bulk ops (already stored guideline)"* — explicitly referencing stored memories
+- Hook fired 3 times: `types.ts`, `store.test.ts`, `index.ts` reads
+
+**HR-2 did NOT enter plan mode** — despite being a multi-file task (new module + tests), the agent went straight to implementation. This validates having HR-3 as the explicit plan mode test.
+
+**Behavioral evidence of recall in HR-3:**
+- Plan explicitly used `datetime('now', '-' || ? || ' days')` in SQL examples — this is a recalled preference from Suite 2 Session 1
+- Code uses `logInfo` for both pruneStale and archiveCompleted — recalled guideline
+- At Stop hook, agent said: *"All patterns followed were already stored: datetime('now', ...) for SQL dates, logInfo for bulk ops, raw DB access via (this.store as any).db, temp DB test scaffold."* — explicitly lists recalled memories
+- Hook fired once during implementation: `index.ts` read (line 148). All other reads were inside subagents.
+
+**HR-3 plan mode flow:**
+1. Agent tried `Skill({"skill": "plan"})` — failed (not a prompt skill)
+2. Called `EnterPlanMode({})`
+3. Spawned **Explore subagent** — read store.ts, dedup.ts, types.ts, logger.ts, store.test.ts
+4. Spawned **Plan subagent** — designed class architecture
+5. Wrote plan to file, called `ExitPlanMode` with full plan
+6. Implemented: maintenance.ts + tests + index.ts export
+
+**CRITICAL FINDING — subagent hook gap confirmed:**
+Between lines 82-131 (Explore + Plan subagent execution), **zero** `hook_progress` entries for `PreToolUse:Read` appear. The subagents read 5+ files in `src/memory/` but the PreToolUse hook never fired for any of them. This confirms the structural limitation: **hooks only fire for direct (main agent) tool calls, not subagent tool calls.**
+
+However, the agent still produced correct code using recalled patterns. This means either:
+- The main agent had already seen recalled context from HR-1/HR-2 earlier in the session and carried it forward
+- The `.claude/rules/aide-memory.md` file (loaded at session start) provides enough baseline guidance
+- The plan itself encoded the recalled patterns (datetime in SQL examples), so the implementation followed the plan regardless of whether subagents had recall
+
+The hook gap is real but **not a blocker** — the combination of rules + session context + plan propagation covers the gap in practice.
+
+**Code produced HR-1 — `mergeMemories` method (store.ts):**
 ```ts
-(paste mergeMemories method here)
+mergeMemories(id1: number, id2: number): Memory | null {
+  const m1 = this.get(id1);
+  const m2 = this.get(id2);
+  if (!m1 || !m2) return null;
+
+  const keep = m1.created_at >= m2.created_at ? m1 : m2;
+  const discard = keep === m1 ? m2 : m1;
+
+  const mergedWhat = `${keep.what}\n${discard.what}`;
+  const mergedWhy = keep.why && discard.why
+    ? `${keep.why}\n${discard.why}`
+    : keep.why ?? discard.why;
+
+  this.db.prepare(`
+    UPDATE memories SET what = ?, why = ?, recalled_count = recalled_count + ? WHERE id = ?
+  `).run(mergedWhat, mergedWhy ?? null, discard.recalled_count, keep.id);
+
+  this.remove(discard.id);
+
+  return this.get(keep.id);
+}
 ```
 
-**Code produced HR-2 (paste DedupEngine class):**
+**Code produced HR-2 — `DedupEngine` class (dedup.ts):**
 ```ts
-(paste here)
+import type { MemoryStore } from './store';
+import type { Memory } from './types';
+import { logInfo } from '../core/logger';
+
+export interface DuplicatePair { a: Memory; b: Memory; }
+export interface DedupReport { detected: number; merged: number; remaining: number; }
+
+export class DedupEngine {
+  constructor(private store: MemoryStore) {}
+
+  detect(): DuplicatePair[] {
+    const db = (this.store as any).db;
+    const rows = db.prepare(`
+      SELECT m1.id AS id1, m2.id AS id2
+      FROM memories m1
+      JOIN memories m2
+        ON m1.id < m2.id
+        AND m1.layer = m2.layer
+        AND (m1.scope IS m2.scope OR (m1.scope IS NOT NULL AND m1.scope = m2.scope))
+        AND m1.status = 'active'
+        AND m2.status = 'active'
+        AND (m2.what LIKE '%' || m1.what || '%' OR m1.what LIKE '%' || m2.what || '%')
+    `).all() as { id1: number; id2: number }[];
+
+    const pairs: DuplicatePair[] = [];
+    for (const row of rows) {
+      const a = this.store.get(row.id1);
+      const b = this.store.get(row.id2);
+      if (a && b) pairs.push({ a, b });
+    }
+    logInfo(`dedup: detected ${pairs.length} duplicate pairs`);
+    return pairs;
+  }
+
+  merge(pairs: DuplicatePair[]): number[] {
+    const merged: number[] = [];
+    const consumed = new Set<number>();
+    for (const { a, b } of pairs) {
+      if (consumed.has(a.id) || consumed.has(b.id)) continue;
+      const result = this.store.mergeMemories(a.id, b.id);
+      if (result) {
+        merged.push(result.id);
+        const discardedId = result.id === a.id ? b.id : a.id;
+        consumed.add(discardedId);
+      }
+    }
+    logInfo(`dedup: merged ${merged.length} pairs`);
+    return merged;
+  }
+
+  report(): DedupReport {
+    const pairs = this.detect();
+    const merged = this.merge(pairs);
+    const remaining = this.store.count({ status: 'active' });
+    return { detected: pairs.length, merged: merged.length, remaining };
+  }
+}
 ```
+
+**Code produced HR-3 — `MemoryMaintenance` class (maintenance.ts):**
+```ts
+import type { MemoryStore } from './store';
+import { DedupEngine } from './dedup';
+import { logInfo } from '../core/logger';
+
+export interface HealthReport {
+  total: number; active: number; completed: number;
+  archived: number; stale: number; duplicateEstimate: number;
+}
+
+export class MemoryMaintenance {
+  private dedup: DedupEngine;
+  constructor(private store: MemoryStore) {
+    this.dedup = new DedupEngine(store);
+  }
+
+  pruneStale(days: number): number {
+    const db = (this.store as any).db;
+    const result = db.prepare(`
+      DELETE FROM memories WHERE status = 'active'
+        AND ((last_recalled_at IS NOT NULL AND last_recalled_at < datetime('now', '-' || ? || ' days'))
+          OR (last_recalled_at IS NULL AND created_at < datetime('now', '-' || ? || ' days')))
+    `).run(days, days);
+    logInfo(`maintenance: pruned ${result.changes} stale memories`);
+    return result.changes;
+  }
+
+  archiveCompleted(days: number): number {
+    const db = (this.store as any).db;
+    const result = db.prepare(`
+      UPDATE memories SET status = 'archived'
+      WHERE status = 'completed'
+        AND created_at < datetime('now', '-' || ? || ' days')
+    `).run(days);
+    logInfo(`maintenance: archived ${result.changes} completed memories`);
+    return result.changes;
+  }
+
+  healthReport(): HealthReport {
+    const db = (this.store as any).db;
+    const total = this.store.count();
+    const active = this.store.count({ status: 'active' });
+    const completed = this.store.count({ status: 'completed' });
+    const archived = this.store.count({ status: 'archived' });
+    const staleRow = db.prepare(`
+      SELECT COUNT(*) as count FROM memories
+      WHERE status = 'active' AND recalled_count = 0
+        AND created_at < datetime('now', '-30 days')
+    `).get() as { count: number };
+    const duplicateEstimate = this.dedup.detect().length;
+    return { total, active, completed, archived, stale: staleRow.count, duplicateEstimate };
+  }
+}
+```
+
+**Plan produced HR-3 (summarized — did recalled context influence the plan?):**
+
+Yes — the plan explicitly used `datetime('now', '-' || ? || ' days')` in its SQL examples, which is a recalled preference from Suite 2. The plan also specified `logInfo` for bulk operations. Key plan elements:
+- Identified `MemoryStore` methods to reuse (count, pruneOld) and `DedupEngine` for duplicate estimates
+- Three methods: pruneStale, archiveCompleted, healthReport
+- 13 test cases across all three methods
+- Specified raw SQL via `(this.store as any).db` for operations not exposed by MemoryStore API
+- Plan was approved by user without modification
 
 **If hook doesn't fire for subagent reads:** This confirms the PlanMode bypass is structural (hooks may not fire inside subagent processes). Document and accept — rules handle 75%, hook handles the remaining direct reads. This is not a blocker.
 
+**If hook DOES fire for subagent reads:** This means the PreToolUse hook covers both direct and plan-mode reads — full 100% coverage. Document which reads triggered recalls and whether the plan referenced recalled knowledge.
+
 **MCP Tool Call Summary (Suite 3):**
 
-| Call # | Tool | Trigger | Proactive? |
-|--------|------|---------|------------|
-| 1 | | | |
-| ... | | | |
+HR-1 and HR-2: **No MCP tool calls made.** Agent did not call aide_recall or aide_remember manually. All recall was via PreToolUse hook injection. Stop hook fired twice per prompt (hasOutput=true then hasOutput=false), agent declined to store both times — correctly noting patterns were already stored from prior sessions.
 
 **Reset code:**
 
@@ -1310,32 +1622,69 @@ git checkout -- src/
 
 | Category | Tokens | % of context |
 |----------|--------|------------|
-| System prompt | | |
-| System tools (built-in) | | |
-| MCP tools (aide-memory) | | |
-| Memory files (MEMORY.md) | | |
-| Messages (conversation) | | |
-| Free space | | |
-| Autocompact buffer | | |
-| **Total used** | **k / 200k** | **%** |
+| System prompt | 3.7k | 1.8% |
+| System tools (built-in) | 11.3k | 5.6% |
+| MCP tools (aide-memory) | 1.4k (on-demand) | 0.7% |
+| Memory files (MEMORY.md + rules) | 1.1k | 0.5% |
+| Skills | 160 | 0.1% |
+| Messages (conversation) | 33.3k | 16.6% |
+| Free space | 118k | 58.8% |
+| Autocompact buffer | 33k | 16.5% |
+| **Total used** | **49k / 200k** | **24%** |
+
+Suite 3 used 49k total for 3 prompts (HR-1 + HR-2 + HR-3 including plan mode). Messages were 33.3k — heavier than Suite 2 single-prompt sessions due to 3 sequential prompts in one session. MCP tools loaded on-demand (not upfront like Suite 1/2). aide-memory overhead remains ~0.7%.
 
 ---
 
 ### Token Budget Comparison (All Suites)
 
-After all tests, fill this summary:
-
 | Session | Prompts | Total Tokens | Message Tokens | aide_recall calls | aide_remember calls |
 |---------|---------|-------------|----------------|-------------------|---------------------|
-| Suite 1 (AIDE+Hooks) | 2 + correction | | | | |
-| Suite 2 Session 1 (AIDE+Hooks) | 1 + correction | | | | |
-| Suite 2A (AIDE+Hooks, recall) | 1 | | | | |
-| Suite 2B (Bare) | 1 | | | | |
-| Suite 3 (AIDE+Hooks) | 2 | | | | |
+| Suite 1 (AIDE+Hooks) | 2 + correction | 51k | 28.6k | 0 (hook only) | 1 (proactive) |
+| Suite 2 Session 1 (AIDE+Hooks) | 1 + correction | 30k | 9.3k | 0 (hook only) | 3 (proactive) |
+| Suite 2A (AIDE+Hooks, recall) | 1 | 34k | 11.8k | 0 (hook only) | 0 |
+| Suite 2B (Bare) | 1 | 32k | 11.4k | n/a | n/a |
+| Suite 3 (AIDE+Hooks) | 3 | 49k | 33.3k | 0 (hook only) | 0 |
 | **Round 2 Run A (bare, 4 prompts)** | **4** | **83k** | **63k** | **n/a** | **n/a** |
 | **Round 2 Run B (AIDE+rules, 4 prompts)** | **4** | **76k** | **52k** | **3** | **0** |
 
-This shows whether hooks add token overhead vs rules-only vs bare.
+**Key observations:**
+- aide-memory overhead is consistent: ~1.4k for MCP tools + ~1.1k for memory files = **~2.5k tokens (~1.2%)** per session. Negligible.
+- Hook injection token cost is **not measurable** from JSONL or `/context` (additionalContext not captured — see item 6 in Things to Keep an Eye On).
+- Agent NEVER called aide_recall manually across all hook-enabled sessions — relied entirely on PreToolUse injection. With rules only (Round 2 Run B), it called aide_recall 3/4 times.
+- aide_remember went from 0% (rules only, Round 2) to proactive usage with hooks (4 calls across Suites 1-2). In Suite 3, agent correctly said "patterns already stored" — no redundant writes.
+
+---
+
+### Overall Test Plan Summary
+
+**What we set out to prove:**
+1. Can hooks fix aide_remember adoption? (was 0% with rules alone)
+2. Does cross-session persistence work? (knowledge taught in session 1 influences session 2)
+3. Does the PreToolUse hook make recall automatic? (was 75% with rules)
+
+**What we proved:**
+
+| Question | Answer | Evidence |
+|----------|--------|----------|
+| Hooks fix aide_remember? | **Yes** | Suite 1: agent called aide_remember proactively before Stop hook. Suite 2 Session 1: 3 proactive aide_remember calls. |
+| Cross-session persistence works? | **Yes** | Suite 2: agent in Session 2A used `datetime()` and `logInfo` — both taught in Session 1, never mentioned in prompt. Bare agent (2B) used `new Date()` and no logInfo. |
+| PreToolUse hook makes recall automatic? | **Partially** | Hook fires on all direct Read calls (100%). Does NOT fire for subagent reads (Plan/Explore). Rules + plan propagation cover the gap in practice. |
+
+**What we discovered along the way:**
+
+1. **Absolute vs relative path bug (Suite 2, FIXED):** Hook passed absolute paths but scopes are relative. All scoped memories were invisible. Fixed in `recall-for-path.js`.
+2. **JSONL observability gap (Suite 3):** Hook `additionalContext` injection is not captured in session logs. Only behavioral evidence confirms recall worked.
+3. **Subagent hook gap (Suite 3 HR-3):** PreToolUse hooks don't fire inside Plan/Explore subagents. Structural limitation of Claude Code — not fixable on our side.
+4. **Agent self-deduplication:** Agent correctly avoids storing redundant memories ("patterns already stored"). No dedup problem observed in testing.
+5. **Stop hook loop prevention works:** Fires once with output, agent responds, fires again with no output, exits cleanly.
+6. **Dump vs nudge design question:** Current hook dumps all path-matched memories. A lighter approach (nudge agent to call aide_recall itself) was never tried — open design question as memory count grows.
+
+**What remains untested:**
+- Memory quality at scale (50+ memories per path, stale knowledge accumulation)
+- Agent-initiated aide_recall (never happened with hooks active — is it needed?)
+- Cross-tool code quality comparison (inconclusive from MVP round, not retested)
+- Longitudinal real-world usage (weeks of daily use, not scripted test prompts)
 
 ---
 
