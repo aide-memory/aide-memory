@@ -38,7 +38,7 @@ What no tool does today: make one developer's context available to another devel
 
 **AIDE Memory** is a persistent memory and team context layer for AI coding agents. "AIDE" is the English word -- helper. No acronym expansion. AIDE is the brand. Memory is the first product. Future products could be AIDE Rules, AIDE Sync.
 
-Phase 1 ships individual memory — not just table stakes, but a competitive product in its own right. The opportunity: claude-mem has reliability issues (worker crashes, session integrity bugs, heavy ChromaDB stack) and dumps all memories into system prompt (expensive). engram has no hooks — relies on agents voluntarily saving (our testing proved 0% voluntary usage). AIDE Memory competes on: better reliability (simpler architecture), better adoption (hooks drive 0%→100%), better token efficiency (nudge ~20 tokens, not dump ~2,000), and path scoping from day one. Phase 2 ships team context features — direction decided by what Phase 1 users actually ask for, not assumptions. The team thesis (proactive cross-dev context sharing) is genuinely novel but unvalidated. We build it when users signal demand.
+Phase 1 ships individual memory -- table stakes, required as infrastructure. Phase 2 ships the actual product: proactive cross-developer context sharing, cross-dev reasoning visibility, config generation from learned memories, and area context generation. Two genuinely unique differentiators live in Phase 2. Phase 1 has zero unique differentiators. We are honest about this.
 
 17 capabilities total: 7 table stakes (auto-capture, smart recall, path scoping, structured layers, cross-tool portability, privacy, memory management) and 10 differentiators (config generation, area context generation, token tracking, proactive team sharing, cross-dev reasoning, correction graduation, import/search, session handoff, preset rule packs, tool onboarding frameworks).
 
@@ -50,7 +50,7 @@ CLI vs agent UX: agent chat (slash commands/skills) is the primary UX for intell
 
 Pricing: **Free** (generous, unlimited -- all individual features), **Team** ($10/user/month -- where the differentiators live), **Enterprise** (contact us -- volume deals with SSO/audit). FSL licensing -- anti-competition protection, enterprise-friendly, auto-converts to Apache 2.0 after two years.
 
-The market is moving fast. claude-mem gained 7,000 stars in 15 days. Qodo raised $120M. Massu appeared with ~90% overlap to our original vision. But the market also rewards simplicity and quality over feature count — claude-mem has 44K stars with no path scoping, no config generation, no team features. memories.sh has path scoping + 8-tool config generation and only 20 stars. **Quality and distribution win, not features.** Ship Phase 1 fast, compete on reliability and efficiency, validate with real users before building more.
+The market is moving fast. claude-mem gained 7,000 stars in 15 days. Qodo raised $120M. Massu appeared with ~90% overlap to our original vision. The execution window is 2-3 months, not 12-18. Phase 1 must ship fast. Phase 2 must resonate with teams. If it doesn't resonate by week 14, we move on.
 
 The name: **AIDE** -- the English word for helper. Not an acronym. Package: `aide-memory` (npm). CLI: `aide`. MCP tools: `aide_recall`, `aide_remember`, `aide_forget`, `aide_search`, `aide_memories`. Domain: `aide-memory.dev` or `useaide.dev` (aide.dev is taken by CodeStory IDE).
 
@@ -63,6 +63,8 @@ The name: **AIDE** -- the English word for helper. Not an acronym. Package: `aid
 "Works on my machine" was Docker's problem. **"Works with my agent"** is the new one.
 
 AI coding agents now write 35% more code than manual development. They also produce 30% more defects and 8x more duplication. But the deeper problem isn't code quality -- it's coordination. AI agents make individuals faster and teams worse at sharing context.
+
+**The Copilot Paradox:** Google tested AI coding assistance with 96 engineers in a controlled study — the AI group was 21% faster on individual tasks. Then METR ran a study on real-world projects with 16 experienced open-source developers working on their own codebases — they were 19% slower. The individual gains get eaten by team overhead. Developers spend ~40% of their time on non-coding work. AI accelerates the coding part. The other 40% stays — or grows, because more code means more review, more integration, more things that can break. The constraint just moves: before AI, writing code was the bottleneck. After AI, the bottleneck is communication and coordination.
 
 Before AI agents, teams coordinated through informal channels: pairing sessions, Slack threads, PR reviews, hallway conversations. These were inefficient but effective -- knowledge flowed between people as a side effect of collaboration. AI agents replace this with solo sessions. Each developer works in a private loop with their agent. The agent learns things about the codebase, makes decisions, writes code. None of that context is visible to the next developer's agent.
 
@@ -122,7 +124,7 @@ The distribution leader. Massive community traction. Progressive disclosure via 
 
 Recent developments: OpenClaw Gateway for multi-agent support with notifications. System prompt injection (dumps memories into system prompt via `before_prompt_build`). "RAD" (Real-Time Agent Data) -- positioning as an open standard for AI agent memory. Folder Context Files for per-directory scoping.
 
-Weaknesses (VERIFIED from GitHub issues): 72% summary failure rate CONFIRMED (issue #1546 — 75/104 attempts failed in one day, still OPEN as of April 2). CLAUDE.md file pollution is the #1 user complaint (issues #609, #632, #641, #758 — 70+ combined reactions, creates files in EVERY directory). Process leaks consuming GBs of RAM (issue #701 — reported fixed, then regressed). Users removing plugin due to token cost (issue #1488 — switching to Claude's native Auto Dream). Windows chronic instability (13+ open issues). Can't cleanly uninstall (issue #781). Security audit rated HIGH risk — unauthenticated HTTP API on port 37777 (issue #1251). No structured memory layers. No governance pipeline. No team features. AGPL-3.0 kills enterprise adoption. Dumps all memories into system prompt rather than path-specific nudging. Users LOVE the concept but HATE the execution quality — massive adoption (45K stars) with real churn from reliability issues.
+Weaknesses: 72% summary failure rate. No structured memory layers. No governance pipeline. No contributor awareness. No team features. AGPL-3.0 kills enterprise adoption. Dumps all memories into system prompt rather than path-specific nudging -- expensive and noisy. Minimal privacy safeguards (manual `<private>` tag only, no auto-redaction).
 
 #### engram (Gentleman-Programming/engram)
 
@@ -130,7 +132,7 @@ Weaknesses (VERIFIED from GitHub issues): 72% summary failure rate CONFIRMED (is
 
 Fastest shipper in the space. Supports 8 agents (Claude Code, Cursor, Windsurf, Gemini CLI, Codex, VS Code, OpenCode, Antigravity) -- broadest agent support. Full TUI. Topic key upsert for deduplication. SQLite + FTS5.
 
-Weaknesses (VERIFIED from GitHub issues): Agents don't voluntarily use it — CONFIRMED as the #1 user complaint. Issue #87: Claude Code literally self-diagnosed the problem: "The tools are deferred... my trained behavior overrides the instruction... there's nothing in the tool flow that forces a pause." Three separate issues (#87, #124, #133) confirm agents don't call engram's tools unless explicitly asked. Issue #137 proposes making context loading mandatory — they're trying to solve the problem we already solved with hooks. Sub-agent infinite loops hanging sessions for 1+ hour (issue #128). Empty/ghost observations from MCP parameter mismatch (issue #132). Session count inflated 16,900% — background tasks counted as sessions (issue #116). Hook output leaking into terminal UI (issue #145). Windows Defender flags binary as Trojan (issue #93 — maintainer refuses to sign). No path scoping. No structured layers. No governance. Growth driven primarily by the Gentleman Programming YouTube community. NOT included in any major "best memory frameworks" roundup despite 2K+ stars.
+Weaknesses: No path scoping (binary project/personal only). No hooks -- relies on agents voluntarily calling `mem_save` (the same 0% voluntary usage problem we proved in testing). No structured layers. No governance. No team features. 15 MCP tools but no proactive surfacing.
 
 #### Massu (massu-ai/massu)
 
@@ -178,7 +180,7 @@ Biomimetic 4-network memory architecture modeled on how human brains actually wo
 
 | Tool                           | What it does                                                                          | Traction                    |
 | ------------------------------ | ------------------------------------------------------------------------------------- | --------------------------- |
-| **memories.sh**                | Generates config files for 8+ tools from learned memories. Path scoping. Technically impressive. | 20 stars, ZERO external users (verified: 0 non-maintainer issues, npm downloads collapsed from 2,413 in Feb to 4 in April) |
+| **memories.sh**                | Generates config files (.cursorrules, CLAUDE.md) from learned memories                | 20 stars                    |
 | **cli-continues**              | Cross-tool session handoff -- continue mid-task in another tool                       | 14 tools, 182 paths         |
 | **Copilot Memories** (VS 2026) | One-shot correction detection, saves to copilot-instructions.md                       | Platform-native             |
 | **HAM**                        | Hierarchical directory-level CLAUDE.md distribution, claims 80% fewer tokens          | OSS                         |
@@ -247,29 +249,7 @@ The product is Phase 2: team context. The market position is narrow but genuine.
 
 ## What We're Building -- Product Capabilities
 
-17 capabilities organized by what the developer experiences, not by technical category. Every capability that requires reasoning uses the native model the developer is already running -- MCP tools do data retrieval (SQLite queries), the agent does reasoning. Zero extra API cost. One binary with license check — free and pro use the same installation, pro unlocked via license key.
-
-**Free vs Pro at a glance:**
-
-| Action | Free | Pro ($10/user/mo) |
-|--------|------|-----|
-| Store memories | Yes (with contributor field) | Same |
-| Recall | YOUR memories only | All contributors, intelligently ranked |
-| Search | YOUR memories only | All contributors |
-| Update/delete | YOUR memories only | YOUR memories only |
-| Flag as outdated | YOUR memories only | Any memory |
-| Import teammate memories | No (post-checkout skips) | Yes (auto on pull) |
-| Export | YOUR memories only | All |
-| Config generation | No | Yes (slash command + CLI) |
-| Cleanup intelligence | No | Yes (model-assisted + CI) |
-| Slash commands | No | Yes (/aide-rules, /aide-context, /aide-cleanup) |
-| Pre-set packs | No | Yes |
-| Privacy controls (.aideignore, redaction) | No | Yes |
-| Analytics | Basic (count, last recalled) | Full (patterns, health, team) |
-| Session handoff | No | Yes |
-| Additional tools beyond CC + Cursor | No | Yes |
-
-**Gating approach:** Layered soft gates in the compiled MCP binary. Data (JSON files) is accessible to anyone. Intelligence (scoring, ranking, cross-contributor analysis, config formatting) is in the binary. Gate the intelligence, not the data. Accept ~1-5% bypass rate. Compete on convenience for the 95%.
+17 capabilities organized by what the developer experiences, not by technical category. Every capability that requires reasoning uses the native model the developer is already running -- MCP tools do data retrieval (SQLite queries), the agent does reasoning. Zero extra API cost.
 
 Storage: one JSON file per memory (UUID filename) in `.aide/memories/<layer>/`. Local SQLite is a cached index rebuilt from these JSON files (hash-based cache -- skips rebuild when nothing changed). Since memories ARE files in the repo, git IS the sync mechanism. No separate sync command, no shared database, no server infrastructure.
 
@@ -283,7 +263,7 @@ These 7 capabilities are baseline expectations. Without them we do not get evalu
 
 ---
 
-#### 1. Automatic memory capture — FREE
+#### 1. Automatic memory capture
 
 **Problem it solves:** Agents never voluntarily save context. Tested: 0/10 prompts resulted in voluntary aide_remember calls when the tool was simply available.
 
@@ -305,7 +285,7 @@ Every memory is tagged with its source (`source:hook` or `source:model`) so we c
 
 ---
 
-#### 2. Smart recall -- nudge, not dump — FREE (your memories) / PRO (all contributors)
+#### 2. Smart recall -- nudge, not dump
 
 **Problem it solves:** claude-mem dumps all memories into the system prompt. This wastes context window on irrelevant memories and burns tokens.
 
@@ -336,7 +316,7 @@ The nudge approach is the sweet spot: near-100% coverage at near-zero cost.
 
 ---
 
-#### 3. Path-scoped context — FREE
+#### 3. Path-scoped context
 
 **Problem it solves:** A memory about test utilities and a memory about database migrations should not sit in the same flat bucket. Large codebases have distinct areas with distinct context.
 
@@ -353,7 +333,7 @@ Hierarchy is tried in order: direct match (cheapest) then FTS5 then semantic (fa
 
 ---
 
-#### 4. Structured layers — FREE
+#### 4. Structured layers
 
 **Problem it solves:** A style preference ("keep files under 150 lines") is fundamentally different from an architectural decision ("Apollo needs useGraphQLGateway: true"). Flat "observation" stores conflate these.
 
@@ -374,7 +354,7 @@ When an agent opens `src/checkout/CartSummary.tsx`, recalled memories are ordere
 
 ---
 
-#### 5. Cross-tool portability — FREE (CC + Cursor) / PRO (additional tools)
+#### 5. Cross-tool portability
 
 **Problem it solves:** Knowledge built in Claude Code is invisible to Cursor, and vice versa. Switching tools means starting from zero.
 
@@ -388,7 +368,7 @@ The hot path (recall on file read) bypasses MCP entirely -- the PreToolUse hook 
 
 ---
 
-#### 6. Privacy controls — PRO
+#### 6. Privacy controls
 
 **Problem it solves:** Auto-capture hooks see Bash stdout, Write contents, Edit diffs. Secrets can leak into the memory store if nothing prevents it.
 
@@ -402,7 +382,7 @@ Privacy ships alongside capture, not as an afterthought.
 
 ---
 
-#### 7. Memory management — PRO (intelligent cleanup) / FREE (manual delete)
+#### 7. Memory management
 
 **Problem it solves:** After weeks of use, memory stores accumulate duplicates, stale context, and contradictions. An early decision about X conflicts with a later decision about Y. The agent gets conflicting signals.
 
@@ -433,7 +413,7 @@ These 10 capabilities are why AIDE Memory exists. Individual memory is infrastru
 
 ---
 
-#### 8. Generate config from learned memories — PRO
+#### 8. Generate config from learned memories
 
 **Problem it solves:** Developers write CLAUDE.md and .cursorrules manually. These files go stale within weeks. Nobody sets up directory structures (`.claude/rules/`) because the activation energy is too high. No tool auto-generates config files from memories the agent actually learned during sessions.
 
@@ -473,7 +453,7 @@ How it works:
 
 ---
 
-#### 9. Generate & browse area context — PRO
+#### 9. Generate context for a specific area
 
 **Problem it solves:** You built a complex feature. A teammate (or their agent) is about to touch it. There is no way to give them structured context about WHY it works the way it does, beyond hoping they read the code carefully.
 
@@ -491,7 +471,7 @@ This capability IS the mechanism for refined team sharing and handoff/onboarding
 
 ---
 
-#### 10. Token savings tracking — PRO (needs validation)
+#### 10. Token savings tracking
 
 **Problem it solves:** Developers want to know if this tool is actually saving them time and money. Vague claims about "token savings" are not credible.
 
@@ -508,7 +488,7 @@ AIDE Memory measures one concrete, directly observable event: **recalls that rep
 
 ---
 
-#### 11. Proactive team context sharing — PRO
+#### 11. Proactive team context sharing
 
 **Problem it solves:** You built a component with a prop designed to match an API contract. A teammate's agent explored it, did not understand WHY, and restructured the prop, breaking the API. The human-to-human communication that would have caught this never happened because "I'd rather tell a model than tell an engineer."
 
@@ -530,7 +510,7 @@ Generate-context (capability #9) produces REFINED handoff/onboarding documents f
 
 ---
 
-#### 12. Cross-developer reasoning visibility — PRO
+#### 12. Cross-developer reasoning visibility
 
 **Problem it solves:** AI makes individuals faster but teams worse at coordinating. The informal knowledge transfer -- Slack threads, pairing sessions, PR reviews -- gets replaced by solo agent sessions. Nobody sees WHY their teammates made decisions.
 
@@ -547,7 +527,7 @@ This is not a chat log or an activity feed. It is structured reasoning organized
 
 ---
 
-#### 13. Correction-to-rule graduation — PRO
+#### 13. Correction-to-rule graduation
 
 **Problem it solves:** You correct your agent: "don't use waitFor in tests unless you genuinely need async resolution." Three weeks later, a teammate's agent makes the same mistake. The correction was stored once in your memory. It was never promoted to a rule that all agents follow.
 
@@ -563,7 +543,7 @@ Corrections recalled N times, or corrected independently by multiple developers,
 
 ---
 
-#### 14. Import and search — FREE (search your memories) / PRO (import from other tools)
+#### 14. Import and search
 
 **Problem it solves:** Developers already have context scattered across tools -- CLAUDE.md, MEMORY.md, .cursorrules, Notion docs, team wikis. Starting from zero is not acceptable. And once memories accumulate, developers need to find and browse them.
 
@@ -574,7 +554,7 @@ Corrections recalled N times, or corrected independently by multiple developers,
 
 ---
 
-#### 15. Active session handoff — PRO
+#### 15. Active session handoff
 
 **Problem it solves:** You hit rate limits on Claude Code mid-task. You switch to Cursor. Your current task context -- which files you read, your plan, what's done, what's pending -- is gone.
 
@@ -587,7 +567,7 @@ Export active session state so you can continue mid-task in another tool or anot
 
 ---
 
-#### 16. Pre-set rule packs — PRO
+#### 16. Pre-set rule packs
 
 **Problem it solves:** New projects start with zero context. Developers who want SOLID principles, clean architecture patterns, or framework-specific best practices have to write all their guidelines from scratch. Agents optimize for completing tasks while violating structural principles -- there is no mechanism to give them architectural awareness from day one.
 
@@ -603,7 +583,7 @@ Two things here:
 
 ---
 
-#### 17. Tool onboarding frameworks — INTERNAL (not user-facing)
+#### 17. Tool onboarding frameworks
 
 **Problem it solves:** Adding support for a new AI coding tool should be a one-day effort, not a multi-week project. Both for config generation (outputting to the tool's native file format) and memory population (reading from the tool's hooks/MCP).
 
@@ -640,11 +620,10 @@ Each phase develops capabilities across multiple layers -- capture, recall, mana
 | Area | What ships |
 |---|---|
 | **Domain & landing page** | Establish `aide-memory.dev` or `useaide.dev` (aide.dev is taken by CodeStory IDE). Simple landing page: what it does, install command, waitlist. Do NOT reveal Phase 2/3 roadmap publicly -- just "persistent memory for AI coding agents." |
-| **Legal** | Trademark search for AIDE. License finalized (proprietary freeware EULA). Explore whether registering a company makes sense for liability, expenses, and IP protection. Legal considerations should be revisited at each phase release. |
-| **GitHub repo** | `aide-memory` on GitHub. README, issue tracker, release binaries. No source code (proprietary freeware). Docs and installation instructions. |
-| **npm package** | `aide-memory` reserved and publishable. `npx aide-memory` works. |
-| **Website** | Landing page with copy-paste install command (`npx aide-memory`), feature overview, waitlist. No future phases revealed. |
-| **Telemetry** | Basic anonymous telemetry ON by default (opt-out). Memory count, recall count, tool used. Never content. Needed for Phase 2 go/no-go decision. |
+| **Legal** | Trademark search for AIDE. FSL license text finalized for public repo. |
+| **Public repo** | `aide-memory` on GitHub. README, LICENSE (FSL), contributing guide. Mirror workflow (publish-oss.yml). |
+| **npm package** | `aide-memory` reserved and publishable. `npx aide-memory init` works. |
+| **Marketing** | Simple "persistent memory for AI coding agents" page. No future phases revealed. |
 
 **Estimate:** 1-2 weeks, can overlap with Phase 1 development.
 
@@ -652,38 +631,32 @@ Each phase develops capabilities across multiple layers -- capture, recall, mana
 
 ### Phase 1: Individual Memory Engine -- "My agent remembers"
 
-**What we're proving:** Developers will install a third-party memory layer and use it daily across at least two AI coding tools. AIDE Memory can compete on quality, reliability, and efficiency — not feature count.
+**What we're proving:** Developers will install a third-party memory layer and use it daily across at least two AI coding tools.
 
-Ship the capture, store, recall loop. This is not just table stakes — it's a competitive product in its own right. The opportunity:
-
-| Competitor gap | How Phase 1 competes |
-|---------------|---------------------|
-| claude-mem reliability issues (worker crashes, session integrity bugs, heavy ChromaDB stack) | Simpler architecture — SQLite only, no external processes, fewer failure modes |
-| claude-mem dumps ALL memories into system prompt (~2,000 tokens per session) | Nudge approach: ~20 tokens per file read, agent pulls only what's relevant |
-| engram relies on agents voluntarily saving (our testing: 0% voluntary usage) | 3 hooks ON by default — proven 0%→100% adoption |
-| Most tools bolt on path scoping after the fact | Path-scoped glob inheritance from day one, core architecture |
-
-**Phase 2+ direction decided by Phase 1 users.** The team context thesis (proactive cross-dev sharing) is genuinely novel but unvalidated. We build team features when users signal demand — not before. Ship Phase 1, get feedback, let real usage data drive what comes next.
+Ship the capture, store, recall loop. This is table stakes to compete -- not differentiating. Must ship fast as infrastructure for the team features that are the actual product.
 
 **Capabilities in this phase:**
 
 
 | Area            | What ships                                                                                                                                                      |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Area | What ships | Tier |
-|------|-----------|------|
-| **Install** | One-command install: `npx aide-memory init`. Writes rules files for ALL supported tools by default. Sets up hooks, creates `.aide/` directory structure, config defaults, downloads embedding model, configures `.gitignore`. | FREE |
-| **Capture** | 3 hooks on by default (PreToolUse nudge, Stop prompt, UserPromptSubmit correction detection). Source tagging. Hidden nudging via `additionalContext`. Dedup across hooks. Contributor field stored from day one. | FREE |
-| **Recall** | Smart nudge approach — YOUR memories only. Path-scoped with glob matching and parent inheritance. | FREE (your mems) |
-| **Structure** | 4 memory layers with priority ordering. Tags from configurable preset list. Model auto-assigns. | FREE |
-| **CLI** | `aide recall`, `aide remember`, `aide search`, `aide list`, `aide stats`. | FREE |
-| **Search** | FTS5 + sqlite-vec semantic search. YOUR memories only on free. | FREE (your mems) |
-| **Embeddings** | Local embedding model downloaded at init. No API keys. sqlite-vec. | FREE |
-| **Multi-tool** | Rules files for all tools at init. Claude Code + Cursor support via MCP + hooks. | FREE (CC + Cursor) |
-| **Storage** | `.aide/memories/<layer>/` directory structure. One JSON file per memory. Local SQLite index. Post-checkout git hook. | FREE |
-| **Config** | `aide config` for customization. Nudge visibility default OFF. Capture defaults ON. Configurable thresholds, tags. | FREE |
-| **Memory editing** | Agent can update/remove existing memories via `aide_update` and `aide_forget` MCP tools. | FREE (your mems) |
-| **Analytics** | Basic: memory count, last recalled, hook breakdown. Default telemetry ON (opt-out). | FREE (basic) |
+| **Install**     | One-command install: `npx aide-memory init`. Writes rules files for ALL supported tools by default (no tool detection). Sets up hooks, creates `.aide/` directory structure, config defaults, downloads embedding model, configures `.gitignore`. Developer does nothing after install. |
+| **Capture**     | 3 hooks on by default (PreToolUse nudge, Stop prompt, UserPromptSubmit correction detection). Source tagging on all memories (`source:hook` or `source:model`). Hidden nudging via `additionalContext`. Dedup across hooks in one interaction. |
+| **Recall**      | Smart nudge approach -- agent told memories exist, decides relevance. Path-scoped with glob matching and parent inheritance.                                    |
+| **Structure**   | 4 memory layers (preferences, technical, area_context, guidelines) with priority ordering. Tags from configurable preset list.                                  |
+| **CLI**         | `aide recall <path>`, `aide remember "<what>" --scope <path>`, `aide search <query>`, `aide list`, `aide stats`, `aide import`.                                 |
+| **Search**      | FTS5 with BM25 ranking for keyword search. sqlite-vec embeddings for semantic fallback. One database, no external processes.                                    |
+| **Import**      | Import from CLAUDE.md, MEMORY.md, .cursorrules, copilot-instructions.md, JSON.                                                                                  |
+| **Privacy**     | `.aideignore` with smart defaults. Secret redaction before storage. Configurable capture scope. `preferences/personal/` gitignored.                             |
+| **Embeddings**  | Local embedding model downloaded at init. No API keys needed. sqlite-vec for storage and cosine similarity search.                                              |
+| **Multi-tool**  | Rules files written for ALL supported tools at init. Claude Code + Cursor support via MCP + tool-specific hook configs.                                         |
+| **Team prep**   | Contributor field on every memory. Costs nothing to store. Data is ready when team features ship.                                                               |
+| **Tracking**    | Basic token tracking -- log file reads across sessions, count recalls vs reads. `aide stats` shows the numbers.                                                 |
+| **Storage**     | `.aide/memories/<layer>/` directory structure. One JSON file per memory (UUID filename). Local SQLite as cached index. Post-checkout git hook for auto-sync.     |
+| **Config**      | `aide config` for customization. Nudge visibility default OFF (hidden via additionalContext). Capture defaults ON. Configurable cleanup thresholds, tags. |
+| **Memory editing** | Agent can update or remove existing memories via `aide_update` and `aide_forget` MCP tools during normal interaction. |
+| **Analytics**   | Basic: memory count, last recalled, hook breakdown. Default telemetry ON (opt-out). Track: installs vs inits, memories stored/recalled per session, hook trigger source, tool used, retention. |
+| **Pre-train scan** | `aide init --scan` scans codebase and pre-populates ~20-30 structural memories (project type, stack, key patterns, existing docs). Agent has context from session 1, not session 5. |
 
 
 **What is already built:**
@@ -700,24 +673,14 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 - Local embedding model integration (sqlite-vec)
 - npm package with `npx aide-memory init` experience (writes rules for all tools, creates `.aide/` structure, downloads model)
 - Cursor MCP config + hooks config
+- Polish: error handling, graceful degradation, startup time
+- `aide_update` MCP tool for editing existing memories
+- `aide config` CLI for customization
+- `aide stats` CLI with analytics + default-on telemetry
+- `aide init --scan` pre-train mode (codebase scan → initial memories)
 - `.aide/memories/` file-per-memory architecture (migrate from single SQLite to JSON files + SQLite index)
 - Post-checkout git hook for auto-sync
-- `aide_update` MCP tool for editing existing memories
-- `aide config` CLI for customization (nudge visibility, capture settings, tags, cleanup thresholds)
-- `aide stats` CLI command with analytics
-- Default-on telemetry (opt-out)
-- Polish: error handling, graceful degradation, startup time
-- **Pre-ship validation:** Prove that recall actually improves agent output (same task, with vs without recalled memories, measurable quality difference)
-
-**Deferred to Phase 2+:**
-
-- Import from other tools (claude-mem, engram, etc.)
-- Privacy controls (.aideignore, secret redaction)
-- Tools beyond Claude Code + Cursor
-- Token tracking / cost measurement
-- Config generation from memories
-- Pre-set rule packs
-- Memory cleanup intelligence
+- Website/landing page (cannot compete without a web presence)
 
 **Estimate:** 4-6 weeks from existing codebase.
 
@@ -728,30 +691,12 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 - Steady memory accumulation (5-10 per active session, not plateau after week 1)
 - Sub-2-minute install with zero setup support tickets
 
-**Analytics required for go/no-go (from default telemetry):**
-
-| Metric | How measured | Why it matters |
-|--------|-------------|----------------|
-| Installs (`npx aide-memory` runs) | Telemetry event | Adoption funnel top |
-| Inits (`aide init` per project) | Telemetry event | Multi-project usage |
-| Active sessions (1+ memories stored) | Local + telemetry | Real usage vs install-and-forget |
-| Memories stored per session | Local analytics table | Hook effectiveness |
-| Memories recalled per session | recalled_count tracking | Recall quality |
-| Which hook triggered storage | Source tag (hook vs model) | Which capture method works |
-| Tool used (Claude Code vs Cursor) | Telemetry | Where are users |
-| Retention (users active >7 days) | Telemetry | Stickiness |
-| Time from install to first recall | Telemetry | Time to value |
-| Memory edits/deletes | Local analytics | Are people managing or just accumulating |
-| Errors/failures | Telemetry | Reliability |
-
 **Go/No-Go gates:**
 
 - **GO to Phase 2** if: 100+ WAU with cross-tool usage, retrieval hit rate >60%
 - **PAUSE** if: <50 WAU after 4 weeks -- investigate distribution, not features
 - **STOP** if: retrieval hit rate <30% -- core value prop is not working
 - **PIVOT** if: users store but never retrieve -- memory is not the problem they need solved
-
-**Legal at this phase:** EULA finalized, trademark filed, company registration if pursued.
 
 **Marketing & docs:**
 - Blog post: "Why your AI agent forgets everything" + launch announcement
@@ -769,21 +714,21 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 **Capabilities in this phase:**
 
 
-| Area | What ships | Tier |
-|------|-----------|------|
-| **Team recall** | MCP tools return all contributors' memories, intelligently ranked. Unlock the contributor filter. | PRO |
-| **Generate config** | `/aide-rules` drafts CLAUDE.md/.cursorrules from most-recalled memories. Slash command + CLI template fallback. Ownership markers. Per-tool flags. Full directory structure. | PRO |
-| **Generate & browse area context** | `/aide-context src/path` produces readable doc + browse teammate reasoning. One capability. | PRO |
-| **Team sharing** | AUTOMATIC via git. Post-checkout hook imports teammate memories. Proactive cross-dev nudge on file access. | PRO |
-| **Intelligent cleanup** | `/aide-cleanup` — duplicate detection, stale detection, conflict flagging, cross-contributor analysis. CI mode: `aide cleanup --ci`. | PRO |
-| **Import from other tools** | Import from CLAUDE.md, MEMORY.md, .cursorrules, copilot-instructions.md, JSON. | PRO |
-| **Privacy controls** | .aideignore, secret redaction, configurable capture scope. | PRO |
-| **Pre-set rule packs** | 2-3 built-in packs (SOLID React/TS, Clean Architecture). `aide import --pack`. | PRO |
-| **Session handoff** | Export/import active session state. Automatic, command, or clipboard. | PRO |
-| **Rich analytics** | Full usage patterns, memory health, team metrics. Token savings tracking (if validated). | PRO |
-| **Additional tools** | Windsurf, Copilot, Cline adapters via tool onboarding framework. | PRO |
-| **Pre-compaction save** | PreCompact hook extracts decisions before auto-compact. | PRO |
-| **Stale context detection** | PostToolUse hook flags when code edits contradict existing memories. | PRO |
+| Area                        | What ships                                                                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Generate config**         | `aide generate-rules` / `/aide-rules` drafts CLAUDE.md/.cursorrules from most-recalled memories. Slash command (model-assisted) + CLI fallback (template-based). Ownership markers protect human-authored content. Easy per-tool flags: `--claude`, `--cursor`, `--copilot`, `--all`. |
+| **Generate area context**   | `aide generate-context src/path` / `/aide-context src/path` produces readable doc from memories + developer annotations. Output committed to `.aide/context/`.        |
+| **Team sharing**            | AUTOMATIC through shared memory files in repo. Git IS the sync. Post-checkout hook imports new/changed files by ID + timestamp (newer wins). No manual export needed. |
+| **Cross-dev nudge**         | PreToolUse hook fires with teammate memory count when another developer's agent touches code with existing context. Proactive, not reactive.                          |
+| **Reasoning visibility**    | Query filter on shared store (`contributor != me`, show `why` field). Human-readable JSON browsable in any editor. `aide list --contributor <name>` for CLI access.    |
+| **Token savings**           | `aide stats --cost` -- concrete metric: recalls that replaced reads. Per-session and cumulative. ONLY ship if close to 100% accurate.                                 |
+| **Session handoff**         | Export/import active session state for continuing mid-task in another tool. Automatic (next tool reads on startup), command (`aide export-session`), or clipboard.     |
+| **Memory management**       | `aide cleanup` / `/aide-cleanup` -- duplicate detection, stale detection, conflict flagging. Model-assisted (slash command) or CI pipeline (`aide cleanup --ci`, no model). |
+| **Pre-compaction save**     | PreCompact hook extracts decisions/constraints not yet stored from transcript before auto-compact summarizes them away. Tagged `source:compaction_save`.               |
+| **Pre-set rule packs**      | Ship 2-3 built-in packs (SOLID React/TS, Clean Architecture). `aide import --pack solid-react-ts`. Community packs later.                                            |
+| **Stale context detection** | PostToolUse hook detects when code edits contradict existing memories/context docs. Flags for human review, does not auto-update.                                     |
+| **Team config generation**  | `aide generate-rules --team` combines most-recalled memories across all contributors. Detects existing shared configs, updates without removing human content.         |
+| **CI cleanup**              | `aide cleanup --ci` for merge pipelines. SQL-based/template-based, no model. Deterministic duplicate/orphan/staleness detection.                                      |
 
 
 **Estimate:** 4-6 weeks after Phase 1.
@@ -802,8 +747,6 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 - **PAUSE** if: conversion <3% -- team features may not solve the right pain
 - **STOP** if: free tier stagnates below 500 WAU -- distribution problem trumps monetization
 - **PIVOT** if: teams love generated config but not sharing -- double down on config generation as the product
-
-**Legal at this phase:** Review pricing/billing compliance, payment processor terms. Revisit company registration if not done in Phase 1.
 
 **Marketing & docs:**
 - Blog post: "Your team's AI agents don't talk to each other" + team features announcement
@@ -879,32 +822,23 @@ The pricing is simple. Individual features are free. Team features cost money. E
 
 **What you get:**
 
-- Capture: 3 hooks on by default (PreToolUse nudge, Stop prompt, UserPromptSubmit correction detection)
-- Recall: path-scoped nudge, YOUR memories only
-- Search: FTS5 keyword + sqlite-vec semantic search
-- Structure: 4 memory layers with priority ordering, configurable tags
-- Storage: one file per memory, local SQLite index, git sync
-- CLI: `aide recall`, `aide remember`, `aide search`, `aide list`, `aide stats`
-- Config: `aide config` for customization (nudge visibility, capture settings, thresholds)
-- Memory editing: update and remove existing memories
-- Unlimited memories, unlimited projects
-- Claude Code + Cursor support
-- Basic `aide stats` (memory count, last recalled, hook breakdown)
+- All individual capture, recall, and search features (capabilities 1-7)
+- Unlimited memories, unlimited projects, unlimited tools
+- Full path-scoped recall with glob inheritance
+- 4 structured memory layers with priority ordering and tags
+- Cross-tool memory via MCP (Claude Code, Cursor, any MCP client)
+- CLI commands: `aide recall`, `aide remember`, `aide search`, `aide list`, `aide stats`, `aide import`
+- Privacy controls: .aideignore, secret redaction, capture scope config, preferences/personal/ gitignored
+- Local-first: SQLite on your machine, data never leaves
+- FTS5 + semantic search (sqlite-vec, local embeddings, no API keys)
+- 3 hooks on by default (PreToolUse, Stop, UserPromptSubmit)
+- Contributor field on every memory (data ready for team features on upgrade)
+- Import from existing tools
 - Monorepo support (hierarchical `.aide/` directories)
 
-**What's NOT in free:**
-- Config generation (`aide generate-rules`) — Pro
-- Memory cleanup intelligence (`aide cleanup`) — Pro
-- Team recall (teammate memories) — Pro
-- Pre-set rule packs — Pro
-- Import from other tools — Pro
-- Rich analytics — Pro
-- Additional tools beyond CC + Cursor — Pro
-- Privacy controls (.aideignore, redaction) — Pro
+**Why it's this generous:** claude-mem is free and has 43,856 stars. engram is free with 8 agent integrations. A capped free tier means nobody tries it. The free tier is the distribution engine. Every free user who accumulates valuable memories over 8 weeks is a candidate for the team upgrade when they start working with teammates.
 
-**Why free is still valuable:** Capture + recall + path scoping is the core loop. It works, it accumulates value over time, and it competes directly with claude-mem (which has reliability issues) and engram (which has adoption issues). The free tier is the distribution engine.
-
-**What never gets paywalled:** All YOUR stored memories are always accessible. The data is on your machine. It is yours.
+**What never gets paywalled:** All stored memories are always accessible. The data is on your machine. It is yours.
 
 ---
 
@@ -914,21 +848,19 @@ The pricing is simple. Individual features are free. Team features cost money. E
 
 **What you get (everything in Free, plus):**
 
-- **Team recall** -- MCP tools return YOUR + TEAMMATE memories, intelligently ranked. Free tier only returns your own.
-- **Generate config** -- `aide generate-rules` / `/aide-rules` drafts CLAUDE.md/.cursorrules from most-recalled memories. Per-tool flags: `--claude`, `--cursor`, `--copilot`, `--all`. Same command works for individual (from your memories) and team (from all memories when synced). Detects existing configs, updates with ownership markers, creates if missing. Full directory structure support.
-- **Generate & browse area context** -- `aide generate-context src/path` / `/aide-context` produces readable doc from memories + annotations. Browse teammate reasoning organized by code area (contributor, why, when, path). One capability — generate is the action, browse is viewing what was generated.
-- **Intelligent memory cleanup** -- `aide cleanup` / `/aide-cleanup` with duplicate detection, stale detection, conflict flagging, cross-contributor analysis. Model-assisted (slash command) or CI pipeline (`aide cleanup --ci`, SQL-based, no model).
-- **Pre-set rule packs** -- `aide import --pack solid-react-ts` loads curated guideline memories. 2-3 built-in packs at launch.
-- **Import from other tools** -- Import from CLAUDE.md, MEMORY.md, .cursorrules, copilot-instructions.md, JSON.
-- **Privacy controls** -- `.aideignore` with smart defaults, secret redaction before storage, configurable capture scope.
-- **Active session handoff** -- export/import session state across tools. Automatic (next tool reads on startup), command (`aide export-session`), or clipboard.
-- **Rich analytics** -- full usage patterns, memory health, recall quality trends. `aide stats --cost` for token savings (if validated).
-- **Additional tool support** -- Windsurf, Copilot, Cline adapters as they ship (via tool onboarding framework).
-- **Stale context detection** -- flags when code edits contradict existing memories.
+- **Generate config from memories** -- `aide generate-rules` / `/aide-rules` drafts CLAUDE.md/.cursorrules from most-recalled memories. Per-tool flags: `--claude`, `--cursor`, `--copilot`, `--all`.
+- **Generate area context** -- `aide generate-context src/path` / `/aide-context` produces readable docs from memories + annotations
+- **Team context sharing** -- automatic via shared memory files in repo, git-synced, cross-dev proactive nudge via PreToolUse hook
+- **Cross-dev reasoning visibility** -- query filter on shared store, browsable `.aide/memories/` files showing teammate decisions with `why` field
+- **Token savings tracking** -- `aide stats --cost` with concrete "recalls that replaced reads" metric (if validated)
+- **Active session handoff** -- export/import session state across tools and sessions
+- **Memory management** -- `aide cleanup` / `/aide-cleanup` with duplicate detection, stale detection, conflict resolution. CI pipeline mode: `aide cleanup --ci`.
+- **Pre-set rule packs** -- `aide import --pack solid-react-ts` loads curated guideline memories. 2-3 built-in packs at launch, community packs later.
+- **Team config generation** -- `aide generate-rules --team` combines memories across all contributors
+- **Stale context detection** -- PostToolUse hook flags when code edits contradict existing memories
+- **Additional tool support** -- Windsurf, Copilot, Cline adapters as they ship (via tool onboarding framework)
 
-**The conversion trigger:** A developer uses the free tier for several weeks. They want config generation, cleanup intelligence, or teammate memory access. Or they hear "47 teammate memories exist for the code you're touching — upgrade to see them."
-
-**Revenue gating:** The MCP binary gates team features via compiled logic. Free binary filters queries to `contributor === you`. Pro binary returns intelligently ranked results from all contributors. The data (JSON files) is accessible to anyone, but the intelligence (scoring, ranking, cross-contributor analysis) is in the compiled binary. Gate the intelligence, not the data.
+**The conversion trigger:** A developer uses the free tier for 6-8 weeks. Their memory store has 150+ memories. Then a teammate's agent breaks something that their memories would have prevented. That is the moment they upgrade.
 
 **Revenue math:**
 
@@ -1217,20 +1149,18 @@ Phase-specific implementation details and architectural deep dives live in separ
 ```
 docs/
   PRODUCT_VISION.md          # This file -- strategic overview
-  sessions/                  # Raw session findings
-    DIRECTION_MARCH31.md
-    DIRECTION_CHAT.txt
-  specs/                     # Implementation specs (created per feature when building)
-    PHASE_1_SPEC.md
-    PHASE_2_SPEC.md
-    ...
-  archive/                   # Historical docs (superseded by PRODUCT_VISION.md)
-    PROTOTYPE.md
-    RESEARCH.md
-    SESSION_CONTEXT.md
+  DIRECTION_MARCH31.md       # March 31 session findings
+  phases/
+    PHASE_1_MEMORY_ENGINE.md   # Individual capture/recall loop, install experience, privacy, search
+    PHASE_2_TEAM_CONTEXT.md    # Team sharing, config generation, cross-dev nudge, reasoning visibility
+    PHASE_3_GOVERNANCE.md      # Correction-to-rule graduation, rule enforcement, cross-tool consistency
+  architecture/
+    SYSTEM_OVERVIEW.md         # Top-down component diagram, data flow
+    MEMORY_LIFECYCLE.md        # Full capture/store/recall loop, scoring, dedup
+    HOOKS_ARCHITECTURE.md      # Hook event matrix, hot path design, limitations
+    TEAM_SHARING.md            # .aide/ file convention, generated context, cross-dev proactive nudge
+    CONFIG_GENERATION.md       # Command-triggered generation, ownership markers, merge strategy
 ```
-
-Two levels max. No deep nesting. Specs created per feature when building, not all upfront.
 
 Each phase doc starts with "After this phase, a developer can..." and works top-down: user experience, components, technical decisions, success criteria, open questions.
 
@@ -1353,7 +1283,7 @@ No account required at any step. No telemetry unless opted in. Rules files writt
 
 **License key system:** offline-capable. `aide activate <key>`. Purchased via Stripe or Lemon Squeezy. Stored locally as signed JWT. Validated at startup with grace period for offline use.
 
-**Trial:** 7-day Team trial, no credit card required. Full Team features. After trial: pro features deactivate gracefully. Your memories are never deleted. Free tier tools continue unchanged. Generated config files freeze in place (not removed). Re-activation is instant -- license key unlocks features, no re-setup.
+**Trial:** 14-day Team trial, no credit card required. Full Team features. After trial: features deactivate gracefully. Memories are never deleted. Free tier tools continue unchanged. Generated config files freeze in place (not removed). Re-activation is instant -- license key unlocks features, no re-setup.
 
 **Concrete trial-end message:** "During your trial, AIDE Memory surfaced context 47 times and generated 3 config files. Your memories are still here -- upgrade to keep the automation running."
 
@@ -1446,9 +1376,9 @@ Ship as `aide-memory` on npm. CLI binary is `aide`. MCP tools are `aide_recall`,
 
 **Development repo:** `aide-v0` (private) -- all code lives here. Single workspace, maximum velocity.
 
-**Public repo:** `aide-memory` on GitHub -- NO source code (proprietary freeware). Contains: README, installation instructions, documentation, issue tracker, release binaries. Community interacts via issues and docs, not code contributions.
+**Public repo:** `aide-memory` on GitHub -- mirrors OSS-eligible code only. Community visibility, issues, PRs.
 
-**Distribution:** npm package (minified/bundled), website download, GitHub releases (binaries). Code is proprietary — never mirrored, never open.
+**Mirroring:** file-copy GitHub Action (~20-30 lines YAML) triggers on `oss-v*` tags. Copies core source, hooks, package.json, README, and LICENSE to the public mirror. Upgrade to splitsh-lite later if commit history matters.
 
 ### Distribution Priority
 
@@ -1465,7 +1395,7 @@ Ship as `aide-memory` on npm. CLI binary is `aide`. MCP tools are `aide_recall`,
 
 ### Licensing
 
-**Decision: Proprietary freeware.** Free to use, code never visible. Distributed as minified npm package or compiled binary. Pro/Enterprise is also proprietary. No code ever becomes open source. Other options (FSL, BSL) remain documented below for reference.
+**Decision pending -- three options under consideration. Pro/Enterprise is ALWAYS proprietary regardless of which option is chosen for the free tier.**
 
 #### Option 1: FSL (Functional Source License)
 
@@ -1522,7 +1452,7 @@ Ship as `aide-memory` on npm. CLI binary is `aide`. MCP tools are `aide_recall`,
 | Phase      | Action                                                                                                   |
 | ---------- | -------------------------------------------------------------------------------------------------------- |
 | Phase 1    | No structural changes. Build in `aide-v0`.                                                               |
-| Pre-launch | Move old code to `src/old/`, set up npm publish workflow (minified/bundled), create public GitHub repo (docs + issues + releases only, no source), write README + docs. |
+| Pre-launch | Move old code to `src/old/`, create publish-oss.yml workflow, set up public mirror, write public README. |
 | Phase 2    | Create `src/pro/`, add publish-pro.yml, implement license key validation. Evaluate Turborepo if needed.  |
 
 
@@ -1552,6 +1482,42 @@ Ship as `aide-memory` on npm. CLI binary is `aide`. MCP tools are `aide_recall`,
 - If orchestration features require capabilities beyond what native models provide (e.g., batch processing across projects, cross-repo analysis), evaluate adding a BYOM (bring your own model) option for CI and enterprise contexts rather than bundling a specific model.
 
 **BYOM (Bring Your Own Model).** For CI pipelines and enterprise deployments where no interactive agent is running, allow customers to configure their own model endpoint for operations that require reasoning (cleanup, config generation, context summarization). This avoids AIDE Memory needing to bundle or pay for model access. Enterprise feature only -- individual and team tiers always use the native tool's model.
+
+---
+
+### AIDE Product Suite — Additional Product Ideas
+
+The original AIDE codebase included architecture scanning (tree-sitter, health scoring, dependency graphs). These capabilities, combined with ideas from the competitive landscape, suggest a suite of complementary products under the AIDE brand. These are NOT part of AIDE Memory — they are separate products that could share infrastructure.
+
+**AIDE Map / AIDE Docs — Codebase Understanding & Documentation**
+
+Similar to Repowise (282 stars in 2 days). Generates structured, queryable documentation from codebase with confidence scores that degrade as code drifts. MCP server so AI agents query structured knowledge instead of reading raw files. Could revive the original AIDE's architecture scanning capabilities (tree-sitter, health scoring) in a new form. Complementary to AIDE Memory: Map tells agents WHAT the code does, Memory tells agents WHY it was built that way.
+
+**AIDE Skills — Documentation-to-Skills Pipeline**
+
+Similar to Skill Seekers. AST parsing + documentation cross-referencing to detect where docs lie vs where code moved on. Packages documentation as installable AI skills with conflict detection. Could feed into AIDE Memory's pre-set packs system — automatically generate guideline memories from verified documentation.
+
+**AIDE Core — Original Architecture Scanner Revived**
+
+The existing `aide-v0` codebase has tree-sitter WASM for code analysis, health scoring, dependency graphs, coupling metrics. This could become a codebase intelligence layer that feeds into both AIDE Memory (structural memories) and AIDE Map (documentation). Currently deprioritized but the code exists in `src/old/`.
+
+**Pre-Train / Init Scan Integration**
+
+The `aide init --scan` feature in Phase 1 is a lightweight version of AIDE Map — scanning the codebase to pre-populate structural memories. If AIDE Map becomes a separate product, the init scan could consume AIDE Map's output as a richer initial memory set. For now, the scan is self-contained and doesn't require AIDE Map.
+
+**How these relate:**
+
+```
+AIDE Map (what the code does) ──────┐
+                                    ├──→ Developer's agent has full context
+AIDE Memory (why it was built) ─────┤
+                                    ├──→ Better decisions, fewer mistakes
+AIDE Skills (verified docs) ────────┘
+
+AIDE Core (structural analysis) ──→ Feeds into Map + Memory
+```
+
+These are future considerations only. Build AIDE Memory first. Evaluate suite expansion based on user demand and market signals.
 
 ---
 
@@ -1603,4 +1569,11 @@ Ship as `aide-memory` on npm. CLI binary is `aide`. MCP tools are `aide_recall`,
 
 ### April 2, 2026 Architecture Session Sources
 
-- Apr 2 strategic session -- storage architecture (one-file-per-memory decision, JSONL rejection, per-dev snapshot rejection), monorepo support, sync adapter architecture, CLI vs agent interaction model, native model interaction via rules files, install experience, tool onboarding framework, unified config, memory ownership model, naming finalization ("aide" = helper, not acronym), licensing options comparison (FSL vs BSL vs proprietary freeware)
+- Apr 2 strategic session -- storage architecture, naming, licensing, free/pro gating, verified user sentiment
+- Google AI coding study (96 engineers, 21% faster individually) -- cited in The Copilot Paradox
+- METR real-world study (16 devs, 19% slower with coordination) -- cited in The Copilot Paradox
+- Repowise (282 stars in 2 days) -- structured codebase wiki with confidence scores, MCP server, claims 50% token reduction
+- Skill Seekers -- AST parsing + doc-vs-code conflict detection, 26 MCP tools
+- Verified claude-mem user sentiment: issues #609, #632, #641, #758 (CLAUDE.md pollution), #1546 (72% summary failure), #701 (process leaks), #1488 (token cost), #781 (uninstall broken), #1251 (security audit HIGH)
+- Verified engram user sentiment: issues #87, #124, #133, #137 (agents don't use voluntarily), #128 (infinite loops), #132 (empty observations), #116 (session inflation)
+- Verified memories.sh/omem/HAM: zero real users (0 external issues, npm downloads collapsed)
