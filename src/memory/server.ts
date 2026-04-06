@@ -1,0 +1,309 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
+import { MemoryStore } from './store';
+import { recall } from './recall';
+import type { MemoryLayer, MemorySource } from './types';
+
+const LAYER_VALUES: [string, ...string[]] = ['preferences', 'technical', 'area_context', 'guidelines'];
+const SOURCE_VALUES: [string, ...string[]] = ['conversation', 'import', 'agent_discovery', 'elevated'];
+
+export function createServer(store: MemoryStore): McpServer {
+  const server = new McpServer({
+    name: 'aide-memory',
+    version: '0.1.0',
+  });
+
+  // aide_recall — get context for an area
+  server.tool(
+    'aide_recall',
+    'Retrieve context for an area of the codebase before planning or making changes. Returns contributor preferences, technical knowledge, area decisions, and project guidelines. Call this when starting work in a codebase area, before proposing plans, or when you may have lost earlier context.',
+    {
+      paths: z.array(z.string()).optional().describe('File or directory paths you are working in. Returns memories scoped to these areas plus project-wide context.'),
+      query: z.string().optional().describe('Optional text to boost relevant results (e.g. "skeleton loading" or "authentication flow").'),
+      layers: z.array(z.enum(LAYER_VALUES)).optional().describe('Filter to specific layers: preferences, technical, area_context, guidelines.'),
+      limit: z.number().optional().describe('Max memories to return (default 20).'),
+    },
+    async (params) => {
+      const result = recall(store, {
+        paths: params.paths,
+        query: params.query,
+        layers: params.layers as MemoryLayer[] | undefined,
+        limit: params.limit,
+      });
+
+      if (result.memories.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: 'No memories found for this area. As you work and make decisions, use aide_remember to store context that should persist.',
+          }],
+        };
+      }
+
+      const grouped = groupByLayer(result.memories);
+      let output = '';
+
+      for (const [layer, memories] of grouped) {
+        output += `\n## ${formatLayerName(layer)}\n`;
+        for (const m of memories) {
+          output += `- ${m.what}`;
+          if (m.contributor) output += ` (from ${m.contributor})`;
+          if (m.scope && m.scope !== 'project') output += ` [${m.scope}]`;
+          output += '\n';
+          if (m.why) output += `  _Why: ${m.why}_\n`;
+        }
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: output.trim() }],
+      };
+    }
+  );
+
+  // aide_remember — store something worth keeping
+  server.tool(
+    'aide_remember',
+    'Store knowledge that should persist beyond this conversation. Call when the developer corrects your approach, makes a decision during planning, teaches you something about the codebase, or when you discover something relevant during exploration. Store the specific knowledge — do not over-generalize from a single instance.',
+    {
+      what: z.string().describe('The specific knowledge to remember.'),
+      layer: z.enum(LAYER_VALUES).describe('preferences = how someone likes to work. technical = facts about the stack. area_context = decisions for a code area. guidelines = team principles.'),
+      scope: z.string().optional().describe('Glob pattern for the code area this applies to (e.g. "src/components/dashboard/**"). Omit for project-wide.'),
+      why: z.string().optional().describe('Context for why this is worth remembering.'),
+      context_label: z.string().optional().describe('Feature grouping label (e.g. "dashboard skeleton loading", "Add App modal").'),
+      contributor: z.string().optional().describe('Who this knowledge came from (for preferences layer).'),
+      source: z.enum(SOURCE_VALUES).optional().describe('How this was captured. Default: conversation.'),
+    },
+    async (params) => {
+      const memory = store.add({
+        layer: params.layer as MemoryLayer,
+        what: params.what,
+        why: params.why,
+        scope: params.scope,
+        context_label: params.context_label,
+        contributor: params.contributor,
+        source: (params.source as MemorySource) ?? 'conversation',
+      });
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Stored: "${memory.what}" as ${memory.layer}${memory.scope ? ` [${memory.scope}]` : ' [project-wide]'} (id: ${memory.id})`,
+        }],
+      };
+    }
+  );
+
+  // aide_forget — remove or archive a memory
+  server.tool(
+    'aide_forget',
+    'Remove or archive a memory that is no longer relevant. Use archive for completed decisions that may have historical value. Use delete for things that were wrong.',
+    {
+      id: z.number().describe('The memory ID to forget.'),
+      mode: z.enum(['archive', 'delete']).optional().describe('archive (default) keeps it but hides from recall. delete removes permanently.'),
+    },
+    async (params) => {
+      const mode = params.mode ?? 'archive';
+      const existing = store.get(params.id);
+
+      if (!existing) {
+        return {
+          content: [{ type: 'text' as const, text: `Memory ${params.id} not found.` }],
+        };
+      }
+
+      if (mode === 'delete') {
+        store.remove(params.id);
+        return {
+          content: [{ type: 'text' as const, text: `Deleted: "${existing.what}" (id: ${params.id})` }],
+        };
+      } else {
+        store.archive(params.id);
+        return {
+          content: [{ type: 'text' as const, text: `Archived: "${existing.what}" (id: ${params.id})` }],
+        };
+      }
+    }
+  );
+
+  // aide_memories — see what's stored
+  server.tool(
+    'aide_memories',
+    'List stored memories for transparency and management. Shows what context is available.',
+    {
+      layer: z.enum(LAYER_VALUES).optional().describe('Filter by layer.'),
+      status: z.enum(['active', 'completed', 'archived'] as [string, ...string[]]).optional().describe('Filter by status. Default: active.'),
+      scope: z.string().optional().describe('Filter by exact scope.'),
+      limit: z.number().optional().describe('Max results (default 50).'),
+    },
+    async (params) => {
+      const memories = store.list({
+        layer: params.layer as MemoryLayer | undefined,
+        status: (params.status as any) ?? 'active',
+        scope: params.scope,
+        limit: params.limit ?? 50,
+      });
+
+      if (memories.length === 0) {
+        return {
+          content: [{ type: 'text' as const, text: 'No memories found.' }],
+        };
+      }
+
+      const total = store.count({ status: (params.status as any) ?? 'active' });
+      let output = `Showing ${memories.length} of ${total} memories:\n\n`;
+
+      for (const m of memories) {
+        output += `[${m.id}] ${m.layer} | ${m.what}`;
+        if (m.scope) output += ` [${m.scope}]`;
+        if (m.contributor) output += ` (${m.contributor})`;
+        output += ` | recalled ${m.recalled_count}x`;
+        output += '\n';
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: output.trim() }],
+      };
+    }
+  );
+
+  // aide_import — seed from existing docs
+  server.tool(
+    'aide_import',
+    'Import guidelines or technical context from a markdown document. Each bullet point or paragraph becomes a separate memory. Use this to seed knowledge from existing docs like TESTING_GUIDELINES.md or ARCHITECTURE.md.',
+    {
+      content: z.string().describe('The markdown content to import.'),
+      layer: z.enum(LAYER_VALUES).describe('Which layer to import into.'),
+      scope: z.string().optional().describe('Scope for all imported memories.'),
+      context_label: z.string().optional().describe('Label for the import batch.'),
+    },
+    async (params) => {
+      const items = parseMarkdownItems(params.content);
+
+      if (items.length === 0) {
+        return {
+          content: [{ type: 'text' as const, text: 'No importable items found in the content.' }],
+        };
+      }
+
+      const created = items.map(item =>
+        store.add({
+          layer: params.layer as MemoryLayer,
+          what: item,
+          scope: params.scope,
+          context_label: params.context_label,
+          source: 'import',
+        })
+      );
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Imported ${created.length} memories as ${params.layer}${params.scope ? ` [${params.scope}]` : ''}:\n${created.map(m => `- [${m.id}] ${m.what}`).join('\n')}`,
+        }],
+      };
+    }
+  );
+
+  // aide_search — find memories by keyword
+  server.tool(
+    'aide_search',
+    'Search memories by keyword substring match. Use when looking for specific knowledge that may be stored — e.g. "what do we know about authentication?" or "any memories about testing?"',
+    {
+      keyword: z.string().describe('Text to search for in memory content (case-insensitive substring match on what and why fields).'),
+      layer: z.enum(LAYER_VALUES).optional().describe('Filter to a specific layer.'),
+      limit: z.number().optional().describe('Max results (default 50).'),
+    },
+    async (params) => {
+      const memories = store.search(params.keyword, {
+        layer: params.layer as MemoryLayer | undefined,
+        limit: params.limit,
+      });
+
+      if (memories.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `No memories found matching "${params.keyword}".`,
+          }],
+        };
+      }
+
+      const grouped = groupByLayer(memories);
+      let output = `Found ${memories.length} matching "${params.keyword}":\n`;
+
+      for (const [layer, mems] of grouped) {
+        output += `\n## ${formatLayerName(layer)}\n`;
+        for (const m of mems) {
+          output += `- [${m.id}] ${m.what}`;
+          if (m.scope && m.scope !== 'project') output += ` [${m.scope}]`;
+          output += '\n';
+          if (m.why) output += `  _Why: ${m.why}_\n`;
+        }
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: output.trim() }],
+      };
+    }
+  );
+
+  return server;
+}
+
+function groupByLayer(memories: import('./types').Memory[]): [string, import('./types').Memory[]][] {
+  const groups = new Map<string, import('./types').Memory[]>();
+  for (const m of memories) {
+    if (!groups.has(m.layer)) groups.set(m.layer, []);
+    groups.get(m.layer)!.push(m);
+  }
+  return Array.from(groups.entries());
+}
+
+function formatLayerName(layer: string): string {
+  switch (layer) {
+    case 'area_context': return 'Area Context';
+    case 'technical': return 'Technical Context';
+    case 'preferences': return 'Preferences';
+    case 'guidelines': return 'Guidelines';
+    default: return layer;
+  }
+}
+
+function parseMarkdownItems(content: string): string[] {
+  const lines = content.split('\n');
+  const items: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Bullet points
+    if (/^[-*+]\s+/.test(trimmed)) {
+      const text = trimmed.replace(/^[-*+]\s+/, '').trim();
+      if (text.length > 5) items.push(text);
+    }
+    // Numbered items
+    else if (/^\d+\.\s+/.test(trimmed)) {
+      const text = trimmed.replace(/^\d+\.\s+/, '').trim();
+      if (text.length > 5) items.push(text);
+    }
+    // Non-empty, non-heading paragraphs
+    else if (trimmed.length > 20 && !trimmed.startsWith('#') && !trimmed.startsWith('```') && !trimmed.startsWith('|')) {
+      items.push(trimmed);
+    }
+  }
+
+  return items;
+}
+
+// CLI entry point
+export async function startServer(projectPath: string): Promise<void> {
+  const store = new MemoryStore(projectPath);
+  const server = createServer(store);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  process.on('SIGINT', () => {
+    store.close();
+    process.exit(0);
+  });
+}

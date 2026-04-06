@@ -1,61 +1,63 @@
 # AIDE — Session Context
 
-> Active context for continuity across sessions. Updated Feb 28, 2026.
+> Active context for continuity across sessions. Updated Mar 1, 2026.
 > This is the "what we're thinking and doing RIGHT NOW" doc.
 
 ---
 
 ## Where We Are
 
-We've pivoted from "architecture scanning/linting tool" to "persistent memory layer for AI coding agents." The core insight: agents don't need better code reading tools — they need the context that ISN'T in the code (decisions, preferences, domain knowledge, guidelines).
+aide-memory MVP is built and tested. MCP server with 6 tools (aide_recall, aide_remember, aide_forget, aide_memories, aide_search, aide_import), SQLite-backed, path-scoped recall. Two rounds of E2E testing complete. Now pivoting to hooks-based adoption.
 
 ## Current State
 
-- **Branch:** `main` has all up-to-date docs
-- **Feature branch:** `feature/agent-memory` (off main, for implementation)
-- **Working doc:** `docs/PROTOTYPE.md` — full spec with honest competitive analysis + e2e test plan
-- **No code written yet** — still refining the idea and validating differentiation
+- **Branch:** `feature/agent-memory` — all implementation + test results
+- **Round 2 E2E results:** `docs/MVP_IMPLEMENTATION.md` — comprehensive analysis
+- **Hooks implementation plan:** `docs/HOOKS_IMPLEMENTATION.md` — next phase
+- **82 tests passing** (74 unit + 8 smoke)
+- **round2-run-b branch** preserved at `c7435d6` (Run B code: tags, stats, extra methods)
+- **feature/agent-memory** has Run A code (pruneOld, ScopeResolver, aide_search, search CLI)
 
-## Key Decisions Made
+## Key Findings from Round 2
 
-1. **AIDE is a memory layer, not a linter/scanner.** Health scores, rules.yaml, config generation deprioritized.
-2. **MCP server is the primary interface.** CLI is secondary.
-3. **Four memory layers:** preferences, technical context, area context, guidelines.
-4. **Start simple:** path + keyword matching for recall. Add embeddings later if needed.
-5. **Clean branch off main.** Don't carry the 17 existing commands.
-6. **Existing AIDE infra to reuse:** SQLite, MCP framework, CLI (commander.js).
-7. **Set aside for now:** Tree-sitter, knowledge graph, rules engine, orchestrator, health scoring.
-8. **Branch strategy:** `main` holds docs, `feature/agent-memory` for implementation.
+1. **Rules fix aide_recall adoption:** 0% → 75% proactive calls. Confirmed across separate sessions.
+2. **aide_recall doesn't improve intra-session code quality.** Bare agent reads code directly and produces equivalent results. Fair test — separate sessions, same prompts.
+3. **aide_remember is completely broken:** 0% across all tests, all rounds. Rules aren't enough.
+4. **Cross-area isolation works:** path-scoped recall returns only relevant context.
+5. **Negligible overhead:** 727 tokens (0.4%). Run B used fewer tokens than Run A (76k vs 83k).
+6. **Untested value prop:** Cross-session persistence (corrections, preferences surviving session boundaries).
 
-## Competitive Position (Honest)
+## Active Decision
 
-- **ConPort** is the closest competitor — same approach (structured SQLite + MCP), similar entity types. Our real differentiators: **path-scoped recall** (they're workspace-flat) and **contributor awareness** (they have none). Our layering is similar to their entity types under different names. They could add path scoping easily — the moat isn't the schema.
-- **mcp-memory-service** is genuinely different — flat semantic store, great taxonomy but no codebase structure. Better embeddings than us.
-- **Platform-native memory** (Claude, Windsurf) is the real long-term threat.
-- **Key question still open:** Is our focused, opinionated approach enough to justify building vs. using ConPort with good prompting?
+**aide_recall works mechanically but doesn't prove value for intra-session tasks.** The real value is cross-session, but we can't test cross-session until aide_remember works (need to store knowledge in session 1 to recall in session 2). Therefore: **fix aide_remember first via hooks, then run cross-session tests.**
 
-## Founder's Primary Pain Point
+## What's Next (Priority Order)
 
-"My agent doesn't learn me. It gets somewhat better within a session, then resets. I have to re-teach my style, re-explain decisions, re-correct the same things. And when context compacts mid-session, planning details vanish."
+1. **Implement hooks** — `Stop` hook for aide_remember nudge, `UserPromptSubmit` for correction detection, `PreToolUse` on Read for automatic aide_recall injection. See `docs/HOOKS_IMPLEMENTATION.md`.
+2. **Run cross-session correction persistence test** — Session 1: teach corrections + verify aide_remember fires. Session 2: new session, does agent use stored knowledge?
+3. **Test with Cursor** — Cursor also has hooks (`.cursor/hooks.json`). See `docs/HOOKS_IMPLEMENTATION.md` for Cursor-specific config.
 
-Specific things the agent should retain:
-- Component preferences (under 150 lines, split even if used once, composition over conditionals)
-- Codebase-specific knowledge (useGraphQLGateway: true)
-- Planning decisions that get lost when context fills up
-- Proactive discoveries (agent should flag legacy queries tied to a feature flag, not wait for dev to notice)
+## Code on feature/agent-memory (committed, worth keeping)
 
-## What's Next
+From Run A (bare agent, all tests pass, good quality code):
+- `src/memory/store.ts` — `pruneOld()`, `search()` methods added
+- `src/memory/scopes.ts` — ScopeResolver class (133 lines, 29 tests)
+- `src/memory/server.ts` — `aide_search` MCP tool added
+- `src/cli/commands/search.ts` — aide search CLI command (61 lines, 7 tests)
+- `src/memory/index.ts` — updated exports
 
-1. **Validate differentiation** — does path-scoped recall actually matter in practice? Consider quick test with ConPort to see if workspace-flat recall is "good enough"
-2. **If differentiation holds:** Start building — schema, recall tool, remember tool, MCP registration
-3. **Run e2e test scenarios** from PROTOTYPE.md on the AIDE codebase itself
-4. **Test with real work sessions** — use it during actual development
+From round2-run-b (preserved but NOT merged — has extra unrequested code):
+- `src/memory/tags.ts` — TagStore (bonus, not prompted)
+- `src/cli/commands/stats.ts` — aide stats CLI (bonus, not prompted)
+- `src/memory/store.ts` — `getStats()`, `mostRecalled()`, `leastRecentlyUsed()` (extra methods)
 
 ## Doc Map
 
 | Doc | Purpose |
 |-----|---------|
-| `docs/SESSION_CONTEXT.md` | This file — active context for session continuity |
-| `docs/PROTOTYPE.md` | Full spec: problems, solution, tools, competitive landscape, implementation, e2e test plan |
-| `docs/RESEARCH.md` | Summary of all problems explored + market research (archive has full detail) |
-| `docs/archive/` | Original docs: PIVOT_PLAN, NEXT_STEPS, PRODUCT_EVALUATION, PRODUCT_CHANGES_SUMMARY, IMPLEMENTATION_REPORT, CONSOLIDATED_RESEARCH |
+| `docs/SESSION_CONTEXT.md` | This file — active context |
+| `docs/MVP_IMPLEMENTATION.md` | Full implementation report: MVP build + Round 1 + Round 2 E2E results |
+| `docs/HOOKS_IMPLEMENTATION.md` | **NEW** — Hooks phase: plan, implementation, testing |
+| `docs/PROTOTYPE.md` | Original spec: problems, solution, competitive landscape |
+| `docs/RESEARCH.md` | Market research summary |
+| `docs/archive/` | Pre-pivot docs |
