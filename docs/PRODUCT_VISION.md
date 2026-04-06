@@ -665,8 +665,6 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 | engram relies on agents voluntarily saving (our testing: 0% voluntary usage) | 3 hooks ON by default — proven 0%→100% adoption |
 | Most tools bolt on path scoping after the fact | Path-scoped glob inheritance from day one, core architecture |
 
-**Phase 2+ direction decided by Phase 1 users.** The team context thesis (proactive cross-dev sharing) is genuinely novel but unvalidated. We build team features when users signal demand — not before. Ship Phase 1, get feedback, let real usage data drive what comes next.
-
 **Capabilities in this phase:**
 
 
@@ -754,6 +752,8 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 - **PAUSE** if: <50 WAU after 4 weeks -- investigate distribution, not features
 - **STOP** if: retrieval hit rate <30% -- core value prop is not working
 - **PIVOT** if: users store but never retrieve -- memory is not the problem they need solved
+
+**Phase 2+ direction decided by Phase 1 data.** The team context thesis (proactive cross-dev sharing) is genuinely novel but unvalidated. We build team features when users signal demand — not before. Let real usage data and user feedback from Phase 1 drive what Phase 2 includes.
 
 **Legal at this phase:** EULA finalized, trademark filed, company registration if pursued.
 
