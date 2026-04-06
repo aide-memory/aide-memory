@@ -1,8 +1,5 @@
 # Implementation Planning Prompt — Phase 0 + 1
 
-Use this prompt to kick off a new session for creating the technical spec.
-
----
 
 ## Prompt
 
