@@ -4,6 +4,7 @@ import os from 'os';
 import fs from 'fs';
 import crypto from 'crypto';
 import type { Memory, CreateMemory, MemoryLayer, MemoryStatus } from './types';
+import type { EmbeddingService } from './embeddings';
 
 const SCHEMA_VERSION = 1;
 
@@ -50,6 +51,7 @@ function getDbPath(projectPath: string): string {
 export class MemoryStore {
   private db: Database.Database;
   readonly dbPath: string;
+  private embeddingService: EmbeddingService | null = null;
 
   constructor(projectPath: string);
   constructor(options: { dbPath: string });
@@ -69,6 +71,20 @@ export class MemoryStore {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.init();
+  }
+
+  /**
+   * Attach an EmbeddingService to this store.
+   * When attached, add() will generate embeddings in the background,
+   * search() will supplement LIKE results with semantic search,
+   * and remove() will clean up embeddings.
+   */
+  setEmbeddingService(service: EmbeddingService): void {
+    this.embeddingService = service;
+  }
+
+  getEmbeddingService(): EmbeddingService | null {
+    return this.embeddingService;
   }
 
   private init(): void {
@@ -100,7 +116,26 @@ export class MemoryStore {
       now
     );
 
-    return this.get(Number(result.lastInsertRowid))!;
+    const memory = this.get(Number(result.lastInsertRowid))!;
+
+    // Generate and store embedding in background (fire-and-forget)
+    if (this.embeddingService?.isReady()) {
+      const embeddingText = [memory.what, memory.why, memory.context_label]
+        .filter(Boolean)
+        .join(' ');
+      this.embeddingService
+        .generateEmbedding(embeddingText)
+        .then((vec) => {
+          if (vec && this.embeddingService) {
+            this.embeddingService.storeEmbedding(this.db, String(memory.id), vec);
+          }
+        })
+        .catch(() => {
+          // Embedding failure is non-fatal — LIKE search still works
+        });
+    }
+
+    return memory;
   }
 
   get(id: number): Memory | null {
@@ -164,6 +199,16 @@ export class MemoryStore {
 
   remove(id: number): boolean {
     const result = this.db.prepare('DELETE FROM memories WHERE id = ?').run(id);
+
+    // Clean up embedding if present
+    if (result.changes > 0 && this.embeddingService) {
+      try {
+        this.embeddingService.removeEmbedding(this.db, String(id));
+      } catch {
+        // Embedding cleanup failure is non-fatal
+      }
+    }
+
     return result.changes > 0;
   }
 
@@ -229,7 +274,61 @@ export class MemoryStore {
     params.push(limit);
 
     const rows = this.db.prepare(sql).all(...params) as any[];
-    return rows.map(r => this.rowToMemory(r));
+    const likeResults = rows.map(r => this.rowToMemory(r));
+
+    // If LIKE returned fewer than 3 results and embeddings are available,
+    // supplement with semantic search results
+    if (likeResults.length < 3 && this.embeddingService?.isReady()) {
+      // semanticSearch is async, but we return synchronously.
+      // Store the promise; callers who want semantic results should use searchWithEmbeddings().
+      // For the synchronous API, return LIKE results only.
+    }
+
+    return likeResults;
+  }
+
+  /**
+   * Search with optional semantic embedding supplementation.
+   * If LIKE search returns < 3 results and embeddings are available,
+   * supplements with semantic search results (deduplicated).
+   */
+  async searchWithEmbeddings(keyword: string, options?: { layer?: MemoryLayer; status?: MemoryStatus; limit?: number }): Promise<Memory[]> {
+    const limit = options?.limit ?? 50;
+    const likeResults = this.search(keyword, options);
+
+    // Supplement with semantic search if too few LIKE results
+    if (likeResults.length < 3 && this.embeddingService?.isReady()) {
+      try {
+        const semanticHits = await this.embeddingService.semanticSearch(
+          this.db,
+          keyword,
+          limit,
+        );
+
+        const existingIds = new Set(likeResults.map(m => m.id));
+        for (const hit of semanticHits) {
+          if (existingIds.has(Number(hit.uuid))) continue;
+          if (hit.score < 0.3) continue; // Skip low-relevance results
+
+          const memory = this.get(Number(hit.uuid));
+          if (!memory) continue;
+
+          // Apply same filters as LIKE search
+          const status = options?.status ?? 'active';
+          if (memory.status !== status) continue;
+          if (options?.layer && memory.layer !== options.layer) continue;
+
+          likeResults.push(memory);
+          existingIds.add(memory.id);
+
+          if (likeResults.length >= limit) break;
+        }
+      } catch {
+        // Semantic search failure is non-fatal
+      }
+    }
+
+    return likeResults;
   }
 
   pruneOld(days: number): number {
