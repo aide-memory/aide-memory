@@ -22,7 +22,7 @@ export function runList(options: ListOptions): void {
   }
 
   const projectRoot = requireProjectRoot();
-  const store = new MemoryStore(projectRoot);
+  const store = new MemoryStore({ projectRoot });
 
   try {
     let memories = store.list({

@@ -22,7 +22,7 @@ export function runRemember(what: string, options: RememberOptions): void {
   }
 
   const projectRoot = requireProjectRoot();
-  const store = new MemoryStore(projectRoot);
+  const store = new MemoryStore({ projectRoot });
 
   try {
     const memory = store.add({

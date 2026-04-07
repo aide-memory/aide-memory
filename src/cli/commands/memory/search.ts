@@ -14,7 +14,7 @@ export interface MemorySearchOptions {
 
 export function runSearch(query: string, options: MemorySearchOptions): void {
   const projectRoot = requireProjectRoot();
-  const store = new MemoryStore(projectRoot);
+  const store = new MemoryStore({ projectRoot });
 
   try {
     const memories = store.search(query, {

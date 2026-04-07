@@ -8,7 +8,7 @@ import { LAYER_LABELS, VALID_LAYERS, requireProjectRoot } from './utils';
 
 export function runStats(): void {
   const projectRoot = requireProjectRoot();
-  const store = new MemoryStore(projectRoot);
+  const store = new MemoryStore({ projectRoot });
 
   try {
     const total = store.count();

@@ -9,7 +9,7 @@ import { LAYER_LABELS, groupByLayer, formatMemoryLine, requireProjectRoot } from
 
 export function runRecall(filePath: string): void {
   const projectRoot = requireProjectRoot();
-  const store = new MemoryStore(projectRoot);
+  const store = new MemoryStore({ projectRoot });
 
   try {
     const result = recall(store, { paths: [filePath] });

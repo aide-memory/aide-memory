@@ -489,7 +489,7 @@ describe('3. Recall Edge Cases', () => {
   });
 
   it('recall with path matching no scopes returns project-wide memories only', () => {
-    store.add({ layer: 'technical', what: 'project-wide', scope: null });
+    store.add({ layer: 'technical', what: 'project-wide' });
     store.add({ layer: 'technical', what: 'scoped to lib', scope: 'lib/**' });
 
     const result = recall(store, { paths: ['src/main.ts'] });

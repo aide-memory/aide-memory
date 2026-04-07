@@ -356,7 +356,7 @@ export async function initProject(
   if (options?.scan) {
     const memories = scanProject(resolvedRoot);
     if (memories.length > 0) {
-      const store = new MemoryStore(resolvedRoot);
+      const store = new MemoryStore({ projectRoot: resolvedRoot });
       try {
         for (const mem of memories) {
           store.add({

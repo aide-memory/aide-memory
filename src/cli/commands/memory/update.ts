@@ -21,7 +21,7 @@ export function runUpdate(idStr: string, options: UpdateOptions): void {
   }
 
   const projectRoot = requireProjectRoot();
-  const store = new MemoryStore(projectRoot);
+  const store = new MemoryStore({ projectRoot });
 
   try {
     const existing = store.get(id);

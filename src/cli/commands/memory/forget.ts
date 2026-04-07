@@ -14,7 +14,7 @@ export function runForget(idStr: string): void {
   }
 
   const projectRoot = requireProjectRoot();
-  const store = new MemoryStore(projectRoot);
+  const store = new MemoryStore({ projectRoot });
 
   try {
     const existing = store.get(id);
