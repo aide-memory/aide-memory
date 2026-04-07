@@ -59,6 +59,7 @@ describe('MCP Server', () => {
       const rememberText = (rememberResult.content as any[])[0].text;
       expect(rememberText).toContain('Stored');
       expect(rememberText).toContain('Keep files under 150 lines');
+      expect(rememberText).toContain('uuid:');
 
       // Recall
       const recallResult = await client.callTool({
@@ -84,35 +85,44 @@ describe('MCP Server', () => {
       const text = (result.content as any[])[0].text;
       expect(text).toContain('No memories found');
     });
-  });
 
-  describe('aide_forget', () => {
-    it('archives a memory', async () => {
-      await client.callTool({
-        name: 'aide_remember',
-        arguments: { what: 'forget me', layer: 'technical' },
-      });
-
-      const memories = store.list();
-      const id = memories[0].id;
-
+    it('stores memory with tags', async () => {
       const result = await client.callTool({
-        name: 'aide_forget',
-        arguments: { id, mode: 'archive' },
+        name: 'aide_remember',
+        arguments: {
+          what: 'Tagged memory',
+          layer: 'technical',
+          tags: ['perf', 'db'],
+        },
       });
 
       const text = (result.content as any[])[0].text;
-      expect(text).toContain('Archived');
+      expect(text).toContain('Stored');
 
-      // Should not appear in recall
-      const recallResult = await client.callTool({
-        name: 'aide_recall',
-        arguments: {},
-      });
-      const recallText = (recallResult.content as any[])[0].text;
-      expect(recallText).toContain('No memories found');
+      // Verify tags were stored
+      const memories = store.list();
+      expect(memories[0].tags).toEqual(['perf', 'db']);
     });
 
+    it('stores memory with hook source', async () => {
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          what: 'Auto-captured',
+          layer: 'area_context',
+          source: 'hook',
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Stored');
+
+      const memories = store.list();
+      expect(memories[0].source).toBe('hook');
+    });
+  });
+
+  describe('aide_forget', () => {
     it('deletes a memory permanently', async () => {
       await client.callTool({
         name: 'aide_remember',
@@ -124,12 +134,44 @@ describe('MCP Server', () => {
 
       const result = await client.callTool({
         name: 'aide_forget',
-        arguments: { id, mode: 'delete' },
+        arguments: { id },
       });
 
       const text = (result.content as any[])[0].text;
       expect(text).toContain('Deleted');
       expect(store.get(id)).toBeNull();
+    });
+
+    it('returns not found message for non-existent id', async () => {
+      const result = await client.callTool({
+        name: 'aide_forget',
+        arguments: { id: 999 },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('not found');
+    });
+
+    it('deleted memory does not appear in recall', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'forget me', layer: 'technical' },
+      });
+
+      const memories = store.list();
+      const id = memories[0].id;
+
+      await client.callTool({
+        name: 'aide_forget',
+        arguments: { id },
+      });
+
+      const recallResult = await client.callTool({
+        name: 'aide_recall',
+        arguments: {},
+      });
+      const recallText = (recallResult.content as any[])[0].text;
+      expect(recallText).toContain('No memories found');
     });
   });
 
