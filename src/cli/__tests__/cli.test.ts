@@ -6,6 +6,7 @@ import { MemoryStore } from '../../memory/store';
 
 /**
  * Create a temp directory with .aide/ structure to simulate a project root.
+ * Uses { projectRoot } mode so directory layout matches what CLI commands expect.
  * Returns { root, dbPath, configPath, memoriesDir }.
  */
 function createTempProject(): {
@@ -23,8 +24,9 @@ function createTempProject(): {
   const memoriesDir = path.join(aideDir, 'memories');
   const configPath = path.join(aideDir, 'config.json');
 
-  // Use the MemoryStore constructor with the project root to get the proper db path
-  const store = new MemoryStore(root);
+  // Use { projectRoot } mode — this creates the .aide/memories/ subdirectories
+  // and sets up the SQLite cache, matching what CLI commands do at runtime.
+  const store = new MemoryStore({ projectRoot: root });
   const dbPath = store.dbPath;
   store.close();
 
@@ -59,7 +61,7 @@ describe('aide-memory CLI', () => {
 
   beforeEach(() => {
     project = createTempProject();
-    store = new MemoryStore(project.root);
+    store = new MemoryStore({ projectRoot: project.root });
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     originalCwd = process.cwd();
@@ -101,7 +103,7 @@ describe('aide-memory CLI', () => {
       store.close();
 
       // Re-create store to avoid locked db
-      store = new MemoryStore(project.root);
+      store = new MemoryStore({ projectRoot: project.root });
 
       runCli(['recall', 'src/memory/']);
 
