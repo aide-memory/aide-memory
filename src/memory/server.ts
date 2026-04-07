@@ -6,12 +6,12 @@ import { recall } from './recall';
 import type { MemoryLayer, MemorySource } from './types';
 
 const LAYER_VALUES: [string, ...string[]] = ['preferences', 'technical', 'area_context', 'guidelines'];
-const SOURCE_VALUES: [string, ...string[]] = ['conversation', 'import', 'agent_discovery', 'elevated'];
+const SOURCE_VALUES: [string, ...string[]] = ['conversation', 'import', 'agent_discovery', 'elevated', 'hook'];
 
 export function createServer(store: MemoryStore): McpServer {
   const server = new McpServer({
     name: 'aide-memory',
-    version: '0.1.0',
+    version: '0.2.0',
   });
 
   // aide_recall — get context for an area
@@ -22,6 +22,7 @@ export function createServer(store: MemoryStore): McpServer {
       paths: z.array(z.string()).optional().describe('File or directory paths you are working in. Returns memories scoped to these areas plus project-wide context.'),
       query: z.string().optional().describe('Optional text to boost relevant results (e.g. "skeleton loading" or "authentication flow").'),
       layers: z.array(z.enum(LAYER_VALUES)).optional().describe('Filter to specific layers: preferences, technical, area_context, guidelines.'),
+      contributor: z.string().optional().describe('Filter to a specific contributor.'),
       limit: z.number().optional().describe('Max memories to return (default 20).'),
     },
     async (params) => {
@@ -29,6 +30,7 @@ export function createServer(store: MemoryStore): McpServer {
         paths: params.paths,
         query: params.query,
         layers: params.layers as MemoryLayer[] | undefined,
+        contributor: params.contributor,
         limit: params.limit,
       });
 
@@ -72,7 +74,9 @@ export function createServer(store: MemoryStore): McpServer {
       why: z.string().optional().describe('Context for why this is worth remembering.'),
       context_label: z.string().optional().describe('Feature grouping label (e.g. "dashboard skeleton loading", "Add App modal").'),
       contributor: z.string().optional().describe('Who this knowledge came from (for preferences layer).'),
+      tags: z.array(z.string()).optional().describe('Tags for categorization.'),
       source: z.enum(SOURCE_VALUES).optional().describe('How this was captured. Default: conversation.'),
+      shared: z.boolean().optional().describe('Whether this memory is shared (true, default) or personal (false). Only affects preferences layer file placement.'),
     },
     async (params) => {
       const memory = store.add({
@@ -82,28 +86,28 @@ export function createServer(store: MemoryStore): McpServer {
         scope: params.scope,
         context_label: params.context_label,
         contributor: params.contributor,
+        tags: params.tags,
         source: (params.source as MemorySource) ?? 'conversation',
+        shared: params.shared,
       });
 
       return {
         content: [{
           type: 'text' as const,
-          text: `Stored: "${memory.what}" as ${memory.layer}${memory.scope ? ` [${memory.scope}]` : ' [project-wide]'} (id: ${memory.id})`,
+          text: `Stored: "${memory.what}" as ${memory.layer}${memory.scope ? ` [${memory.scope}]` : ' [project-wide]'} (id: ${memory.id}, uuid: ${memory.uuid})`,
         }],
       };
     }
   );
 
-  // aide_forget — remove or archive a memory
+  // aide_forget — remove a memory
   server.tool(
     'aide_forget',
-    'Remove or archive a memory that is no longer relevant. Use archive for completed decisions that may have historical value. Use delete for things that were wrong.',
+    'Remove a memory that is no longer relevant or was wrong. Permanently deletes the memory.',
     {
       id: z.number().describe('The memory ID to forget.'),
-      mode: z.enum(['archive', 'delete']).optional().describe('archive (default) keeps it but hides from recall. delete removes permanently.'),
     },
     async (params) => {
-      const mode = params.mode ?? 'archive';
       const existing = store.get(params.id);
 
       if (!existing) {
@@ -112,17 +116,10 @@ export function createServer(store: MemoryStore): McpServer {
         };
       }
 
-      if (mode === 'delete') {
-        store.remove(params.id);
-        return {
-          content: [{ type: 'text' as const, text: `Deleted: "${existing.what}" (id: ${params.id})` }],
-        };
-      } else {
-        store.archive(params.id);
-        return {
-          content: [{ type: 'text' as const, text: `Archived: "${existing.what}" (id: ${params.id})` }],
-        };
-      }
+      store.remove(params.id);
+      return {
+        content: [{ type: 'text' as const, text: `Deleted: "${existing.what}" (id: ${params.id})` }],
+      };
     }
   );
 
@@ -132,15 +129,15 @@ export function createServer(store: MemoryStore): McpServer {
     'List stored memories for transparency and management. Shows what context is available.',
     {
       layer: z.enum(LAYER_VALUES).optional().describe('Filter by layer.'),
-      status: z.enum(['active', 'completed', 'archived'] as [string, ...string[]]).optional().describe('Filter by status. Default: active.'),
       scope: z.string().optional().describe('Filter by exact scope.'),
+      contributor: z.string().optional().describe('Filter by contributor.'),
       limit: z.number().optional().describe('Max results (default 50).'),
     },
     async (params) => {
       const memories = store.list({
         layer: params.layer as MemoryLayer | undefined,
-        status: (params.status as any) ?? 'active',
         scope: params.scope,
+        contributor: params.contributor,
         limit: params.limit ?? 50,
       });
 
@@ -150,7 +147,7 @@ export function createServer(store: MemoryStore): McpServer {
         };
       }
 
-      const total = store.count({ status: (params.status as any) ?? 'active' });
+      const total = store.count();
       let output = `Showing ${memories.length} of ${total} memories:\n\n`;
 
       for (const m of memories) {
@@ -297,7 +294,7 @@ function parseMarkdownItems(content: string): string[] {
 
 // CLI entry point
 export async function startServer(projectPath: string): Promise<void> {
-  const store = new MemoryStore(projectPath);
+  const store = new MemoryStore({ projectRoot: projectPath });
   const server = createServer(store);
   const transport = new StdioServerTransport();
   await server.connect(transport);

@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import { MemoryStore } from '../../memory/store';
 import type { MemoryLayer } from '../../memory/types';
 
+
 export interface SearchOptions {
   path?: string;
   layer?: string;
