@@ -32,6 +32,9 @@ import { runStats } from './commands/memory/stats';
 import { runConfig } from './commands/memory/config';
 import { runSyncImport, runSyncExport } from './commands/memory/sync';
 import { runMigrate } from './commands/memory/migrate';
+import { runInit } from './commands/memory/init';
+import { checkForUpdates, printUpdateNotice } from '../memory/updater';
+import { AideConfig } from '../memory/config';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../../package.json');
@@ -158,12 +161,15 @@ export function createProgram(): Command {
       runMigrate();
     });
 
-  // aide-memory init (placeholder)
+  // aide-memory init
   program
     .command('init')
     .description('Initialize a new .aide/ project')
-    .action(() => {
-      console.log('Not yet implemented. Coming soon.');
+    .option('--scan', 'Run pre-train scan to generate initial memories')
+    .option('--update-rules', 'Only refresh rules files (idempotent)')
+    .option('--force', 'Overwrite existing files')
+    .action((options: { scan?: boolean; updateRules?: boolean; force?: boolean }) => {
+      runInit(options);
     });
 
   return program;
@@ -173,4 +179,21 @@ export function createProgram(): Command {
 if (require.main === module) {
   const program = createProgram();
   program.parse(process.argv);
+
+  // Non-blocking update check (fire-and-forget, after command runs)
+  try {
+    const cwd = process.cwd();
+    const config = new AideConfig(cwd);
+    if (config.get('updates.check')) {
+      checkForUpdates(pkg.version).then((latest) => {
+        if (latest) {
+          printUpdateNotice(pkg.version, latest);
+        }
+      }).catch(() => {
+        // Update check failure is non-fatal
+      });
+    }
+  } catch {
+    // Config load failure is non-fatal for update checks
+  }
 }
