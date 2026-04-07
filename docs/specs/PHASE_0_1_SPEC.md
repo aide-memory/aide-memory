@@ -17,8 +17,8 @@
 | Sprint 1 | **COMPLETE** | P1.1 Storage, P1.2 Types, P1.3 FTS5, P1.8 Rules | All merged. 305 tests. Storage: file-per-memory + SQLite cache. FTS5: BM25 search. Rules: 5 templates. |
 | Sprint 2 | **COMPLETE** | P1.5 Hooks, P1.6 aide_update, P1.7 CLI, P1.11 Config | All merged. 422 tests. 4 hooks, 7 MCP tools, 11 CLI commands, config system. |
 | Sprint 3 | **COMPLETE** | P1.10 Sync, P1.12+P1.13 Analytics, P1.14+P1.15 Init+Scan | All merged. 478 tests. Sync: 20 tests, conflict detection. Analytics: 17 tests. Init: 11 tests, Scan: 8 tests. |
-| Sprint 4 | IN PROGRESS | P1.4 Embeddings, P1.16 Package, P1.20 Update | Agents launching. P1.9 Cursor + P1.18 Plugin are manual tasks. |
-| Sprint 5 | PENDING | P1.17 Validation, P1.19 Demos, P1.21 Docs | Mostly manual. Blocked on Sprint 4. |
+| Sprint 4 | **COMPLETE** | P1.4 Embeddings, P1.16 Package | All merged. 533 tests. Embeddings: Transformers + Ollama backends, 34 tests. Package: npm setup, 21 tests. |
+| Sprint 5 | IN PROGRESS | P1.20 Update, integration fixes, polish | Launching final agents. P1.17 Validation, P1.19 Demos, P1.21 Docs are manual. |
 | Phase 0 | MANUAL | P0.1-P0.6 Domain, Legal, Repo, npm, Landing, Docs | Requires human action |
 
 ### Manual Intervention Needed (for human)
