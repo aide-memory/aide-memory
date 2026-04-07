@@ -12,11 +12,9 @@ export function runStats(): void {
 
   try {
     const total = store.count();
-    const active = store.count({ status: 'active' });
 
     console.log(chalk.white.bold('Memory Statistics\n'));
     console.log(`  Total memories: ${total}`);
-    console.log(`  Active: ${active}`);
     console.log();
 
     // Count by layer
@@ -28,7 +26,7 @@ export function runStats(): void {
     console.log();
 
     // Most recalled
-    const all = store.list({ status: 'active' });
+    const all = store.list();
     const sorted = [...all].sort((a, b) => b.recalled_count - a.recalled_count);
     const topRecalled = sorted.filter(m => m.recalled_count > 0).slice(0, 5);
 

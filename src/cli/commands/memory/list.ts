@@ -29,7 +29,6 @@ export function runList(options: ListOptions): void {
       layer: options.layer as MemoryLayer | undefined,
       scope: options.scope,
       limit: options.limit ? parseInt(options.limit, 10) : undefined,
-      status: 'active',
     });
 
     // Post-filter by contributor (store.list doesn't support this natively)
@@ -50,7 +49,7 @@ export function runList(options: ListOptions): void {
       return;
     }
 
-    const total = store.count({ status: 'active' });
+    const total = store.count();
     console.log(chalk.white(`Showing ${memories.length} of ${total} memories:\n`));
 
     for (const m of memories) {
