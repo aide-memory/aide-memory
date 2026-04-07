@@ -1,0 +1,17 @@
+src/
+tests/
+*.test.ts
+*.test.js
+docs/
+.claude/
+.aide/
+tsconfig.json
+vitest.config.ts
+*.map
+eval/
+web/
+PIVOT_PLAN.md
+PRODUCT_CHANGES_SUMMARY.md
+package.aide-memory.json
+README.npm.md
+scripts/build.sh

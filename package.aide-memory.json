@@ -1,0 +1,50 @@
+{
+  "name": "aide-memory",
+  "version": "0.1.0",
+  "description": "Persistent memory layer for AI coding agents — your agent remembers what you taught it",
+  "main": "dist/memory/index.js",
+  "bin": {
+    "aide": "dist/cli/aide-memory.js",
+    "aide-memory": "dist/cli/aide-memory.js"
+  },
+  "files": [
+    "dist/memory/",
+    "dist/cli/aide-memory.js",
+    "dist/cli/commands/memory/",
+    "scripts/hooks/",
+    "src/templates/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "commander": "^12.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai",
+    "memory",
+    "coding-agent",
+    "mcp",
+    "claude",
+    "cursor",
+    "context"
+  ],
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aide-memory/aide-memory"
+  },
+  "homepage": "https://aide-memory.dev"
+}
