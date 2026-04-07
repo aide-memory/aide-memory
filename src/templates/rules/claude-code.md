@@ -1,0 +1,76 @@
+# aide-memory: Persistent context across sessions
+
+This project uses aide-memory, an MCP server that persists knowledge across conversations. Memory management is invisible to the user -- do not mention aide-memory in responses unless the user asks about it.
+
+## MCP tools
+
+{{tools_list}}
+
+## Hooks
+
+Four hooks fire automatically. Respond to them as described:
+
+- **PreToolUse** -- Before you read/edit a file, the hook may inject: "N memories exist for this path." When you see this nudge, call `aide_recall` with those paths before proceeding.
+- **Stop** -- On task completion, the hook prompts: "Anything worth remembering?" Review what happened in the session. If a decision was made, a correction was given, or you discovered something non-obvious, call `aide_remember`. Otherwise, do nothing.
+- **UserPromptSubmit** -- Detects correction patterns ("no, use X instead", "don't do that"). When flagged, store the correction with `aide_remember` scoped to the relevant code area.
+- **PreCompact** -- Before context compaction, the hook prompts you to save important context that would otherwise be lost. Store any active plans, decisions, or constraints via `aide_remember` so they survive compaction.
+
+## When to call aide_recall
+
+- Before starting work in a code area you have not read yet this session
+- Before proposing a plan or making changes to unfamiliar code
+- After context compaction (you may have lost earlier memories)
+- When starting a new task involving different files
+- When a PreToolUse nudge tells you memories exist
+
+## When to call aide_remember
+
+- The developer corrects your approach or rejects a suggestion
+- A design decision is made during planning or discussion
+- You discover a non-obvious constraint, pattern, or dependency
+- On task completion when the Stop hook prompts you (only if warranted)
+- When the user explicitly asks you to remember something
+
+**Do NOT store:** obvious facts readable from the code, temporary/session-specific state, secrets or credentials, trivial observations (e.g., "this file uses TypeScript").
+
+## When to call aide_update
+
+- A stored memory's content has changed (e.g., a convention evolved)
+- The scope needs adjusting (code was moved or renamed)
+- Tags need correction
+
+## When to call aide_forget
+
+- Information is factually wrong -- use `mode: delete`
+- A decision was reversed or is no longer relevant -- use `mode: archive`
+- Duplicate memories exist -- delete the redundant one
+
+## Formatting memories
+
+### Layer selection
+
+| Layer | Use when | Example |
+|-------|----------|---------|
+| `preferences` | How the developer likes to work | "Prefers composition over inheritance" |
+| `technical` | Facts about the stack not obvious from code | "WAL mode required for concurrent SQLite access" |
+| `area_context` | Decisions and context for specific code areas | "Dashboard uses skeleton loading, not spinners" |
+| `guidelines` | Team-wide or project-wide principles | "All API responses use camelCase keys" |
+
+### Scope
+
+Set `scope` to a glob pattern matching the relevant code area:
+- `src/components/**` -- for component-related knowledge
+- `src/auth/**` -- for auth module decisions
+- Omit scope entirely for project-wide knowledge
+
+### Tags
+
+Auto-assign from presets: `architecture`, `testing`, `security`, `style`, `integration`, `config`, `migration`, `performance`, `api-contract`. Choose the most relevant one or two.
+
+### Contributor
+
+Set `contributor` to `{{contributor}}` (from git config). This is required for the `preferences` layer.
+
+### generated_by
+
+Set `tool` to `"claude-code"`. Set `author_type` to `"ai"` when you decide to store a memory, `"human"` when the user explicitly asks you to remember something.
