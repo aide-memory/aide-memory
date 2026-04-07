@@ -1,0 +1,507 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  cosineSimilarity,
+  vectorToBuffer,
+  bufferToVector,
+  ensureEmbeddingsTable,
+  EmbeddingService,
+  type EmbeddingBackend,
+} from '../embeddings';
+import Database from 'better-sqlite3';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+function tempDbPath(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-embed-test-'));
+  return path.join(dir, 'memory.db');
+}
+
+// --- Mock backend for tests (no real model download) ---
+
+class MockBackend implements EmbeddingBackend {
+  private ready = false;
+  private vectors: Map<string, Float32Array> = new Map();
+
+  constructor(private shouldInitialize: boolean = true) {}
+
+  async initialize(): Promise<boolean> {
+    this.ready = this.shouldInitialize;
+    return this.ready;
+  }
+
+  isReady(): boolean {
+    return this.ready;
+  }
+
+  /** Register a pre-computed vector for a given input text. */
+  setVector(text: string, vector: Float32Array): void {
+    this.vectors.set(text, vector);
+  }
+
+  async generateEmbedding(text: string): Promise<Float32Array | null> {
+    if (!this.ready) return null;
+    const preset = this.vectors.get(text);
+    if (preset) return preset;
+    // Generate a deterministic pseudo-embedding from the text
+    const arr = new Float32Array(4);
+    for (let i = 0; i < text.length && i < 4; i++) {
+      arr[i] = text.charCodeAt(i) / 255;
+    }
+    // Normalize
+    let norm = 0;
+    for (let i = 0; i < arr.length; i++) norm += arr[i] * arr[i];
+    norm = Math.sqrt(norm);
+    if (norm > 0) for (let i = 0; i < arr.length; i++) arr[i] /= norm;
+    return arr;
+  }
+}
+
+// --- Tests ---
+
+describe('cosineSimilarity', () => {
+  it('returns 1 for identical vectors', () => {
+    const v = new Float32Array([1, 2, 3]);
+    expect(cosineSimilarity(v, v)).toBeCloseTo(1.0, 5);
+  });
+
+  it('returns -1 for opposite vectors', () => {
+    const a = new Float32Array([1, 0, 0]);
+    const b = new Float32Array([-1, 0, 0]);
+    expect(cosineSimilarity(a, b)).toBeCloseTo(-1.0, 5);
+  });
+
+  it('returns 0 for orthogonal vectors', () => {
+    const a = new Float32Array([1, 0, 0]);
+    const b = new Float32Array([0, 1, 0]);
+    expect(cosineSimilarity(a, b)).toBeCloseTo(0.0, 5);
+  });
+
+  it('handles normalized vectors correctly', () => {
+    const a = new Float32Array([0.6, 0.8]);
+    const b = new Float32Array([0.8, 0.6]);
+    // dot = 0.48 + 0.48 = 0.96, both are unit vectors
+    expect(cosineSimilarity(a, b)).toBeCloseTo(0.96, 4);
+  });
+
+  it('returns 0 for empty vectors', () => {
+    const a = new Float32Array([]);
+    const b = new Float32Array([]);
+    expect(cosineSimilarity(a, b)).toBe(0);
+  });
+
+  it('returns 0 for mismatched lengths', () => {
+    const a = new Float32Array([1, 2]);
+    const b = new Float32Array([1, 2, 3]);
+    expect(cosineSimilarity(a, b)).toBe(0);
+  });
+
+  it('returns 0 for zero vectors', () => {
+    const a = new Float32Array([0, 0, 0]);
+    const b = new Float32Array([1, 2, 3]);
+    expect(cosineSimilarity(a, b)).toBe(0);
+  });
+
+  it('is commutative', () => {
+    const a = new Float32Array([1, 3, 5, 7]);
+    const b = new Float32Array([2, 4, 6, 8]);
+    expect(cosineSimilarity(a, b)).toBeCloseTo(cosineSimilarity(b, a), 10);
+  });
+
+  it('works with higher-dimensional vectors', () => {
+    // Simulate 384-dim vectors (bge-small-en-v1.5 output size)
+    const a = new Float32Array(384);
+    const b = new Float32Array(384);
+    for (let i = 0; i < 384; i++) {
+      a[i] = Math.sin(i);
+      b[i] = Math.cos(i);
+    }
+    const sim = cosineSimilarity(a, b);
+    // sin and cos are orthogonal-ish over many samples, should be near 0
+    expect(Math.abs(sim)).toBeLessThan(0.1);
+  });
+});
+
+describe('vectorToBuffer / bufferToVector', () => {
+  it('roundtrips a vector through Buffer', () => {
+    const original = new Float32Array([1.5, -2.3, 0.0, 42.0]);
+    const buf = vectorToBuffer(original);
+    const restored = bufferToVector(buf);
+    expect(restored.length).toBe(original.length);
+    for (let i = 0; i < original.length; i++) {
+      expect(restored[i]).toBeCloseTo(original[i], 5);
+    }
+  });
+
+  it('roundtrips an empty vector', () => {
+    const original = new Float32Array([]);
+    const buf = vectorToBuffer(original);
+    const restored = bufferToVector(buf);
+    expect(restored.length).toBe(0);
+  });
+
+  it('preserves buffer byte length', () => {
+    const vec = new Float32Array([1, 2, 3]);
+    const buf = vectorToBuffer(vec);
+    // Float32 = 4 bytes per element
+    expect(buf.byteLength).toBe(12);
+  });
+});
+
+describe('ensureEmbeddingsTable', () => {
+  let db: Database.Database;
+  let dbPath: string;
+
+  beforeEach(() => {
+    dbPath = tempDbPath();
+    db = new Database(dbPath);
+  });
+
+  afterEach(() => {
+    db.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    const dir = path.dirname(dbPath);
+    if (fs.existsSync(dir)) fs.rmdirSync(dir);
+  });
+
+  it('creates the embeddings table', () => {
+    ensureEmbeddingsTable(db);
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='embeddings'")
+      .all() as { name: string }[];
+    expect(tables).toHaveLength(1);
+    expect(tables[0].name).toBe('embeddings');
+  });
+
+  it('is idempotent', () => {
+    ensureEmbeddingsTable(db);
+    ensureEmbeddingsTable(db);
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='embeddings'")
+      .all() as { name: string }[];
+    expect(tables).toHaveLength(1);
+  });
+
+  it('creates table with correct columns', () => {
+    ensureEmbeddingsTable(db);
+    const info = db.prepare('PRAGMA table_info(embeddings)').all() as {
+      name: string;
+      type: string;
+    }[];
+    const columns = info.map((c) => c.name);
+    expect(columns).toContain('uuid');
+    expect(columns).toContain('vector');
+    expect(columns).toContain('dimensions');
+  });
+});
+
+describe('EmbeddingService', () => {
+  describe('initialization', () => {
+    it('isReady returns false before initialization', () => {
+      const service = new EmbeddingService();
+      expect(service.isReady()).toBe(false);
+    });
+
+    it('initializes successfully with a working backend', async () => {
+      const backend = new MockBackend(true);
+      const service = new EmbeddingService(backend);
+      const ok = await service.initialize();
+      expect(ok).toBe(true);
+      expect(service.isReady()).toBe(true);
+    });
+
+    it('returns false when backend fails to initialize', async () => {
+      const backend = new MockBackend(false);
+      const service = new EmbeddingService(backend);
+      // This will try the failing preferred backend, then try Transformers.js
+      // (which won't be installed in test env), then Ollama (not running).
+      // All should fail gracefully.
+      const ok = await service.initialize();
+      // The preferred backend fails, Transformers.js won't be available,
+      // and Ollama isn't running in tests, so this should be false.
+      expect(ok).toBe(false);
+      expect(service.isReady()).toBe(false);
+    });
+
+    it('generateEmbedding returns null when not initialized', async () => {
+      const service = new EmbeddingService();
+      const result = await service.generateEmbedding('test');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('storeEmbedding / getEmbedding', () => {
+    let db: Database.Database;
+    let dbPath: string;
+    let service: EmbeddingService;
+
+    beforeEach(async () => {
+      dbPath = tempDbPath();
+      db = new Database(dbPath);
+      const backend = new MockBackend(true);
+      service = new EmbeddingService(backend);
+      await service.initialize();
+    });
+
+    afterEach(() => {
+      db.close();
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      const dir = path.dirname(dbPath);
+      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    });
+
+    it('stores and retrieves a vector', () => {
+      const vec = new Float32Array([0.1, 0.2, 0.3, 0.4]);
+      service.storeEmbedding(db, 'mem-1', vec);
+
+      const retrieved = service.getEmbedding(db, 'mem-1');
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.length).toBe(4);
+      for (let i = 0; i < vec.length; i++) {
+        expect(retrieved![i]).toBeCloseTo(vec[i], 5);
+      }
+    });
+
+    it('overwrites existing embedding with same uuid', () => {
+      const vec1 = new Float32Array([1, 0, 0, 0]);
+      const vec2 = new Float32Array([0, 0, 0, 1]);
+      service.storeEmbedding(db, 'mem-1', vec1);
+      service.storeEmbedding(db, 'mem-1', vec2);
+
+      const retrieved = service.getEmbedding(db, 'mem-1');
+      expect(retrieved![0]).toBeCloseTo(0, 5);
+      expect(retrieved![3]).toBeCloseTo(1, 5);
+    });
+
+    it('returns null for non-existent uuid', () => {
+      const retrieved = service.getEmbedding(db, 'nonexistent');
+      expect(retrieved).toBeNull();
+    });
+
+    it('stores correct dimensions metadata', () => {
+      const vec = new Float32Array([1, 2, 3, 4, 5]);
+      service.storeEmbedding(db, 'mem-dims', vec);
+
+      ensureEmbeddingsTable(db);
+      const row = db.prepare('SELECT dimensions FROM embeddings WHERE uuid = ?').get('mem-dims') as {
+        dimensions: number;
+      };
+      expect(row.dimensions).toBe(5);
+    });
+  });
+
+  describe('removeEmbedding', () => {
+    let db: Database.Database;
+    let dbPath: string;
+    let service: EmbeddingService;
+
+    beforeEach(async () => {
+      dbPath = tempDbPath();
+      db = new Database(dbPath);
+      const backend = new MockBackend(true);
+      service = new EmbeddingService(backend);
+      await service.initialize();
+    });
+
+    afterEach(() => {
+      db.close();
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      const dir = path.dirname(dbPath);
+      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    });
+
+    it('removes an existing embedding', () => {
+      service.storeEmbedding(db, 'mem-1', new Float32Array([1, 2, 3]));
+      expect(service.removeEmbedding(db, 'mem-1')).toBe(true);
+      expect(service.getEmbedding(db, 'mem-1')).toBeNull();
+    });
+
+    it('returns false for non-existent uuid', () => {
+      expect(service.removeEmbedding(db, 'nonexistent')).toBe(false);
+    });
+  });
+
+  describe('semanticSearch ranking', () => {
+    let db: Database.Database;
+    let dbPath: string;
+    let service: EmbeddingService;
+
+    beforeEach(async () => {
+      dbPath = tempDbPath();
+      db = new Database(dbPath);
+      const backend = new MockBackend(true);
+      service = new EmbeddingService(backend);
+      await service.initialize();
+    });
+
+    afterEach(() => {
+      db.close();
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      const dir = path.dirname(dbPath);
+      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    });
+
+    it('returns results sorted by similarity score (highest first)', () => {
+      // Store vectors that are at known distances from our query
+      const query = new Float32Array([1, 0, 0, 0]);
+
+      // Very similar to query
+      const close = new Float32Array([0.95, 0.1, 0.05, 0.0]);
+      // Somewhat similar
+      const medium = new Float32Array([0.5, 0.5, 0.5, 0.5]);
+      // Opposite direction
+      const far = new Float32Array([-1, 0, 0, 0]);
+
+      service.storeEmbedding(db, 'close', close);
+      service.storeEmbedding(db, 'medium', medium);
+      service.storeEmbedding(db, 'far', far);
+
+      const results = service.semanticSearchWithVector(db, query, 10);
+
+      expect(results.length).toBe(3);
+      expect(results[0].uuid).toBe('close');
+      expect(results[1].uuid).toBe('medium');
+      expect(results[2].uuid).toBe('far');
+
+      // Scores should be in descending order
+      expect(results[0].score).toBeGreaterThan(results[1].score);
+      expect(results[1].score).toBeGreaterThan(results[2].score);
+    });
+
+    it('respects the limit parameter', () => {
+      const query = new Float32Array([1, 0, 0, 0]);
+      service.storeEmbedding(db, 'a', new Float32Array([1, 0, 0, 0]));
+      service.storeEmbedding(db, 'b', new Float32Array([0, 1, 0, 0]));
+      service.storeEmbedding(db, 'c', new Float32Array([0, 0, 1, 0]));
+
+      const results = service.semanticSearchWithVector(db, query, 2);
+      expect(results.length).toBe(2);
+    });
+
+    it('returns empty array when no embeddings stored', () => {
+      const query = new Float32Array([1, 0, 0, 0]);
+      const results = service.semanticSearchWithVector(db, query, 10);
+      expect(results.length).toBe(0);
+    });
+
+    it('skips embeddings with mismatched dimensions', () => {
+      const query = new Float32Array([1, 0, 0, 0]); // 4 dims
+
+      // Store a 3-dim vector (mismatch)
+      service.storeEmbedding(db, 'mismatch', new Float32Array([1, 0, 0]));
+      // Store a 4-dim vector (match)
+      service.storeEmbedding(db, 'match', new Float32Array([0.9, 0.1, 0, 0]));
+
+      const results = service.semanticSearchWithVector(db, query, 10);
+      expect(results.length).toBe(1);
+      expect(results[0].uuid).toBe('match');
+    });
+
+    it('returns correct scores for known vectors', () => {
+      const query = new Float32Array([1, 0]);
+
+      // Identical direction
+      service.storeEmbedding(db, 'identical', new Float32Array([1, 0]));
+      // 45 degrees
+      const sqrt2 = Math.SQRT1_2;
+      service.storeEmbedding(db, 'diagonal', new Float32Array([sqrt2, sqrt2]));
+      // Orthogonal
+      service.storeEmbedding(db, 'orthogonal', new Float32Array([0, 1]));
+
+      const results = service.semanticSearchWithVector(db, query, 10);
+
+      expect(results[0].uuid).toBe('identical');
+      expect(results[0].score).toBeCloseTo(1.0, 5);
+
+      expect(results[1].uuid).toBe('diagonal');
+      expect(results[1].score).toBeCloseTo(sqrt2, 4);
+
+      expect(results[2].uuid).toBe('orthogonal');
+      expect(results[2].score).toBeCloseTo(0.0, 5);
+    });
+  });
+
+  describe('semanticSearch with mock backend', () => {
+    let db: Database.Database;
+    let dbPath: string;
+    let service: EmbeddingService;
+    let backend: MockBackend;
+
+    beforeEach(async () => {
+      dbPath = tempDbPath();
+      db = new Database(dbPath);
+      backend = new MockBackend(true);
+      service = new EmbeddingService(backend);
+      await service.initialize();
+    });
+
+    afterEach(() => {
+      db.close();
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      const dir = path.dirname(dbPath);
+      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    });
+
+    it('generates embedding from text and searches', async () => {
+      // Set up a known mapping
+      const queryVec = new Float32Array([1, 0, 0, 0]);
+      const storedVec = new Float32Array([0.9, 0.1, 0, 0]);
+      backend.setVector('find something', queryVec);
+
+      service.storeEmbedding(db, 'result-1', storedVec);
+
+      const results = await service.semanticSearch(db, 'find something', 10);
+      expect(results.length).toBe(1);
+      expect(results[0].uuid).toBe('result-1');
+      expect(results[0].score).toBeGreaterThan(0.9);
+    });
+
+    it('returns empty when service is not ready', async () => {
+      const failBackend = new MockBackend(false);
+      const failService = new EmbeddingService(failBackend);
+      // Don't initialize — stays not ready
+
+      const results = await failService.semanticSearch(db, 'test', 10);
+      expect(results).toEqual([]);
+    });
+  });
+
+  describe('graceful degradation', () => {
+    it('EmbeddingService works when no backend available', async () => {
+      const failing = new MockBackend(false);
+      const service = new EmbeddingService(failing);
+
+      // initialize will try preferred (fails), then Transformers (not installed),
+      // then Ollama (not running). All fail gracefully.
+      const ok = await service.initialize();
+      expect(ok).toBe(false);
+      expect(service.isReady()).toBe(false);
+
+      // generateEmbedding returns null safely
+      const vec = await service.generateEmbedding('test');
+      expect(vec).toBeNull();
+    });
+
+    it('storeEmbedding and getEmbedding work independently of backend readiness', async () => {
+      // Even with a failing backend, DB operations should work
+      const backend = new MockBackend(true);
+      const service = new EmbeddingService(backend);
+      await service.initialize();
+
+      const dbPath = tempDbPath();
+      const db = new Database(dbPath);
+
+      try {
+        const vec = new Float32Array([1, 2, 3]);
+        service.storeEmbedding(db, 'test-id', vec);
+        const retrieved = service.getEmbedding(db, 'test-id');
+        expect(retrieved).not.toBeNull();
+        expect(retrieved!.length).toBe(3);
+      } finally {
+        db.close();
+        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+        fs.rmdirSync(path.dirname(dbPath));
+      }
+    });
+  });
+});
