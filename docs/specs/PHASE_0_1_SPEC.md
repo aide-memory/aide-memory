@@ -215,6 +215,53 @@ See P0.6 above — same agent prompt generates all docs.
 - [ ] All 7 doc pages written
 - [ ] Published to docs site
 
+#### Launch Marketing (AGENT-ASSISTED + HUMAN)
+
+Content can be drafted by agents, publishing requires human action.
+
+**Agent prompt for blog post:**
+```
+Write a launch blog post for AIDE Memory — "Why Your AI Agent Forgets Everything (And How to Fix It)".
+Read docs/PRODUCT_VISION.md (executive summary + problem section) and docs/specs/VERIFICATION_REPORT.md for real data.
+Structure:
+1. The problem (agents reset every session, corrections lost, planning details forgotten)
+2. What existing tools get wrong (claude-mem dumps everything, engram relies on voluntary saving)
+3. How AIDE Memory works (hooks capture, nudge recalls, file-per-memory, git syncs)
+4. Quick start (npx aide-memory init, 2 minutes)
+5. What's next
+Keep it under 1,500 words, conversational tone, include code snippets. No buzzwords.
+Write to /Users/meky/code/aide-v0/docs/marketing/launch-blog-post.md
+```
+
+**Agent prompt for HN post:**
+```
+Write a concise Show HN post for AIDE Memory.
+Format: Title (under 80 chars), then 3-4 paragraph description.
+Focus on: the problem (agents forget), the hook (0% voluntary → 100% hook-driven adoption),
+the architecture (file-per-memory, git sync, nudge not dump), and install (one command).
+Keep it under 300 words. No marketing fluff — HN readers hate it.
+Write to /Users/meky/code/aide-v0/docs/marketing/show-hn.md
+```
+
+**Publishing channels (HUMAN — post/submit):**
+- [ ] Hacker News: Show HN post
+- [ ] Reddit: r/ClaudeAI, r/cursor, r/programming, r/MachineLearning
+- [ ] dev.to: full launch blog post
+- [ ] Medium / Hashnode: cross-post blog
+- [ ] X/Twitter: thread with demo GIFs
+- [ ] Claude Code community (Discord/forums if available)
+- [ ] Cursor community forums
+- [ ] Notable AI/developer newsletters (submit for coverage):
+  - TLDR Newsletter (tldrnewsletter.com) — submit via their link form
+  - Console.dev — submit as a new developer tool
+  - Changelog News — submit via changelog.com/submit
+  - AI Engineer newsletter — submit via latent.space
+  - Ben's Bites — submit via bensbites.com
+- [ ] Product Hunt launch (create project, schedule launch day)
+- [ ] LinkedIn post for professional network
+
+**Timing:** Launch all channels within 24-48 hours of each other for maximum impact. HN first (morning EST, Tuesday-Thursday optimal), then Reddit + dev.to + socials same day.
+
 ---
 
 ## Table of Contents
