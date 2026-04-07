@@ -673,10 +673,10 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 | Area | What ships | Tier |
 |------|-----------|------|
 | **Install** | One-command install: `npx aide-memory init`. Writes rules files for ALL supported tools by default. Sets up hooks, creates `.aide/` directory structure, config defaults, downloads embedding model, configures `.gitignore`. | FREE |
-| **Capture** | 3 hooks on by default (PreToolUse nudge, Stop prompt, UserPromptSubmit correction detection). Source tagging. Hidden nudging via `additionalContext`. Dedup across hooks. Contributor field stored from day one. | FREE |
+| **Capture** | 4 hooks on by default (PreToolUse nudge, Stop prompt, UserPromptSubmit correction+decision+preference detection, PreCompact extract-before-loss). Source tagging. Hidden nudging via `additionalContext`. Dedup across hooks. Contributor + `generated_by` (tool/model/author_type) stored from day one. | FREE |
 | **Recall** | Smart nudge approach — YOUR memories only. Path-scoped with glob matching and parent inheritance. | FREE (your mems) |
 | **Structure** | 4 memory layers with priority ordering. Tags from configurable preset list. Model auto-assigns. | FREE |
-| **CLI** | `aide recall`, `aide remember`, `aide search`, `aide list`, `aide stats`. | FREE |
+| **CLI** | `aide recall`, `aide remember`, `aide update`, `aide forget`, `aide search`, `aide list`, `aide stats`, `aide config`, `aide sync import/export`. Full parity with MCP tools. Binary: `aide` (default), `aide-memory` (fallback). | FREE |
 | **Search** | FTS5 + sqlite-vec semantic search. YOUR memories only on free. | FREE (your mems) |
 | **Embeddings** | Local embedding model downloaded at init. No API keys. sqlite-vec. | FREE |
 | **Multi-tool** | Rules files for all tools at init. Claude Code + Cursor support via MCP + hooks. | FREE (CC + Cursor) |
