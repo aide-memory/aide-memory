@@ -5,7 +5,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import type { Memory, CreateMemory, MemoryLayer, MemoryStatus } from './types';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const CREATE_TABLE = `
 CREATE TABLE IF NOT EXISTS memories (
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS memories (
   source TEXT NOT NULL DEFAULT 'conversation',
   derived_from TEXT,
   created_at TEXT NOT NULL,
+  updated_at TEXT,
   recalled_count INTEGER NOT NULL DEFAULT 0,
   last_recalled_at TEXT
 );
@@ -78,6 +79,21 @@ export class MemoryStore {
     const versionRow = this.db.prepare('SELECT value FROM meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
     if (!versionRow) {
       this.db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(SCHEMA_VERSION));
+    } else {
+      const currentVersion = parseInt(versionRow.value, 10);
+      if (currentVersion < 2) {
+        this.migrateToV2();
+        this.db.prepare('UPDATE meta SET value = ? WHERE key = ?').run(String(SCHEMA_VERSION), 'schema_version');
+      }
+    }
+  }
+
+  private migrateToV2(): void {
+    // Add updated_at column if it doesn't exist
+    const columns = this.db.prepare("PRAGMA table_info(memories)").all() as { name: string }[];
+    const hasUpdatedAt = columns.some(c => c.name === 'updated_at');
+    if (!hasUpdatedAt) {
+      this.db.exec('ALTER TABLE memories ADD COLUMN updated_at TEXT');
     }
   }
 
@@ -156,6 +172,10 @@ export class MemoryStore {
     }
 
     if (fields.length === 0) return this.get(id);
+
+    // Always set updated_at when fields change
+    fields.push('updated_at = ?');
+    params.push(new Date().toISOString());
 
     params.push(id);
     this.db.prepare(`UPDATE memories SET ${fields.join(', ')} WHERE id = ?`).run(...params);
@@ -255,6 +275,7 @@ export class MemoryStore {
       source: row.source as any,
       derived_from: row.derived_from ? JSON.parse(row.derived_from) : null,
       created_at: row.created_at,
+      updated_at: row.updated_at ?? null,
       recalled_count: row.recalled_count,
       last_recalled_at: row.last_recalled_at,
     };

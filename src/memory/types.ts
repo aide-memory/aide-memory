@@ -14,6 +14,7 @@ export interface Memory {
   source: MemorySource;
   derived_from: number[] | null;
   created_at: string;
+  updated_at: string | null;
   recalled_count: number;
   last_recalled_at: string | null;
 }
