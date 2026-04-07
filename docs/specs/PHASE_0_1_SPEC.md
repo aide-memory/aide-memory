@@ -18,7 +18,7 @@
 | Sprint 2 | **COMPLETE** | P1.5 Hooks, P1.6 aide_update, P1.7 CLI, P1.11 Config | All merged. 422 tests. 4 hooks, 7 MCP tools, 11 CLI commands, config system. |
 | Sprint 3 | **COMPLETE** | P1.10 Sync, P1.12+P1.13 Analytics, P1.14+P1.15 Init+Scan | All merged. 478 tests. Sync: 20 tests, conflict detection. Analytics: 17 tests. Init: 11 tests, Scan: 8 tests. |
 | Sprint 4 | **COMPLETE** | P1.4 Embeddings, P1.16 Package | All merged. 533 tests. Embeddings: Transformers + Ollama backends, 34 tests. Package: npm setup, 21 tests. |
-| Sprint 5 | IN PROGRESS | P1.20 Update, integration fixes, polish | Launching final agents. P1.17 Validation, P1.19 Demos, P1.21 Docs are manual. |
+| Sprint 5 | **COMPLETE** | P1.20 Update, mcp-smoke fix, integration polish | All merged. **544 tests passing, 0 controllable failures.** 4 remaining failures are external service connections (ConPort/mcp-memory-service). TypeScript clean. |
 | Phase 0 | MANUAL | P0.1-P0.6 Domain, Legal, Repo, npm, Landing, Docs | Requires human action |
 
 ### Manual Intervention Needed (for human)
