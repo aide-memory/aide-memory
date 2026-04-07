@@ -41,7 +41,7 @@ try {
   const store = new MemoryStore(projectRoot);
 
   // Get all active memories and count those matching the path scope
-  const allMemories = store.list({ status: 'active' });
+  const allMemories = store.list();
   let count = 0;
   for (const m of allMemories) {
     if (scopeMatchesPath(m.scope, relativePath)) {

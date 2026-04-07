@@ -48,9 +48,11 @@ Note: Cursor uses `agent_message` for hook responses rather than `additionalCont
 
 ## When to call aide_forget
 
-- Information is factually wrong -- use `mode: delete`
-- Decision reversed or no longer relevant -- use `mode: archive`
+- Information is factually wrong
+- Decision reversed or no longer relevant
 - Duplicate memories -- delete the redundant one
+
+Note: aide_forget permanently deletes the memory. There is no archive mode.
 
 ## Formatting memories
 

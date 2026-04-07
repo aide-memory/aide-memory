@@ -41,9 +41,11 @@ Four hooks fire automatically. Respond to them as described:
 
 ## When to call aide_forget
 
-- Information is factually wrong -- use `mode: delete`
-- A decision was reversed or is no longer relevant -- use `mode: archive`
+- Information is factually wrong
+- A decision was reversed or is no longer relevant
 - Duplicate memories exist -- delete the redundant one
+
+Note: aide_forget permanently deletes the memory. There is no archive mode.
 
 ## Formatting memories
 
