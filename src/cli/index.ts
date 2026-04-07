@@ -20,6 +20,7 @@ import { reindexProject } from './commands/reindex';
 import { watchProject } from './commands/watch';
 import { askQuestion } from './commands/ask';
 import { searchMemories } from './commands/search';
+import { displayStats } from './commands/stats';
 import { startRepl } from './repl';
 import { startWebServer } from '../web/server';
 
@@ -224,6 +225,31 @@ program
         }
       } catch (err) {
         logError('Search failed', err);
+        process.exit(1);
+      }
+    }
+  );
+
+// aide stats [path] - Show memory stats
+program
+  .command('stats')
+  .description('Display memory analytics and usage statistics')
+  .option('-p, --path <path>', 'Project root path', process.cwd())
+  .action(
+    async (options: { path?: string }) => {
+      try {
+        const rootPath = path.resolve(options.path || process.cwd());
+        const { MemoryStore } = await import('../memory/store');
+        const { Analytics } = await import('../memory/analytics');
+        const store = new MemoryStore(rootPath);
+        try {
+          const analytics = new Analytics(store.getDatabase());
+          displayStats(analytics);
+        } finally {
+          store.close();
+        }
+      } catch (err) {
+        logError('Stats failed', err);
         process.exit(1);
       }
     }

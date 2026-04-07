@@ -51,6 +51,11 @@ export class MemoryStore {
   private db: Database.Database;
   readonly dbPath: string;
 
+  /** Expose the underlying database for Analytics (same SQLite connection). */
+  getDatabase(): Database.Database {
+    return this.db;
+  }
+
   constructor(projectPath: string);
   constructor(options: { dbPath: string });
   constructor(arg: string | { dbPath: string }) {
