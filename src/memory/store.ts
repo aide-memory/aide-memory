@@ -4,6 +4,7 @@ import os from 'os';
 import fs from 'fs';
 import crypto from 'crypto';
 import type { Memory, CreateMemory, MemoryLayer, MemoryStatus } from './types';
+import { initFts5, backfillFts5Index, escapeFts5Query } from './fts5';
 
 const SCHEMA_VERSION = 1;
 
@@ -50,6 +51,12 @@ function getDbPath(projectPath: string): string {
 export class MemoryStore {
   private db: Database.Database;
   readonly dbPath: string;
+  private _fts5Available: boolean = false;
+
+  /** Whether FTS5 full-text search is available and initialized. */
+  get fts5Available(): boolean {
+    return this._fts5Available;
+  }
 
   constructor(projectPath: string);
   constructor(options: { dbPath: string });
@@ -78,6 +85,12 @@ export class MemoryStore {
     const versionRow = this.db.prepare('SELECT value FROM meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
     if (!versionRow) {
       this.db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(SCHEMA_VERSION));
+    }
+
+    // Initialize FTS5 search (graceful fallback to LIKE if unavailable)
+    this._fts5Available = initFts5(this.db);
+    if (this._fts5Available) {
+      backfillFts5Index(this.db);
     }
   }
 
@@ -208,6 +221,57 @@ export class MemoryStore {
   }
 
   search(keyword: string, options?: { layer?: MemoryLayer; status?: MemoryStatus; limit?: number }): Memory[] {
+    if (this._fts5Available) {
+      const ftsResults = this.searchFts5(keyword, options);
+      // Fall back to LIKE if FTS5 returns nothing (handles substring matches
+      // that FTS5 tokenization misses, e.g. single-character queries).
+      if (ftsResults.length > 0) return ftsResults;
+    }
+    return this.searchLike(keyword, options);
+  }
+
+  /** FTS5-based search with BM25 ranking. */
+  private searchFts5(keyword: string, options?: { layer?: MemoryLayer; status?: MemoryStatus; limit?: number }): Memory[] {
+    const escaped = escapeFts5Query(keyword);
+    if (escaped === null) return [];
+
+    const limit = options?.limit ?? 50;
+
+    // Use a JOIN to preserve BM25 ordering from the FTS5 MATCH.
+    // The outer query applies layer/status filters without disturbing rank order.
+    let sql = `
+      SELECT m.* FROM memories m
+      INNER JOIN (
+        SELECT rowid, rank FROM memories_fts WHERE memories_fts MATCH ?
+        ORDER BY rank
+      ) fts ON m.id = fts.rowid
+    `;
+    const params: any[] = [escaped];
+
+    const conditions: string[] = [];
+    if (options?.layer) {
+      conditions.push('m.layer = ?');
+      params.push(options.layer);
+    }
+    const status = options?.status ?? 'active';
+    conditions.push('m.status = ?');
+    params.push(status);
+
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+    sql += ' ORDER BY fts.rank';
+    sql += ' LIMIT ?';
+    params.push(limit);
+
+    const rows = this.db.prepare(sql).all(...params) as any[];
+    return rows.map(r => this.rowToMemory(r));
+  }
+
+  /** LIKE-based fallback search (used when FTS5 is unavailable). */
+  private searchLike(keyword: string, options?: { layer?: MemoryLayer; status?: MemoryStatus; limit?: number }): Memory[] {
+    if (!keyword || !keyword.trim()) return [];
+
     const conditions: string[] = ['(what LIKE ? OR why LIKE ?)'];
     const like = `%${keyword}%`;
     const params: any[] = [like, like];
