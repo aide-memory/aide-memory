@@ -34,6 +34,9 @@
     "ws": "^8.18.3",
     "zod": "^3.0.0"
   },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^3.0.0"
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/express": "^5.0.6",
