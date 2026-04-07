@@ -81,6 +81,11 @@ export class MemoryStore {
     return this._fts5Available;
   }
 
+  /** Expose the underlying database for Analytics (same SQLite connection). */
+  getDatabase(): Database.Database {
+    return this.db;
+  }
+
   // File-per-memory fields (null when using legacy dbPath-only mode)
   private memoriesDir: string | null = null;
   private defaultContributor: string;
