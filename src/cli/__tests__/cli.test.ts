@@ -377,12 +377,16 @@ describe('aide-memory CLI', () => {
     });
   });
 
-  // ---- Extra: init placeholder ----
+  // ---- Extra: init ----
   describe('init', () => {
-    it('prints coming soon message', () => {
+    it('creates .aide directory structure', async () => {
       runCli(['init']);
-      const output = getOutput();
-      expect(output).toContain('Not yet implemented');
+      // initProject is async — give it a tick to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Verify the .aide/memories directories were created
+      expect(fs.existsSync(path.join(project.root, '.aide', 'memories', 'technical'))).toBe(true);
+      expect(fs.existsSync(path.join(project.root, '.aide', 'memories', 'area_context'))).toBe(true);
+      expect(fs.existsSync(path.join(project.root, '.aide', 'config.json'))).toBe(true);
     });
   });
 
