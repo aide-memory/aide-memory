@@ -1,0 +1,902 @@
+{
+  "timestamp": "2026-02-26T05:16:25.405Z",
+  "name": "v0.2",
+  "analysis": {
+    "modules": [
+      {
+        "name": "analysis",
+        "patterns": [
+          "src/analysis/**/*"
+        ],
+        "fileIds": [
+          "file:d6685c764f4f",
+          "file:92f7f2397025",
+          "file:ab2d329fc3e9",
+          "file:947b4712370a",
+          "file:305fd6524762",
+          "file:81e28e71e584",
+          "file:3b13a65bb8c1",
+          "file:287e464a8e22",
+          "file:4539813953e9",
+          "file:47bcec709bf0",
+          "file:240f5e671db7",
+          "file:91ccf7d6bda0"
+        ],
+        "symbolCount": 106,
+        "internalRelations": 57,
+        "externalRelations": 63,
+        "cohesion": 0.475
+      },
+      {
+        "name": "brain",
+        "patterns": [
+          "src/brain/**/*"
+        ],
+        "fileIds": [
+          "file:e5bce5964dc8",
+          "file:d16efc349960",
+          "file:056bc51555fe",
+          "file:a09f9ddde1bc"
+        ],
+        "symbolCount": 101,
+        "internalRelations": 30,
+        "externalRelations": 1,
+        "cohesion": 0.967741935483871
+      },
+      {
+        "name": "retrieval",
+        "patterns": [
+          "src/retrieval/**/*"
+        ],
+        "fileIds": [
+          "file:2d912e4530c7",
+          "file:b15ca5eef783",
+          "file:9f5d629dbd85",
+          "file:d2f951a26314",
+          "file:8457d789fdbc",
+          "file:bfa543da1b15",
+          "file:561ee9a8856b"
+        ],
+        "symbolCount": 97,
+        "internalRelations": 27,
+        "externalRelations": 142,
+        "cohesion": 0.15976331360946747
+      },
+      {
+        "name": "orchestration",
+        "patterns": [
+          "src/orchestration/**/*"
+        ],
+        "fileIds": [
+          "file:a5b4f910f096",
+          "file:6b0be590a04c",
+          "file:06c0c8e9c2d8",
+          "file:e2f8dfef2e2d",
+          "file:51442890c40d",
+          "file:fd1c3fb9577a",
+          "file:3a3807dd9cca",
+          "file:87bd88ed91fd",
+          "file:0ed48e422acb",
+          "file:0d2fabec6fe4"
+        ],
+        "symbolCount": 84,
+        "internalRelations": 32,
+        "externalRelations": 75,
+        "cohesion": 0.29906542056074764
+      },
+      {
+        "name": "models",
+        "patterns": [
+          "src/models/**/*"
+        ],
+        "fileIds": [
+          "file:8c22be779570",
+          "file:0d09fcde2abb",
+          "file:40a49015a64b",
+          "file:f45e42b0ca8c",
+          "file:0a66e250ea1f"
+        ],
+        "symbolCount": 72,
+        "internalRelations": 38,
+        "externalRelations": 1,
+        "cohesion": 0.9743589743589743
+      },
+      {
+        "name": "session",
+        "patterns": [
+          "src/session/**/*"
+        ],
+        "fileIds": [
+          "file:b8650f98ac4b",
+          "file:b3a5a0a70264"
+        ],
+        "symbolCount": 42,
+        "internalRelations": 1,
+        "externalRelations": 17,
+        "cohesion": 0.05555555555555555
+      },
+      {
+        "name": "core",
+        "patterns": [
+          "src/core/**/*"
+        ],
+        "fileIds": [
+          "file:697bbf5abcbc",
+          "file:e7d1e3556288",
+          "file:0baef5a07050",
+          "file:2cc22a5b261b",
+          "file:beca1f7daaa9"
+        ],
+        "symbolCount": 35,
+        "internalRelations": 2,
+        "externalRelations": 6,
+        "cohesion": 0.25
+      },
+      {
+        "name": "web",
+        "patterns": [
+          "web/**/*"
+        ],
+        "fileIds": [
+          "file:75934e210267",
+          "file:0112bc36c40e",
+          "file:2da9a5b1b6f9",
+          "file:ba69190bfc68",
+          "file:28805d400f3d",
+          "file:5b6a5b811a47",
+          "file:a4f15fa4fd48",
+          "file:2d326fa7c7d8"
+        ],
+        "symbolCount": 34,
+        "internalRelations": 23,
+        "externalRelations": 61,
+        "cohesion": 0.27380952380952384
+      },
+      {
+        "name": "cli",
+        "patterns": [
+          "src/cli/**/*"
+        ],
+        "fileIds": [
+          "file:a315b80f8eea",
+          "file:bacfe9cc1ba4",
+          "file:9362cb09ab3b",
+          "file:1bf4db789f8a",
+          "file:3ef3426cf77a",
+          "file:abd392f52866",
+          "file:b08083cc5300",
+          "file:076b81552aa3",
+          "file:4a544ee72d19",
+          "file:ec5e8a1ed581",
+          "file:31b1b3997876"
+        ],
+        "symbolCount": 34,
+        "internalRelations": 23,
+        "externalRelations": 227,
+        "cohesion": 0.092
+      },
+      {
+        "name": "rules",
+        "patterns": [
+          "src/rules/**/*"
+        ],
+        "fileIds": [
+          "file:7396173fe97f",
+          "file:f95d9bfe77b0",
+          "file:ce96839e163b",
+          "file:302ec5b7e6e6"
+        ],
+        "symbolCount": 20,
+        "internalRelations": 14,
+        "externalRelations": 10,
+        "cohesion": 0.5833333333333334
+      },
+      {
+        "name": "context",
+        "patterns": [
+          "src/context/**/*"
+        ],
+        "fileIds": [
+          "file:51f4bca54df2",
+          "file:a7aa5e06b5a8",
+          "file:7ab6b100277a"
+        ],
+        "symbolCount": 19,
+        "internalRelations": 3,
+        "externalRelations": 17,
+        "cohesion": 0.15
+      },
+      {
+        "name": "project",
+        "patterns": [
+          "src/project/**/*"
+        ],
+        "fileIds": [
+          "file:13a405d5f29f",
+          "file:113393bca202"
+        ],
+        "symbolCount": 12,
+        "internalRelations": 0,
+        "externalRelations": 43,
+        "cohesion": 0
+      },
+      {
+        "name": "storage",
+        "patterns": [
+          "src/storage/**/*"
+        ],
+        "fileIds": [
+          "file:43601ad04be5"
+        ],
+        "symbolCount": 10,
+        "internalRelations": 10,
+        "externalRelations": 0,
+        "cohesion": 1
+      },
+      {
+        "name": "(root)",
+        "patterns": [
+          "*"
+        ],
+        "fileIds": [
+          "file:f3bd7de86274",
+          "file:9f932a37a2b5",
+          "file:27f4d9c139c2",
+          "file:ef9e43d35476",
+          "file:d0496e0a0697",
+          "file:257a5458b9ed",
+          "file:cb13bf65c345"
+        ],
+        "symbolCount": 0,
+        "internalRelations": 0,
+        "externalRelations": 0,
+        "cohesion": 1
+      },
+      {
+        "name": "eval",
+        "patterns": [
+          "eval/**/*"
+        ],
+        "fileIds": [
+          "file:a643e92c485a"
+        ],
+        "symbolCount": 0,
+        "internalRelations": 0,
+        "externalRelations": 0,
+        "cohesion": 1
+      }
+    ],
+    "dependencies": [
+      {
+        "from": "retrieval",
+        "to": "brain",
+        "count": 81,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "core",
+        "count": 50,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "session",
+        "count": 48,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "analysis",
+        "to": "brain",
+        "count": 44,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS",
+          "TESTS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "brain",
+        "count": 39,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "session",
+        "count": 32,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "retrieval",
+        "to": "core",
+        "count": 30,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "orchestration",
+        "to": "core",
+        "count": 26,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "storage",
+        "count": 24,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "orchestration",
+        "to": "brain",
+        "count": 24,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "project",
+        "to": "analysis",
+        "count": 19,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "orchestration",
+        "to": "models",
+        "count": 17,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "analysis",
+        "count": 15,
+        "relationKinds": [
+          "CALLS",
+          "IMPORTS"
+        ]
+      },
+      {
+        "from": "project",
+        "to": "brain",
+        "count": 15,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "retrieval",
+        "to": "models",
+        "count": 15,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "session",
+        "to": "brain",
+        "count": 14,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "rules",
+        "count": 14,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "analysis",
+        "to": "core",
+        "count": 11,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "models",
+        "count": 11,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "context",
+        "count": 10,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "retrieval",
+        "count": 9,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "rules",
+        "to": "analysis",
+        "count": 8,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "context",
+        "to": "brain",
+        "count": 7,
+        "relationKinds": [
+          "IMPORTS"
+        ]
+      },
+      {
+        "from": "context",
+        "to": "core",
+        "count": 7,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "project",
+        "to": "core",
+        "count": 7,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "retrieval",
+        "to": "orchestration",
+        "count": 7,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "brain",
+        "count": 7,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "orchestration",
+        "to": "analysis",
+        "count": 6,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "analysis",
+        "to": "rules",
+        "count": 5,
+        "relationKinds": [
+          "IMPORTS"
+        ]
+      },
+      {
+        "from": "core",
+        "to": "storage",
+        "count": 5,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "retrieval",
+        "to": "analysis",
+        "count": 5,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "project",
+        "count": 5,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "context",
+        "count": 4,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "models",
+        "count": 4,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "storage",
+        "count": 4,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "core",
+        "count": 4,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "session",
+        "to": "models",
+        "count": 3,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "analysis",
+        "to": "orchestration",
+        "count": 2,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "context",
+        "to": "web",
+        "count": 2,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "orchestration",
+        "to": "retrieval",
+        "count": 2,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "project",
+        "to": "retrieval",
+        "count": 2,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "retrieval",
+        "to": "session",
+        "count": 2,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "retrieval",
+        "to": "web",
+        "count": 2,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "cli",
+        "count": 2,
+        "relationKinds": [
+          "IMPORTS",
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "retrieval",
+        "count": 2,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "cli",
+        "to": "web",
+        "count": 2,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "analysis",
+        "to": "session",
+        "count": 1,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "brain",
+        "to": "core",
+        "count": 1,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "core",
+        "to": "brain",
+        "count": 1,
+        "relationKinds": [
+          "IMPORTS"
+        ]
+      },
+      {
+        "from": "models",
+        "to": "brain",
+        "count": 1,
+        "relationKinds": [
+          "IMPORTS"
+        ]
+      },
+      {
+        "from": "context",
+        "to": "retrieval",
+        "count": 1,
+        "relationKinds": [
+          "IMPORTS"
+        ]
+      },
+      {
+        "from": "rules",
+        "to": "brain",
+        "count": 1,
+        "relationKinds": [
+          "IMPORTS"
+        ]
+      },
+      {
+        "from": "rules",
+        "to": "session",
+        "count": 1,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "analysis",
+        "count": 1,
+        "relationKinds": [
+          "CALLS"
+        ]
+      },
+      {
+        "from": "web",
+        "to": "project",
+        "count": 1,
+        "relationKinds": [
+          "CALLS"
+        ]
+      }
+    ],
+    "circularDeps": [
+      {
+        "modules": [
+          "brain",
+          "core",
+          "brain"
+        ]
+      },
+      {
+        "modules": [
+          "analysis",
+          "rules",
+          "analysis"
+        ]
+      },
+      {
+        "modules": [
+          "orchestration",
+          "analysis",
+          "orchestration"
+        ]
+      },
+      {
+        "modules": [
+          "retrieval",
+          "orchestration",
+          "retrieval"
+        ]
+      },
+      {
+        "modules": [
+          "web",
+          "context",
+          "web"
+        ]
+      },
+      {
+        "modules": [
+          "retrieval",
+          "web",
+          "context",
+          "retrieval"
+        ]
+      },
+      {
+        "modules": [
+          "retrieval",
+          "web",
+          "cli",
+          "retrieval"
+        ]
+      },
+      {
+        "modules": [
+          "retrieval",
+          "web",
+          "cli",
+          "project",
+          "retrieval"
+        ]
+      },
+      {
+        "modules": [
+          "web",
+          "cli",
+          "web"
+        ]
+      },
+      {
+        "modules": [
+          "retrieval",
+          "web",
+          "retrieval"
+        ]
+      }
+    ],
+    "healthScore": {
+      "total": 31,
+      "moduleCohesion": 15,
+      "lowCoupling": 8,
+      "noCircularDeps": 0,
+      "moduleSize": 6,
+      "testCoverage": 2
+    }
+  },
+  "checkResult": {
+    "violations": [
+      {
+        "ruleId": "boundary:web",
+        "severity": "error",
+        "message": "Module \"web\" depends on \"analysis\" (1 relations) — not in allowed: [brain, cli, context, core, models, project, retrieval, session, storage]",
+        "details": "Relation types: CALLS"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: brain → core → brain"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: analysis → rules → analysis"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: orchestration → analysis → orchestration"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: retrieval → orchestration → retrieval"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: web → context → web"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: retrieval → web → context → retrieval"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: retrieval → web → cli → retrieval"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: retrieval → web → cli → project → retrieval"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: web → cli → web"
+      },
+      {
+        "ruleId": "no-circular-deps",
+        "severity": "error",
+        "message": "Circular dependency: retrieval → web → retrieval"
+      },
+      {
+        "ruleId": "max-coupling",
+        "severity": "warning",
+        "message": "Module coupling \"retrieval\" → \"brain\": 81 relations (max: 50)"
+      }
+    ],
+    "errorCount": 11,
+    "warningCount": 1,
+    "score": 31
+  }
+}

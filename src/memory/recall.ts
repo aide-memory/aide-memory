@@ -69,7 +69,7 @@ function keywordScore(memory: Memory, query: string): number {
  * Recall memories relevant to given paths and/or query.
  *
  * Retrieval strategy:
- * 1. Get all active memories from the store
+ * 1. Get all memories from the store (no status filter — file exists = active)
  * 2. Filter by scope matching against provided paths
  * 3. If query provided, boost matches via keyword scoring
  * 4. Sort by layer priority, then by keyword relevance
@@ -77,7 +77,13 @@ function keywordScore(memory: Memory, query: string): number {
  */
 export function recall(store: MemoryStore, query: RecallQuery): RecallResult {
   const limit = query.limit ?? DEFAULT_LIMIT;
-  const allMemories = store.list({ status: 'active' });
+
+  // No status filter — all memories in the store are active
+  const listOptions: { contributor?: string } = {};
+  if (query.contributor) {
+    listOptions.contributor = query.contributor;
+  }
+  const allMemories = store.list(listOptions);
 
   // Filter by layer if specified
   let candidates = query.layers

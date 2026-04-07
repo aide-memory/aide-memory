@@ -215,18 +215,13 @@ describe('FTS5 Search', () => {
     expect(compResults.length).toBe(1);
   });
 
-  // 12. Status filter defaults to 'active'
-  it('search with status filter defaults to active', () => {
-    const mem = store.add({ layer: 'technical', what: 'Archived knowledge about caching' });
-    store.archive(mem.id);
+  // 12. Removed memory not found in search
+  it('search does not find removed memories', () => {
+    const mem = store.add({ layer: 'technical', what: 'Removed knowledge about caching' });
+    store.remove(mem.id);
 
-    // Default search should not find archived memories
-    const activeResults = store.search('caching');
-    expect(activeResults.length).toBe(0);
-
-    // Explicit archived status should find it
-    const archivedResults = store.search('caching', { status: 'archived' });
-    expect(archivedResults.length).toBe(1);
+    const results = store.search('caching');
+    expect(results.length).toBe(0);
   });
 
   // 13. FTS5 index rebuilt correctly via rebuild

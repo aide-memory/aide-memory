@@ -194,16 +194,34 @@ describe('recall', () => {
     expect(result.matched_scopes).toContain('src/components/**');
   });
 
-  it('does not return archived memories', () => {
-    // Archive the skeleton loading memory
+  it('deleted memories do not appear in recall', () => {
+    // Delete the skeleton loading memory
     const all = store.list();
     const skeleton = all.find(m => m.what.includes('Skeleton'));
-    store.archive(skeleton!.id);
+    store.remove(skeleton!.id);
 
     const result = recall(store, {
       paths: ['src/components/dashboard/Sidebar.tsx'],
     });
 
     expect(result.memories.map(m => m.what)).not.toContain('Skeleton loading replaces ALL legacy loaders');
+  });
+
+  it('filters by contributor', () => {
+    const result = recall(store, {
+      contributor: 'meky',
+    });
+
+    // Only the memory explicitly set as contributor: 'meky' should match
+    expect(result.memories.length).toBe(1);
+    expect(result.memories[0].what).toBe('Keep components under 150 lines');
+  });
+
+  it('returns memories with uuid field', () => {
+    const result = recall(store, {});
+    for (const m of result.memories) {
+      expect(m.uuid).toBeTruthy();
+      expect(m.uuid).toMatch(/^[0-9a-f]{8}-/);
+    }
   });
 });

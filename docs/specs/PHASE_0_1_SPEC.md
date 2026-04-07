@@ -14,7 +14,7 @@
 
 | Sprint | Status | Components | Notes |
 |--------|--------|-----------|-------|
-| Sprint 1 | IN PROGRESS | P1.1 Storage, P1.2 Types, P1.3 FTS5, P1.8 Rules | Agents launched |
+| Sprint 1 | IN PROGRESS | P1.1 Storage, P1.2 Types, P1.3 FTS5, P1.8 Rules | P1.3 MERGED, P1.8 MERGED. P1.1+P1.2 running. NOTE: vitest picks up worktree test files — exclude with `--exclude '**/.claude/worktrees/**'` or add to vitest.config.ts. Pre-existing failures: mcp-smoke + e2e-comparison (external tools). |
 | Sprint 2 | PENDING | P1.5 Hooks, P1.6 aide_update, P1.7 CLI, P1.9 Cursor, P1.11 Config, P1.20 Update | Blocked on Sprint 1 |
 | Sprint 3 | PENDING | P1.4 Embeddings, P1.10 Sync, P1.12+P1.13 Analytics | Blocked on Sprint 1 |
 | Sprint 4 | PENDING | P1.14 Init, P1.15 Scan, P1.16 Package, P1.18 Plugin | Blocked on Sprint 2-3 |
