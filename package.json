@@ -4,7 +4,9 @@
   "description": "AIDE V0 - Local project-aware AI coding assistant with graph-based retrieval",
   "main": "dist/cli/index.js",
   "bin": {
-    "aide": "dist/cli/index.js"
+    "aide": "dist/cli/aide-memory.js",
+    "aide-memory": "dist/cli/aide-memory.js",
+    "aide-legacy": "dist/cli/index.js"
   },
   "scripts": {
     "dev": "ts-node src/cli/index.ts",
