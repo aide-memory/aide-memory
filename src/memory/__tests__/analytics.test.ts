@@ -3,6 +3,7 @@ import { Analytics } from '../analytics';
 import { MemoryStore } from '../store';
 import Database from 'better-sqlite3';
 import fs from 'fs';
+import crypto from 'crypto';
 import path from 'path';
 import os from 'os';
 
@@ -185,30 +186,30 @@ describe('Analytics', () => {
 
       // Old memory with 0 recalls = stale
       db.prepare(
-        `INSERT INTO memories (layer, what, status, source, created_at, recalled_count)
-         VALUES ('preferences', 'old never recalled', 'active', 'conversation', ?, 0)`
-      ).run(old);
+        `INSERT INTO memories (uuid, layer, what, contributor, source, created_at, updated_at, recalled_count)
+         VALUES (?, 'preferences', 'old never recalled', 'test', 'conversation', ?, ?, 0)`
+      ).run(crypto.randomUUID(), old, old);
 
       // Old memory with recalls = not stale
       db.prepare(
-        `INSERT INTO memories (layer, what, status, source, created_at, recalled_count)
-         VALUES ('preferences', 'old but recalled', 'active', 'conversation', ?, 5)`
-      ).run(old);
+        `INSERT INTO memories (uuid, layer, what, contributor, source, created_at, updated_at, recalled_count)
+         VALUES (?, 'preferences', 'old but recalled', 'test', 'conversation', ?, ?, 5)`
+      ).run(crypto.randomUUID(), old, old);
 
       // Recent memory with 0 recalls = not stale (too new)
       db.prepare(
-        `INSERT INTO memories (layer, what, status, source, created_at, recalled_count)
-         VALUES ('preferences', 'new never recalled', 'active', 'conversation', ?, 0)`
-      ).run(recent);
+        `INSERT INTO memories (uuid, layer, what, contributor, source, created_at, updated_at, recalled_count)
+         VALUES (?, 'preferences', 'new never recalled', 'test', 'conversation', ?, ?, 0)`
+      ).run(crypto.randomUUID(), recent, recent);
 
       const stats = analytics.getStats();
       expect(stats.staleCount).toBe(1);
     });
 
-    it('excludes archived memories from counts', () => {
-      store.add({ layer: 'preferences', what: 'active one' });
-      const m2 = store.add({ layer: 'preferences', what: 'will be archived' });
-      store.archive(m2.id);
+    it('excludes removed memories from counts', () => {
+      store.add({ layer: 'preferences', what: 'kept one' });
+      const m2 = store.add({ layer: 'preferences', what: 'will be removed' });
+      store.remove(m2.id);
 
       const stats = analytics.getStats();
       expect(stats.totalMemories).toBe(1);

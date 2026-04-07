@@ -90,13 +90,13 @@ export class Analytics {
   getStats(): MemoryStats {
     // Total memories (active only)
     const totalRow = this.db.prepare(
-      "SELECT COUNT(*) as count FROM memories WHERE status = 'active'"
+      "SELECT COUNT(*) as count FROM memories WHERE 1=1"
     ).get() as { count: number };
     const totalMemories = totalRow.count;
 
     // Count by layer (active only)
     const layerRows = this.db.prepare(
-      "SELECT layer, COUNT(*) as count FROM memories WHERE status = 'active' GROUP BY layer"
+      "SELECT layer, COUNT(*) as count FROM memories WHERE 1=1 GROUP BY layer"
     ).all() as { layer: string; count: number }[];
     const byLayer: Record<string, number> = {};
     for (const row of layerRows) {
@@ -105,7 +105,7 @@ export class Analytics {
 
     // Most recalled (top 5, active only)
     const recalledRows = this.db.prepare(
-      "SELECT what, layer, recalled_count FROM memories WHERE status = 'active' AND recalled_count > 0 ORDER BY recalled_count DESC LIMIT 5"
+      "SELECT what, layer, recalled_count FROM memories WHERE 1=1 AND recalled_count > 0 ORDER BY recalled_count DESC LIMIT 5"
     ).all() as { what: string; layer: string; recalled_count: number }[];
     const mostRecalled = recalledRows.map(r => ({
       what: r.what,
@@ -115,7 +115,7 @@ export class Analytics {
 
     // Capture source breakdown (active only)
     const sourceRows = this.db.prepare(
-      "SELECT source, COUNT(*) as count FROM memories WHERE status = 'active' GROUP BY source"
+      "SELECT source, COUNT(*) as count FROM memories WHERE 1=1 GROUP BY source"
     ).all() as { source: string; count: number }[];
     const captureSourceBreakdown: Record<string, number> = {};
     for (const row of sourceRows) {
@@ -125,7 +125,7 @@ export class Analytics {
     // Stale count: active memories with 0 recalls created more than 30 days ago
     const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
     const staleRow = this.db.prepare(
-      "SELECT COUNT(*) as count FROM memories WHERE status = 'active' AND recalled_count = 0 AND created_at < ?"
+      "SELECT COUNT(*) as count FROM memories WHERE 1=1 AND recalled_count = 0 AND created_at < ?"
     ).get(cutoff) as { count: number };
     const staleCount = staleRow.count;
 
