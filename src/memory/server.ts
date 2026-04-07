@@ -100,12 +100,58 @@ export function createServer(store: MemoryStore): McpServer {
     }
   );
 
-  // aide_forget — remove a memory
+  // aide_update — update an existing memory
+  server.tool(
+    'aide_update',
+    'Update an existing memory. Use when information has changed, scope needs adjusting, or context needs updating. You can only update your own memories.',
+    {
+      id: z.number().describe('ID of the memory to update.'),
+      what: z.string().optional().describe('Updated knowledge text.'),
+      why: z.string().optional().describe('Updated context.'),
+      scope: z.string().optional().describe('Updated scope pattern.'),
+      context_label: z.string().optional().describe('Updated feature label.'),
+    },
+    async (params) => {
+      const existing = store.get(params.id);
+
+      if (!existing) {
+        return {
+          content: [{ type: 'text' as const, text: `Memory ${params.id} not found.` }],
+        };
+      }
+
+      const changes: Record<string, string> = {};
+      if (params.what !== undefined) changes.what = params.what;
+      if (params.why !== undefined) changes.why = params.why;
+      if (params.scope !== undefined) changes.scope = params.scope;
+      if (params.context_label !== undefined) changes.context_label = params.context_label;
+
+      if (Object.keys(changes).length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `No changes provided. Current memory:\n- what: ${existing.what}\n- scope: ${existing.scope ?? 'project-wide'}\n- layer: ${existing.layer}`,
+          }],
+        };
+      }
+
+      const updated = store.update(params.id, changes);
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Updated memory ${updated!.id}: "${updated!.what}"${updated!.scope ? ` [${updated!.scope}]` : ' [project-wide]'}`,
+        }],
+      };
+    }
+  );
+
+  // aide_forget — permanently delete a memory
   server.tool(
     'aide_forget',
-    'Remove a memory that is no longer relevant or was wrong. Permanently deletes the memory.',
+    'Permanently delete a memory that is no longer relevant or was incorrect.',
     {
-      id: z.number().describe('The memory ID to forget.'),
+      id: z.number().describe('The memory ID to delete.'),
     },
     async (params) => {
       const existing = store.get(params.id);

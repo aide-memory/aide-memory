@@ -36,10 +36,10 @@ describe('MCP Server', () => {
     if (fs.existsSync(dir)) fs.rmdirSync(dir);
   });
 
-  it('lists all 6 tools', async () => {
+  it('lists all 7 tools', async () => {
     const tools = await client.listTools();
     const names = tools.tools.map(t => t.name).sort();
-    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember', 'aide_search']);
+    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember', 'aide_search', 'aide_update']);
   });
 
   describe('aide_remember + aide_recall', () => {
@@ -333,6 +333,74 @@ describe('MCP Server', () => {
 
       const text = (result.content as any[])[0].text;
       expect(text).toContain('Imported 3 memories');
+    });
+  });
+
+  describe('aide_update', () => {
+    it('updates a memory and returns confirmation', async () => {
+      const addResult = await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'Original text', layer: 'technical' },
+      });
+      const id = parseInt((addResult.content as any[])[0].text.match(/id: (\d+)/)?.[1]);
+
+      const result = await client.callTool({
+        name: 'aide_update',
+        arguments: { id, what: 'Updated text' },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Updated');
+      expect(text).toContain('Updated text');
+    });
+
+    it('returns not found for nonexistent ID', async () => {
+      const result = await client.callTool({
+        name: 'aide_update',
+        arguments: { id: 99999, what: 'test' },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('not found');
+    });
+
+    it('returns unchanged memory when no fields provided', async () => {
+      const addResult = await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'No change test', layer: 'technical' },
+      });
+      const id = parseInt((addResult.content as any[])[0].text.match(/id: (\d+)/)?.[1]);
+
+      const result = await client.callTool({
+        name: 'aide_update',
+        arguments: { id },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('No changes provided');
+    });
+  });
+
+  describe('aide_forget (simplified)', () => {
+    it('deletes a memory permanently', async () => {
+      const addResult = await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'To be deleted', layer: 'technical' },
+      });
+      const id = parseInt((addResult.content as any[])[0].text.match(/id: (\d+)/)?.[1]);
+
+      const result = await client.callTool({
+        name: 'aide_forget',
+        arguments: { id },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Deleted');
+    });
+
+    it('returns not found for nonexistent ID', async () => {
+      const result = await client.callTool({
+        name: 'aide_forget',
+        arguments: { id: 99999 },
+      });
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('not found');
     });
   });
 });
