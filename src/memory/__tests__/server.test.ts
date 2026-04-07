@@ -36,10 +36,10 @@ describe('MCP Server', () => {
     if (fs.existsSync(dir)) fs.rmdirSync(dir);
   });
 
-  it('lists all 6 tools', async () => {
+  it('lists all 7 tools', async () => {
     const tools = await client.listTools();
     const names = tools.tools.map(t => t.name).sort();
-    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember', 'aide_search']);
+    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember', 'aide_search', 'aide_update']);
   });
 
   describe('aide_remember + aide_recall', () => {
@@ -86,33 +86,138 @@ describe('MCP Server', () => {
     });
   });
 
-  describe('aide_forget', () => {
-    it('archives a memory', async () => {
+  describe('aide_update', () => {
+    it('updates memory with valid ID and returns confirmation', async () => {
       await client.callTool({
         name: 'aide_remember',
-        arguments: { what: 'forget me', layer: 'technical' },
+        arguments: { what: 'original text', layer: 'technical', scope: 'src/**' },
       });
 
       const memories = store.list();
       const id = memories[0].id;
 
       const result = await client.callTool({
-        name: 'aide_forget',
-        arguments: { id, mode: 'archive' },
+        name: 'aide_update',
+        arguments: { id, what: 'updated text' },
       });
 
       const text = (result.content as any[])[0].text;
-      expect(text).toContain('Archived');
+      expect(text).toContain('Updated memory');
+      expect(text).toContain('updated text');
 
-      // Should not appear in recall
-      const recallResult = await client.callTool({
-        name: 'aide_recall',
-        arguments: {},
-      });
-      const recallText = (recallResult.content as any[])[0].text;
-      expect(recallText).toContain('No memories found');
+      const updated = store.get(id)!;
+      expect(updated.what).toBe('updated text');
     });
 
+    it('returns not found for nonexistent ID', async () => {
+      const result = await client.callTool({
+        name: 'aide_update',
+        arguments: { id: 9999, what: 'nope' },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('not found');
+    });
+
+    it('returns unchanged memory when no change fields provided', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'keep me', layer: 'preferences' },
+      });
+
+      const memories = store.list();
+      const id = memories[0].id;
+
+      const result = await client.callTool({
+        name: 'aide_update',
+        arguments: { id },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('No changes provided');
+      expect(text).toContain('keep me');
+
+      // Memory unchanged
+      const mem = store.get(id)!;
+      expect(mem.what).toBe('keep me');
+    });
+
+    it('sets updated_at to current time', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'timestamps', layer: 'technical' },
+      });
+
+      const memories = store.list();
+      const id = memories[0].id;
+      const before = new Date().toISOString();
+
+      await client.callTool({
+        name: 'aide_update',
+        arguments: { id, what: 'timestamps v2' },
+      });
+
+      const updated = store.get(id)!;
+      expect(updated.updated_at).not.toBeNull();
+      // updated_at should be recent (within a few seconds)
+      const updatedTime = new Date(updated.updated_at!).getTime();
+      const beforeTime = new Date(before).getTime();
+      expect(updatedTime).toBeGreaterThanOrEqual(beforeTime - 1000);
+      expect(updatedTime).toBeLessThanOrEqual(beforeTime + 5000);
+    });
+
+    it('does not change created_at', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'created time check', layer: 'technical' },
+      });
+
+      const memories = store.list();
+      const id = memories[0].id;
+      const originalCreatedAt = memories[0].created_at;
+
+      await client.callTool({
+        name: 'aide_update',
+        arguments: { id, what: 'modified text' },
+      });
+
+      const updated = store.get(id)!;
+      expect(updated.created_at).toBe(originalCreatedAt);
+    });
+
+    it('updates multiple fields in a single call', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'old what', layer: 'area_context', scope: 'src/old/**', why: 'old why' },
+      });
+
+      const memories = store.list();
+      const id = memories[0].id;
+
+      const result = await client.callTool({
+        name: 'aide_update',
+        arguments: {
+          id,
+          what: 'new what',
+          why: 'new why',
+          scope: 'src/new/**',
+          context_label: 'refactored feature',
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('new what');
+      expect(text).toContain('src/new/**');
+
+      const updated = store.get(id)!;
+      expect(updated.what).toBe('new what');
+      expect(updated.why).toBe('new why');
+      expect(updated.scope).toBe('src/new/**');
+      expect(updated.context_label).toBe('refactored feature');
+    });
+  });
+
+  describe('aide_forget', () => {
     it('deletes a memory permanently', async () => {
       await client.callTool({
         name: 'aide_remember',
@@ -124,12 +229,22 @@ describe('MCP Server', () => {
 
       const result = await client.callTool({
         name: 'aide_forget',
-        arguments: { id, mode: 'delete' },
+        arguments: { id },
       });
 
       const text = (result.content as any[])[0].text;
       expect(text).toContain('Deleted');
       expect(store.get(id)).toBeNull();
+    });
+
+    it('returns not found for nonexistent ID', async () => {
+      const result = await client.callTool({
+        name: 'aide_forget',
+        arguments: { id: 9999 },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('not found');
     });
   });
 

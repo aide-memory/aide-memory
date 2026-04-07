@@ -31,10 +31,10 @@ describe('MCP smoke test (real seeded DB)', () => {
     store.close();
   });
 
-  it('lists all 6 tools', async () => {
+  it('lists all 7 tools', async () => {
     const result = await client.listTools();
     const names = result.tools.map(t => t.name).sort();
-    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember', 'aide_search']);
+    expect(names).toEqual(['aide_forget', 'aide_import', 'aide_memories', 'aide_recall', 'aide_remember', 'aide_search', 'aide_update']);
   });
 
   it('has seeded memories', async () => {
@@ -147,10 +147,10 @@ describe('MCP smoke test (real seeded DB)', () => {
     expect(idMatch).not.toBeNull();
     const id = parseInt(idMatch![1]);
 
-    // Archive it
+    // Delete it
     const forgetResult = await client.callTool({
       name: 'aide_forget',
-      arguments: { id, mode: 'delete' },
+      arguments: { id },
     });
     const forgetText: string = (forgetResult.content as any)[0].text;
     expect(forgetText).toContain('Deleted:');
