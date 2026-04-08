@@ -1,0 +1,63 @@
+Functional Source License, Version 1.1
+
+Copyright 2026 AIDE Memory
+
+Permission is hereby granted to any person obtaining a copy of this software and associated documentation files (the "Software"), subject to the following conditions and restrictions:
+
+TERMS:
+
+1. FUNCTIONAL SOURCE LICENSE
+   This Software is licensed under the Functional Source License, Version 1.1. You may use the Software in its unmodified form only.
+
+2. PERMITTED USES
+   You may:
+   - Use the Software for personal, organizational, or commercial purposes
+   - Install and use the Software on your personal or organizational computers
+   - Use the Software to enhance memory capabilities for AI Coding Agents
+
+3. RESTRICTED USES
+   You may NOT:
+   - Modify, adapt, translate, or create derivative works of the Software
+   - Reverse engineer, decompile, or disassemble the Software
+   - Redistribute, resell, or transfer the Software to third parties
+   - Remove or alter proprietary notices, labels, or marks
+   - Use the Software for commercial distribution or as a service offering without express written permission
+   - Circumvent, bypass, or disable any security features or licensing mechanisms
+
+4. INTELLECTUAL PROPERTY
+   The Software and all intellectual property rights therein remain the exclusive property of AIDE Memory.
+
+5. USER DATA OWNERSHIP
+   You retain full ownership and control of all data created, stored, or processed through the Software.
+
+6. CONVERSION TO APACHE 2.0
+   On the date that is two (2) years after the initial release of this version of the Software, the terms of this Functional Source License shall be superseded by the Apache License, Version 2.0, at which point the Software shall be freely available under the Apache 2.0 license terms.
+
+7. DISCLAIMER OF WARRANTIES
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS, IMPLIED, OR STATUTORY.
+
+8. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL AIDE MEMORY BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR EXEMPLARY DAMAGES.
+
+9. GOVERNING LAW
+   This License shall be governed by and construed in accordance with the laws of California, United States.
+
+For the complete End User License Agreement, see EULA.md in this repository.# aide-memory
+
+**Your AI coding agent forgets everything between sessions.** You correct it, it adjusts, you close the session, and next time it starts from zero. aide-memory fixes this -- persistent, path-scoped memory that captures context automatically via hooks and recalls it exactly when the agent needs it.
+
+```bash
+npx aide-memory init
+```
+
+Two minutes. Zero config. No Docker, no cloud, no API keys.
+
+---
+
+## What It Does
+
+- **Hook-driven capture** -- 4 hooks fire automatically (PreToolUse, Stop, UserPromptSubmit, PreCompact). Your agent stores context without you asking it to. Tested: 0% voluntary adoption vs 100% hook-driven.
+- **Nudge, not dump** -- ~20 token nudge per file read instead of ~2,000 token system prompt injection. The agent decides what is relevant and recalls only that.
+- **Path-scoped recall** -- memories are tied to code paths via glob patterns. A memory about checkout code surfaces in checkout files, not everywhere.
+- **File-per-memory storage** -- each memory is a human-readable JSON file in `.aide/memories/`. Browsable, diffable, version-controlled.
+- **Git is the sync** -- memories ar
