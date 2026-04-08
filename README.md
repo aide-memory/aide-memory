@@ -13,256 +13,256 @@ Two minutes. Zero config. No Docker, no cloud, no API keys.
 ## What It Does
 
 - **Hook-driven capture** -- 4 hooks fire automatically (PreToolUse, Stop, UserPromptSubmit, PreCompact). Your agent stores context without you asking it to. Tested: 0% voluntary adoption vs 100% hook-driven.
-- - **Nudge, not dump** -- ~20 token nudge per file read instead of ~2,000 token system prompt injection. The agent decides what is relevant and recalls only that.
-  - - **Path-scoped recall** -- memories are tied to code paths via glob patterns. A memory about checkout code surfaces in checkout files, not everywhere.
-    - - **File-per-memory storage** -- each memory is a human-readable JSON file in `.aide/memories/`. Browsable, diffable, version-controlled.
-      - - **Git is the sync** -- memories are files, files are committed, git syncs them. No separate sync mechanism needed.
-        - - **Structured layers** -- preferences, technical, area context, guidelines. Recalled in priority order so the agent gets the most important context first.
-          - - **FTS5 search** -- BM25-ranked full-text search across all memories. Sub-millisecond path lookups.
-            - - **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both.
-             
-              - ---
+- **Nudge, not dump** -- ~20 token nudge per file read instead of ~2,000 token system prompt injection. The agent decides what is relevant and recalls only that.
+- **Path-scoped recall** -- memories are tied to code paths via glob patterns. A memory about checkout code surfaces in checkout files, not everywhere.
+- **File-per-memory storage** -- each memory is a human-readable JSON file in `.aide/memories/`. Browsable, diffable, version-controlled.
+- **Git is the sync** -- memories are files, files are committed, git syncs them. No separate sync mechanism needed.
+- **Structured layers** -- preferences, technical, area context, guidelines. Recalled in priority order so the agent gets the most important context first.
+- **FTS5 search** -- BM25-ranked full-text search across all memories. Sub-millisecond path lookups.
+- **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both.
 
-              ## Quick Start
+---
 
-              ### 1. Initialize
+## Quick Start
 
-              ```bash
-              npx aide-memory init
-              ```
+### 1. Initialize
 
-              Creates `.aide/memories/`, installs 4 hooks, writes editor rules, configures the MCP server.
+```bash
+npx aide-memory init
+```
 
-              ### 2. Store a memory
+Creates `.aide/memories/`, installs 4 hooks, writes editor rules, configures the MCP server.
 
-              ```bash
-              aide-memory remember "API responses must use camelCase keys" --layer guidelines
-              ```
+### 2. Store a memory
 
-              Or let the hooks capture context automatically as you work -- corrections, planning decisions, and session reflections are stored without manual intervention.
+```bash
+aide-memory remember "API responses must use camelCase keys" --layer guidelines
+```
 
-              ### 3. Recall by path
+Or let the hooks capture context automatically as you work -- corrections, planning decisions, and session reflections are stored without manual intervention.
 
-              ```bash
-              aide-memory recall src/auth/
-              ```
+### 3. Recall by path
 
-              Returns memories scoped to that path, plus project-wide context. Your agent does this automatically via the PreToolUse hook whenever it reads a file.
+```bash
+aide-memory recall src/auth/
+```
 
-              ### 4. Search across memories
+Returns memories scoped to that path, plus project-wide context. Your agent does this automatically via the PreToolUse hook whenever it reads a file.
 
-              ```bash
-              aide-memory search "authentication"
-              ```
+### 4. Search across memories
 
-              FTS5 BM25-ranked keyword search, grouped by layer.
+```bash
+aide-memory search "authentication"
+```
 
-              ### 5. Inspect
+FTS5 BM25-ranked keyword search, grouped by layer.
 
-              ```bash
-              aide-memory stats
-              ```
+### 5. Inspect
 
-              See totals by layer, most-recalled memories, capture source breakdown, and stale candidates.
+```bash
+aide-memory stats
+```
 
-              ---
+See totals by layer, most-recalled memories, capture source breakdown, and stale candidates.
 
-              ## How It Works
+---
 
-              ### Hooks drive everything
+## How It Works
 
-              | Hook | When it fires | What it does | Token cost |
-              |------|--------------|--------------|------------|
-              | **PreToolUse** | Before file reads | Nudges: "N memories exist for this path" | ~20 tokens |
-              | **Stop** | Task completion | Prompts agent to reflect and store learnings | Hidden |
-              | **UserPromptSubmit** | User corrects agent | Detects correction patterns, stores scoped memory | Hidden |
-              | **PreCompact** | Before context compaction | Extracts planning decisions before context is lost | Hidden |
+### Hooks drive everything
 
-              All hooks use `additionalContext` -- invisible to you. Memory management happens silently in the background.
+| Hook | When it fires | What it does | Token cost |
+|------|--------------|--------------|------------|
+| **PreToolUse** | Before file reads | Nudges: "N memories exist for this path" | ~20 tokens |
+| **Stop** | Task completion | Prompts agent to reflect and store learnings | Hidden |
+| **UserPromptSubmit** | User corrects agent | Detects correction patterns, stores scoped memory | Hidden |
+| **PreCompact** | Before context compaction | Extracts planning decisions before context is lost | Hidden |
 
-              ### Storage: file-per-memory with SQLite cache
+All hooks use `additionalContext` -- invisible to you. Memory management happens silently in the background.
 
-              ```
-              .aide/
-              ├── memories/
-              │   ├── preferences/
-              │   │   ├── personal/          # gitignored -- your private preferences
-              │   │   └── shared/            # tracked -- team-visible preferences
-              │   ├── technical/             # tracked -- stack and integration facts
-              │   ├── area_context/          # tracked -- decisions for specific code areas
-              │   └── guidelines/            # tracked -- team and project principles
-              ├── config.json                # local configuration
-              └── cache/
-                  └── memory.db              # SQLite cache (rebuildable, gitignored)
-              ```
+### Storage: file-per-memory with SQLite cache
 
-              Each memory is a single JSON file:
+```
+.aide/
+├── memories/
+│   ├── preferences/
+│   │   ├── personal/          # gitignored -- your private preferences
+│   │   └── shared/            # tracked -- team-visible preferences
+│   ├── technical/             # tracked -- stack and integration facts
+│   ├── area_context/          # tracked -- decisions for specific code areas
+│   └── guidelines/            # tracked -- team and project principles
+├── config.json                # local configuration
+└── cache/
+    └── memory.db              # SQLite cache (rebuildable, gitignored)
+```
 
-              ```json
-              {
-                "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                "layer": "technical",
-                "what": "Apollo needs useGraphQLGateway: true for federation",
-                "why": "Without this flag, subgraph queries silently fail",
-                "scope": "src/graphql/**",
-                "contributor": "ahmed",
-                "tags": ["api-contracts", "graphql"],
-                "shared": true
-              }
-              ```
+Each memory is a single JSON file:
 
-              SQLite is a rebuildable cache. Delete it and it reconstructs from the JSON files. The JSON files are the source of truth.
+```json
+{
+  "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "layer": "technical",
+  "what": "Apollo needs useGraphQLGateway: true for federation",
+  "why": "Without this flag, subgraph queries silently fail",
+  "scope": "src/graphql/**",
+  "contributor": "ahmed",
+  "tags": ["api-contracts", "graphql"],
+  "shared": true
+}
+```
 
-              ### Recall: three tiers
+SQLite is a rebuildable cache. Delete it and it reconstructs from the JSON files. The JSON files are the source of truth.
 
-              1. **Path match** -- glob pattern lookup (sub-millisecond, deterministic)
-              2. 2. **FTS5** -- BM25-ranked keyword search for cross-cutting queries
-                 3. 3. **Embeddings** -- cosine similarity via local model for semantic fallback (no API keys)
-                   
-                    4. Path inheritance: a memory scoped to `src/**` surfaces for `src/checkout/CartSummary.tsx`. A memory scoped to `src/checkout/**` surfaces only in checkout code.
-                   
-                    5. ### Sync via git
-                   
-                    6. Memories are files. Commit them, push them, pull them. A `post-checkout` hook automatically imports new or changed memories after `git pull` or branch switches. Conflicts resolve by timestamp -- newer wins.
-                   
-                    7. ---
-                   
-                    8. ## CLI Commands
-                   
-                    9. All commands use the `aide-memory` binary (aliased as `aide`).
-                   
-                    10. | Command | Description |
-                    11. |---------|-------------|
-                    12. | `init [--scan] [--update-rules]` | Create `.aide/`, install hooks, write editor rules, configure MCP |
-                    13. | `recall <path>` | Recall memories scoped to a file or directory path |
-                    14. | `remember <what>` | Store a memory with `--layer`, `--scope`, `--tags`, `--why` |
-                    15. | `update <id>` | Update an existing memory's content, scope, or context |
-                    16. | `forget <id>` | Permanently delete a memory |
-                    17. | `search <query>` | FTS5 keyword search with BM25 ranking |
-                    18. | `list` | List memories with `--layer`, `--scope`, `--contributor`, `--tag` filters |
-                    19. | `stats` | Show analytics: counts by layer, most recalled, stale candidates |
-                    20. | `config <key> [value]` | Get or set configuration (dot-notation keys) |
-                    21. | `sync import` | Rebuild SQLite cache from JSON memory files |
-                    22. | `sync export` | Ensure all memories have corresponding JSON files |
-                   
-                    23. Use `--scan` with `init` to generate initial memories from your project structure, stack detection, and config files.
-                   
-                    24. ---
-                   
-                    25. ## MCP Tools
-                   
-                    26. Seven tools exposed to your AI agent (~1,400 tokens total schema -- GitHub MCP is 54K for comparison):
-                   
-                    27. | Tool | Description |
-                    28. |------|-------------|
-                    29. | `aide_recall` | Path-scoped memory retrieval with glob inheritance |
-                    30. | `aide_remember` | Store a new memory with layer, scope, tags, and context |
-                    31. | `aide_update` | Edit an existing memory's content or scope |
-                    32. | `aide_forget` | Permanently delete a memory |
-                    33. | `aide_search` | FTS5 keyword search, results grouped by layer |
-                    34. | `aide_memories` | List memories with count and filter support |
-                    35. | `aide_import` | Import from markdown bullet/numbered lists into any layer |
-                   
-                    36. ---
-                   
-                    37. ## Configuration
-                   
-                    38. Configuration lives in `.aide/config.json`. Manage via CLI:
-                   
-                    39. ```bash
-                        aide-memory config capture.enabled          # read
-                        aide-memory config capture.enabled false    # write
-                        ```
+### Recall: three tiers
 
-                        | Key | Default | Description |
-                        |-----|---------|-------------|
-                        | `capture.enabled` | `true` | Enable/disable all automatic hook capture |
-                        | `capture.hooks.preToolUse` | `true` | PreToolUse hook (nudge on file read) |
-                        | `capture.hooks.stop` | `true` | Stop hook (reflection on task completion) |
-                        | `capture.hooks.userPromptSubmit` | `true` | UserPromptSubmit hook (correction detection) |
-                        | `capture.hooks.preCompact` | `true` | PreCompact hook (save before compaction) |
-                        | `tags.presets` | `[architecture, testing, security, style, performance, api-contracts]` | Available tags for memory categorization |
+1. **Path match** -- glob pattern lookup (sub-millisecond, deterministic)
+2. **FTS5** -- BM25-ranked keyword search for cross-cutting queries
+3. **Embeddings** -- cosine similarity via local model for semantic fallback (no API keys)
 
-                        ---
+Path inheritance: a memory scoped to `src/**` surfaces for `src/checkout/CartSummary.tsx`. A memory scoped to `src/checkout/**` surfaces only in checkout code.
 
-                        ## Comparison with Alternatives
+### Sync via git
 
-                        ### vs. claude-mem
+Memories are files. Commit them, push them, pull them. A `post-checkout` hook automatically imports new or changed memories after `git pull` or branch switches. Conflicts resolve by timestamp -- newer wins.
 
-                        [claude-mem](https://github.com/nicobailon/claude-mem) dumps all memories into the system prompt on every interaction (~2,000 tokens of overhead regardless of relevance). No path scoping -- every memory surfaces everywhere. No hooks -- relies on the agent voluntarily saving context, which in testing has a 0% adoption rate without explicit prompting.
+---
 
-                        aide-memory uses a ~20 token nudge per file read, path-scoped recall so only relevant memories surface, and hook-driven capture that works without agent cooperation.
+## CLI Commands
 
-                        ### vs. engram
+All commands use the `aide-memory` binary (aliased as `aide`).
 
-                        [engram](https://github.com/cline/engram) stores memories as flat key-value pairs with no structural awareness of your codebase. No glob-based path scoping, no layered priority (preferences vs. technical vs. guidelines), no hook integration for automatic capture. Memories are workspace-global -- you cannot scope a memory to `src/auth/**` and have it surface only when working in auth code.
+| Command | Description |
+|---------|-------------|
+| `init [--scan] [--update-rules]` | Create `.aide/`, install hooks, write editor rules, configure MCP |
+| `recall <path>` | Recall memories scoped to a file or directory path |
+| `remember <what>` | Store a memory with `--layer`, `--scope`, `--tags`, `--why` |
+| `update <id>` | Update an existing memory's content, scope, or context |
+| `forget <id>` | Permanently delete a memory |
+| `search <query>` | FTS5 keyword search with BM25 ranking |
+| `list` | List memories with `--layer`, `--scope`, `--contributor`, `--tag` filters |
+| `stats` | Show analytics: counts by layer, most recalled, stale candidates |
+| `config <key> [value]` | Get or set configuration (dot-notation keys) |
+| `sync import` | Rebuild SQLite cache from JSON memory files |
+| `sync export` | Ensure all memories have corresponding JSON files |
 
-                        aide-memory provides four structured layers, path-scoped recall with glob inheritance, and automatic capture via editor hooks.
+Use `--scan` with `init` to generate initial memories from your project structure, stack detection, and config files.
 
-                        ### What we share
+---
 
-                        All three tools solve the same core problem: AI agents forget between sessions. The key architectural difference is **how memories are selected for recall**. Flat stores surface everything or nothing. Path-scoped stores surface what is relevant to the code you are working in right now.
+## MCP Tools
 
-                        ---
+Seven tools exposed to your AI agent (~1,400 tokens total schema -- GitHub MCP is 54K for comparison):
 
-                        ## Editor Setup
+| Tool | Description |
+|------|-------------|
+| `aide_recall` | Path-scoped memory retrieval with glob inheritance |
+| `aide_remember` | Store a new memory with layer, scope, tags, and context |
+| `aide_update` | Edit an existing memory's content or scope |
+| `aide_forget` | Permanently delete a memory |
+| `aide_search` | FTS5 keyword search, results grouped by layer |
+| `aide_memories` | List memories with count and filter support |
+| `aide_import` | Import from markdown bullet/numbered lists into any layer |
 
-                        ### Claude Code
+---
 
-                        `aide-memory init` automatically:
-                        - Writes `.claude/rules/aide-memory.md` (agent instructions)
-                        - - Configures hooks in Claude Code settings
-                          - - Sets up the MCP server
-                           
-                            - ### Cursor
-                           
-                            - `aide-memory init` automatically:
-                            - - Writes `.cursor/rules/aide-memory.mdc` (with MDC frontmatter)
-                              - - Configures MCP server in `.cursor/mcp.json`
-                               
-                                - ---
+## Configuration
 
-                                ## Requirements
+Configuration lives in `.aide/config.json`. Manage via CLI:
 
-                                - **Node.js 18+**
-                                - - **npm or npx**
-                                  - - **Claude Code or Cursor** (for hook integration)
-                                   
-                                    - No Docker. No external databases. No API keys. No cloud accounts.
-                                   
-                                    - ---
+```bash
+aide-memory config capture.enabled          # read
+aide-memory config capture.enabled false    # write
+```
 
-                                    ## Test Status
+| Key | Default | Description |
+|-----|---------|-------------|
+| `capture.enabled` | `true` | Enable/disable all automatic hook capture |
+| `capture.hooks.preToolUse` | `true` | PreToolUse hook (nudge on file read) |
+| `capture.hooks.stop` | `true` | Stop hook (reflection on task completion) |
+| `capture.hooks.userPromptSubmit` | `true` | UserPromptSubmit hook (correction detection) |
+| `capture.hooks.preCompact` | `true` | PreCompact hook (save before compaction) |
+| `tags.presets` | `[architecture, testing, security, style, performance, api-contracts]` | Available tags for memory categorization |
 
-                                    - **544 tests passing** across 21 test files
-                                    - - **0 TypeScript errors**
-                                      - - 7 MCP tools, 11 CLI commands, 4 hooks -- all verified end-to-end
-                                       
-                                        - ---
+---
 
-                                        ## Contributing
+## Comparison with Alternatives
 
-                                        Contributions welcome. Please open an issue first to discuss what you would like to change.
+### vs. claude-mem
 
-                                        ```bash
-                                        git clone https://github.com/aide-memory/aide-memory.git
-                                        cd aide-memory
-                                        npm install
-                                        npm test
-                                        ```
+[claude-mem](https://github.com/nicobailon/claude-mem) dumps all memories into the system prompt on every interaction (~2,000 tokens of overhead regardless of relevance). No path scoping -- every memory surfaces everywhere. No hooks -- relies on the agent voluntarily saving context, which in testing has a 0% adoption rate without explicit prompting.
 
-                                        ---
+aide-memory uses a ~20 token nudge per file read, path-scoped recall so only relevant memories surface, and hook-driven capture that works without agent cooperation.
 
-                                        ## License
+### vs. engram
 
-                                        See [LICENSE](LICENSE) for details.
+[engram](https://github.com/cline/engram) stores memories as flat key-value pairs with no structural awareness of your codebase. No glob-based path scoping, no layered priority (preferences vs. technical vs. guidelines), no hook integration for automatic capture. Memories are workspace-global -- you cannot scope a memory to `src/auth/**` and have it surface only when working in auth code.
 
-                                        ---
+aide-memory provides four structured layers, path-scoped recall with glob inheritance, and automatic capture via editor hooks.
 
-                                        ## Documentation
+### What we share
 
-                                        - [CLI Reference](docs/user/cli-reference.md) -- all 11 commands with flags, examples, and error messages
-                                        - - [MCP Tools Reference](docs/user/mcp-tools.md) -- all 7 tools with parameters and example calls
-                                          - - [Architecture Guide](docs/user/architecture.md) -- storage, hooks, recall, and sync internals
-                                            - - [Configuration Guide](docs/user/configuration.md) -- all settings with defaults
-                                              - - [FAQ](docs/user/faq.md) -- common questions and troubleshooting
+All three tools solve the same core problem: AI agents forget between sessions. The key architectural difference is **how memories are selected for recall**. Flat stores surface everything or nothing. Path-scoped stores surface what is relevant to the code you are working in right now.
+
+---
+
+## Editor Setup
+
+### Claude Code
+
+`aide-memory init` automatically:
+- Writes `.claude/rules/aide-memory.md` (agent instructions)
+- Configures hooks in Claude Code settings
+- Sets up the MCP server
+
+### Cursor
+
+`aide-memory init` automatically:
+- Writes `.cursor/rules/aide-memory.mdc` (with MDC frontmatter)
+- Configures MCP server in `.cursor/mcp.json`
+
+---
+
+## Requirements
+
+- **Node.js 18+**
+- **npm or npx**
+- **Claude Code or Cursor** (for hook integration)
+
+No Docker. No external databases. No API keys. No cloud accounts.
+
+---
+
+## Test Status
+
+- **544 tests passing** across 21 test files
+- **0 TypeScript errors**
+- 7 MCP tools, 11 CLI commands, 4 hooks -- all verified end-to-end
+
+---
+
+## Contributing
+
+Contributions welcome. Please open an issue first to discuss what you would like to change.
+
+```bash
+git clone https://github.com/aide-memory/aide-memory.git
+cd aide-memory
+npm install
+npm test
+```
+
+---
+
+## License
+
+See [LICENSE](LICENSE) for details.
+
+---
+
+## Documentation
+
+- [CLI Reference](docs/user/cli-reference.md) -- all 11 commands with flags, examples, and error messages
+- [MCP Tools Reference](docs/user/mcp-tools.md) -- all 7 tools with parameters and example calls
+- [Architecture Guide](docs/user/architecture.md) -- storage, hooks, recall, and sync internals
+- [Configuration Guide](docs/user/configuration.md) -- all settings with defaults
+- [FAQ](docs/user/faq.md) -- common questions and troubleshooting
