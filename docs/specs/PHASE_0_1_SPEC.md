@@ -209,25 +209,55 @@ VALIDATION — 5 SCENARIOS IN CLAUDE CODE
 ============================
 
 Setup first:
-1. mkdir -p /tmp/aide-val && cd /tmp/aide-val
-2. git init && git config user.name "test-user" && git config user.email "test@test.com"
-3. npm init -y
-4. echo '{"compilerOptions":{"strict":true,"target":"ES2020","module":"commonjs","outDir":"dist","rootDir":"src"}}' > tsconfig.json
-5. mkdir -p src/components src/api src/auth src/utils
-6. Create src/components/Button.tsx:
+1. Make aide-memory command available globally:
+   cd /Users/meky/code/aide-v0 && npm link
+   (This makes `aide` and `aide-memory` available as commands — no more long node dist/ paths)
+
+2. Create a realistic test project:
+   mkdir -p /tmp/aide-val && cd /tmp/aide-val
+   git init && git config user.name "test-user" && git config user.email "test@test.com"
+   npm init -y
+   npm install dayjs typescript --save
+   echo '{"compilerOptions":{"strict":true,"target":"ES2020","module":"commonjs","jsx":"react-jsx","outDir":"dist","rootDir":"src"}}' > tsconfig.json
+
+3. Create realistic project structure:
+   mkdir -p src/components src/api src/auth src/utils src/__tests__
+
+4. Create src/components/Button.tsx:
    export const Button = ({ label, onClick }: { label: string; onClick: () => void }) => {
      return <button onClick={onClick}>{label}</button>;
    };
-7. Create src/api/routes.ts:
+
+5. Create src/api/routes.ts:
+   import { authMiddleware } from '../auth/middleware';
    export function getUsers() { return []; }
    export function getUser(id: string) { return { id }; }
-8. Create src/auth/middleware.ts:
-   export function authMiddleware(req: any, res: any, next: any) { next(); }
-9. Create src/utils/dates.ts:
+   export function createUser(data: any) { return { ...data, id: '1' }; }
+
+6. Create src/auth/middleware.ts:
+   export function authMiddleware(req: any, res: any, next: any) {
+     const token = req.headers?.authorization?.split(' ')[1];
+     if (!token) { res.status(401).json({ error: 'Unauthorized' }); return; }
+     next();
+   }
+
+7. Create src/utils/dates.ts:
    import dayjs from 'dayjs';
    export const formatDate = (d: Date) => dayjs(d).format('YYYY-MM-DD');
-10. Run: node /Users/meky/code/aide-v0/dist/cli/aide-memory.js init
-11. Verify .aide/ directory exists
+   export const isRecent = (d: Date) => dayjs().diff(dayjs(d), 'day') < 7;
+
+8. Create src/__tests__/dates.test.ts:
+   import { describe, it, expect } from 'vitest';
+   import { formatDate } from '../utils/dates';
+   describe('formatDate', () => {
+     it('formats a date', () => { expect(formatDate(new Date('2026-01-15'))).toBe('2026-01-15'); });
+   });
+
+9. Initialize aide-memory:
+   aide-memory init
+   (If `aide-memory` command not found, fall back to: aide-memory init)
+
+10. Verify .aide/ directory exists with memories/ subdirectories
 
 For EACH scenario below:
 - Open a NEW terminal tab
@@ -293,9 +323,9 @@ SCORING:
 
 SCENARIO 4 — Proactive Discovery:
 First, seed context (run in terminal, NOT in Claude Code):
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "The DataTable component uses server-side pagination via API — never implement client-side pagination as it breaks with large datasets" --layer area_context --scope "src/components/**" --tags "architecture"
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "All API routes must validate input using zod schemas before processing" --layer guidelines --scope "src/api/**" --tags "api-contract"
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Auth middleware checks JWT tokens — always call authMiddleware before route handlers" --layer technical --scope "src/auth/**" --tags "security"
+aide-memory remember "The DataTable component uses server-side pagination via API — never implement client-side pagination as it breaks with large datasets" --layer area_context --scope "src/components/**" --tags "architecture"
+aide-memory remember "All API routes must validate input using zod schemas before processing" --layer guidelines --scope "src/api/**" --tags "api-contract"
+aide-memory remember "Auth middleware checks JWT tokens — always call authMiddleware before route handlers" --layer technical --scope "src/auth/**" --tags "security"
 
 Session 1:
 1. "Create a new DataTable component at src/components/DataTable.tsx with columns for name, email, and role. Add sorting and filtering."
@@ -315,11 +345,11 @@ rm -rf /tmp/aide-val-without/.aide
 
 Seed 5 memories in aide-val-with (run in terminal):
 cd /tmp/aide-val-with
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "This project uses a custom auth middleware — always import from src/auth/middleware" --layer technical
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Components should be functional with hooks, no class components" --layer guidelines --scope "src/components/**"
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "API routes follow RESTful conventions: GET for read, POST for create, PUT for update, DELETE for remove" --layer guidelines --scope "src/api/**"
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "All date operations use dayjs, never moment.js or native Date arithmetic" --layer technical
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Test files go in __tests__/ directories next to the code they test, using vitest" --layer guidelines --tags "testing"
+aide-memory remember "This project uses a custom auth middleware — always import from src/auth/middleware" --layer technical
+aide-memory remember "Components should be functional with hooks, no class components" --layer guidelines --scope "src/components/**"
+aide-memory remember "API routes follow RESTful conventions: GET for read, POST for create, PUT for update, DELETE for remove" --layer guidelines --scope "src/api/**"
+aide-memory remember "All date operations use dayjs, never moment.js or native Date arithmetic" --layer technical
+aide-memory remember "Test files go in __tests__/ directories next to the code they test, using vitest" --layer guidelines --tags "testing"
 
 Session A (WITH memories — in /tmp/aide-val-with):
 1. "Create a new API endpoint at src/api/products.ts for CRUD operations on products, with proper auth and validation"
@@ -344,7 +374,7 @@ NOTE: Cursor may need reactivation. SKIP this section for now.
 After user confirms Cursor is ready, come back and run:
 1. Open Cursor, open /tmp/aide-val project
 2. Verify aide-memory MCP server is configured in .cursor/mcp.json:
-   { "mcpServers": { "aide-memory": { "command": "node", "args": ["/Users/meky/code/aide-v0/dist/memory/server.js", "/tmp/aide-val"] } } }
+   { "mcpServers": { "aide-memory": { "command": "aide-memory", "args": ["serve", "/tmp/aide-val"] } } }
 3. Verify .cursor/rules/aide-memory.mdc exists
 4. Use Cursor's agent/composer mode
 5. Run same 5 scenarios with same prompts and scoring
@@ -358,27 +388,28 @@ DEMO RECORDINGS
 After validation is complete, I will start screen recording. When I say "go":
 
 Demo 1 — Init (30s):
-cd /tmp/aide-demo && mkdir demo-project && cd demo-project && git init
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js init --scan
+Use the validation project /tmp/aide-val (already has realistic structure).
+Or create a fresh one: git clone a small open-source repo, then:
+aide-memory init --scan
 (pause 2s between commands)
 
 Demo 2 — Remember + Recall (45s):
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Always use composition over inheritance" --layer guidelines
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Auth uses JWT tokens" --layer technical --scope "src/auth/**"
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js recall src/auth/
+aide-memory remember "Always use composition over inheritance" --layer guidelines
+aide-memory remember "Auth uses JWT tokens" --layer technical --scope "src/auth/**"
+aide-memory recall src/auth/
 (pause 2s between)
 
 Demo 3 — Search (30s):
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js search "authentication"
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js list --layer technical
+aide-memory search "authentication"
+aide-memory list --layer technical
 (pause 2s between)
 
 Demo 4 — Stats (20s):
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js stats
+aide-memory stats
 
 Demo 5 — Config (20s):
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js config capture.enabled
-node /Users/meky/code/aide-v0/dist/cli/aide-memory.js config tags.presets
+aide-memory config capture.enabled
+aide-memory config tags.presets
 
 ============================
 RESULTS & REPORTING
