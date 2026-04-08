@@ -389,6 +389,14 @@ After validation passes:
    - changelog.com/submit
    - Product Hunt (create project page)
 4. Save all submission URLs and processes to /Users/meky/code/aide-v0/docs/marketing/PUBLISHING_GUIDE.md
+
+============================
+CHECKLIST UPDATE
+============================
+
+After completing EACH task above, update the checklist in this file (/Users/meky/code/aide-v0/docs/specs/PHASE_0_1_SPEC.md).
+Find the matching "- [ ]" checkbox under the corresponding P0.X or P1.X section and change it to "- [x]".
+Do this after each task completes, not all at the end. This keeps the spec as a live progress tracker.
 ```
 
 **Checklist after Cowork completes:**
