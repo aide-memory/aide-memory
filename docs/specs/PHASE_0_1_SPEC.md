@@ -210,189 +210,315 @@ Each doc should be self-contained, with code examples and expected output.
 - [ ] Any issues documented
 
 #### P1.17 — Pre-ship Validation (COWORK — 5 scenarios)
-Run each in BOTH Claude Code and Cursor. Use general coding tasks — agent should NOT know it's being tested for memory. All scenarios should use a worktree/temp project to avoid issues with main tree.
+Included in the master Cowork prompt below. See "MASTER COWORK PROMPT" section.
 
-**Cowork prompt (paste this — Cowork handles everything, reports findings):**
-```
-You are running pre-ship validation for AIDE Memory. Do ALL of the following:
-
-SETUP:
-1. Create a temp project: mkdir -p /tmp/aide-test && cd /tmp/aide-test && git init && git config user.name "test-user" && npm init -y
-2. Run: node /Users/meky/code/aide-v0/dist/cli/aide-memory.js init --scan
-3. Verify .aide/ directory created with memories
-
-CLAUDE CODE VALIDATION (5 scenarios — run each in a separate Claude Code session):
-
-For EACH scenario: open a NEW terminal, cd /tmp/aide-test, start `claude`, run the scenario, then save the full transcript to /Users/meky/code/aide-v0/docs/validation/scenario-N-cc.md
-
-Scenario 1 — Style continuity:
-- Session 1: Ask Claude to create a React component. Correct it 3 times: "keep files under 100 lines", "use camelCase not PascalCase for variables", "prefer named exports"
-- Session 2 (new claude session): Ask Claude to create a DIFFERENT React component in a different directory
-- Record: did it follow the 3 corrections without being told?
-
-Scenario 2 — Planning persistence:
-- Session 1: Plan a multi-file refactor: "Let's refactor src/api/ — step 1: extract validators, step 2: add error middleware, step 3: consolidate routes. Constraint: keep backward compat with v1 API"
-- Session 2 (new session): Say "continue the refactor we planned"
-- Record: did it know the plan or start from scratch?
-
-Scenario 3 — Technical knowledge:
-- Session 1: Work on a feature, during which tell Claude "we always use dayjs not moment in this project" and "tests use vitest not jest"
-- Session 2 (new session): Ask Claude to "add date formatting to the user profile component and write tests"
-- Record: did it use dayjs and vitest without being told?
-
-Scenario 4 — Proactive discovery:
-- First: run `node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "The DataTable component uses server-side pagination — do not add client-side pagination" --layer area_context --scope "src/components/**"`
-- Session 1: Ask Claude to "add sorting to the DataTable component"
-- Record: did it mention or respect the server-side pagination constraint?
-
-Scenario 5 — New contributor (with vs without memory):
-- Create two copies of the test project: /tmp/aide-test-with and /tmp/aide-test-without
-- Initialize aide-memory only in aide-test-with, seed 5 memories about the project
-- In BOTH, ask Claude: "fix the test that's failing in src/auth/"
-- Record: quality difference between the two
-
-SCORING (for each scenario):
-- Did agent recall relevant context? (yes/no)
-- Did output reflect recalled context? (yes/partial/no)
-- Measurable quality difference vs bare agent? (yes/no)
-
-After all 5 scenarios, write a summary report to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md with:
-- Pass/fail per scenario
-- Key observations
-- Overall verdict: PASS (ship) or FAIL (fix first)
-- Include relevant transcript excerpts as evidence
-
-CURSOR VALIDATION (repeat the same 5 scenarios):
-- Open Cursor IDE instead of Claude Code terminal
-- Save transcripts to /Users/meky/code/aide-v0/docs/validation/scenario-N-cursor.md
-- Add Cursor results to the same PHASE_1_RESULTS.md report
-```
-
-**Scenario 1 — Style continuity:**
-1. Session 1: Work on a feature. Correct agent's style 3 times (line length, naming, structure)
-2. Session 2: Ask agent to build similar feature in different area
-3. Score: does it follow corrected patterns without being told?
-
-**Scenario 2 — Planning persistence:**
-1. Session 1: Plan a multi-file refactor with specific steps and constraints
-2. Session 2: Say "continue the refactor"
-3. Score: does it know the plan or start from scratch?
-
-**Scenario 3 — Technical knowledge:**
-1. Session 1: Agent discovers a non-obvious convention during work
-2. Session 2: Give general task in same area
-3. Score: does it follow the convention?
-
-**Scenario 4 — Proactive discovery:**
-1. Pre-seed area context for `src/checkout/`
-2. Give agent task: "add pagination to the data table"
-3. Score: does it respect existing architectural decisions?
-
-**Scenario 5 — New contributor sim:**
-1. Populated memory store vs empty store
-2. Same task: "fix the flaky test in src/auth/"
-3. Score: quality difference?
-
-**Scoring rubric per scenario:**
-- Did agent recall relevant context? (yes/no)
-- Did output reflect recalled context? (yes/partial/no)
-- Measurable quality difference vs bare agent? (yes/no)
-
-Document results in `docs/validation/PHASE_1_RESULTS.md`.
 - [ ] 5 scenarios run in Claude Code
 - [ ] 5 scenarios run in Cursor
-- [ ] Results documented
+- [ ] Results documented in `docs/validation/PHASE_1_RESULTS.md`
 - [ ] Decision: PASS (ship) or FAIL (fix issues first)
 
 #### P1.18 — Plugin/Marketplace (COWORK)
-**Cowork prompt:**
-```
-1. Open browser, go to docs.anthropic.com and search for "Claude Code plugin marketplace submission"
-   - If submission process exists, follow the steps to submit aide-memory
-   - If not available yet, note this and move on
-2. Go to cursor.com/marketplace and check if MCP tool listings are supported
-   - If supported, submit aide-memory with description from the public README
-   - If not, note this and move on
-3. Report what you found and what was submitted
-```
+Included in master prompt below.
 - [ ] Claude Code listing submitted (or noted as not yet available)
 - [ ] Cursor listing submitted (or noted as not yet available)
 
 #### P1.19 — Demo Recordings (COWORK + HUMAN)
-Cowork can perform the demo tasks while you screen-record. Or use asciinema for terminal-only captures.
-
-**Cowork prompt for demo execution:**
-```
-I'm going to screen record while you perform these tasks.
-Open Terminal, cd to a test project with aide-memory initialized.
-Execute each demo slowly with 2-second pauses between commands so I can capture clean footage.
-Wait for my "go" before each demo.
-```
-
-Record screen + terminal for each:
-1. **Init** (30s): `aide-memory init` → setup complete
-2. **Auto-capture** (30s): make a correction → memory stored silently
-3. **Nudge + recall** (45s): open file → nudge appears → agent recalls → uses context
-4. **Cross-session** (60s): session 1 teaches → session 2 remembers
-5. **Search** (30s): `aide-memory search "authentication"` → results
-6. **Full flow** (3-5min): init → work → correction → new session → recall → better output
-
-Tools: [asciinema](https://asciinema.org) for terminal, OBS/QuickTime for screen. Convert to GIF with [gifski](https://gif.ski) or [peek](https://github.com/phw/peek).
+Included in master prompt below. You screen-record while Cowork executes demos.
 - [ ] Individual clips recorded (6)
 - [ ] Full flow demo recorded
 - [ ] Converted to GIFs for README/landing page
 
-#### P1.21 — User Documentation (AGENT-ASSISTED)
-See P0.6 above — same agent prompt generates all docs.
-- [ ] All 7 doc pages written
-- [ ] Published to docs site
+#### P1.21 — User Documentation (CLAUDE CODE ✅ DONE)
+8 pages in `docs/user/`. No action needed.
 
-#### Launch Marketing (AGENT-ASSISTED + HUMAN)
+#### Launch Marketing Content (CLAUDE CODE ✅ DONE)
+5 pieces in `docs/marketing/`. Publishing is in the master prompt below.
 
-Content can be drafted by agents, publishing requires human action.
+---
 
-**Agent prompt for blog post:**
+### MASTER COWORK PROMPT
+
+**Paste this entire block into ONE Cowork session. Cowork will run tasks in parallel where possible.**
+
 ```
-Write a launch blog post for AIDE Memory — "Why Your AI Agent Forgets Everything (And How to Fix It)".
-Read docs/PRODUCT_VISION.md (executive summary + problem section) and docs/specs/VERIFICATION_REPORT.md for real data.
-Structure:
-1. The problem (agents reset every session, corrections lost, planning details forgotten)
-2. What existing tools get wrong (claude-mem dumps everything, engram relies on voluntary saving)
-3. How AIDE Memory works (hooks capture, nudge recalls, file-per-memory, git syncs)
-4. Quick start (npx aide-memory init, 2 minutes)
-5. What's next
-Keep it under 1,500 words, conversational tone, include code snippets. No buzzwords.
-Write to /Users/meky/code/aide-v0/docs/marketing/launch-blog-post.md
+You are completing the remaining launch tasks for AIDE Memory. The codebase is at /Users/meky/code/aide-v0 on branch feature/phase-1. Do ALL of the following tasks. Run independent tasks in parallel.
+
+============================
+PHASE 0 TASKS (run in parallel)
+============================
+
+TASK A — Trademark Search:
+1. Open browser, go to tess2.uspto.gov
+2. Click "Basic Word Mark Search"
+3. Search for "AIDE" with International Classes: 009, 042
+4. Screenshot the results page
+5. Look specifically for "AiDE" or "AIDE" related to software/AI platforms
+6. Save summary to /Users/meky/code/aide-v0/docs/legal/trademark-search-results.md
+7. Include: number of results, any conflicts with AI/software tools, risk assessment
+
+TASK B — EULA Draft:
+1. Draft a proprietary freeware EULA for AIDE Memory
+2. Key clauses:
+   - Software is free to use, no account required
+   - No modification, redistribution, or reverse engineering
+   - No warranty, provided "as is"
+   - User owns all their data (memory files, config)
+   - Telemetry: anonymous usage data collected by default, opt-out available
+   - Termination: user can stop using at any time, data remains theirs
+3. Save to /Users/meky/code/aide-v0/docs/legal/EULA.md
+
+TASK C — Terms & Conditions:
+1. Draft Terms & Conditions for aide-memory.dev website
+2. Standard web terms: acceptable use, intellectual property, limitation of liability, privacy (local-first, no data leaves machine on free tier)
+3. Save to /Users/meky/code/aide-v0/docs/legal/TERMS.md
+
+TASK D — GitHub Repo:
+1. Open browser, go to github.com
+2. Create organization "aide-memory" (if it doesn't exist)
+3. Create public repo "aide-memory" with description: "Persistent memory layer for AI coding agents — your agent remembers what you taught it"
+4. Initialize with README
+5. Go to Settings → Features → Issues → Set up templates: add "Bug report" and "Feature request"
+6. Go to Settings → Actions → General → enable GitHub Actions
+
+TASK E — npm Reservation:
+1. Open Terminal
+2. cd /Users/meky/code/aide-v0
+3. Run: npm login (I'll provide credentials when prompted)
+4. Run: cp package.aide-memory.json package.json
+5. Run: npm pack --dry-run
+6. WAIT for my approval before running npm publish
+7. After approval: npm publish --access public
+8. Run: git checkout package.json
+9. Verify at https://www.npmjs.com/package/aide-memory
+
+TASK F — Scaffold Landing Page:
+1. Open Terminal
+2. Run: cd ~/code && npx create-next-app aide-memory-web -e https://github.com/shuding/nextra-docs-template
+3. cd aide-memory-web
+4. The landing page content is at /Users/meky/code/aide-v0/docs/LANDING_PAGE_CONTENT.md — copy it into the Nextra pages
+5. Open browser, go to vercel.com/new → connect aide-memory-web repo → deploy
+6. Go to Cloudflare dashboard → aide-memory.dev → DNS → add CNAME: @ → cname.vercel-dns.com
+7. In Vercel project settings → Domains → add aide-memory.dev
+
+TASK G — Plugin/Marketplace Research:
+1. Open browser, go to docs.anthropic.com, search for "Claude Code plugin marketplace submission"
+   - If process exists, follow it to submit aide-memory
+   - If not available, note this
+2. Go to cursor.com, search for marketplace or MCP tool directory
+   - If supported, submit aide-memory
+   - If not, note this
+3. Save findings to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md
+
+============================
+VALIDATION — 5 SCENARIOS IN CLAUDE CODE
+============================
+
+Setup first:
+1. mkdir -p /tmp/aide-val && cd /tmp/aide-val
+2. git init && git config user.name "test-user" && git config user.email "test@test.com"
+3. npm init -y
+4. echo '{"compilerOptions":{"strict":true,"target":"ES2020","module":"commonjs","outDir":"dist","rootDir":"src"}}' > tsconfig.json
+5. mkdir -p src/components src/api src/auth src/utils
+6. Create src/components/Button.tsx:
+   export const Button = ({ label, onClick }: { label: string; onClick: () => void }) => {
+     return <button onClick={onClick}>{label}</button>;
+   };
+7. Create src/api/routes.ts:
+   export function getUsers() { return []; }
+   export function getUser(id: string) { return { id }; }
+8. Create src/auth/middleware.ts:
+   export function authMiddleware(req: any, res: any, next: any) { next(); }
+9. Create src/utils/dates.ts:
+   import dayjs from 'dayjs';
+   export const formatDate = (d: Date) => dayjs(d).format('YYYY-MM-DD');
+10. Run: node /Users/meky/code/aide-v0/dist/cli/aide-memory.js init
+11. Verify .aide/ directory exists
+
+For EACH scenario below:
+- Open a NEW terminal tab
+- cd /tmp/aide-val
+- Start a Claude Code session: claude
+- Run the session prompts EXACTLY as written
+- After each scenario, save the key findings
+- Between sessions, exit Claude Code and start fresh
+
+SCENARIO 1 — Style Continuity:
+Session 1 prompts (type each, wait for response):
+1. "Create a React component at src/components/UserCard.tsx that displays a user's name, email, and avatar"
+2. After it creates it, say: "No, keep components under 80 lines. Split this into smaller pieces if needed."
+3. After it fixes, say: "Also, always use named exports, not default exports"
+4. After it fixes, say: "One more thing — use camelCase for all variable names, not PascalCase for non-component variables"
+5. Exit Claude Code
+
+Session 2 (NEW session):
+1. "Create a React component at src/components/ProductList.tsx that shows a grid of products with name, price, image, and an add-to-cart button"
+2. OBSERVE: Does it follow the 3 rules (under 80 lines, named exports, camelCase vars) WITHOUT being told?
+3. Exit Claude Code
+
+SCORING:
+- Under 80 lines? (yes/no)
+- Named export? (yes/no)
+- camelCase variables? (yes/no)
+- Were memories recalled? Check aide-memory list output.
+
+SCENARIO 2 — Planning Persistence:
+Session 1:
+1. "Let's plan a refactor of src/api/. Here's what I want: Step 1: Create a validators/ directory and extract input validation. Step 2: Add an error handling middleware at src/api/errorHandler.ts. Step 3: Consolidate all route handlers into a single router. Important constraint: we must maintain backward compatibility with the existing getUsers and getUser exports."
+2. Wait for Claude to acknowledge the plan
+3. "Great, let's start with step 1 — create the validators"
+4. Let it work, then exit Claude Code
+
+Session 2 (NEW session):
+1. "Continue the API refactor we were working on"
+2. OBSERVE: Does it know about step 2 (error handler), step 3 (consolidate), and the backward compat constraint? Or does it ask "what refactor?"
+3. Exit Claude Code
+
+SCORING:
+- Knew about the plan? (yes/no)
+- Knew remaining steps? (yes/partial/no)
+- Remembered backward compat constraint? (yes/no)
+
+SCENARIO 3 — Technical Knowledge:
+Session 1:
+1. "Add a helper function to src/utils/dates.ts that calculates the difference between two dates in days"
+2. After it creates it, say: "We always use dayjs in this project, not moment or native Date math"
+3. Then say: "Also, all tests in this project use vitest, not jest"
+4. "Now write a test for the date difference function"
+5. Exit Claude Code
+
+Session 2 (NEW session):
+1. "Add a function to src/utils/dates.ts that formats a date as a relative time string (e.g., '3 days ago', 'just now') and write tests for it"
+2. OBSERVE: Does it use dayjs (not moment/native)? Does it use vitest (not jest)?
+3. Exit Claude Code
+
+SCORING:
+- Used dayjs? (yes/no)
+- Used vitest? (yes/no)
+- Were technical memories recalled?
+
+SCENARIO 4 — Proactive Discovery:
+First, seed context (run in terminal, NOT in Claude Code):
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "The DataTable component uses server-side pagination via API — never implement client-side pagination as it breaks with large datasets" --layer area_context --scope "src/components/**" --tags "architecture"
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "All API routes must validate input using zod schemas before processing" --layer guidelines --scope "src/api/**" --tags "api-contract"
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Auth middleware checks JWT tokens — always call authMiddleware before route handlers" --layer technical --scope "src/auth/**" --tags "security"
+
+Session 1:
+1. "Create a new DataTable component at src/components/DataTable.tsx with columns for name, email, and role. Add sorting and filtering."
+2. OBSERVE: Does the agent mention server-side pagination or avoid implementing client-side pagination? It should recall the area_context memory.
+3. Exit Claude Code
+
+SCORING:
+- Agent mentioned/respected server-side pagination? (yes/no)
+- PreToolUse nudge appeared? (check terminal output)
+- Agent called aide_recall? (yes/no)
+
+SCENARIO 5 — New Contributor (with vs without):
+Create two project copies:
+cp -r /tmp/aide-val /tmp/aide-val-with
+cp -r /tmp/aide-val /tmp/aide-val-without
+rm -rf /tmp/aide-val-without/.aide
+
+Seed 5 memories in aide-val-with (run in terminal):
+cd /tmp/aide-val-with
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "This project uses a custom auth middleware — always import from src/auth/middleware" --layer technical
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Components should be functional with hooks, no class components" --layer guidelines --scope "src/components/**"
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "API routes follow RESTful conventions: GET for read, POST for create, PUT for update, DELETE for remove" --layer guidelines --scope "src/api/**"
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "All date operations use dayjs, never moment.js or native Date arithmetic" --layer technical
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Test files go in __tests__/ directories next to the code they test, using vitest" --layer guidelines --tags "testing"
+
+Session A (WITH memories — in /tmp/aide-val-with):
+1. "Create a new API endpoint at src/api/products.ts for CRUD operations on products, with proper auth and validation"
+2. Note what it produces
+3. Exit Claude Code
+
+Session B (WITHOUT memories — in /tmp/aide-val-without):
+1. Same prompt: "Create a new API endpoint at src/api/products.ts for CRUD operations on products, with proper auth and validation"
+2. Note what it produces
+3. Exit Claude Code
+
+SCORING:
+- WITH: Used auth middleware import? Used RESTful conventions? Used dayjs if dates needed?
+- WITHOUT: Did it know about these conventions?
+- Quality difference visible? (yes/no, describe)
+
+============================
+CURSOR VALIDATION (same 5 scenarios)
+============================
+
+Repeat all 5 scenarios above but using Cursor IDE instead of Claude Code terminal:
+1. Open Cursor, open /tmp/aide-val project
+2. Use Cursor's agent/composer mode
+3. Same prompts, same scoring
+4. Save results alongside Claude Code results
+
+============================
+DEMO RECORDINGS
+============================
+
+After validation is complete, I will start screen recording. When I say "go":
+
+Demo 1 — Init (30s):
+cd /tmp/aide-demo && mkdir demo-project && cd demo-project && git init
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js init --scan
+(pause 2s between commands)
+
+Demo 2 — Remember + Recall (45s):
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Always use composition over inheritance" --layer guidelines
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "Auth uses JWT tokens" --layer technical --scope "src/auth/**"
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js recall src/auth/
+(pause 2s between)
+
+Demo 3 — Search (30s):
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js search "authentication"
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js list --layer technical
+(pause 2s between)
+
+Demo 4 — Stats (20s):
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js stats
+
+Demo 5 — Config (20s):
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js config capture.enabled
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js config tags.presets
+
+============================
+RESULTS & REPORTING
+============================
+
+After ALL tasks complete, write:
+
+1. /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md:
+   - Pass/fail per scenario (Claude Code + Cursor)
+   - Key observations with transcript excerpts
+   - Overall verdict: PASS (ship) or FAIL (fix first)
+   - Metrics: how many memories recalled, nudge trigger rate, quality comparison
+
+2. /Users/meky/code/aide-v0/docs/validation/scenario-1-cc.md through scenario-5-cc.md (transcripts)
+3. /Users/meky/code/aide-v0/docs/validation/scenario-1-cursor.md through scenario-5-cursor.md
+
+============================
+PUBLISHING PREP
+============================
+
+After validation passes:
+1. Open browser, search for "Hacker News submit" → note the process
+2. Open browser, go to dev.to → note the publish process
+3. Search for these newsletter submission pages and note URLs:
+   - tldrnewsletter.com (link submission form)
+   - console.dev (new tool submission)
+   - changelog.com/submit
+   - Product Hunt (create project page)
+4. Save all submission URLs and processes to /Users/meky/code/aide-v0/docs/marketing/PUBLISHING_GUIDE.md
 ```
 
-**Agent prompt for HN post:**
-```
-Write a concise Show HN post for AIDE Memory.
-Format: Title (under 80 chars), then 3-4 paragraph description.
-Focus on: the problem (agents forget), the hook (0% voluntary → 100% hook-driven adoption),
-the architecture (file-per-memory, git sync, nudge not dump), and install (one command).
-Keep it under 300 words. No marketing fluff — HN readers hate it.
-Write to /Users/meky/code/aide-v0/docs/marketing/show-hn.md
-```
-
-**Publishing channels (HUMAN — post/submit):**
-- [ ] Hacker News: Show HN post
-- [ ] Reddit: r/ClaudeAI, r/cursor, r/programming, r/MachineLearning
-- [ ] dev.to: full launch blog post
-- [ ] Medium / Hashnode: cross-post blog
-- [ ] X/Twitter: thread with demo GIFs
-- [ ] Claude Code community (Discord/forums if available)
-- [ ] Cursor community forums
-- [ ] Notable AI/developer newsletters (submit for coverage):
-  - TLDR Newsletter (tldrnewsletter.com) — submit via their link form
-  - Console.dev — submit as a new developer tool
-  - Changelog News — submit via changelog.com/submit
-  - AI Engineer newsletter — submit via latent.space
-  - Ben's Bites — submit via bensbites.com
-- [ ] Product Hunt launch (create project, schedule launch day)
-- [ ] LinkedIn post for professional network
-
-**Timing:** Launch all channels within 24-48 hours of each other for maximum impact. HN first (morning EST, Tuesday-Thursday optimal), then Reddit + dev.to + socials same day.
+**Checklist after Cowork completes:**
+- [ ] P0.2: Trademark search, EULA, T&C
+- [ ] P0.3: GitHub org + repo
+- [ ] P0.4: npm package reserved
+- [ ] P0.5: Landing page scaffolded + deployed
+- [ ] P1.17: 5 scenarios × 2 tools = 10 test runs documented
+- [ ] P1.18: Plugin status documented
+- [ ] P1.19: Demo commands executed (you screen-record when ready)
+- [ ] Publishing guide created
 
 ---
 
