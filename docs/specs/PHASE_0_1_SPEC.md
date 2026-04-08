@@ -167,6 +167,9 @@ TASK C — Terms & Conditions:
 3. Save to /Users/meky/code/aide-v0/docs/legal/TERMS.md
 
 TASK D — GitHub Repo:
+NOTE: This is a SEPARATE PUBLIC repo (aide-memory/aide-memory on GitHub) — NOT the private aide-v0 dev repo.
+The public repo has: README, docs, issue tracker, release binaries. NO source code.
+The private repo (aide-v0 at /Users/meky/code/aide-v0) stays private — it has all the source.
 1. Open browser, go to github.com
 2. Create organization "aide-memory" (if it doesn't exist)
 3. Create public repo "aide-memory" with description: "Persistent memory layer for AI coding agents — your agent remembers what you taught it"
