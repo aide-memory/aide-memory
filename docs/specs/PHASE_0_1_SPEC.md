@@ -33,6 +33,17 @@ Each task below has step-by-step instructions. Three automation approaches:
 
 **Computer Use = GUI clicking capability WITHIN Cowork.** Toggle it on in a Cowork session to let Claude see your screen, click, type, navigate browsers, open apps.
 
+**How to execute:** Open `docs/specs/PHASE_0_1_SPEC.md`, go to "Manual Intervention Guide" section, and:
+1. **COWORK tasks:** Paste each COWORK prompt into a Cowork session (can batch independent ones). Cowork runs parallel sub-agents.
+2. **CLAUDE CODE tasks:** Already handled in this Claude Code session — no action needed from you.
+3. **HUMAN tasks:** Require your judgment (legal decisions, subjective scoring, credential entry).
+
+### CLAUDE CODE Tasks (handled in this session — no action needed)
+- [x] P0.6 User docs — 8 pages generated in `docs/user/`
+- [x] Launch marketing content — 5 pieces generated in `docs/marketing/`
+- [ ] P0.3 Public README — generating now
+- [ ] P0.5 Landing page content — generating now
+
 ---
 
 #### P0.1 — Domain Registration (COWORK ✅ DONE)
@@ -40,8 +51,8 @@ Completed via Claude Cowork + Computer Use. Both `aide-memory.dev` and `aide-mem
 - [x] Domains registered (aide-memory.dev + aide-memory.com)
 - [x] DNS configured
 - [x] DNSSEC enabled
-- [ ] Email forwarding active (hello@aide-memory.dev → personal email)
-- [ ] .com → .dev redirect rule configured
+- [x] Email forwarding active (hello@aide-memory.dev → personal email)
+- [x] .com → .dev redirect rule configured
 
 #### P0.2 — Legal (COWORK + HUMAN)
 1. **Trademark search (COWORK):** Paste into Cowork: "Go to tess2.uspto.gov, do a Basic Word Mark Search for 'AIDE' in International Classes 009 and 042. Screenshot the results and summarize any conflicts, especially with AiDE(R) enterprise AI platform."
@@ -81,7 +92,7 @@ Generate a comprehensive public-facing README.md for the aide-memory GitHub repo
 Include: product description, install command (npx aide-memory init), feature list,
 CLI command reference table, MCP tool reference, quick start guide (2-minute flow),
 configuration options, contributing guidelines placeholder, and license section.
-Keep it under 500 lines. Write to /Users/meky/code/aide-v0/docs/PUBLIC_README.md.
+Keep it under 500 lines. Write to /Users/meky/code/aide-v0/docs/PUBLIC_README.md. Should have strong pitch in the begining.
 ```
 - [ ] GitHub org created
 - [ ] Repo created with README, license, issue templates
@@ -198,18 +209,63 @@ Each doc should be self-contained, with code examples and expected output.
 - [ ] Corrections detected by hooks
 - [ ] Any issues documented
 
-#### P1.17 — Pre-ship Validation (COWORK + HUMAN — 5 scenarios)
-Run each in BOTH Claude Code and Cursor. Use general coding tasks — agent should NOT know it's being tested for memory.
+#### P1.17 — Pre-ship Validation (COWORK — 5 scenarios)
+Run each in BOTH Claude Code and Cursor. Use general coding tasks — agent should NOT know it's being tested for memory. All scenarios should use a worktree/temp project to avoid issues with main tree.
 
-**Cowork can help:** Use Cowork to open Claude Code or Cursor, run the scenarios, and capture results. But you'll need to review the output quality yourself (subjective scoring). Cowork handles the setup and execution, you handle the judgment.
-
-**Cowork prompt for Claude Code validation:**
+**Cowork prompt (paste this — Cowork handles everything, reports findings):**
 ```
-Open Terminal and start a Claude Code session in a test project.
-The project should have aide-memory initialized (.aide/ directory).
-I'll give you 5 scenarios to run. For each, start a new Claude Code session,
-perform the task, and paste the full transcript into a results file.
-Wait for my instructions before starting each scenario.
+You are running pre-ship validation for AIDE Memory. Do ALL of the following:
+
+SETUP:
+1. Create a temp project: mkdir -p /tmp/aide-test && cd /tmp/aide-test && git init && git config user.name "test-user" && npm init -y
+2. Run: node /Users/meky/code/aide-v0/dist/cli/aide-memory.js init --scan
+3. Verify .aide/ directory created with memories
+
+CLAUDE CODE VALIDATION (5 scenarios — run each in a separate Claude Code session):
+
+For EACH scenario: open a NEW terminal, cd /tmp/aide-test, start `claude`, run the scenario, then save the full transcript to /Users/meky/code/aide-v0/docs/validation/scenario-N-cc.md
+
+Scenario 1 — Style continuity:
+- Session 1: Ask Claude to create a React component. Correct it 3 times: "keep files under 100 lines", "use camelCase not PascalCase for variables", "prefer named exports"
+- Session 2 (new claude session): Ask Claude to create a DIFFERENT React component in a different directory
+- Record: did it follow the 3 corrections without being told?
+
+Scenario 2 — Planning persistence:
+- Session 1: Plan a multi-file refactor: "Let's refactor src/api/ — step 1: extract validators, step 2: add error middleware, step 3: consolidate routes. Constraint: keep backward compat with v1 API"
+- Session 2 (new session): Say "continue the refactor we planned"
+- Record: did it know the plan or start from scratch?
+
+Scenario 3 — Technical knowledge:
+- Session 1: Work on a feature, during which tell Claude "we always use dayjs not moment in this project" and "tests use vitest not jest"
+- Session 2 (new session): Ask Claude to "add date formatting to the user profile component and write tests"
+- Record: did it use dayjs and vitest without being told?
+
+Scenario 4 — Proactive discovery:
+- First: run `node /Users/meky/code/aide-v0/dist/cli/aide-memory.js remember "The DataTable component uses server-side pagination — do not add client-side pagination" --layer area_context --scope "src/components/**"`
+- Session 1: Ask Claude to "add sorting to the DataTable component"
+- Record: did it mention or respect the server-side pagination constraint?
+
+Scenario 5 — New contributor (with vs without memory):
+- Create two copies of the test project: /tmp/aide-test-with and /tmp/aide-test-without
+- Initialize aide-memory only in aide-test-with, seed 5 memories about the project
+- In BOTH, ask Claude: "fix the test that's failing in src/auth/"
+- Record: quality difference between the two
+
+SCORING (for each scenario):
+- Did agent recall relevant context? (yes/no)
+- Did output reflect recalled context? (yes/partial/no)
+- Measurable quality difference vs bare agent? (yes/no)
+
+After all 5 scenarios, write a summary report to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md with:
+- Pass/fail per scenario
+- Key observations
+- Overall verdict: PASS (ship) or FAIL (fix first)
+- Include relevant transcript excerpts as evidence
+
+CURSOR VALIDATION (repeat the same 5 scenarios):
+- Open Cursor IDE instead of Claude Code terminal
+- Save transcripts to /Users/meky/code/aide-v0/docs/validation/scenario-N-cursor.md
+- Add Cursor results to the same PHASE_1_RESULTS.md report
 ```
 
 **Scenario 1 — Style continuity:**
