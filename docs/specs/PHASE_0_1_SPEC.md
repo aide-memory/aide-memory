@@ -124,18 +124,34 @@ Included in master prompt below. You screen-record while Cowork executes demos.
 ```
 You are completing the remaining launch tasks for AIDE Memory. The codebase is at /Users/meky/code/aide-v0 on branch feature/phase-1.
 
-EXECUTION ORDER:
-1. Phase 0 Tasks A-D (parallel — trademark, EULA, T&C, GitHub repo)
-2. Phase 0 Task E (npm — needs user for Google OAuth login, WAIT for approval before publish)
-3. Phase 0 Task F (landing page scaffold + deploy)
-4. Phase 0 Task G (plugin research)
-5. Claude Code Validation (5 scenarios — run sequentially)
-6. SKIP Cursor Validation for now (user will reactivate Cursor first, come back later)
-7. Demo Recordings (wait for user to start screen recording)
-8. Publishing Prep
-9. Update checklist after each completed task
+PARALLELIZATION: Spin off separate sub-agents for independent tasks. Do NOT do tasks top-down one by one — run as many in parallel as possible. Only go sequential when there's a dependency.
 
-Run independent tasks in parallel where noted. WAIT for user input where noted (npm credentials, publish approval, demo recording start).
+PARALLEL GROUP 1 (all at the same time):
+- Task A (trademark search) — browser agent
+- Task B (EULA draft) — writing agent
+- Task C (Terms & Conditions) — writing agent
+- Task D (GitHub repo) — browser agent
+- Task F2 (logo exploration) — browser agent
+- Task G (plugin research) — browser agent
+
+THEN SEQUENTIAL (needs user input):
+- Task E (npm) — needs user for Google OAuth, WAIT for approval before publish
+
+THEN PARALLEL GROUP 2:
+- Task F (landing page scaffold + deploy) — terminal + browser agent
+- Validation setup (npm link, create test project) — terminal agent
+
+THEN SEQUENTIAL (each scenario needs its own Claude Code session):
+- Validation scenarios 1-5 in Claude Code — run one at a time
+
+SKIP for now:
+- Cursor Validation — user will reactivate Cursor first
+- Demo Recordings — wait for user to start screen recording
+
+AFTER VALIDATION:
+- Publishing Prep — browser agent
+
+ALWAYS: Update checklist in this file after each completed task.
 
 ============================
 PHASE 0 TASKS (run in parallel)
