@@ -54,160 +54,41 @@ Completed via Claude Cowork + Computer Use. Both `aide-memory.dev` and `aide-mem
 - [x] Email forwarding active (hello@aide-memory.dev → personal email)
 - [x] .com → .dev redirect rule configured
 
-#### P0.2 — Legal (COWORK + HUMAN)
-1. **Trademark search (COWORK):** Paste into Cowork: "Go to tess2.uspto.gov, do a Basic Word Mark Search for 'AIDE' in International Classes 009 and 042. Screenshot the results and summarize any conflicts, especially with AiDE(R) enterprise AI platform."
-2. **EULA (COWORK):** Paste into Cowork: "Draft a proprietary freeware EULA for a developer tool called AIDE Memory. Key clauses: free to use, no modification/redistribution, no warranty, data ownership (user owns their data). Use GitHub's Terms of Service as structure reference. Save to a file on my desktop."
-3. **Terms & Conditions (COWORK):** Paste into Cowork: "Go to termsfeed.com and generate Terms & Conditions for aide-memory.dev. Product: AIDE Memory, a developer tool. Save the output."
-4. **Company registration (HUMAN):** Decide whether to register an LLC for liability/IP protection. Can defer to Phase 2 if not pursuing revenue yet.
+#### P0.2 — Legal (COWORK Tasks A/B/C + HUMAN)
+Included in MASTER COWORK PROMPT below (Tasks A, B, C). Company registration is your decision — can defer to Phase 2.
 - [ ] Trademark search completed (no blocking conflicts)
 - [ ] EULA drafted
 - [ ] Terms & Conditions drafted
 - [ ] Company registration decision made
 
-#### P0.3 — Public GitHub Repo (COWORK + CLAUDE CODE)
-
-**Cowork prompt (browser automation):**
-```
-1. Go to github.com and create a new organization called "aide-memory"
-2. In that org, create a public repo called "aide-memory"
-3. Add a description: "Persistent memory layer for AI coding agents"
-4. Initialize with a README
-5. Set up issue templates: go to Settings → Features → Issues → Set up templates
-   - Add "Bug report" template
-   - Add "Feature request" template
-6. Go to Settings → Actions → General → enable GitHub Actions
-```
-
-**Claude Code prompt (README + docs):**
-```
-Read docs/marketing/public-readme.md in /Users/meky/code/aide-v0.
-This is the README for the public aide-memory GitHub repo.
-Copy it to the clipboard or save to a known location for upload.
-```
-
-**Agent prompt for README + docs:**
-```
-Read README.npm.md and docs/specs/PHASE_0_1_SPEC.md in /Users/meky/code/aide-v0.
-Generate a comprehensive public-facing README.md for the aide-memory GitHub repo.
-Include: product description, install command (npx aide-memory init), feature list,
-CLI command reference table, MCP tool reference, quick start guide (2-minute flow),
-configuration options, contributing guidelines placeholder, and license section.
-Keep it under 500 lines. Write to /Users/meky/code/aide-v0/docs/PUBLIC_README.md. Should have strong pitch in the begining.
-```
+#### P0.3 — Public GitHub Repo (COWORK Task D + CLAUDE CODE ✅)
+COWORK: Task D in master prompt. CLAUDE CODE: `docs/PUBLIC_README.md` already generated — upload to repo after Cowork creates it.
 - [ ] GitHub org created
 - [ ] Repo created with README, license, issue templates
 - [ ] GitHub Actions release workflow configured
 
-#### P0.4 — npm Package Reservation (COWORK)
-
-**Cowork prompt:**
-```
-1. Open Terminal
-2. Run: cd /Users/meky/code/aide-v0
-3. Run: npm login (I'll provide credentials when prompted)
-4. Run: cp package.aide-memory.json package.json
-5. Run: npm pack --dry-run (verify contents look right — should include dist/, hooks, templates)
-6. Run: npm publish --access public (this publishes v0.1.0 placeholder)
-7. Run: git checkout package.json (restore original)
-8. Verify: open https://www.npmjs.com/package/aide-memory and confirm it exists
-```
+#### P0.4 — npm Package Reservation (COWORK Task E)
+Included in MASTER COWORK PROMPT (Task E). Will need your npm credentials when prompted.
 - [ ] npm account ready
 - [ ] `aide-memory` name reserved on npm
 - [ ] Publish workflow tested
 
-#### P0.5 — Landing Page (COWORK + CLAUDE CODE)
-
-**Repo name:** `aide-memory-web` (generic — holds landing page + docs site + blog)
-
-**Cowork prompt (scaffold + deploy):**
-```
-1. Open Terminal
-2. Run: cd ~/code && npx create-next-app aide-memory-web -e https://github.com/shuding/nextra-docs-template
-3. Run: cd aide-memory-web
-4. Open browser, go to vercel.com/new
-5. Connect the aide-memory-web GitHub repo (create it on GitHub first if needed under the aide-memory org)
-6. Deploy to Vercel
-7. Go to Cloudflare dashboard → aide-memory.dev → DNS
-8. Add CNAME record: @ → cname.vercel-dns.com
-9. In Vercel project settings → Domains → add aide-memory.dev
-```
-
-**Agent prompt for landing page content:**
-```
-Create landing page content for AIDE Memory — a persistent memory layer for AI coding agents.
-Read docs/PRODUCT_VISION.md executive summary and docs/specs/PHASE_0_1_SPEC.md for features.
-Generate:
-1. Hero section: one-sentence pitch + install command (npx aide-memory init)
-2. Feature bullets (6-8, from Phase 1 capabilities)
-3. "How it works" section (3 steps: init, work, recall)
-4. Comparison table (AIDE Memory vs claude-mem vs engram — from competitive analysis)
-5. FAQ (5 questions)
-Write as markdown to /Users/meky/code/aide-v0/docs/LANDING_PAGE_CONTENT.md.
-Do NOT reveal Phase 2+ roadmap. Keep it focused on individual memory features.
-```
+#### P0.5 — Landing Page (COWORK Task F + CLAUDE CODE ✅)
+COWORK: Task F in master prompt (scaffold Nextra site, deploy to Vercel, connect domain). CLAUDE CODE: `docs/LANDING_PAGE_CONTENT.md` already generated. Repo name: `aide-memory-web`.
 - [ ] Next.js + Nextra site scaffolded
 - [ ] Deployed to Vercel
 - [ ] Domain connected
 - [ ] Content written and published
 
-#### P0.6 — User Documentation (AGENT-ASSISTED)
-Docs live as markdown in the public repo, rendered by Nextra.
+#### P0.6 — User Documentation (CLAUDE CODE ✅ DONE)
+8 pages generated in `docs/user/`: quick-start, cli-reference, mcp-tools, configuration, hooks, troubleshooting, architecture, index.
 
-**Agent prompt for all docs:**
-```
-Generate complete user documentation for AIDE Memory.
-Read src/cli/aide-memory.ts and src/cli/commands/memory/*.ts for all CLI commands.
-Read src/memory/server.ts for all MCP tools.
-Read src/memory/config.ts for configuration options.
-Read src/memory/init.ts for init behavior.
-Read scripts/hooks/*.sh for hook behavior.
-
-Generate these markdown files:
-1. docs/user/quick-start.md — Install to first recall in 2 minutes
-2. docs/user/cli-reference.md — Every command with flags, examples, expected output
-3. docs/user/mcp-tools.md — Every MCP tool with parameters and example responses
-4. docs/user/configuration.md — All config keys, defaults, examples
-5. docs/user/hooks.md — How hooks work, what they do, how to customize
-6. docs/user/troubleshooting.md — Common issues and solutions
-7. docs/user/architecture.md — How storage, recall, sync work (for contributors)
-
-Each doc should be self-contained, with code examples and expected output.
-```
-- [ ] Quick start guide
-- [ ] CLI reference
-- [ ] MCP tools reference
-- [ ] Configuration guide
-- [ ] Hooks guide
-- [ ] Troubleshooting guide
-- [ ] Architecture overview
-
-#### P1.9 — Cursor Validation (COWORK + HUMAN)
-
-**Cowork prompt (setup):**
-```
-1. Open Cursor IDE
-2. Open the project at /Users/meky/code/aide-v0
-3. Run `aide init` in the Cursor terminal to set up .aide/ directory
-4. Verify .cursor/rules/aide-memory.mdc exists
-5. Open Cursor Settings → MCP → verify aide-memory server is listed
-6. If not, add it manually to .cursor/mcp.json
-```
-
-**Then manually verify:**
-1. Open a project in Cursor with `.aide/` initialized
-2. Add MCP server to `.cursor/mcp.json`:
-   ```json
-   { "mcpServers": { "aide-memory": { "command": "node", "args": ["/path/to/aide-v0/dist/memory/server.js"] } } }
-   ```
-3. Verify `.cursor/rules/aide-memory.mdc` is read by Cursor agent
-4. Test: does Cursor's agent call aide_recall when reading files?
-5. Test: does UserPromptSubmit hook detect corrections in Cursor?
-6. Document any Cursor-specific issues in `docs/specs/CURSOR_NOTES.md`
+#### P1.9 — Cursor Validation (COWORK)
+Included in MASTER COWORK PROMPT (Cursor validation section — repeats all 5 scenarios in Cursor).
 - [ ] MCP server configured in Cursor
 - [ ] Rules file read by Cursor agent
-- [ ] aide_recall triggered on file reads
-- [ ] Corrections detected by hooks
-- [ ] Any issues documented
+- [ ] 5 scenarios run and documented
+- [ ] Any Cursor-specific issues noted
 
 #### P1.17 — Pre-ship Validation (COWORK — 5 scenarios)
 Included in the master Cowork prompt below. See "MASTER COWORK PROMPT" section.
