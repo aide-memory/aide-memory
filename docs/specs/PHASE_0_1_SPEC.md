@@ -122,7 +122,20 @@ Included in master prompt below. You screen-record while Cowork executes demos.
 **Paste this entire block into ONE Cowork session. Cowork will run tasks in parallel where possible.**
 
 ```
-You are completing the remaining launch tasks for AIDE Memory. The codebase is at /Users/meky/code/aide-v0 on branch feature/phase-1. Do ALL of the following tasks. Run independent tasks in parallel.
+You are completing the remaining launch tasks for AIDE Memory. The codebase is at /Users/meky/code/aide-v0 on branch feature/phase-1.
+
+EXECUTION ORDER:
+1. Phase 0 Tasks A-D (parallel — trademark, EULA, T&C, GitHub repo)
+2. Phase 0 Task E (npm — needs user for Google OAuth login, WAIT for approval before publish)
+3. Phase 0 Task F (landing page scaffold + deploy)
+4. Phase 0 Task G (plugin research)
+5. Claude Code Validation (5 scenarios — run sequentially)
+6. SKIP Cursor Validation for now (user will reactivate Cursor first, come back later)
+7. Demo Recordings (wait for user to start screen recording)
+8. Publishing Prep
+9. Update checklist after each completed task
+
+Run independent tasks in parallel where noted. WAIT for user input where noted (npm credentials, publish approval, demo recording start).
 
 ============================
 PHASE 0 TASKS (run in parallel)
@@ -164,13 +177,14 @@ TASK D — GitHub Repo:
 TASK E — npm Reservation:
 1. Open Terminal
 2. cd /Users/meky/code/aide-v0
-3. Run: npm login (I'll provide credentials when prompted)
-4. Run: cp package.aide-memory.json package.json
-5. Run: npm pack --dry-run
-6. WAIT for my approval before running npm publish
-7. After approval: npm publish --access public
-8. Run: git checkout package.json
-9. Verify at https://www.npmjs.com/package/aide-memory
+3. Run: npm login --auth-type=web (this opens browser — user will sign in with Google: ahmedmeky123@gmail.com)
+4. WAIT for user to complete Google OAuth login in browser
+5. Run: cp package.aide-memory.json package.json
+6. Run: npm pack --dry-run (show output, verify it looks right)
+7. WAIT for user approval before publishing
+8. After approval: npm publish --access public
+9. Run: git checkout package.json (restore original)
+10. Open browser, verify at https://www.npmjs.com/package/aide-memory
 
 TASK F — Scaffold Landing Page:
 1. Open Terminal
@@ -323,14 +337,19 @@ SCORING:
 - Quality difference visible? (yes/no, describe)
 
 ============================
-CURSOR VALIDATION (same 5 scenarios)
+CURSOR VALIDATION (DEFERRED — do after Claude Code validation)
 ============================
 
-Repeat all 5 scenarios above but using Cursor IDE instead of Claude Code terminal:
+NOTE: Cursor may need reactivation. SKIP this section for now.
+After user confirms Cursor is ready, come back and run:
 1. Open Cursor, open /tmp/aide-val project
-2. Use Cursor's agent/composer mode
-3. Same prompts, same scoring
-4. Save results alongside Claude Code results
+2. Verify aide-memory MCP server is configured in .cursor/mcp.json:
+   { "mcpServers": { "aide-memory": { "command": "node", "args": ["/Users/meky/code/aide-v0/dist/memory/server.js", "/tmp/aide-val"] } } }
+3. Verify .cursor/rules/aide-memory.mdc exists
+4. Use Cursor's agent/composer mode
+5. Run same 5 scenarios with same prompts and scoring
+6. Save results to /Users/meky/code/aide-v0/docs/validation/scenario-N-cursor.md
+7. Add Cursor results to PHASE_1_RESULTS.md
 
 ============================
 DEMO RECORDINGS
