@@ -191,9 +191,21 @@ TASK F — Scaffold Landing Page:
 2. Run: cd ~/code && npx create-next-app aide-memory-web -e https://github.com/shuding/nextra-docs-template
 3. cd aide-memory-web
 4. The landing page content is at /Users/meky/code/aide-v0/docs/LANDING_PAGE_CONTENT.md — copy it into the Nextra pages
-5. Open browser, go to vercel.com/new → connect aide-memory-web repo → deploy
-6. Go to Cloudflare dashboard → aide-memory.dev → DNS → add CNAME: @ → cname.vercel-dns.com
-7. In Vercel project settings → Domains → add aide-memory.dev
+5. Configure dark theme as default (Nextra supports this in theme.config.tsx — set darkMode: true, similar to Cursor/Claude docs aesthetic)
+6. Open browser, go to vercel.com/new → connect aide-memory-web repo → deploy
+7. Go to Cloudflare dashboard → aide-memory.dev → DNS → add CNAME: @ → cname.vercel-dns.com
+8. In Vercel project settings → Domains → add aide-memory.dev
+
+TASK F2 — Logo Exploration:
+1. Open browser, go to a free logo/icon tool (e.g., app.brandmark.io, looka.com, or just search "free developer tool logo generator")
+2. Explore simple logo concepts for "AIDE Memory" — ideas to try:
+   - Brain icon (simple, minimal line art)
+   - Memory/chip icon
+   - The letters "AM" or "aide" in a clean monospace font
+   - A simple geometric brain + circuit pattern
+3. Generate 3-5 options, save screenshots to /Users/meky/code/aide-v0/docs/branding/logo-options/
+4. Keep it minimal — monochrome works, should look good at small sizes (favicon, npm badge)
+5. If a good free SVG is found, save it as /Users/meky/code/aide-v0/docs/branding/logo.svg
 
 TASK G — Plugin/Marketplace Research:
 1. Open browser, go to docs.anthropic.com, search for "Claude Code plugin marketplace submission"
