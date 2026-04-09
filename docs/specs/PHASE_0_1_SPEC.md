@@ -140,12 +140,15 @@ Codebase: /Users/meky/code/aide-v0 (branch: feature/phase-1)
 Landing page repo: aide-memory-web/ inside the codebase (separate git repo, remote: aide-memory/aide-memory-web)
 Public GitHub repo: aide-memory/aide-memory
 npm package: aide-memory (version 0.1.1 live)
-Domain: aide-memory.dev (registered on Cloudflare)
+Domain: aide-memory.dev (live on Vercel, connected via Cloudflare CNAME)
+
+IMPORTANT: All sub-agents MUST use Opus 4.6 — never Sonnet or Haiku.
 
 PARALLELIZATION: Spin off separate sub-agents for ALL independent tasks. Run as many in parallel as possible. Only go sequential when there's a dependency.
 
 WHAT'S ALREADY DONE (do NOT redo):
 - Domain registration (aide-memory.dev + .com on Cloudflare) ✅
+- Vercel deployment (aide-memory.dev live, SSL provisioned) ✅
 - Legal: trademark search, EULA, Terms & Conditions ✅
 - GitHub: org, repo, README, issue templates, LICENSE, Actions workflow, NPM_TOKEN ✅
 - npm: aide-memory@0.1.1 published and verified ✅
@@ -156,23 +159,17 @@ WHAT'S ALREADY DONE (do NOT redo):
 - Plugin research: documented in docs/specs/PLUGIN_STATUS.md ✅
 
 ============================
-REMAINING TASKS — spin off one sub-agent per task
+PHASE 1 — PARALLEL GROUP (all independent — run simultaneously)
 ============================
 
-PARALLEL GROUP 1 (all independent — run simultaneously):
-
-TASK 1 — Vercel Deployment (browser agent)
-Deploy the landing page to Vercel and connect the domain.
-1. Go to vercel.com, sign in
-2. Click "Import Project" → import from GitHub: aide-memory/aide-memory-web
-3. Framework preset: Next.js. Build command: next build. Output: .next
-4. Click Deploy → wait for build to complete
-5. Get the preview URL → open it → verify the site loads (hero, docs, features)
-6. Go to Project Settings → Domains → add "aide-memory.dev"
-7. Go to Cloudflare DNS for aide-memory.dev → add CNAME record: name=@ value=cname.vercel-dns.com (proxied OFF)
-8. Wait for Vercel SSL provisioning (usually < 5 min)
-9. Verify https://aide-memory.dev loads correctly
-10. Save result: "Vercel deployment complete, aide-memory.dev live" to /Users/meky/code/aide-v0/docs/specs/PHASE_0_1_SPEC.md (update P0.5 Vercel checkbox to [x])
+TASK 1 — Validation (Claude Code agent)
+Run 6 validation scenarios from the runbook.
+1. Read the full runbook: /Users/meky/code/aide-v0/docs/validation/PHASE_0_1_INTEGRATION_TESTING.md
+2. Follow the "Before each scenario" steps: rebuild (git pull, npm install, npm run build, npm link)
+3. Run ALL 6 scenarios in order, following exact steps in the runbook
+4. For each scenario: record PASS/FAIL and any issues encountered
+5. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md
+6. If any scenario FAILS: document what failed and why, but continue with remaining scenarios
 
 TASK 2 — PostHog Account Setup (browser agent)
 Set up analytics dashboard so we can see usage data.
@@ -213,53 +210,82 @@ Submit aide-memory to the official MCP server registry.
 4. Submit a Pull Request from the fork to the upstream repo
 5. Save the PR URL to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md (append under MCP Registry section)
 
-TASK 5 — Claude Code Marketplace Submission (browser agent)
-Check if Claude Code has a marketplace/extensions directory and submit if available.
+TASK 5 — Claude Code Marketplace Research (browser agent)
+Research only — DO NOT submit without user approval.
 1. Go to docs.anthropic.com
-2. Search for "Claude Code marketplace", "Claude Code extensions", "Claude Code plugins"
-3. If a submission process exists: follow it, submit aide-memory
-4. If no submission process yet: document what you found and when to check back
+2. Search for "Claude Code marketplace", "Claude Code extensions", "Claude Code plugins", "MCP server directory"
+3. Document what submission process exists (if any), including URLs, requirements, and steps
+4. If a submission process exists: draft the submission content but DO NOT submit
 5. Save findings to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md (append under Claude Code section)
+6. STOP and tell user what you found — user will review and decide whether to proceed
 
-TASK 6 — Cursor Marketplace Submission (browser agent)
-Check if Cursor has an MCP server directory and submit if available.
-1. Go to cursor.com and docs.cursor.com
-2. Search for "MCP directory", "MCP marketplace", "extensions", "plugins"
-3. If a submission process exists: follow it, submit aide-memory
-4. If no submission process yet: document what you found
-5. Save findings to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md (append under Cursor section)
+TASK 6 — Demo Setup & Recording Prep (Claude Code agent)
+Set up the demo environment and create a step-by-step recording guide.
+1. Create a realistic demo project at /Users/meky/code/aide-demo-project/:
+   - Init a small Node.js/TypeScript project with real files (e.g., src/auth/, src/api/, src/utils/)
+   - Add realistic code files with imports and dependencies
+   - Run `aide-memory init` in the demo project
+   - Pre-seed 3-5 representative memories using `aide-memory remember` CLI:
+     * A preference: "Use dayjs not moment" scoped to src/**
+     * A technical fact: "Auth uses JWT with RS256" scoped to src/auth/**
+     * An area context: "API rate limiting is 100 req/min per user" scoped to src/api/**
+     * A guideline: "All API responses use camelCase" scoped to src/api/**
+2. Create a demo script at /Users/meky/code/aide-v0/docs/demo/DEMO_SCRIPT.md with:
+   - 7 individual demo sequences (one per feature), each with:
+     * Setup state (what should be on screen before recording)
+     * Exact commands to type / actions to take
+     * Expected output to verify
+     * Suggested recording duration
+   - Demo sequences:
+     a. `aide-memory init` — fresh project setup (show .aide/ created, hooks installed)
+     b. `aide-memory remember` — store a memory via CLI
+     c. Recall in action — open a file in Claude Code, show the hook nudge + aide_recall
+     d. Path scoping — show how src/auth/ memories don't appear for src/api/ files
+     e. Correction capture — make a mistake, get corrected, show memory auto-stored
+     f. Cross-session persistence — close Claude Code, reopen, show memories persist
+     g. Full flow — init → remember → work → recall → correct → persist (1 continuous demo)
+   - For each sequence, include the terminal commands AND what the user should narrate
+3. Create a recording setup guide at /Users/meky/code/aide-v0/docs/demo/RECORDING_SETUP.md:
+   - Recommended screen recording tool (macOS: built-in Screenshot app or OBS)
+   - Terminal settings (font size 16+, dark theme, clean prompt)
+   - Window dimensions for consistent GIF output
+   - How to convert recordings to GIFs (ffmpeg command or gifski)
+   - Recommended GIF dimensions and max file sizes for README/landing page
+4. Create a landing page embed plan at /Users/meky/code/aide-v0/docs/demo/LANDING_PAGE_EMBED.md:
+   - How to embed demo GIFs/videos on aide-memory.dev (Nextra supports images/video in MDX)
+   - Where on the landing page they should go (hero section? features section? dedicated demo page?)
+   - How blog posts can reference the same assets
+   - File naming convention for final assets
+
+NOTE on Cursor: Cursor marketplace submission is DEFERRED until after Cursor validation is complete. Do not research or submit.
 
 ============================
-AFTER PARALLEL GROUP 1 — sequential tasks (need results from above)
+PHASE 2 — SEQUENTIAL (after Phase 1 tasks complete)
 ============================
 
-TASK 7 — Marketing Submissions (browser agent, ONLY after Vercel deployment is live + user has completed demo recordings + user has reviewed and approved all public content)
-Publish pre-written marketing content. All content files are ready — just copy and paste. DO NOT run this task until the user explicitly confirms content review is complete.
+TASK 7 — Content Review Gate (REQUIRES USER)
+Present ALL public-facing content to the user for review. DO NOT proceed to Task 8 without explicit user approval.
+1. List all public-facing content files for user review:
+   - /Users/meky/code/aide-v0/docs/PUBLIC_README.md
+   - /Users/meky/code/aide-v0/docs/marketing/launch-blog-post.md
+   - /Users/meky/code/aide-v0/docs/marketing/show-hn.md
+   - /Users/meky/code/aide-v0/docs/marketing/reddit-posts.md
+   - /Users/meky/code/aide-v0/docs/marketing/devto-post.md
+   - Landing page at aide-memory.dev
+   - Demo GIFs (once user records them)
+2. Ask user: "Please review each of these files. Let me know which ones need changes and I'll iterate with you."
+3. Make any edits the user requests
+4. Get explicit "approved for publishing" confirmation from user before proceeding
+5. DO NOT proceed to Task 8 until user says all content is approved
+
+TASK 8 — Marketing Submissions (browser agent, ONLY after Task 7 approval)
+Publish pre-written marketing content. DO NOT run until user confirms content review is complete.
 1. Show HN: go to news.ycombinator.com/submit → paste title and URL from /Users/meky/code/aide-v0/docs/marketing/show-hn.md → submit
 2. Dev.to: go to dev.to/new → paste content from /Users/meky/code/aide-v0/docs/marketing/devto-post.md → add tags: mcp, ai, developer-tools, productivity → publish
 3. tldrnewsletter.com: find the link submission form → submit aide-memory.dev
 4. console.dev: find the new tool submission → submit aide-memory
 5. changelog.com/submit: submit aide-memory
 6. Save all submission URLs/confirmations to /Users/meky/code/aide-v0/docs/marketing/SUBMISSION_RESULTS.md
-
-============================
-USER-ONLY GATES (DO NOT attempt — user runs these)
-============================
-
-1. VALIDATION: User runs 6 validation scenarios using runbook at:
-   /Users/meky/code/aide-v0/docs/validation/PHASE_0_1_INTEGRATION_TESTING.md
-
-2. DEMO RECORDINGS: User records demos after validation passes.
-   6 individual clips + 1 full flow → convert to GIFs for README/landing page.
-
-3. CONTENT REVIEW: User reviews ALL public-facing content before any submissions:
-   - Public README (docs/PUBLIC_README.md)
-   - Blog posts (docs/marketing/*.md)
-   - Landing page (aide-memory.dev)
-   - Demo GIFs
-   User must explicitly approve before Task 7 (marketing submissions) runs.
-
-These are NOT Cowork tasks. Skip them entirely.
 
 ============================
 CHECKLIST UPDATE
@@ -292,7 +318,7 @@ REMAINING (source of truth — all pending items with concrete next steps):
 
 ### A. Validation (CRITICAL — launch gate)
 
-**P1.17: 5 validation scenarios in Claude Code** — USER runs these
+**P1.17: 6 validation scenarios in Claude Code** — COWORK runs these
 - Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (ready)
 - Observability: `aide-memory recall-log` now logs both recalls AND memory store events (stored/updated/deleted) to `.aide/recall-log.jsonl`
 - Before each scenario: `aide-memory recall-log --clear`
@@ -352,14 +378,8 @@ REMAINING (source of truth — all pending items with concrete next steps):
 
 ### D. Deployment
 
-**Vercel deployment** — PENDING
-1. Push `aide-memory-web` to `aide-memory/aide-memory-web` on GitHub (public repo)
-2. Go to vercel.com → import `aide-memory/aide-memory-web`
-3. Framework: Next.js, build command: `next build`, output: `.next`
-4. Deploy → get preview URL → verify
-5. Add custom domain: `aide-memory.dev` in Vercel project settings
-6. In Cloudflare DNS: add CNAME `aide-memory.dev` → `cname.vercel-dns.com`
-7. Wait for SSL provisioning, verify at https://aide-memory.dev
+**Vercel deployment** — COMPLETE
+- aide-memory.dev live on Vercel, SSL provisioned, Cloudflare CNAME configured
 
 **npm release** — READY (workflow tested)
 - To release: update version in `package.aide-memory.json`, then `git tag v0.X.0 && git push origin v0.X.0`
@@ -402,10 +422,11 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - [ ] Submit to console.dev new tool submission
 - [ ] Submit to changelog.com/submit
 
-**P1.19: Demo recordings** — BLOCKING (must complete before marketing submissions)
-- User will screen-record while running demo commands
-- 6 individual clips + 1 full flow demo
-- Convert to GIFs for README/landing page
+**P1.19: Demo** — BLOCKING (must complete before marketing submissions)
+- **Demo setup** — COWORK: create demo project, seed memories, write recording script + guide
+- **Demo recordings** — USER: screen-record using the script Cowork creates
+- **Landing page embed** — add demo GIFs/video to aide-memory.dev so blogs can reference them
+- 7 individual clips + 1 full flow demo → convert to GIFs
 - Demo must be reviewed and finalized before any blog/submission goes live
 
 ---
@@ -414,10 +435,10 @@ REMAINING (source of truth — all pending items with concrete next steps):
 
 **Research complete** — see `docs/specs/PLUGIN_STATUS.md`
 
-**Pending — COWORK (browser tasks, after validation passes):**
+**Pending — COWORK:**
 - [ ] MCP Registry: fork github.com/modelcontextprotocol/servers → add aide-memory entry → submit PR
-- [ ] Claude Code: check docs.anthropic.com for extensions/marketplace submission process → submit if available
-- [ ] Cursor: check cursor.com/settings or docs.cursor.com for MCP directory → submit if available
+- [ ] Claude Code: research submission process only → save findings → user reviews before any submission
+- [ ] Cursor: DEFERRED — do not submit until after Cursor validation passes
 - Save results to `docs/specs/PLUGIN_STATUS.md` (append submission status)
 
 ---
@@ -467,18 +488,20 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 
 | Priority | Item | Who | Blocker? |
 |----------|------|-----|----------|
-| 1 | Run 5 validation scenarios | USER | Yes — launch gate |
-| 2 | Deploy landing page to Vercel + connect domain | COWORK | Yes — public presence |
+| 1 | Run 6 validation scenarios | COWORK | Yes — launch gate |
+| 2 | PostHog account setup | COWORK | No — analytics works locally without it |
 | 3 | Logo rework (3-5 options, pick winner, export sizes) | COWORK + USER | No — but needed before launch marketing |
-| 4 | PostHog account setup | COWORK | No — analytics works locally without it |
-| 5 | Demo recordings | USER | Yes — must complete before marketing |
-| 6 | Review all public content (README, blogs, landing page, demos) | USER | Yes — sign-off gate before submissions |
-| 7 | Marketplace submissions | COWORK | No — after validation + review |
-| 8 | Marketing/publishing submissions | COWORK | No — after validation + demo + review |
-| 9 | Cursor validation | USER | No — deferred |
-| 10 | Company registration | USER | No — Phase 2 |
-| 11 | Claude ecosystem guides (Desktop, Web, Cowork) | CLAUDE CODE | No — Phase 1 follow-up |
-| 12 | Non-IDE developer docs (agent frameworks, CI/CD) | CLAUDE CODE | No — Phase 1 follow-up |
+| 4 | Demo setup + recording prep (script, env, guide) | COWORK | Yes — must complete before recordings |
+| 5 | MCP Registry submission | COWORK | No — after validation |
+| 6 | Claude Code marketplace research (research only, user reviews) | COWORK | No — user approves before submission |
+| 7 | Demo recordings + landing page embed | USER | Yes — must complete before marketing |
+| 8 | Review ALL public content (README, blogs, landing page, demos) | USER + COWORK | Yes — sign-off gate before submissions |
+| 9 | Marketing/publishing submissions | COWORK | No — after demo + review approval |
+| 10 | Cursor marketplace submission | COWORK | No — deferred until after Cursor validation |
+| 11 | Cursor validation | USER | No — deferred |
+| 12 | Company registration | USER | No — Phase 2 |
+| 13 | Claude ecosystem guides (Desktop, Web, Cowork) | CLAUDE CODE | No — Phase 1 follow-up |
+| 14 | Non-IDE developer docs (agent frameworks, CI/CD) | CLAUDE CODE | No — Phase 1 follow-up |
 
 ---
 
