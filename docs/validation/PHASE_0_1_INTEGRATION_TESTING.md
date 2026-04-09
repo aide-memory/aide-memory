@@ -1236,3 +1236,92 @@ ls -la /tmp/aide-val/../scenario-*-results.md /tmp/aide-val/../VALIDATION_RESULT
 - **Seed memories via terminal**, not Claude Code, for Scenario 4 & 5
 - **Save all result files** before moving to the next scenario
 - **Keep the test project intact** — do NOT delete between scenarios
+
+---
+
+## SCENARIO 6 — MCP Server Unavailable Fallback (8 minutes)
+
+**Goal:** Verify hooks gracefully handle aide-memory MCP server not running. Agent should save pending memories locally and notify user.
+
+### Setup
+
+```bash
+cd /tmp/aide-val
+```
+
+Temporarily disable the MCP server by renaming the config:
+
+```bash
+mv .mcp.json .mcp.json.bak
+```
+
+### Session 1 — Work without MCP server
+
+Start a new Claude Code session (MCP server will NOT connect):
+
+```bash
+claude
+```
+
+Prompt:
+```
+Add a utility function at src/utils/format.ts that formats currency values.
+Use the project's existing conventions.
+```
+
+**What to observe:**
+1. PreToolUse hook fires and nudges "N memories exist" — agent tries aide_recall → fails
+2. Agent should tell you the MCP server is not running
+3. On stop, agent should write pending memories to `.aide/pending-memories.jsonl`
+4. Agent should tell you to start the MCP server
+
+Exit Claude Code.
+
+### Verification
+
+```bash
+# Check pending memories were saved
+cat .aide/pending-memories.jsonl
+
+# Should contain JSON lines with: layer, what, why, scope, tags, source, timestamp
+# Verify at least 1 entry exists
+wc -l .aide/pending-memories.jsonl
+```
+
+### Restore MCP server
+
+```bash
+mv .mcp.json.bak .mcp.json
+```
+
+### Result File
+
+```bash
+cat > /Users/meky/code/aide-v0/docs/validation/scenario-6-cc.md << 'EOF'
+# Scenario 6 — MCP Server Unavailable Fallback
+
+## Date: ____
+## Result: PASS / FAIL
+
+## Observations
+
+| Check | Expected | Actual | Pass/Fail |
+|-------|----------|--------|-----------|
+| Agent detected MCP unavailable | Yes | | |
+| Agent notified user to start server | Yes | | |
+| Pending memories saved to .aide/pending-memories.jsonl | Yes | | |
+| JSON lines have correct fields (layer, what, scope, etc.) | Yes | | |
+| No crash or silent failure | Yes | | |
+
+## pending-memories.jsonl Content
+```
+[Paste contents here]
+```
+
+## Agent Messages About MCP
+[Paste relevant agent output about MCP being unavailable]
+
+## Issues Encountered
+[Document any problems]
+EOF
+```
