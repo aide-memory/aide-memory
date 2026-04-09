@@ -57,7 +57,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       for (const [layer, memories] of grouped) {
         output += `\n## ${formatLayerName(layer)}\n`;
         for (const m of memories) {
-          output += `- ${m.what}`;
+          output += `- [${m.id}] ${m.what}`;
           if (m.contributor) output += ` (from ${m.contributor})`;
           if (m.scope && m.scope !== 'project') output += ` [${m.scope}]`;
           output += '\n';
