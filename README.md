@@ -235,11 +235,11 @@ No Docker. No external databases. No API keys. No cloud accounts.
 
 ---
 
-## Test Status
+## Features at a Glance
 
-- **544 tests passing** across 21 test files
-- **0 TypeScript errors**
-- 7 MCP tools, 11 CLI commands, 4 hooks -- all verified end-to-end
+- 7 MCP tools, 11 CLI commands, 4 hooks
+- Zero cloud dependencies — everything runs locally
+- Works with Claude Code, Cursor, and any MCP-compatible client
 
 ---
 
