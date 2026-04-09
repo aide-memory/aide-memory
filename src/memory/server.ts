@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import path from 'path';
+import fs from 'fs';
 import { MemoryStore } from './store';
 import { recall } from './recall';
 import { logStoreEvent } from './store-log';
@@ -49,6 +50,19 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
             text: 'No memories found for this area. As you work and make decisions, use aide_remember to store context that should persist.',
           }],
         };
+      }
+
+      // Track recalled paths so the Read hook knows not to block again
+      // Format: "PID|absolutePath" — PID scopes tracking to this session
+      if (logDir && params.paths) {
+        try {
+          const cacheDir = path.join(logDir, 'cache');
+          fs.mkdirSync(cacheDir, { recursive: true });
+          const recalledFile = path.join(cacheDir, 'recalled-paths.txt');
+          const pid = process.ppid ?? process.pid;
+          const pathsToWrite = params.paths.map(p => `${pid}|${path.resolve(p)}`).join('\n') + '\n';
+          fs.appendFileSync(recalledFile, pathsToWrite);
+        } catch { /* Non-fatal */ }
       }
 
       const grouped = groupByLayer(result.memories);

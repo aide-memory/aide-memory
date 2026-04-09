@@ -40,19 +40,82 @@ try {
   // Open store using projectRoot (constructor accepts string project path)
   const store = new MemoryStore(projectRoot);
 
-  // Get all active memories and count those matching the path scope
+  // Get all active memories matching the path scope
   const allMemories = store.list();
-  let count = 0;
+  const matching = [];
   for (const m of allMemories) {
     if (scopeMatchesPath(m.scope, relativePath)) {
-      count++;
+      matching.push(m);
     }
   }
 
   store.close();
 
-  // Output only the count — the hook script handles formatting
-  process.stdout.write(String(count));
+  if (matching.length === 0) {
+    process.stdout.write('0');
+    process.exit(0);
+  }
+
+  // Count per layer
+  const layers = {};
+  for (const m of matching) {
+    layers[m.layer] = (layers[m.layer] || 0) + 1;
+  }
+
+  // Extract topic keywords from all matching memories
+  // Grab: capitalized words (not sentence starters), hyphenated compounds, path-like strings
+  const stopWords = new Set([
+    'the', 'this', 'that', 'from', 'with', 'into', 'for', 'and', 'but', 'not',
+    'all', 'are', 'was', 'were', 'been', 'have', 'has', 'had', 'will', 'can',
+    'should', 'would', 'could', 'may', 'must', 'use', 'used', 'using', 'also',
+    'when', 'what', 'how', 'why', 'who', 'which', 'where', 'then', 'than',
+    'each', 'every', 'some', 'any', 'does', 'done', 'only', 'just', 'more',
+    'most', 'very', 'same', 'other', 'after', 'before', 'about', 'between',
+    'IMPORTANT', 'COMPLETE', 'DONE', 'TODO', 'NOTE', 'PENDING', 'NEW', 'OLD',
+    'TRUE', 'FALSE', 'YES', 'NO', 'NEVER', 'ALWAYS',
+  ]);
+
+  const topicCounts = {};
+  for (const m of matching) {
+    const text = [m.what, m.why || '', m.context_label || ''].join(' ');
+
+    // Hyphenated compounds (aide-memory, npm-publish, etc.)
+    const hyphenated = text.match(/[a-zA-Z]+-[a-zA-Z]+(?:-[a-zA-Z]+)*/g) || [];
+    for (const h of hyphenated) {
+      const lower = h.toLowerCase();
+      if (!stopWords.has(lower)) {
+        topicCounts[lower] = (topicCounts[lower] || 0) + 1;
+      }
+    }
+
+    // Capitalized words not at sentence start (skip first word after . or newline)
+    const sentences = text.split(/[.\n]+/);
+    for (const sentence of sentences) {
+      const words = sentence.trim().split(/\s+/).slice(1); // skip first word
+      for (const word of words) {
+        if (/^[A-Z][a-z]{2,}/.test(word)) {
+          const clean = word.replace(/[^a-zA-Z]/g, '');
+          if (clean.length > 2 && !stopWords.has(clean) && !stopWords.has(clean.toUpperCase())) {
+            topicCounts[clean] = (topicCounts[clean] || 0) + 1;
+          }
+        }
+      }
+    }
+  }
+
+  // Sort by frequency, take top 8
+  const topics = Object.entries(topicCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([t]) => t);
+
+  // Output as JSON — the hook script handles formatting
+  const result = {
+    count: matching.length,
+    layers,
+    topics,
+  };
+  process.stdout.write(JSON.stringify(result));
 } catch (err) {
   // Silently exit — don't break the agent if DB doesn't exist or build is stale
   process.exit(0);

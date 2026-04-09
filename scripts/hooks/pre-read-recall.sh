@@ -1,8 +1,10 @@
 #!/bin/bash
 # PreToolUse hook — nudge agent that memories exist for a file path.
-# Fires before Read tool. Calls recall-for-path.js to get a COUNT of memories
-# scoped to the file being read. Never dumps memory content — only the count.
-# The agent decides whether to call aide_recall to fetch actual memories.
+# Fires before Read tool. Calls recall-for-path.js to get layer counts
+# and topic keywords for memories scoped to the file being read.
+#
+# Blocking if aide_recall has NOT been called for this path since last
+# compaction. Soft nudge if already recalled (tracked via recalled-paths.txt).
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
@@ -18,19 +20,56 @@ if echo "$FILE_PATH" | grep -q '\.aide/memories/'; then
   exit 0
 fi
 
-# Get memory count via direct store access
+# Get memory info via direct store access
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-COUNT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" 2>/dev/null)
+RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" 2>/dev/null)
 
-# Only inject nudge if there are matching memories
-if [ -n "$COUNT" ] && [ "$COUNT" -gt 0 ] 2>/dev/null; then
-  NUDGE="${COUNT} memories exist for ${FILE_PATH}. Call aide_recall if relevant. If unavailable, tell user to start the MCP server."
+# No result or zero count = nothing to recall
+if [ -z "$RESULT" ] || [ "$RESULT" = "0" ]; then
+  exit 0
+fi
+
+# Parse JSON result
+COUNT=$(echo "$RESULT" | jq -r '.count // 0' 2>/dev/null)
+if [ "$COUNT" = "0" ] || [ -z "$COUNT" ]; then
+  exit 0
+fi
+
+# Build layer breakdown string
+LAYERS=$(echo "$RESULT" | jq -r '[.layers | to_entries[] | "\(.value) \(.key)"] | join(", ")' 2>/dev/null)
+
+# Build topics string
+TOPICS=$(echo "$RESULT" | jq -r '.topics | join(", ")' 2>/dev/null)
+
+# Format the nudge message
+NUDGE="${COUNT} memories for ${FILE_PATH} (${LAYERS})"
+if [ -n "$TOPICS" ] && [ "$TOPICS" != "null" ] && [ "$TOPICS" != "" ]; then
+  NUDGE="${NUDGE} — topics: ${TOPICS}"
+fi
+NUDGE="${NUDGE}. Call aide_recall."
+
+# Check if this path was already recalled in THIS session
+# Each entry in recalled-paths.txt is "PID|path" — only match current session's PID
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths.txt"
+SESSION_PID="$PPID"
+
+# Check if path was already recalled by this session — if so, soft nudge
+if [ -f "$RECALLED_FILE" ] && grep -qF "${SESSION_PID}|${FILE_PATH}" "$RECALLED_FILE" 2>/dev/null; then
+  # Already recalled in this session — soft nudge only
   echo "$NUDGE" | jq -Rs '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       additionalContext: .
     }
   }'
+  exit 0
 fi
+
+# Not yet recalled in this session — block until agent calls aide_recall
+echo "$NUDGE" | jq -Rs '{
+  decision: "block",
+  reason: .
+}'
 
 exit 0
