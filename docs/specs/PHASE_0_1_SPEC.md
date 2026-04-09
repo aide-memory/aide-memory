@@ -532,7 +532,7 @@ REMAINING (source of truth — all pending items with concrete next steps):
 **Local analytics** — COMPLETE
 - `logEvent()` wired in store.ts for: memory_stored, memory_updated, memory_deleted, memory_recalled, search_performed
 - Viewable via `aide-memory stats`
-- Opt-in: `aide-memory config telemetry.enabled true` (disabled by default)
+- Opt-out: `aide-memory config telemetry.enabled false` (enabled by default)
 
 **Recall/store event log** — COMPLETE
 - `.aide/recall-log.jsonl` captures detailed per-event trace (recall queries, memories returned, store/update/delete events)

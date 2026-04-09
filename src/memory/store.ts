@@ -79,7 +79,7 @@ export class MemoryStore {
   private _fts5Available: boolean = false;
   private embeddingService: EmbeddingService | null = null;
   private analytics: Analytics | null = null;
-  private telemetryEnabled: boolean = false;
+  private telemetryEnabled: boolean = true;
 
   /** Whether FTS5 full-text search is available and initialized. */
   get fts5Available(): boolean {
@@ -139,8 +139,8 @@ export class MemoryStore {
         const configPath = path.join(arg.projectRoot, '.aide', 'config.json');
         if (fs.existsSync(configPath)) {
           const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-          if (configData.telemetry?.enabled === true) {
-            this.telemetryEnabled = true;
+          if (configData.telemetry?.enabled === false) {
+            this.telemetryEnabled = false;
           }
         }
       } catch {
