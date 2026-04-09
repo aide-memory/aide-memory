@@ -144,6 +144,8 @@ Domain: aide-memory.dev (live on Vercel, connected via Cloudflare CNAME)
 
 IMPORTANT: All sub-agents MUST use Opus 4.6 — never Sonnet or Haiku.
 
+COMPUTER USE: You have access to Computer Use (desktop automation). Use it to interact with native Terminal, start/close Claude Code sessions, open browsers, and control desktop apps. For tasks that need a Claude Code session (like validation), open Terminal via Computer Use, run `claude` to start a session, execute the steps, then close it.
+
 PARALLELIZATION: Spin off separate sub-agents for ALL independent tasks. Run as many in parallel as possible. Only go sequential when there's a dependency.
 
 WHAT'S ALREADY DONE (do NOT redo):
