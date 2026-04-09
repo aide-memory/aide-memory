@@ -129,367 +129,146 @@ Included in master prompt below. You screen-record while Cowork executes demos.
 
 ---
 
-### MASTER COWORK PROMPT
+### MASTER COWORK PROMPT (Updated April 9, 2026)
 
-**Paste this entire block into ONE Cowork session. Cowork will run tasks in parallel where possible.**
+**Paste this entire block into ONE Cowork session. Cowork will spin off sub-agents for each independent task.**
 
 ```
-You are completing the remaining launch tasks for AIDE Memory. The codebase is at /Users/meky/code/aide-v0 on branch feature/phase-1.
+You are completing the remaining launch tasks for AIDE Memory — a persistent, path-scoped memory layer for AI coding agents. Published as `aide-memory` on npm.
 
-PARALLELIZATION: Spin off separate sub-agents for independent tasks. Do NOT do tasks top-down one by one — run as many in parallel as possible. Only go sequential when there's a dependency.
+Codebase: /Users/meky/code/aide-v0 (branch: feature/phase-1)
+Landing page repo: aide-memory-web/ inside the codebase (separate git repo, remote: aide-memory/aide-memory-web)
+Public GitHub repo: aide-memory/aide-memory
+npm package: aide-memory (version 0.1.1 live)
+Domain: aide-memory.dev (registered on Cloudflare)
 
-PARALLEL GROUP 1 (all at the same time):
-- Task A (trademark search) — browser agent
-- Task B (EULA draft) — writing agent
-- Task C (Terms & Conditions) — writing agent
-- Task D (GitHub repo) — browser agent
-- Task F2 (logo exploration) — browser agent
-- Task G (plugin research) — browser agent
+PARALLELIZATION: Spin off separate sub-agents for ALL independent tasks. Run as many in parallel as possible. Only go sequential when there's a dependency.
 
-THEN SEQUENTIAL (needs user input):
-- Task E (npm) — needs user for Google OAuth, WAIT for approval before publish
-
-THEN PARALLEL GROUP 2:
-- Task F (landing page scaffold + deploy) — terminal + browser agent
-- Validation setup (npm link, create test project) — terminal agent
-
-THEN SEQUENTIAL (each scenario needs its own Claude Code session):
-- Validation scenarios 1-5 in Claude Code — run one at a time
-
-SKIP for now:
-- Cursor Validation — user will reactivate Cursor first
-- Demo Recordings — wait for user to start screen recording
-
-AFTER VALIDATION:
-- Publishing Prep — browser agent
-
-ALWAYS: Update checklist in this file after each completed task.
+WHAT'S ALREADY DONE (do NOT redo):
+- Domain registration (aide-memory.dev + .com on Cloudflare) ✅
+- Legal: trademark search, EULA, Terms & Conditions ✅
+- GitHub: org, repo, README, issue templates, LICENSE, Actions workflow, NPM_TOKEN ✅
+- npm: aide-memory@0.1.1 published and verified ✅
+- Landing page: Nextra site built with content, pages, dark theme ✅
+- User docs: 8 pages in docs/user/ ✅
+- Marketing content: 5 pieces in docs/marketing/ + publishing guide ✅
+- Analytics: local SQLite + PostHog HTTP integration + recall-log CLI ✅
+- Plugin research: documented in docs/specs/PLUGIN_STATUS.md ✅
 
 ============================
-PHASE 0 TASKS (run in parallel)
+REMAINING TASKS — spin off one sub-agent per task
 ============================
 
-TASK A — Trademark Search:
-1. Open browser, go to tess2.uspto.gov
-2. Click "Basic Word Mark Search"
-3. Search for "AIDE" with International Classes: 009, 042
-4. Screenshot the results page
-5. Look specifically for "AiDE" or "AIDE" related to software/AI platforms
-6. Save summary to /Users/meky/code/aide-v0/docs/legal/trademark-search-results.md
-7. Include: number of results, any conflicts with AI/software tools, risk assessment
+PARALLEL GROUP 1 (all independent — run simultaneously):
 
-TASK B — EULA Draft:
-1. Draft a proprietary freeware EULA for AIDE Memory
-2. Key clauses:
-   - Software is free to use, no account required
-   - No modification, redistribution, or reverse engineering
-   - No warranty, provided "as is"
-   - User owns all their data (memory files, config)
-   - Telemetry: anonymous usage data collected by default, opt-out available
-   - Termination: user can stop using at any time, data remains theirs
-3. Save to /Users/meky/code/aide-v0/docs/legal/EULA.md
+TASK 1 — Vercel Deployment (browser agent)
+Deploy the landing page to Vercel and connect the domain.
+1. Go to vercel.com, sign in
+2. Click "Import Project" → import from GitHub: aide-memory/aide-memory-web
+3. Framework preset: Next.js. Build command: next build. Output: .next
+4. Click Deploy → wait for build to complete
+5. Get the preview URL → open it → verify the site loads (hero, docs, features)
+6. Go to Project Settings → Domains → add "aide-memory.dev"
+7. Go to Cloudflare DNS for aide-memory.dev → add CNAME record: name=@ value=cname.vercel-dns.com (proxied OFF)
+8. Wait for Vercel SSL provisioning (usually < 5 min)
+9. Verify https://aide-memory.dev loads correctly
+10. Save result: "Vercel deployment complete, aide-memory.dev live" to /Users/meky/code/aide-v0/docs/specs/PHASE_0_1_SPEC.md (update P0.5 Vercel checkbox to [x])
 
-TASK C — Terms & Conditions:
-1. Draft Terms & Conditions for aide-memory.dev website
-2. Standard web terms: acceptable use, intellectual property, limitation of liability, privacy (local-first, no data leaves machine on free tier)
-3. Save to /Users/meky/code/aide-v0/docs/legal/TERMS.md
+TASK 2 — PostHog Account Setup (browser agent)
+Set up analytics dashboard so we can see usage data.
+1. Go to posthog.com → click "Get Started Free"
+2. Sign up with Google (use the same Google account as other services)
+3. Create a new project named "aide-memory"
+4. Go to Project Settings → copy the Project API Key (starts with phc_)
+5. Save the key: open terminal, run: echo "AIDE_POSTHOG_KEY=phc_YOUR_KEY_HERE" >> /Users/meky/code/aide-v0/.env
+6. Also add it as a GitHub secret: go to github.com/aide-memory/aide-memory → Settings → Secrets → Actions → New secret → name: AIDE_POSTHOG_KEY, value: the key
+7. Verify: go back to PostHog dashboard, check that the project exists and is ready to receive events
+8. Save result to /Users/meky/code/aide-v0/docs/specs/PHASE_0_1_SPEC.md (update PostHog checkbox)
 
-TASK D — GitHub Repo:
-NOTE: This is a SEPARATE PUBLIC repo (aide-memory/aide-memory on GitHub) — NOT the private aide-v0 dev repo.
-The public repo has: README, docs, issue tracker, release binaries. NO source code.
-The private repo (aide-v0 at /Users/meky/code/aide-v0) stays private — it has all the source.
-1. Open browser, go to github.com
-2. Create organization "aide-memory" (if it doesn't exist)
-3. Create public repo "aide-memory" with description: "Persistent memory layer for AI coding agents — your agent remembers what you taught it"
-4. Initialize with README
-5. Go to Settings → Features → Issues → Set up templates: add "Bug report" and "Feature request"
-6. Go to Settings → Actions → General → enable GitHub Actions
+TASK 3 — Logo Rework (browser agent)
+Current logo is placeholder quality. Generate proper options.
+1. Read the 4 design concepts in /Users/meky/code/aide-v0/docs/branding/logo-exploration.md
+2. Go to canva.com (or figma.com or logomaster.ai) → sign in
+3. For each of the 4 concepts, generate a logo:
+   - Concept 1: Layered memory / stacked cards
+   - Concept 2: Brain + circuit hybrid
+   - Concept 3: Path/tree with memory nodes
+   - Concept 4: Minimal geometric mark
+4. Also generate 1 additional freestyle option (your best judgment)
+5. Screenshot each logo option → save to /Users/meky/code/aide-v0/docs/branding/logo-options/ (create dir if needed)
+   - Name files: option-1-stacked.png, option-2-brain.png, option-3-tree.png, option-4-geometric.png, option-5-freestyle.png
+6. Create a summary: /Users/meky/code/aide-v0/docs/branding/logo-options/COMPARISON.md with thumbnail descriptions and pros/cons
+7. DO NOT pick a winner — user will choose. Just present the options.
 
-TASK E — npm Reservation:
-1. Open Terminal
-2. cd /Users/meky/code/aide-v0
-3. Run: npm login --auth-type=web (this opens browser — user will sign in with Google: ahmedmeky123@gmail.com)
-4. WAIT for user to complete Google OAuth login in browser
-5. Run: cp package.aide-memory.json package.json
-6. Run: npm pack --dry-run (show output, verify it looks right)
-7. WAIT for user approval before publishing
-8. After approval: npm publish --access public
-9. Run: git checkout package.json (restore original)
-10. Open browser, verify at https://www.npmjs.com/package/aide-memory
+TASK 4 — MCP Registry Submission (browser agent)
+Submit aide-memory to the official MCP server registry.
+1. Go to github.com/modelcontextprotocol/servers
+2. Fork the repo to the aide-memory org
+3. In the fork, add an entry for aide-memory:
+   - Follow the existing format in the repo (look at how other servers are listed)
+   - Name: aide-memory
+   - Description: "Persistent, path-scoped memory for AI coding agents"
+   - npm package: aide-memory
+   - Command: npx aide-memory serve
+4. Submit a Pull Request from the fork to the upstream repo
+5. Save the PR URL to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md (append under MCP Registry section)
 
-TASK F — Scaffold Landing Page:
-1. Open Terminal
-2. Run: cd ~/code && npx create-next-app aide-memory-web -e https://github.com/shuding/nextra-docs-template
-3. cd aide-memory-web
-4. The landing page content is at /Users/meky/code/aide-v0/docs/LANDING_PAGE_CONTENT.md — copy it into the Nextra pages
-5. Configure dark theme as default (Nextra supports this in theme.config.tsx — set darkMode: true, similar to Cursor/Claude docs aesthetic)
-6. Open browser, go to vercel.com/new → connect aide-memory-web repo → deploy
-7. Go to Cloudflare dashboard → aide-memory.dev → DNS → add CNAME: @ → cname.vercel-dns.com
-8. In Vercel project settings → Domains → add aide-memory.dev
+TASK 5 — Claude Code Marketplace Submission (browser agent)
+Check if Claude Code has a marketplace/extensions directory and submit if available.
+1. Go to docs.anthropic.com
+2. Search for "Claude Code marketplace", "Claude Code extensions", "Claude Code plugins"
+3. If a submission process exists: follow it, submit aide-memory
+4. If no submission process yet: document what you found and when to check back
+5. Save findings to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md (append under Claude Code section)
 
-TASK F2 — Logo Exploration:
-1. Open browser, go to a free logo/icon tool (e.g., app.brandmark.io, looka.com, or just search "free developer tool logo generator")
-2. Explore simple logo concepts for "AIDE Memory" — ideas to try:
-   - Brain icon (simple, minimal line art)
-   - Memory/chip icon
-   - The letters "AM" or "aide" in a clean monospace font
-   - A simple geometric brain + circuit pattern
-3. Generate 3-5 options, save screenshots to /Users/meky/code/aide-v0/docs/branding/logo-options/
-4. Keep it minimal — monochrome works, should look good at small sizes (favicon, npm badge)
-5. If a good free SVG is found, save it as /Users/meky/code/aide-v0/docs/branding/logo.svg
-
-TASK G — Plugin/Marketplace Research:
-1. Open browser, go to docs.anthropic.com, search for "Claude Code plugin marketplace submission"
-   - If process exists, follow it to submit aide-memory
-   - If not available, note this
-2. Go to cursor.com, search for marketplace or MCP tool directory
-   - If supported, submit aide-memory
-   - If not, note this
-3. Save findings to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md
+TASK 6 — Cursor Marketplace Submission (browser agent)
+Check if Cursor has an MCP server directory and submit if available.
+1. Go to cursor.com and docs.cursor.com
+2. Search for "MCP directory", "MCP marketplace", "extensions", "plugins"
+3. If a submission process exists: follow it, submit aide-memory
+4. If no submission process yet: document what you found
+5. Save findings to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md (append under Cursor section)
 
 ============================
-VALIDATION — 5 SCENARIOS IN CLAUDE CODE
+AFTER PARALLEL GROUP 1 — sequential tasks (need results from above)
 ============================
 
-Setup first:
-1. Make aide-memory command available globally:
-   cd /Users/meky/code/aide-v0 && npm link
-   (This makes `aide` and `aide-memory` available as commands — no more long node dist/ paths)
-
-2. Create a realistic test project:
-   mkdir -p /tmp/aide-val && cd /tmp/aide-val
-   git init && git config user.name "test-user" && git config user.email "test@test.com"
-   npm init -y
-   npm install dayjs typescript --save
-   echo '{"compilerOptions":{"strict":true,"target":"ES2020","module":"commonjs","jsx":"react-jsx","outDir":"dist","rootDir":"src"}}' > tsconfig.json
-
-3. Create realistic project structure:
-   mkdir -p src/components src/api src/auth src/utils src/__tests__
-
-4. Create src/components/Button.tsx:
-   export const Button = ({ label, onClick }: { label: string; onClick: () => void }) => {
-     return <button onClick={onClick}>{label}</button>;
-   };
-
-5. Create src/api/routes.ts:
-   import { authMiddleware } from '../auth/middleware';
-   export function getUsers() { return []; }
-   export function getUser(id: string) { return { id }; }
-   export function createUser(data: any) { return { ...data, id: '1' }; }
-
-6. Create src/auth/middleware.ts:
-   export function authMiddleware(req: any, res: any, next: any) {
-     const token = req.headers?.authorization?.split(' ')[1];
-     if (!token) { res.status(401).json({ error: 'Unauthorized' }); return; }
-     next();
-   }
-
-7. Create src/utils/dates.ts:
-   import dayjs from 'dayjs';
-   export const formatDate = (d: Date) => dayjs(d).format('YYYY-MM-DD');
-   export const isRecent = (d: Date) => dayjs().diff(dayjs(d), 'day') < 7;
-
-8. Create src/__tests__/dates.test.ts:
-   import { describe, it, expect } from 'vitest';
-   import { formatDate } from '../utils/dates';
-   describe('formatDate', () => {
-     it('formats a date', () => { expect(formatDate(new Date('2026-01-15'))).toBe('2026-01-15'); });
-   });
-
-9. Initialize aide-memory:
-   aide-memory init
-   (If `aide-memory` command not found, fall back to: aide-memory init)
-
-10. Verify .aide/ directory exists with memories/ subdirectories
-
-For EACH scenario below:
-- Open a NEW terminal tab
-- cd /tmp/aide-val
-- Start a Claude Code session: claude
-- Run the session prompts EXACTLY as written
-- After each scenario, save the key findings
-- Between sessions, exit Claude Code and start fresh
-
-SCENARIO 1 — Style Continuity:
-Session 1 prompts (type each, wait for response):
-1. "Create a React component at src/components/UserCard.tsx that displays a user's name, email, and avatar"
-2. After it creates it, say: "No, keep components under 80 lines. Split this into smaller pieces if needed."
-3. After it fixes, say: "Also, always use named exports, not default exports"
-4. After it fixes, say: "One more thing — use camelCase for all variable names, not PascalCase for non-component variables"
-5. Exit Claude Code
-
-Session 2 (NEW session):
-1. "Create a React component at src/components/ProductList.tsx that shows a grid of products with name, price, image, and an add-to-cart button"
-2. OBSERVE: Does it follow the 3 rules (under 80 lines, named exports, camelCase vars) WITHOUT being told?
-3. Exit Claude Code
-
-SCORING:
-- Under 80 lines? (yes/no)
-- Named export? (yes/no)
-- camelCase variables? (yes/no)
-- Were memories recalled? Check aide-memory list output.
-
-SCENARIO 2 — Planning Persistence:
-Session 1:
-1. "Let's plan a refactor of src/api/. Here's what I want: Step 1: Create a validators/ directory and extract input validation. Step 2: Add an error handling middleware at src/api/errorHandler.ts. Step 3: Consolidate all route handlers into a single router. Important constraint: we must maintain backward compatibility with the existing getUsers and getUser exports."
-2. Wait for Claude to acknowledge the plan
-3. "Great, let's start with step 1 — create the validators"
-4. Let it work, then exit Claude Code
-
-Session 2 (NEW session):
-1. "Continue the API refactor we were working on"
-2. OBSERVE: Does it know about step 2 (error handler), step 3 (consolidate), and the backward compat constraint? Or does it ask "what refactor?"
-3. Exit Claude Code
-
-SCORING:
-- Knew about the plan? (yes/no)
-- Knew remaining steps? (yes/partial/no)
-- Remembered backward compat constraint? (yes/no)
-
-SCENARIO 3 — Technical Knowledge:
-Session 1:
-1. "Add a helper function to src/utils/dates.ts that calculates the difference between two dates in days"
-2. After it creates it, say: "We always use dayjs in this project, not moment or native Date math"
-3. Then say: "Also, all tests in this project use vitest, not jest"
-4. "Now write a test for the date difference function"
-5. Exit Claude Code
-
-Session 2 (NEW session):
-1. "Add a function to src/utils/dates.ts that formats a date as a relative time string (e.g., '3 days ago', 'just now') and write tests for it"
-2. OBSERVE: Does it use dayjs (not moment/native)? Does it use vitest (not jest)?
-3. Exit Claude Code
-
-SCORING:
-- Used dayjs? (yes/no)
-- Used vitest? (yes/no)
-- Were technical memories recalled?
-
-SCENARIO 4 — Proactive Discovery:
-First, seed context (run in terminal, NOT in Claude Code):
-aide-memory remember "The DataTable component uses server-side pagination via API — never implement client-side pagination as it breaks with large datasets" --layer area_context --scope "src/components/**" --tags "architecture"
-aide-memory remember "All API routes must validate input using zod schemas before processing" --layer guidelines --scope "src/api/**" --tags "api-contract"
-aide-memory remember "Auth middleware checks JWT tokens — always call authMiddleware before route handlers" --layer technical --scope "src/auth/**" --tags "security"
-
-Session 1:
-1. "Create a new DataTable component at src/components/DataTable.tsx with columns for name, email, and role. Add sorting and filtering."
-2. OBSERVE: Does the agent mention server-side pagination or avoid implementing client-side pagination? It should recall the area_context memory.
-3. Exit Claude Code
-
-SCORING:
-- Agent mentioned/respected server-side pagination? (yes/no)
-- PreToolUse nudge appeared? (check terminal output)
-- Agent called aide_recall? (yes/no)
-
-SCENARIO 5 — New Contributor (with vs without):
-Create two project copies:
-cp -r /tmp/aide-val /tmp/aide-val-with
-cp -r /tmp/aide-val /tmp/aide-val-without
-rm -rf /tmp/aide-val-without/.aide
-
-Seed 5 memories in aide-val-with (run in terminal):
-cd /tmp/aide-val-with
-aide-memory remember "This project uses a custom auth middleware — always import from src/auth/middleware" --layer technical
-aide-memory remember "Components should be functional with hooks, no class components" --layer guidelines --scope "src/components/**"
-aide-memory remember "API routes follow RESTful conventions: GET for read, POST for create, PUT for update, DELETE for remove" --layer guidelines --scope "src/api/**"
-aide-memory remember "All date operations use dayjs, never moment.js or native Date arithmetic" --layer technical
-aide-memory remember "Test files go in __tests__/ directories next to the code they test, using vitest" --layer guidelines --tags "testing"
-
-Session A (WITH memories — in /tmp/aide-val-with):
-1. "Create a new API endpoint at src/api/products.ts for CRUD operations on products, with proper auth and validation"
-2. Note what it produces
-3. Exit Claude Code
-
-Session B (WITHOUT memories — in /tmp/aide-val-without):
-1. Same prompt: "Create a new API endpoint at src/api/products.ts for CRUD operations on products, with proper auth and validation"
-2. Note what it produces
-3. Exit Claude Code
-
-SCORING:
-- WITH: Used auth middleware import? Used RESTful conventions? Used dayjs if dates needed?
-- WITHOUT: Did it know about these conventions?
-- Quality difference visible? (yes/no, describe)
+TASK 7 — Marketing Submissions (browser agent, ONLY after Vercel deployment is live + user has completed demo recordings + user has reviewed and approved all public content)
+Publish pre-written marketing content. All content files are ready — just copy and paste. DO NOT run this task until the user explicitly confirms content review is complete.
+1. Show HN: go to news.ycombinator.com/submit → paste title and URL from /Users/meky/code/aide-v0/docs/marketing/show-hn.md → submit
+2. Dev.to: go to dev.to/new → paste content from /Users/meky/code/aide-v0/docs/marketing/devto-post.md → add tags: mcp, ai, developer-tools, productivity → publish
+3. tldrnewsletter.com: find the link submission form → submit aide-memory.dev
+4. console.dev: find the new tool submission → submit aide-memory
+5. changelog.com/submit: submit aide-memory
+6. Save all submission URLs/confirmations to /Users/meky/code/aide-v0/docs/marketing/SUBMISSION_RESULTS.md
 
 ============================
-CURSOR VALIDATION (DEFERRED — do after Claude Code validation)
+USER-ONLY GATES (DO NOT attempt — user runs these)
 ============================
 
-NOTE: Cursor may need reactivation. SKIP this section for now.
-After user confirms Cursor is ready, come back and run:
-1. Open Cursor, open /tmp/aide-val project
-2. Verify aide-memory MCP server is configured in .cursor/mcp.json:
-   { "mcpServers": { "aide-memory": { "command": "aide-memory", "args": ["serve", "/tmp/aide-val"] } } }
-3. Verify .cursor/rules/aide-memory.mdc exists
-4. Use Cursor's agent/composer mode
-5. Run same 5 scenarios with same prompts and scoring
-6. Save results to /Users/meky/code/aide-v0/docs/validation/scenario-N-cursor.md
-7. Add Cursor results to PHASE_1_RESULTS.md
+1. VALIDATION: User runs 6 validation scenarios using runbook at:
+   /Users/meky/code/aide-v0/docs/validation/PHASE_0_1_INTEGRATION_TESTING.md
 
-============================
-DEMO RECORDINGS
-============================
+2. DEMO RECORDINGS: User records demos after validation passes.
+   6 individual clips + 1 full flow → convert to GIFs for README/landing page.
 
-After validation is complete, I will start screen recording. When I say "go":
+3. CONTENT REVIEW: User reviews ALL public-facing content before any submissions:
+   - Public README (docs/PUBLIC_README.md)
+   - Blog posts (docs/marketing/*.md)
+   - Landing page (aide-memory.dev)
+   - Demo GIFs
+   User must explicitly approve before Task 7 (marketing submissions) runs.
 
-Demo 1 — Init (30s):
-Use the validation project /tmp/aide-val (already has realistic structure).
-Or create a fresh one: git clone a small open-source repo, then:
-aide-memory init --scan
-(pause 2s between commands)
-
-Demo 2 — Remember + Recall (45s):
-aide-memory remember "Always use composition over inheritance" --layer guidelines
-aide-memory remember "Auth uses JWT tokens" --layer technical --scope "src/auth/**"
-aide-memory recall src/auth/
-(pause 2s between)
-
-Demo 3 — Search (30s):
-aide-memory search "authentication"
-aide-memory list --layer technical
-(pause 2s between)
-
-Demo 4 — Stats (20s):
-aide-memory stats
-
-Demo 5 — Config (20s):
-aide-memory config capture.enabled
-aide-memory config tags.presets
-
-============================
-RESULTS & REPORTING
-============================
-
-After ALL tasks complete, write:
-
-1. /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md:
-   - Pass/fail per scenario (Claude Code + Cursor)
-   - Key observations with transcript excerpts
-   - Overall verdict: PASS (ship) or FAIL (fix first)
-   - Metrics: how many memories recalled, nudge trigger rate, quality comparison
-
-2. /Users/meky/code/aide-v0/docs/validation/scenario-1-cc.md through scenario-5-cc.md (transcripts)
-3. /Users/meky/code/aide-v0/docs/validation/scenario-1-cursor.md through scenario-5-cursor.md
-
-============================
-PUBLISHING PREP
-============================
-
-After validation passes:
-1. Open browser, search for "Hacker News submit" → note the process
-2. Open browser, go to dev.to → note the publish process
-3. Search for these newsletter submission pages and note URLs:
-   - tldrnewsletter.com (link submission form)
-   - console.dev (new tool submission)
-   - changelog.com/submit
-   - Product Hunt (create project page)
-4. Save all submission URLs and processes to /Users/meky/code/aide-v0/docs/marketing/PUBLISHING_GUIDE.md
+These are NOT Cowork tasks. Skip them entirely.
 
 ============================
 CHECKLIST UPDATE
 ============================
 
 After completing EACH task above, update the checklist in this file (/Users/meky/code/aide-v0/docs/specs/PHASE_0_1_SPEC.md).
-Find the matching "- [ ]" checkbox under the corresponding P0.X or P1.X section and change it to "- [x]".
-Do this after each task completes, not all at the end. This keeps the spec as a live progress tracker.
+Find the matching "- [ ]" checkbox under the corresponding section and change it to "- [x]".
+Do this after each task completes, not all at the end.
+
 ```
 
 **Checklist after Cowork completes:**
@@ -612,17 +391,22 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - [x] Public README (`docs/marketing/public-readme.md`)
 - [x] Publishing guide (`docs/marketing/PUBLISHING_GUIDE.md`) — submission URLs for HN, dev.to, tldrnewsletter, console.dev, changelog, Product Hunt
 
-**Pending — COWORK (browser tasks, after validation passes):**
+**Pre-publish review gate (USER — before any submissions):**
+- [ ] Review all public-facing content: README, blog posts, landing page, demo GIFs
+- [ ] Approve each piece for publishing (no Cowork submission until user signs off)
+
+**Pending — COWORK (browser tasks, after validation + demo + user review):**
 - [ ] Submit Show HN post (copy from `docs/marketing/show-hn.md`, paste at news.ycombinator.com/submit)
 - [ ] Publish dev.to post (copy from `docs/marketing/devto-post.md`, paste at dev.to/new)
 - [ ] Submit to tldrnewsletter.com link submission form
 - [ ] Submit to console.dev new tool submission
 - [ ] Submit to changelog.com/submit
 
-**P1.19: Demo recordings** — DEFERRED
-- User will screen-record while running demo commands (runbook in master prompt below)
+**P1.19: Demo recordings** — BLOCKING (must complete before marketing submissions)
+- User will screen-record while running demo commands
 - 6 individual clips + 1 full flow demo
 - Convert to GIFs for README/landing page
+- Demo must be reviewed and finalized before any blog/submission goes live
 
 ---
 
@@ -687,13 +471,14 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 | 2 | Deploy landing page to Vercel + connect domain | COWORK | Yes — public presence |
 | 3 | Logo rework (3-5 options, pick winner, export sizes) | COWORK + USER | No — but needed before launch marketing |
 | 4 | PostHog account setup | COWORK | No — analytics works locally without it |
-| 5 | Marketplace submissions | COWORK | No — after validation |
-| 6 | Marketing/publishing submissions | COWORK | No — after validation |
-| 7 | Demo recordings | USER | No — after validation |
-| 8 | Cursor validation | USER | No — deferred |
-| 9 | Company registration | USER | No — Phase 2 |
-| 10 | Claude ecosystem guides (Desktop, Web, Cowork) | CLAUDE CODE | No — Phase 1 follow-up |
-| 11 | Non-IDE developer docs (agent frameworks, CI/CD) | CLAUDE CODE | No — Phase 1 follow-up |
+| 5 | Demo recordings | USER | Yes — must complete before marketing |
+| 6 | Review all public content (README, blogs, landing page, demos) | USER | Yes — sign-off gate before submissions |
+| 7 | Marketplace submissions | COWORK | No — after validation + review |
+| 8 | Marketing/publishing submissions | COWORK | No — after validation + demo + review |
+| 9 | Cursor validation | USER | No — deferred |
+| 10 | Company registration | USER | No — Phase 2 |
+| 11 | Claude ecosystem guides (Desktop, Web, Cowork) | CLAUDE CODE | No — Phase 1 follow-up |
+| 12 | Non-IDE developer docs (agent frameworks, CI/CD) | CLAUDE CODE | No — Phase 1 follow-up |
 
 ---
 
