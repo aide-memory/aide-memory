@@ -24,7 +24,7 @@ COUNT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" 2>/dev/null)
 
 # Only inject nudge if there are matching memories
 if [ -n "$COUNT" ] && [ "$COUNT" -gt 0 ] 2>/dev/null; then
-  NUDGE="${COUNT} memories exist for ${FILE_PATH}. Call aide_recall if relevant.\n\nIf aide_recall is not available (MCP server not running), tell the user: \"aide-memory MCP server is not running — ${COUNT} memories exist for this path but cannot be retrieved. Start the server or add it to .mcp.json and restart Claude Code.\""
+  NUDGE="${COUNT} memories exist for ${FILE_PATH}. Call aide_recall if relevant. If unavailable, tell user to start the MCP server."
   echo "$NUDGE" | jq -Rs '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",

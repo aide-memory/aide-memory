@@ -19,6 +19,6 @@ fi
 cat <<'HOOK_OUTPUT'
 {
   "decision": "block",
-  "reason": "Before finishing: Did you learn anything non-obvious during this task? Constraints, patterns, decisions, or corrections worth persisting? If so, try calling aide_remember with the appropriate layer (preferences, technical, area_context, or guidelines) and scope. Use source: \"hook\" to tag hook-captured memories.\n\nIf aide_remember is not available (MCP server not running), do TWO things:\n1. Append the memory content as a JSON line to .aide/pending-memories.jsonl (create if needed) with fields: layer, what, why, scope, tags, source, timestamp\n2. Tell the user: \"aide-memory MCP server is not running. I saved pending memories to .aide/pending-memories.jsonl — run `aide-memory serve` then `aide-memory import --pending` to store them.\"\n\nIf nothing worth storing, you may stop."
+  "reason": "Before finishing: anything non-obvious worth persisting (constraints, decisions, corrections)? Call aide_remember (layer, scope, source:hook). If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server. If nothing to store, stop."
 }
 HOOK_OUTPUT

@@ -16,13 +16,16 @@ if [ -z "$USER_MESSAGE" ]; then
   exit 0
 fi
 
+# Shared fallback instruction (appended to all nudges)
+FALLBACK="If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server."
+
 # Pattern 1: Corrections — user is fixing agent behavior
 if echo "$USER_MESSAGE" | grep -qiE "(no[, ]+(don.t|do not|use|instead|that.s wrong)|actually[, ]|wrong[, ]|not like that|use .+ instead|don.t use|stop using|I told you|I said)"; then
-  cat <<'HOOK_OUTPUT'
+  cat <<HOOK_OUTPUT
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "The user appears to be correcting you. After addressing their feedback, call aide_remember to store this correction so it persists across sessions. Use layer 'preferences' for style/approach preferences, or 'technical' for factual corrections about the codebase. Use source: \"hook\" to tag this as hook-captured.\n\nIf aide_remember is not available (MCP server not running), append the memory as a JSON line to .aide/pending-memories.jsonl (fields: layer, what, why, scope, tags, source, timestamp) and tell the user: \"aide-memory MCP server is not running. Saved to .aide/pending-memories.jsonl — run aide-memory serve then aide-memory import --pending to store them.\""
+    "additionalContext": "User correction detected. Store via aide_remember (layer: preferences or technical, source: hook). ${FALLBACK}"
   }
 }
 HOOK_OUTPUT
@@ -31,11 +34,11 @@ fi
 
 # Pattern 2: Decisions — user is making a choice or direction
 if echo "$USER_MESSAGE" | grep -qiE "(let.s (use|go with)|we should|go with|the approach is|decided to|decision is|we.re going|from now on)"; then
-  cat <<'HOOK_OUTPUT'
+  cat <<HOOK_OUTPUT
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "The user appears to be making a decision. After acknowledging, call aide_remember to store this decision so it persists across sessions. Use layer 'area_context' for decisions about specific parts of the codebase, or 'technical' for architecture-wide decisions. Use source: \"hook\" to tag this as hook-captured.\n\nIf aide_remember is not available (MCP server not running), append the memory as a JSON line to .aide/pending-memories.jsonl (fields: layer, what, why, scope, tags, source, timestamp) and tell the user: \"aide-memory MCP server is not running. Saved to .aide/pending-memories.jsonl — run aide-memory serve then aide-memory import --pending to store them.\""
+    "additionalContext": "User decision detected. Store via aide_remember (layer: area_context or technical, source: hook). ${FALLBACK}"
   }
 }
 HOOK_OUTPUT
@@ -44,11 +47,11 @@ fi
 
 # Pattern 3: Preferences — user is expressing style or approach preferences
 if echo "$USER_MESSAGE" | grep -qiE "(I prefer|always use|never use|I like|my style is|I want you to|don.t ever|make sure to always|I always)"; then
-  cat <<'HOOK_OUTPUT'
+  cat <<HOOK_OUTPUT
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "The user is expressing a preference. After acknowledging, call aide_remember to store this preference so it persists across sessions. Use layer 'preferences' for personal style and approach preferences. Use source: \"hook\" to tag this as hook-captured.\n\nIf aide_remember is not available (MCP server not running), append the memory as a JSON line to .aide/pending-memories.jsonl (fields: layer, what, why, scope, tags, source, timestamp) and tell the user: \"aide-memory MCP server is not running. Saved to .aide/pending-memories.jsonl — run aide-memory serve then aide-memory import --pending to store them.\""
+    "additionalContext": "User preference detected. Store via aide_remember (layer: preferences, source: hook). ${FALLBACK}"
   }
 }
 HOOK_OUTPUT

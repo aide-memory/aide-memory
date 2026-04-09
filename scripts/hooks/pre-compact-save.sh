@@ -14,7 +14,7 @@ cat <<'HOOK_OUTPUT'
 {
   "hookSpecificOutput": {
     "hookEventName": "PreCompact",
-    "additionalContext": "Context is about to be compacted. Extract any key decisions, plans, or constraints worth persisting via aide_remember before they are lost. Use source: \"hook\" to tag these as hook-captured.\n\nIf aide_remember is not available (MCP server not running), append the memories as JSON lines to .aide/pending-memories.jsonl (fields: layer, what, why, scope, tags, source, timestamp) and tell the user: \"aide-memory MCP server is not running. Saved to .aide/pending-memories.jsonl — run aide-memory serve then aide-memory import --pending to store them.\""
+    "additionalContext": "Context compacting. Save key decisions/constraints via aide_remember (source: hook) before they are lost. If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server."
   }
 }
 HOOK_OUTPUT
