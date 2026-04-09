@@ -278,8 +278,19 @@ Present ALL public-facing content to the user for review. DO NOT proceed to Task
 4. Get explicit "approved for publishing" confirmation from user before proceeding
 5. DO NOT proceed to Task 8 until user says all content is approved
 
-TASK 8 — Marketing Submissions (browser agent, ONLY after Task 7 approval)
-Publish pre-written marketing content. DO NOT run until user confirms content review is complete.
+TASK 8 — npm Republish (Claude Code agent, after validation fixes applied + content review approved)
+Bump version and publish updated package to npm. This must happen before marketing so links/install commands reference the latest version.
+1. Apply any fixes discovered during validation (Task 1)
+2. Update version in package.aide-memory.json (bump minor or patch as appropriate)
+3. Run full test suite: npm test
+4. Build: npm run build
+5. Tag and push: git tag v0.X.0 && git push origin v0.X.0
+6. GitHub Actions auto-publishes to npm (or manual: cp package.aide-memory.json package.json && npm publish --access public && git checkout package.json)
+7. Verify on npmjs.com/package/aide-memory that the new version is live
+8. Update version references in PUBLIC_README.md and landing page if needed
+
+TASK 9 — Marketing Submissions (browser agent, ONLY after Task 8 npm republish is live)
+Publish pre-written marketing content. DO NOT run until user confirms content review is complete AND npm is updated.
 1. Show HN: go to news.ycombinator.com/submit → paste title and URL from /Users/meky/code/aide-v0/docs/marketing/show-hn.md → submit
 2. Dev.to: go to dev.to/new → paste content from /Users/meky/code/aide-v0/docs/marketing/devto-post.md → add tags: mcp, ai, developer-tools, productivity → publish
 3. tldrnewsletter.com: find the link submission form → submit aide-memory.dev
@@ -496,12 +507,13 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 | 6 | Claude Code marketplace research (research only, user reviews) | COWORK | No — user approves before submission |
 | 7 | Demo recordings + landing page embed | USER | Yes — must complete before marketing |
 | 8 | Review ALL public content (README, blogs, landing page, demos) | USER + COWORK | Yes — sign-off gate before submissions |
-| 9 | Marketing/publishing submissions | COWORK | No — after demo + review approval |
-| 10 | Cursor marketplace submission | COWORK | No — deferred until after Cursor validation |
-| 11 | Cursor validation | USER | No — deferred |
-| 12 | Company registration | USER | No — Phase 2 |
-| 13 | Claude ecosystem guides (Desktop, Web, Cowork) | CLAUDE CODE | No — Phase 1 follow-up |
-| 14 | Non-IDE developer docs (agent frameworks, CI/CD) | CLAUDE CODE | No — Phase 1 follow-up |
+| 9 | npm republish (bump version, apply validation fixes) | COWORK | Yes — before marketing so install commands are current |
+| 10 | Marketing/publishing submissions | COWORK | No — after demo + review + npm republish |
+| 11 | Cursor marketplace submission | COWORK | No — deferred until after Cursor validation |
+| 12 | Cursor validation | USER | No — deferred |
+| 13 | Company registration | USER | No — Phase 2 |
+| 14 | Claude ecosystem guides (Desktop, Web, Cowork) | CLAUDE CODE | No — Phase 1 follow-up |
+| 15 | Non-IDE developer docs (agent frameworks, CI/CD) | CLAUDE CODE | No — Phase 1 follow-up |
 
 ---
 
