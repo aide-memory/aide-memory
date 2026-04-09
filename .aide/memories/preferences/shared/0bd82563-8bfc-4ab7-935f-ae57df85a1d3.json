@@ -1,0 +1,16 @@
+{
+  "uuid": "0bd82563-8bfc-4ab7-935f-ae57df85a1d3",
+  "layer": "preferences",
+  "what": "User corrections on task delegation: 1) Don't claim items are pending if they're already checked off in the spec — read the checklist carefully. 2) Landing page visual upgrades are Claude Code tasks (code changes), not Cowork tasks. 3) Marketplace submissions should wait until user verifies the product works, but CAN be done via Cowork (browser-based submissions). 4) Check if another agent already created a file before creating it yourself to avoid conflicts.",
+  "why": "User corrected multiple assumptions about task status, delegation targets, and sequencing. These are judgment calls that apply to future planning.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T16:10:11.427Z",
+  "updated_at": "2026-04-09T16:19:38.474Z"
+}

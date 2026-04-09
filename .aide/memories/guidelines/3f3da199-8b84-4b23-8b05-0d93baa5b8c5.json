@@ -1,0 +1,19 @@
+{
+  "uuid": "3f3da199-8b84-4b23-8b05-0d93baa5b8c5",
+  "layer": "guidelines",
+  "what": "PHASE_0_1_SPEC.md is the single source of truth for all remaining work. AUDIT_GAPS_REPORT.md is stale/redundant — everything was consolidated into the REMAINING section of the spec (sections A-H with priority table). Don't create separate tracking files.",
+  "why": "User explicitly asked to consolidate into one file and stop fragmenting status across multiple docs. The audit gaps report was written April 8 and most items are now done.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "docs",
+    "project-management"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T21:37:48.578Z",
+  "updated_at": "2026-04-09T21:37:48.578Z"
+}

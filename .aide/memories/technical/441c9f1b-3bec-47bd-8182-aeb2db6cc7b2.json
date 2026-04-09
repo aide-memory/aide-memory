@@ -1,0 +1,18 @@
+{
+  "uuid": "441c9f1b-3bec-47bd-8182-aeb2db6cc7b2",
+  "layer": "technical",
+  "what": "Landing page/website repo should be named `aide-memory-web` (not aide-memory-site or aide-memory-landing). Generic enough to hold landing page + docs site + blog. Lives in the aide-memory GitHub org, deployed to Vercel, pointed to aide-memory.dev via Cloudflare CNAME.",
+  "why": "User decided on naming. Consistent with the project's naming conventions.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-08T16:43:45.992Z",
+  "updated_at": "2026-04-08T16:43:45.992Z"
+}

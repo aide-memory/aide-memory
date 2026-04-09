@@ -1,0 +1,16 @@
+{
+  "uuid": "34351fd6-a283-41c0-8c16-3ed0f293c84f",
+  "layer": "preferences",
+  "what": "Always use `aide-memory` (or `aide`) command in docs, demos, and prompts — not `node /path/to/dist/cli/aide-memory.js`. Run `npm link` in the project root first to make the command available globally. Use realistic test projects with real files, imports, and dependencies for demos and validation — not empty temp directories.",
+  "why": "User correction — demos and tests should look real, not contrived. And always use the actual CLI command, not internal paths.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "meky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-08T17:20:50.776Z",
+  "updated_at": "2026-04-08T17:20:50.776Z"
+}

@@ -1,0 +1,20 @@
+{
+  "uuid": "cc4aaa1e-d1c0-43d8-8ee1-c5229bf2f45d",
+  "layer": "preferences",
+  "what": "Analytics/telemetry is ENABLED by default (telemetryEnabled = true). Users opt OUT with `aide-memory config telemetry.enabled false`. User explicitly corrected the opposite — they want users sharing analytics by default for product visibility.",
+  "why": "User corrected me twice on this. \"No I want analytics opt in to be true by default i.e users share analytics by default.\" The config check looks for telemetry.enabled === false to disable, not === true to enable.",
+  "scope": "src/memory/store.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "analytics",
+    "telemetry",
+    "correction"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T22:11:35.208Z",
+  "updated_at": "2026-04-09T22:11:35.208Z"
+}

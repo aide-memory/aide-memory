@@ -1,0 +1,18 @@
+{
+  "uuid": "5527a1e6-8726-4b9b-bf37-0bee15468bce",
+  "layer": "technical",
+  "what": "For automating manual tasks: Claude Cowork (Desktop app) can spin up parallel sub-agents and use Computer Use for browser/desktop automation. Dispatch (mobile) lets you assign tasks remotely. For browser-specific automation, Playwright MCP is faster and cheaper than Computer Use (27K tokens vs 114K per task, DOM-based vs vision-based). Cowork can handle Phase 0 tasks (GitHub repo, npm publish, Vercel deploy, trademark search) in parallel. Limitation: Cowork controls one desktop — can't run two separate tool sessions (Claude Code + Cursor) simultaneously on same machine. User successfully used Cowork for P0.1 (Cloudflare domain setup).",
+  "why": "Maps the right automation tool to each remaining task. Cowork for browser tasks, Claude Code for engineering, Playwright MCP for efficient browser automation.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-08T16:38:10.654Z",
+  "updated_at": "2026-04-08T16:38:10.654Z"
+}

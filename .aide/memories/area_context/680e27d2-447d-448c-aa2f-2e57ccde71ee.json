@@ -1,0 +1,19 @@
+{
+  "uuid": "680e27d2-447d-448c-aa2f-2e57ccde71ee",
+  "layer": "area_context",
+  "what": "server.ts is fragile during multi-agent work — git checkout on this file wipes other agents' changes (e.g. logDir passthrough for recall logging). When debugging type errors, prefer targeted edits over full file checkouts. Always verify other agents' changes survived after conflict resolution.",
+  "why": "Cowork added logDir param to createServer/startServer and recall() call. A git checkout -- src/memory/server.ts during zod debugging wiped all of it silently. Had to re-read and restore manually.",
+  "scope": "src/memory/server.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "multi-agent",
+    "git-conflicts"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T21:37:39.111Z",
+  "updated_at": "2026-04-09T21:37:39.111Z"
+}

@@ -1,0 +1,19 @@
+{
+  "uuid": "9a35a280-3149-461e-87ab-139903efd152",
+  "layer": "technical",
+  "what": "Analytics/telemetry is opt-in by default (telemetryEnabled = false in store.ts). Users must explicitly enable with `aide-memory config telemetry.enabled true`. This was a deliberate user decision — matches the \"no telemetry phoning home\" promise in docs.",
+  "why": "User explicitly requested opt-in default. The config check looks for telemetry.enabled === true (not === false). Previous default was opt-out which contradicted the local-first privacy messaging.",
+  "scope": "src/memory/store.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "analytics",
+    "privacy"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T21:48:49.444Z",
+  "updated_at": "2026-04-09T21:48:49.444Z"
+}

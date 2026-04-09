@@ -1,0 +1,16 @@
+{
+  "uuid": "f992ebad-cd8a-4e83-8930-76f5fafd3300",
+  "layer": "technical",
+  "what": "MCP tool parameters typed as z.number() will fail when LLMs send numbers as strings (common). Use z.coerce.number() instead for all numeric MCP tool parameters to auto-convert string→number. Fixed in src/memory/server.ts for id and limit params.",
+  "why": "Claude sent id as string \"19\" instead of number 19, causing zod validation error. This is a known LLM behavior — always coerce MCP params.",
+  "scope": "src/memory/server.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T16:22:11.471Z",
+  "updated_at": "2026-04-09T16:22:11.471Z"
+}

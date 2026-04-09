@@ -1,0 +1,16 @@
+{
+  "uuid": "22eeb88d-82d0-4534-9de6-44f3426aac18",
+  "layer": "technical",
+  "what": "Nextra is a docs framework, not a general UI framework. It only scans .mdx files for page routing — .jsx/.tsx pages won't be found by the _meta.js system. To use custom JSX components as pages, wrap them: create the component in components/, then import it from an .mdx file. Use layout: 'raw' in _meta.js to remove docs chrome (sidebar, toc) from landing pages.",
+  "why": "Spent time debugging build failures when trying to use .jsx as a Nextra page — Nextra 3 ignores non-mdx files in its routing.",
+  "scope": "aide-memory-web/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T16:22:07.145Z",
+  "updated_at": "2026-04-09T16:22:07.145Z"
+}

@@ -1,0 +1,20 @@
+{
+  "uuid": "e2cc78bf-2141-4304-b276-12deaef4ef0e",
+  "layer": "technical",
+  "what": "npm publish uses a separate README from the GitHub public repo. npm README (short, utilitarian — install + setup + MCP config) vs GitHub README (longer, marketing — problem statement, features, demo GIFs, comparison). Since npm pulls README from package root at publish time and we publish from private aide-v0 repo, need a README.npm.md that gets copied to README.md before npm publish, then restored.",
+  "why": "Decision made during Phase 0/1 planning — two different audiences need different READMEs, and the npm publish workflow from the private repo requires a swap step.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "publishing",
+    "npm",
+    "github"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-08T18:58:07.934Z",
+  "updated_at": "2026-04-08T18:58:07.934Z"
+}

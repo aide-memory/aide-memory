@@ -1,0 +1,16 @@
+{
+  "uuid": "338cd4dd-5297-4ddb-9bc3-294f3fa449c2",
+  "layer": "preferences",
+  "what": "All subagents must be Opus 4.6 — never use Sonnet or Haiku for any agent, even simple merge/cleanup tasks. User explicitly called this out.",
+  "why": "User wants maximum quality on all work, no cost-cutting on agent model selection.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "meky",
+  "tags": [],
+  "source": "conversation",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-08T03:54:55.079Z",
+  "updated_at": "2026-04-08T03:54:55.079Z"
+}

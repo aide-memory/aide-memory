@@ -1,0 +1,20 @@
+{
+  "uuid": "81a99d71-2cd6-4cc6-aa20-017c18e37b97",
+  "layer": "technical",
+  "what": "Decision: use PostHog (free tier, 1M events/mo) for user-facing analytics telemetry. posthog-node npm package handles batching. Events are anonymized (event type + counts only, never memory content). Opt-out via aide-memory config telemetry.enabled false. PostHog project needs to be created via browser (Cowork task), then API key added to config.",
+  "why": "User wants visibility on actual user analytics. Local SQLite only tracks per-machine. PostHog gives centralized dashboard for free.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "analytics",
+    "telemetry",
+    "posthog"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T16:28:22.898Z",
+  "updated_at": "2026-04-09T16:28:22.898Z"
+}

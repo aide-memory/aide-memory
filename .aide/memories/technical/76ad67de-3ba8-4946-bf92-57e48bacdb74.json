@@ -1,0 +1,19 @@
+{
+  "uuid": "76ad67de-3ba8-4946-bf92-57e48bacdb74",
+  "layer": "technical",
+  "what": "Observability logging uses a single .aide/recall-log.jsonl file for both recall events AND store events (memory_stored, memory_updated, memory_deleted). Recall logging lives in recall.ts (logRecallEvent), store logging lives in store-log.ts (logStoreEvent). Both are non-fatal. The CLI command recall-log renders both event types.",
+  "why": "Originally only recalls were logged. User needed store events too for validation — to see what memories got created, not just what was recalled. Keeping them in one file simplifies the CLI and gives a unified timeline.",
+  "scope": "src/memory/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "observability",
+    "validation"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T21:37:44.749Z",
+  "updated_at": "2026-04-09T21:37:44.749Z"
+}

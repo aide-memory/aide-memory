@@ -1,0 +1,16 @@
+{
+  "uuid": "ffd069d1-b86d-4e02-a848-bba9bef8699e",
+  "layer": "preferences",
+  "what": "User's npm account uses Google login with ahmedmeky123@gmail.com. Cursor may need reactivation before testing. Validation order: Claude Code first, then Cursor after reactivation. npm publish needs credentials — login via Google if possible.",
+  "why": "Needed for Cowork to handle npm login and for sequencing validation testing.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "meky",
+  "tags": [],
+  "source": "conversation",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-08T17:12:05.282Z",
+  "updated_at": "2026-04-08T17:12:05.282Z"
+}

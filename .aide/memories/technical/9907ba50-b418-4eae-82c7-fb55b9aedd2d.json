@@ -1,0 +1,20 @@
+{
+  "uuid": "9907ba50-b418-4eae-82c7-fb55b9aedd2d",
+  "layer": "technical",
+  "what": "When committing/pushing aide-memory-web changes, must cd into aide-memory-web/ first — it's a separate git repo (origin: aide-memory/aide-memory-web on GitHub). Parent repo git commands won't see its changes. After pushing, cd back to /Users/meky/code/aide-v0 for main repo work.",
+  "why": "Discovered during this session when git add from parent repo silently ignored aide-memory-web/theme.config.jsx. The nested .git means all git operations must happen from within that directory.",
+  "scope": "aide-memory-web/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "git",
+    "workflow",
+    "nested-repo"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-09T22:15:54.532Z",
+  "updated_at": "2026-04-09T22:15:54.532Z"
+}

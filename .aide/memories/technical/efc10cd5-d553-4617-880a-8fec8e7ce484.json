@@ -1,0 +1,16 @@
+{
+  "uuid": "efc10cd5-d553-4617-880a-8fec8e7ce484",
+  "layer": "technical",
+  "what": "Strategic reframe: auto-rules generation should be the PAID hook from day one, not deferred to Phase 2. It's the viral moment (\"it wrote my CLAUDE.md\"), requires model reasoning (can't easily DIY), and is immediately valuable (not \"after 8 weeks\"). Free tier = capture + recall + path scoping + hooks (the memory engine, competes with claude-mem/engram). Paid tier = auto-generate config files from behavior + cross-tool handoff + team recall + cleanup. The most visible, shareable feature is paid. User's three pain points (cross-tool gaps, lazy to create rules, team context lost) are verified UNSOLVED by every tool with actual users — claude-mem has no config gen or team features, engram agents don't use it, MemPalace has no team or config gen.",
+  "why": "Potential pivot in monetization strategy. Instead of \"everything free, hope people pay for convenience,\" the most compelling feature (auto-rules) becomes the paid hook. This creates real \"I need this\" upgrade pressure — not just \"nice to have\" convenience features. User hasn't confirmed yet but this framing addresses the \"whole product is free\" concern from earlier.",
+  "scope": "docs/**",
+  "context_label": "auto-rules as paid hook reframe",
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-08T04:02:35.211Z",
+  "updated_at": "2026-04-08T04:02:35.211Z"
+}
