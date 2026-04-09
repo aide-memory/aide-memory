@@ -7,6 +7,7 @@ import { execSync } from 'child_process';
 import type { Memory, MemoryFile, CreateMemory, MemoryLayer, GeneratedBy } from './types';
 import { initFts5, backfillFts5Index, escapeFts5Query } from './fts5';
 import type { EmbeddingService } from './embeddings';
+import { Analytics } from './analytics';
 
 const SCHEMA_VERSION = 2;
 
@@ -77,6 +78,8 @@ export class MemoryStore {
   readonly dbPath: string;
   private _fts5Available: boolean = false;
   private embeddingService: EmbeddingService | null = null;
+  private analytics: Analytics | null = null;
+  private telemetryEnabled: boolean = false;
 
   /** Whether FTS5 full-text search is available and initialized. */
   get fts5Available(): boolean {
@@ -127,6 +130,24 @@ export class MemoryStore {
     this.db.pragma('foreign_keys = ON');
     this.init();
 
+    // Initialize analytics
+    this.analytics = new Analytics(this.db);
+
+    // Check telemetry config if in file-per-memory mode (has project root)
+    if (typeof arg !== 'string' && 'projectRoot' in arg) {
+      try {
+        const configPath = path.join(arg.projectRoot, '.aide', 'config.json');
+        if (fs.existsSync(configPath)) {
+          const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+          if (configData.telemetry?.enabled === true) {
+            this.telemetryEnabled = true;
+          }
+        }
+      } catch {
+        // Config read failure is non-fatal — default to enabled
+      }
+    }
+
     // If file-per-memory mode, sync cache on startup
     if (this.memoriesDir) {
       this.rebuildCacheIfNeeded();
@@ -163,6 +184,18 @@ export class MemoryStore {
 
   getEmbeddingService(): EmbeddingService | null {
     return this.embeddingService;
+  }
+
+  /** Get the Analytics instance (for stats CLI command). */
+  getAnalytics(): Analytics | null {
+    return this.analytics;
+  }
+
+  /** Log an analytics event if telemetry is enabled. */
+  private logEvent(event: string, value?: string, tool?: string): void {
+    if (this.telemetryEnabled && this.analytics) {
+      this.analytics.logEvent(event, value, tool);
+    }
   }
 
   private init(): void {
@@ -420,6 +453,8 @@ export class MemoryStore {
 
     const memory = this.get(Number(result.lastInsertRowid))!;
 
+    this.logEvent('memory_stored', input.layer);
+
     // Write JSON file if in file-per-memory mode
     if (this.memoriesDir) {
       this.writeMemoryFile(memory);
@@ -529,6 +564,8 @@ export class MemoryStore {
 
     const updated = this.get(id)!;
 
+    this.logEvent('memory_updated', updated.layer);
+
     // Update JSON file if in file-per-memory mode
     if (this.memoriesDir) {
       // If shared changed, delete old file location first
@@ -545,6 +582,8 @@ export class MemoryStore {
   remove(id: number): boolean {
     const existing = this.get(id);
     if (!existing) return false;
+
+    this.logEvent('memory_deleted', existing.layer);
 
     const result = this.db.prepare('DELETE FROM memories WHERE id = ?').run(id);
 
@@ -583,6 +622,7 @@ export class MemoryStore {
       }
     });
     tx();
+    this.logEvent('memory_recalled', String(ids.length));
   }
 
   count(options?: { layer?: MemoryLayer; contributor?: string }): number {
@@ -608,11 +648,23 @@ export class MemoryStore {
   }
 
   search(keyword: string, options?: { layer?: MemoryLayer; limit?: number }): Memory[] {
+    let results: Memory[];
+    let searchType: string;
     if (this._fts5Available) {
       const ftsResults = this.searchFts5(keyword, options);
-      if (ftsResults.length > 0) return ftsResults;
+      if (ftsResults.length > 0) {
+        results = ftsResults;
+        searchType = 'fts5';
+      } else {
+        results = this.searchLike(keyword, options);
+        searchType = 'like';
+      }
+    } else {
+      results = this.searchLike(keyword, options);
+      searchType = 'like';
     }
-    return this.searchLike(keyword, options);
+    this.logEvent('search_performed', searchType);
+    return results;
   }
 
   /** FTS5-based search with BM25 ranking. */

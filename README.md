@@ -1,258 +1,268 @@
-# AIDE V0 - Local Code Assistant
+# aide-memory
 
-A local, project-aware AI coding assistant that understands your codebase through symbol extraction and graph-based retrieval.
+**Your AI coding agent forgets everything between sessions.** You correct it, it adjusts, you close the session, and next time it starts from zero. aide-memory fixes this -- persistent, path-scoped memory that captures context automatically via hooks and recalls it exactly when the agent needs it.
 
-## Supported Languages
+```bash
+npx aide-memory init
+```
 
-| Language                                                 | File Indexing | Symbol Extraction | Relation Detection |
-| -------------------------------------------------------- | ------------- | ----------------- | ------------------ |
-| TypeScript/JavaScript                                    | ✅            | ✅ (ts-morph)     | ✅ Full            |
-| Python                                                   | ✅            | ✅ (ctags)        | ✅ Imports/Calls   |
-| Go                                                       | ✅            | ✅ (ctags)        | ✅ Imports/Calls   |
-| Rust                                                     | ✅            | ✅ (ctags)        | ✅ Imports/Calls   |
-| Java                                                     | ✅            | ✅ (ctags)        | ✅ Imports/Calls   |
-| C/C++                                                    | ✅            | ✅ (ctags)        | ✅ Includes/Calls  |
-| Ruby, PHP, C#, Swift, Kotlin, Scala, Lua, R, Perl, Shell | ✅            | ✅ (ctags)        | Basic              |
-| JSON, YAML, TOML, Markdown                               | ✅            | -                 | -                  |
+Two minutes. Zero config. No Docker, no cloud, no API keys.
 
-**Note**: For non-TypeScript/JavaScript languages, [Universal Ctags](https://ctags.io/) is required for symbol extraction.
+---
+
+## What It Does
+
+- **Hook-driven capture** -- 4 hooks fire automatically (PreToolUse, Stop, UserPromptSubmit, PreCompact). Your agent stores context without you asking it to. Tested: 0% voluntary adoption vs 100% hook-driven.
+- **Nudge, not dump** -- ~20 token nudge per file read instead of ~2,000 token system prompt injection. The agent decides what is relevant and recalls only that.
+- **Path-scoped recall** -- memories are tied to code paths via glob patterns. A memory about checkout code surfaces in checkout files, not everywhere.
+- **File-per-memory storage** -- each memory is a human-readable JSON file in `.aide/memories/`. Browsable, diffable, version-controlled.
+- **Git is the sync** -- memories are files, files are committed, git syncs them. No separate sync mechanism needed.
+- **Structured layers** -- preferences, technical, area context, guidelines. Recalled in priority order so the agent gets the most important context first.
+- **FTS5 search** -- BM25-ranked full-text search across all memories. Sub-millisecond path lookups.
+- **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both.
+
+---
+
+## Quick Start
+
+### 1. Initialize
+
+```bash
+npx aide-memory init
+```
+
+Creates `.aide/memories/`, installs 4 hooks, writes editor rules, configures the MCP server.
+
+### 2. Store a memory
+
+```bash
+aide-memory remember "API responses must use camelCase keys" --layer guidelines
+```
+
+Or let the hooks capture context automatically as you work -- corrections, planning decisions, and session reflections are stored without manual intervention.
+
+### 3. Recall by path
+
+```bash
+aide-memory recall src/auth/
+```
+
+Returns memories scoped to that path, plus project-wide context. Your agent does this automatically via the PreToolUse hook whenever it reads a file.
+
+### 4. Search across memories
+
+```bash
+aide-memory search "authentication"
+```
+
+FTS5 BM25-ranked keyword search, grouped by layer.
+
+### 5. Inspect
+
+```bash
+aide-memory stats
+```
+
+See totals by layer, most-recalled memories, capture source breakdown, and stale candidates.
+
+---
 
 ## How It Works
 
-### Core Concept
+### Hooks drive everything
 
-AIDE builds a **"project brain"** - a SQLite database containing:
+| Hook | When it fires | What it does | Token cost |
+|------|--------------|--------------|------------|
+| **PreToolUse** | Before file reads | Nudges: "N memories exist for this path" | ~20 tokens |
+| **Stop** | Task completion | Prompts agent to reflect and store learnings | Hidden |
+| **UserPromptSubmit** | User corrects agent | Detects correction patterns, stores scoped memory | Hidden |
+| **PreCompact** | Before context compaction | Extracts planning decisions before context is lost | Hidden |
 
-- **Files** - paths, languages, content hashes
-- **Symbols** - functions, classes, methods with line spans and signatures
-- **Relations** - CALLS, IMPORTS, EXTENDS, IMPLEMENTS between symbols
-- **Notes** - user/model annotations attached to symbols
-- **Sessions** - persistent chat history and focus tracking
+All hooks use `additionalContext` -- invisible to you. Memory management happens silently in the background.
 
-### Query Flow
+### Storage: file-per-memory with SQLite cache
 
 ```
-User Question: "Where is ContextAssembler used?"
-                         │
-                         ▼
-            ┌────────────────────────┐
-            │  1. Find Seed Symbols  │
-            │  Match "ContextAssembler"│
-            │  in symbol names        │
-            └────────────────────────┘
-                         │
-                         ▼
-            ┌────────────────────────┐
-            │  2. Graph Traversal    │
-            │  Expand via relations  │
-            │  Find callers/callees  │
-            └────────────────────────┘
-                         │
-                         ▼
-            ┌────────────────────────┐
-            │  3. Context Assembly   │
-            │  Build LLM prompt with │
-            │  code snippets + notes │
-            └────────────────────────┘
-                         │
-                         ▼
-            ┌────────────────────────┐
-            │  4. LLM Response       │
-            │  Ollama generates      │
-            │  contextual answer     │
-            └────────────────────────┘
+.aide/
+├── memories/
+│   ├── preferences/
+│   │   ├── personal/          # gitignored -- your private preferences
+│   │   └── shared/            # tracked -- team-visible preferences
+│   ├── technical/             # tracked -- stack and integration facts
+│   ├── area_context/          # tracked -- decisions for specific code areas
+│   └── guidelines/            # tracked -- team and project principles
+├── config.json                # local configuration
+└── cache/
+    └── memory.db              # SQLite cache (rebuildable, gitignored)
 ```
 
-### Key Features
+Each memory is a single JSON file:
 
-- **Symbol-based retrieval** - finds relevant code by understanding what calls what
-- **Session persistence** - chat history survives restarts
-- **Focus tracking** - remembers what you were discussing for follow-up questions
-- **Accurate context** - only shows direct relationships, not indirect connections
+```json
+{
+  "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "layer": "technical",
+  "what": "Apollo needs useGraphQLGateway: true for federation",
+  "why": "Without this flag, subgraph queries silently fail",
+  "scope": "src/graphql/**",
+  "contributor": "ahmed",
+  "tags": ["api-contracts", "graphql"],
+  "shared": true
+}
+```
+
+SQLite is a rebuildable cache. Delete it and it reconstructs from the JSON files. The JSON files are the source of truth.
+
+### Recall: three tiers
+
+1. **Path match** -- glob pattern lookup (sub-millisecond, deterministic)
+2. **FTS5** -- BM25-ranked keyword search for cross-cutting queries
+3. **Embeddings** -- cosine similarity via local model for semantic fallback (no API keys)
+
+Path inheritance: a memory scoped to `src/**` surfaces for `src/checkout/CartSummary.tsx`. A memory scoped to `src/checkout/**` surfaces only in checkout code.
+
+### Sync via git
+
+Memories are files. Commit them, push them, pull them. A `post-checkout` hook automatically imports new or changed memories after `git pull` or branch switches. Conflicts resolve by timestamp -- newer wins.
 
 ---
 
-## Folder Structure
+## CLI Commands
 
-```
-src/
-├── brain/                    # Core data layer
-│   ├── types.ts              # FileRecord, SymbolRecord, Relation, Note, Tag
-│   ├── store.ts              # ProjectBrainStore interface
-│   └── sqliteStore.ts        # SQLite implementation
-│
-├── analysis/                 # Code parsing
-│   ├── fileAnalyzer.ts       # Language detection, content hashing
-│   ├── parser.ts             # Extract symbols from TypeScript/JavaScript (ts-morph)
-│   ├── ctagsParser.ts        # Extract symbols from other languages (Universal Ctags)
-│   └── relationResolver.ts   # Discover CALLS, IMPORTS, EXTENDS relations
-│
-├── retrieval/                # Context retrieval
-│   ├── strategy.ts           # RetrievalStrategy interface + config
-│   └── graphTraversal.ts     # BFS expansion from seed symbols
-│
-├── context/                  # LLM prompt building
-│   └── assembler.ts          # Build system message from code slices
-│
-├── session/                  # Session management
-│   └── sessionManager.ts     # Focus tracking, chat history, persistence
-│
-├── cli/                      # Command-line interface
-│   ├── index.ts              # Main CLI (commander.js)
-│   ├── repl.ts               # Interactive REPL
-│   ├── ui.ts                 # Terminal formatting
-│   └── commands/
-│       ├── init.ts           # aide init - full project indexing
-│       ├── reindex.ts        # aide reindex - incremental update
-│       ├── watch.ts          # aide watch - file change detection
-│       └── ask.ts            # aide ask - single question mode
-│
-├── models/
-│   └── localModelClient.ts   # Ollama integration
-│
-├── core/
-│   ├── config.ts             # Project configuration
-│   └── logger.ts             # Logging utilities
-│
-├── storage/
-│   └── paths.ts              # ~/.aide storage paths
-│
-└── _legacy/                  # Old embedding code (for reference)
-```
+All commands use the `aide-memory` binary (aliased as `aide`).
+
+| Command | Description |
+|---------|-------------|
+| `init [--scan] [--update-rules]` | Create `.aide/`, install hooks, write editor rules, configure MCP |
+| `recall <path>` | Recall memories scoped to a file or directory path |
+| `remember <what>` | Store a memory with `--layer`, `--scope`, `--tags`, `--why` |
+| `update <id>` | Update an existing memory's content, scope, or context |
+| `forget <id>` | Permanently delete a memory |
+| `search <query>` | FTS5 keyword search with BM25 ranking |
+| `list` | List memories with `--layer`, `--scope`, `--contributor`, `--tag` filters |
+| `stats` | Show analytics: counts by layer, most recalled, stale candidates |
+| `config <key> [value]` | Get or set configuration (dot-notation keys) |
+| `sync import` | Rebuild SQLite cache from JSON memory files |
+| `sync export` | Ensure all memories have corresponding JSON files |
+
+Use `--scan` with `init` to generate initial memories from your project structure, stack detection, and config files.
 
 ---
 
-## Usage
+## MCP Tools
 
-### `aide init [path]` - Initialize/index a project
+Seven tools exposed to your AI agent (~1,400 tokens total schema -- GitHub MCP is 54K for comparison):
 
-```bash
-aide init                     # Index current directory
-aide init /path/to/project    # Index specific project
-aide init --force             # Force full reindex from scratch
-aide init --clear-sessions    # Clear all session files
-aide init -f --clear-sessions # Both options combined
-```
-
-| Option             | Description                |
-| ------------------ | -------------------------- |
-| `-f, --force`      | Force reindex from scratch |
-| `--clear-sessions` | Delete all session history |
-
-### `aide [path]` - Start interactive REPL (default)
-
-```bash
-aide                    # Start REPL, auto-resume previous session
-aide --new              # Start fresh session
-aide --clear-history    # Clear chat history before starting
-aide --no-init          # Don't auto-init if project not indexed
-aide /path/to/project   # Start REPL for specific project
-```
-
-| Option            | Description                        |
-| ----------------- | ---------------------------------- |
-| `-n, --new`       | Start new session (don't resume)   |
-| `--clear-history` | Clear chat history before starting |
-| `--no-init`       | Skip auto-init if not indexed      |
-
-### `aide ask <question>` - Single question mode
-
-```bash
-aide ask "What does the analysis package do?"
-aide ask "Where is ContextAssembler used?" --debug
-aide ask "How does parsing work?" -d 3 -f 10
-```
-
-| Option              | Description              | Default |
-| ------------------- | ------------------------ | ------- |
-| `-p, --path <path>` | Project root path        | `.`     |
-| `-d, --depth <n>`   | Graph traversal depth    | `2`     |
-| `-f, --fanout <n>`  | Max symbols per relation | `5`     |
-| `-t, --tokens <n>`  | Token budget for context | `4000`  |
-| `--debug`           | Print debug information  | -       |
-
-### `aide reindex [path]` - Incremental reindex
-
-```bash
-aide reindex                      # Reindex changed files
-aide reindex -f src/cli/index.ts  # Reindex specific files
-aide reindex --files a.ts b.ts    # Reindex multiple files
-```
-
-| Option                   | Description               |
-| ------------------------ | ------------------------- |
-| `-f, --files <files...>` | Specific files to reindex |
-
-### `aide watch [path]` - Watch for file changes
-
-```bash
-aide watch              # Watch current project
-aide watch -d 500       # Custom debounce delay (ms)
-```
-
-| Option                | Description          | Default |
-| --------------------- | -------------------- | ------- |
-| `-d, --debounce <ms>` | Debounce delay in ms | `1000`  |
+| Tool | Description |
+|------|-------------|
+| `aide_recall` | Path-scoped memory retrieval with glob inheritance |
+| `aide_remember` | Store a new memory with layer, scope, tags, and context |
+| `aide_update` | Edit an existing memory's content or scope |
+| `aide_forget` | Permanently delete a memory |
+| `aide_search` | FTS5 keyword search, results grouped by layer |
+| `aide_memories` | List memories with count and filter support |
+| `aide_import` | Import from markdown bullet/numbered lists into any layer |
 
 ---
 
-### REPL Commands
+## Configuration
 
-| Command          | Description                   |
-| ---------------- | ----------------------------- |
-| `:help`          | Show all commands             |
-| `:focus`         | Show current focus symbols    |
-| `:history`       | Show chat history             |
-| `:clear`         | Clear focus                   |
-| `:clear-history` | Clear chat history            |
-| `:new`           | Clear everything, start fresh |
-| `:note <text>`   | Add note to focus symbol      |
-| `:q`             | Quit                          |
+Configuration lives in `.aide/config.json`. Manage via CLI:
+
+```bash
+aide-memory config capture.enabled          # read
+aide-memory config capture.enabled false    # write
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `capture.enabled` | `true` | Enable/disable all automatic hook capture |
+| `capture.hooks.preToolUse` | `true` | PreToolUse hook (nudge on file read) |
+| `capture.hooks.stop` | `true` | Stop hook (reflection on task completion) |
+| `capture.hooks.userPromptSubmit` | `true` | UserPromptSubmit hook (correction detection) |
+| `capture.hooks.preCompact` | `true` | PreCompact hook (save before compaction) |
+| `tags.presets` | `[architecture, testing, security, style, performance, api-contracts]` | Available tags for memory categorization |
 
 ---
 
-## Data Storage
+## Comparison with Alternatives
 
-```
-~/.aide/projects/{project-id}/
-├── brain.db          # SQLite database (files, symbols, relations, notes)
-├── config.json       # Project configuration
-└── sessions/
-    ├── session-xxx.json   # Session state + chat history
-    └── latest.txt         # Points to most recent session
-```
+### vs. claude-mem
+
+[claude-mem](https://github.com/nicobailon/claude-mem) dumps all memories into the system prompt on every interaction (~2,000 tokens of overhead regardless of relevance). No path scoping -- every memory surfaces everywhere. No hooks -- relies on the agent voluntarily saving context, which in testing has a 0% adoption rate without explicit prompting.
+
+aide-memory uses a ~20 token nudge per file read, path-scoped recall so only relevant memories surface, and hook-driven capture that works without agent cooperation.
+
+### vs. engram
+
+[engram](https://github.com/cline/engram) stores memories as flat key-value pairs with no structural awareness of your codebase. No glob-based path scoping, no layered priority (preferences vs. technical vs. guidelines), no hook integration for automatic capture. Memories are workspace-global -- you cannot scope a memory to `src/auth/**` and have it surface only when working in auth code.
+
+aide-memory provides four structured layers, path-scoped recall with glob inheritance, and automatic capture via editor hooks.
+
+### What we share
+
+All three tools solve the same core problem: AI agents forget between sessions. The key architectural difference is **how memories are selected for recall**. Flat stores surface everything or nothing. Path-scoped stores surface what is relevant to the code you are working in right now.
+
+---
+
+## Editor Setup
+
+### Claude Code
+
+`aide-memory init` automatically:
+- Writes `.claude/rules/aide-memory.md` (agent instructions)
+- Configures hooks in Claude Code settings
+- Sets up the MCP server
+
+### Cursor
+
+`aide-memory init` automatically:
+- Writes `.cursor/rules/aide-memory.mdc` (with MDC frontmatter)
+- Configures MCP server in `.cursor/mcp.json`
 
 ---
 
 ## Requirements
 
-- **Node.js** >= 18.0.0
-- **Ollama** - Local LLM runtime (for chat and embeddings)
-- **Universal Ctags** (optional) - Required for non-TypeScript/JavaScript symbol extraction
+- **Node.js 18+**
+- **npm or npx**
+- **Claude Code or Cursor** (for hook integration)
 
-### Installing Universal Ctags
-
-```bash
-# macOS
-brew install universal-ctags
-
-# Ubuntu/Debian
-sudo apt install universal-ctags
-
-# Windows (via Chocolatey)
-choco install universal-ctags
-```
-
-If ctags is not installed, AIDE will still index all files but only extract symbols from TypeScript/JavaScript.
+No Docker. No external databases. No API keys. No cloud accounts.
 
 ---
 
-## Future Improvements
+## Test Status
 
-- [ ] **File summaries** - LLM-generated descriptions for each file and tags (i.e TagRecord entries)
-- [ ] **Embeddings** - Semantic search as fallback when symbol matching fails
-- [ ] **Smarter notes** - Auto-extract insights from LLM responses (model-suggested notes/tags)
-- [ ] **Configurable traversal depth/fanout** exposed in CLI or config
-- [ ] Options to ask with a -s or --session my-session
-- [ ] **Project-level memory** - Cross-session learnings about the codebase
-- [x] **Multi-language support** - Python, Go, Rust, Java, C/C++ via Universal Ctags
+- **544 tests passing** across 21 test files
+- **0 TypeScript errors**
+- 7 MCP tools, 11 CLI commands, 4 hooks -- all verified end-to-end
+
+---
+
+## Contributing
+
+Contributions welcome. Please open an issue first to discuss what you would like to change.
+
+```bash
+git clone https://github.com/aide-memory/aide-memory.git
+cd aide-memory
+npm install
+npm test
+```
+
+---
+
+## License
+
+See [LICENSE](LICENSE) for details.
+
+---
+
+## Documentation
+
+- [CLI Reference](docs/user/cli-reference.md) -- all 11 commands with flags, examples, and error messages
+- [MCP Tools Reference](docs/user/mcp-tools.md) -- all 7 tools with parameters and example calls
+- [Architecture Guide](docs/user/architecture.md) -- storage, hooks, recall, and sync internals
+- [Configuration Guide](docs/user/configuration.md) -- all settings with defaults
+- [FAQ](docs/user/faq.md) -- common questions and troubleshooting

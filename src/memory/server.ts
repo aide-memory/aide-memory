@@ -1,14 +1,22 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import path from 'path';
 import { MemoryStore } from './store';
 import { recall } from './recall';
+import { logStoreEvent } from './store-log';
 import type { MemoryLayer, MemorySource } from './types';
 
 const LAYER_VALUES: [string, ...string[]] = ['preferences', 'technical', 'area_context', 'guidelines'];
 const SOURCE_VALUES: [string, ...string[]] = ['conversation', 'import', 'agent_discovery', 'elevated', 'hook'];
 
-export function createServer(store: MemoryStore): McpServer {
+/** Coerce a value to number — LLMs often send numbers as strings */
+function toNumber(v: unknown): number {
+  return typeof v === 'string' ? Number(v) : v as number;
+}
+
+export function createServer(store: MemoryStore, options?: { logDir?: string | null }): McpServer {
+  const logDir = options?.logDir ?? null;
   const server = new McpServer({
     name: 'aide-memory',
     version: '0.2.0',
@@ -32,7 +40,7 @@ export function createServer(store: MemoryStore): McpServer {
         layers: params.layers as MemoryLayer[] | undefined,
         contributor: params.contributor,
         limit: params.limit,
-      });
+      }, logDir);
 
       if (result.memories.length === 0) {
         return {
@@ -91,6 +99,8 @@ export function createServer(store: MemoryStore): McpServer {
         shared: params.shared,
       });
 
+      logStoreEvent(logDir, 'memory_stored', memory);
+
       return {
         content: [{
           type: 'text' as const,
@@ -112,11 +122,12 @@ export function createServer(store: MemoryStore): McpServer {
       context_label: z.string().optional().describe('Updated feature label.'),
     },
     async (params) => {
-      const existing = store.get(params.id);
+      const id = toNumber(params.id);
+      const existing = store.get(id);
 
       if (!existing) {
         return {
-          content: [{ type: 'text' as const, text: `Memory ${params.id} not found.` }],
+          content: [{ type: 'text' as const, text: `Memory ${id} not found.` }],
         };
       }
 
@@ -135,7 +146,9 @@ export function createServer(store: MemoryStore): McpServer {
         };
       }
 
-      const updated = store.update(params.id, changes);
+      const updated = store.update(id, changes);
+
+      logStoreEvent(logDir, 'memory_updated', updated!);
 
       return {
         content: [{
@@ -154,17 +167,19 @@ export function createServer(store: MemoryStore): McpServer {
       id: z.number().describe('The memory ID to delete.'),
     },
     async (params) => {
-      const existing = store.get(params.id);
+      const id = toNumber(params.id);
+      const existing = store.get(id);
 
       if (!existing) {
         return {
-          content: [{ type: 'text' as const, text: `Memory ${params.id} not found.` }],
+          content: [{ type: 'text' as const, text: `Memory ${id} not found.` }],
         };
       }
 
-      store.remove(params.id);
+      store.remove(id);
+      logStoreEvent(logDir, 'memory_deleted', existing);
       return {
-        content: [{ type: 'text' as const, text: `Deleted: "${existing.what}" (id: ${params.id})` }],
+        content: [{ type: 'text' as const, text: `Deleted: "${existing.what}" (id: ${id})` }],
       };
     }
   );
@@ -341,7 +356,8 @@ function parseMarkdownItems(content: string): string[] {
 // CLI entry point
 export async function startServer(projectPath: string): Promise<void> {
   const store = new MemoryStore({ projectRoot: projectPath });
-  const server = createServer(store);
+  const logDir = path.join(projectPath, '.aide');
+  const server = createServer(store, { logDir });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 

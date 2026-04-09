@@ -29,6 +29,7 @@ import { runForget } from './commands/memory/forget';
 import { runSearch } from './commands/memory/search';
 import { runList } from './commands/memory/list';
 import { runStats } from './commands/memory/stats';
+import { runRecallLog } from './commands/memory/recall-log';
 import { runConfig } from './commands/memory/config';
 import { runSyncImport, runSyncExport } from './commands/memory/sync';
 import { runMigrate } from './commands/memory/migrate';
@@ -122,6 +123,16 @@ export function createProgram(): Command {
     .description('Show memory analytics summary')
     .action(() => {
       runStats();
+    });
+
+  // aide-memory recall-log
+  program
+    .command('recall-log')
+    .description('Show detailed recall history (which memories were returned per recall event)')
+    .option('--last <n>', 'Show only the last N recall events')
+    .option('--clear', 'Clear the recall log')
+    .action((options: any) => {
+      runRecallLog(options);
     });
 
   // aide-memory config <key> [value]

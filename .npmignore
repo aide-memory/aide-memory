@@ -2,6 +2,9 @@ src/
 tests/
 *.test.ts
 *.test.js
+__tests__/
+**/run-comparison.js
+**/seed-project.js
 docs/
 .claude/
 .aide/

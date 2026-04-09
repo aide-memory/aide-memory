@@ -1,8 +1,50 @@
 import type { Memory, MemoryLayer, RecallQuery, RecallResult } from './types';
 import type { MemoryStore } from './store';
+import fs from 'fs';
+import path from 'path';
 
 const LAYER_ORDER: MemoryLayer[] = ['area_context', 'technical', 'preferences', 'guidelines'];
 const DEFAULT_LIMIT = 20;
+
+/**
+ * Append a recall event to .aide/recall-log.jsonl for observability.
+ * Each line records: timestamp, query params, and every memory returned.
+ * Non-fatal — if logging fails, recall still works.
+ */
+function logRecallEvent(
+  logDir: string | null,
+  query: RecallQuery,
+  results: Memory[],
+  matchedScopes: string[],
+): void {
+  if (!logDir) return;
+  try {
+    const logPath = path.join(logDir, 'recall-log.jsonl');
+    const entry = {
+      timestamp: new Date().toISOString(),
+      query: {
+        paths: query.paths ?? [],
+        text: query.query ?? null,
+        layers: query.layers ?? null,
+        limit: query.limit ?? DEFAULT_LIMIT,
+      },
+      matched_scopes: matchedScopes,
+      memories_returned: results.map(m => ({
+        id: m.id,
+        uuid: m.uuid,
+        layer: m.layer,
+        what: m.what,
+        scope: m.scope,
+        tags: m.tags,
+        recalled_count: m.recalled_count + 1, // +1 because recordRecall just incremented
+      })),
+      count: results.length,
+    };
+    fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
+  } catch {
+    // Non-fatal — don't break recall if logging fails
+  }
+}
 
 /**
  * Check if a memory's scope matches a given file/directory path.
@@ -75,7 +117,7 @@ function keywordScore(memory: Memory, query: string): number {
  * 4. Sort by layer priority, then by keyword relevance
  * 5. Cap at limit
  */
-export function recall(store: MemoryStore, query: RecallQuery): RecallResult {
+export function recall(store: MemoryStore, query: RecallQuery, logDir?: string | null): RecallResult {
   const limit = query.limit ?? DEFAULT_LIMIT;
 
   // No status filter — all memories in the store are active
@@ -127,6 +169,9 @@ export function recall(store: MemoryStore, query: RecallQuery): RecallResult {
   if (ids.length > 0) {
     store.recordRecall(ids);
   }
+
+  // Write detailed recall log for observability
+  logRecallEvent(logDir ?? null, query, results, Array.from(matchedScopes));
 
   return {
     memories: results,

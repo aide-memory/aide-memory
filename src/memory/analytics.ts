@@ -1,4 +1,10 @@
 import Database from 'better-sqlite3';
+import crypto from 'crypto';
+import os from 'os';
+
+// PostHog project key — set via AIDE_POSTHOG_KEY env var or hardcode after account setup
+const POSTHOG_KEY = process.env.AIDE_POSTHOG_KEY || '';
+const POSTHOG_HOST = 'https://us.i.posthog.com';
 
 export interface AnalyticsEvent {
   id: number;
@@ -30,10 +36,21 @@ CREATE INDEX IF NOT EXISTS idx_analytics_timestamp ON analytics(timestamp);
 
 export class Analytics {
   private db: Database.Database;
+  private distinctId: string;
+  private eventBuffer: Array<{ event: string; properties: Record<string, unknown>; timestamp: string }> = [];
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(db: Database.Database) {
     this.db = db;
     this.init();
+
+    // Generate a stable anonymous ID from machine hostname + username hash
+    // No PII is sent — this is just for deduplication
+    this.distinctId = crypto
+      .createHash('sha256')
+      .update(`${os.hostname()}:${os.userInfo().username}`)
+      .digest('hex')
+      .slice(0, 16);
   }
 
   private init(): void {
@@ -42,9 +59,65 @@ export class Analytics {
 
   logEvent(event: string, value?: string, tool?: string): void {
     const now = new Date().toISOString();
+    // Local SQLite logging
     this.db.prepare(
       'INSERT INTO analytics (event, value, tool, timestamp) VALUES (?, ?, ?, ?)'
     ).run(event, value ?? null, tool ?? null, now);
+
+    // Buffer for remote PostHog logging (anonymized — no memory content, just event type + counts)
+    if (POSTHOG_KEY) {
+      this.eventBuffer.push({
+        event,
+        properties: {
+          value: value ?? undefined,
+          tool: tool ?? undefined,
+          platform: os.platform(),
+          arch: os.arch(),
+          node_version: process.version,
+        },
+        timestamp: now,
+      });
+
+      // Auto-flush after 10 events or 30s
+      if (this.eventBuffer.length >= 10) {
+        this.flush();
+      } else if (!this.flushTimer) {
+        this.flushTimer = setTimeout(() => this.flush(), 30000);
+      }
+    }
+  }
+
+  /** Send buffered events to PostHog via HTTP. Fire-and-forget. */
+  private flush(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    if (this.eventBuffer.length === 0) return;
+
+    const batch = this.eventBuffer.splice(0);
+    const payload = JSON.stringify({
+      api_key: POSTHOG_KEY,
+      batch: batch.map(e => ({
+        event: e.event,
+        properties: { ...e.properties, distinct_id: this.distinctId },
+        timestamp: e.timestamp,
+      })),
+    });
+
+    // Fire-and-forget HTTP POST — no await, no dependency
+    fetch(`${POSTHOG_HOST}/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    }).catch(() => {
+      // Remote telemetry failure is non-fatal
+    });
+  }
+
+  /** Flush any pending events. Call on process exit. */
+  shutdown(): void {
+    this.flush();
   }
 
   getEvents(options?: { event?: string; since?: string; limit?: number }): AnalyticsEvent[] {
