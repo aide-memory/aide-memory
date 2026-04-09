@@ -23,10 +23,8 @@ FALLBACK="If aide_remember unavailable, write JSON lines to .aide/pending-memori
 if echo "$USER_MESSAGE" | grep -qiE "(no[, ]+(don.t|do not|use|instead|that.s wrong)|actually[, ]|wrong[, ]|not like that|use .+ instead|don.t use|stop using|I told you|I said)"; then
   cat <<HOOK_OUTPUT
 {
-  "hookSpecificOutput": {
-    "hookEventName": "UserPromptSubmit",
-    "additionalContext": "User correction detected. Store via aide_remember (layer: preferences or technical, source: hook). ${FALLBACK}"
-  }
+  "decision": "block",
+  "reason": "User correction detected. Store via aide_remember (layer: preferences or technical, source: hook). ${FALLBACK}"
 }
 HOOK_OUTPUT
   exit 0
@@ -36,10 +34,8 @@ fi
 if echo "$USER_MESSAGE" | grep -qiE "(let.s (use|go with)|we should|go with|the approach is|decided to|decision is|we.re going|from now on)"; then
   cat <<HOOK_OUTPUT
 {
-  "hookSpecificOutput": {
-    "hookEventName": "UserPromptSubmit",
-    "additionalContext": "User decision detected. Store via aide_remember (layer: area_context or technical, source: hook). ${FALLBACK}"
-  }
+  "decision": "block",
+  "reason": "User decision detected. Store via aide_remember (layer: area_context or technical, source: hook). ${FALLBACK}"
 }
 HOOK_OUTPUT
   exit 0
@@ -49,10 +45,8 @@ fi
 if echo "$USER_MESSAGE" | grep -qiE "(I prefer|always use|never use|I like|my style is|I want you to|don.t ever|make sure to always|I always)"; then
   cat <<HOOK_OUTPUT
 {
-  "hookSpecificOutput": {
-    "hookEventName": "UserPromptSubmit",
-    "additionalContext": "User preference detected. Store via aide_remember (layer: preferences, source: hook). ${FALLBACK}"
-  }
+  "decision": "block",
+  "reason": "User preference detected. Store via aide_remember (layer: preferences, source: hook). ${FALLBACK}"
 }
 HOOK_OUTPUT
   exit 0

@@ -7,15 +7,13 @@
 # pain point (350+ GitHub comments document this). We prompt the agent
 # to save anything worth persisting before context is lost.
 #
-# Never blocks compaction — observability only, prompt to save.
+# Blocks compaction until agent saves key context.
 
-# Output extraction prompt via additionalContext (hidden from terminal)
+# Output blocking prompt
 cat <<'HOOK_OUTPUT'
 {
-  "hookSpecificOutput": {
-    "hookEventName": "PreCompact",
-    "additionalContext": "Context compacting. Save key decisions/constraints via aide_remember (source: hook) before they are lost. If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server."
-  }
+  "decision": "block",
+  "reason": "Context compacting. Save key decisions/constraints via aide_remember (source: hook) before they are lost. If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server. If nothing to store, stop."
 }
 HOOK_OUTPUT
 
