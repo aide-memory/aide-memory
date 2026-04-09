@@ -766,6 +766,116 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 
 ---
 
+### Phase 1 Follow-ups
+
+After Phase 1 ships and individual memory is validated with real users, these follow-up workstreams expand reach, distribution, and observability — all before investing in Phase 2 team features.
+
+#### 1. Ecosystem Integration
+
+AIDE Memory currently targets Claude Code and Cursor. The real opportunity is becoming the shared memory layer across the entire AI tool ecosystem — any tool that speaks MCP can connect.
+
+**Claude ecosystem:**
+- **Claude Code** — primary target, already supported via MCP stdio
+- **Claude Desktop** — MCP support available; same `aide-memory` server config works
+- **Claude Web (claude.ai)** — MCP integration when available; memories from coding sessions become accessible in general chat
+- **Cowork (browser agent)** — MCP support expected; browser-based tasks inherit codebase context (e.g., you teach a naming convention in Claude Code, Cowork follows it when generating browser automation scripts)
+
+**Cursor ecosystem:**
+- **Cursor Agent / Composer** — already supported via MCP config in `.cursor/mcp.json`
+- Cursor's plugin system supports MCP servers natively; marketplace listing (see below) makes discovery easier
+
+**Other MCP clients:**
+- Any tool implementing the MCP client protocol can connect: Windsurf, Zed, Cline, Continue, custom editors
+- As MCP adoption grows, AIDE Memory works automatically — no per-tool integration needed
+
+**The vision:** You teach your agent something in Claude Code. When you switch to Cursor, it already knows. When Cowork runs a browser task, it inherits your preferences. When you chat on claude.ai, your coding context is available. One memory layer, every tool. The memories live in `.aide/memories/` in your repo — the tool doesn't matter, the context persists.
+
+#### 2. Non-IDE Developers
+
+Not every developer works inside Claude Code or Cursor. Many run custom agent pipelines, use terminal-only workflows, or operate in restricted environments. AIDE Memory should serve them too.
+
+**Custom agent frameworks:**
+- Developers building orchestration with LangChain, CrewAI, AutoGen, Semantic Kernel, or custom agents can connect to aide-memory as an MCP server
+- Any framework that supports MCP tool-calling gets memory for free
+- For frameworks without MCP support: aide-memory's CLI (`aide-memory recall`, `aide-memory remember`, etc.) can be shell-exec'd from any agent pipeline
+
+**CLI-first workflow:**
+- `aide-memory` CLI already supports all core operations: `recall`, `remember`, `forget`, `search`, `list`, `stats`
+- Terminal-native developers can use the CLI directly without an IDE or agent
+- CI/CD pipelines can query memories (e.g., "recall context for files changed in this PR")
+
+**Programmatic access:**
+- Potential SDK/API for direct integration from Node.js/TypeScript agent code (import the store directly, skip MCP overhead)
+- Useful for developers building custom agent loops who want sub-millisecond memory access without the MCP protocol layer
+
+**Self-hosted, local-first:**
+- No cloud dependency — SQLite + JSON files in the repo
+- Works in air-gapped environments, on-prem setups, and offline laptops
+- No API keys, no accounts, no telemetry phoning home
+- Developers own their data completely
+
+#### 3. Marketplace Submissions
+
+Based on research in `docs/specs/PLUGIN_STATUS.md`, all three major platforms are accepting submissions. These are the sequential steps for each.
+
+**MCP Registry (modelcontextprotocol.io) — submit first:**
+1. Publish `aide-memory` to npm as a public package (`npm publish --access public`)
+2. Install the MCP publisher CLI (`brew install mcp-publisher`)
+3. Run `mcp-publisher init` to generate `server.json` with metadata (name: `io.github.meky/aide-memory`)
+4. Authenticate: `mcp-publisher login github`
+5. Validate: `mcp-publisher publish --dry-run`
+6. Publish: `mcp-publisher publish`
+7. Verify listing at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io/)
+
+**Claude Code Marketplace — submit second:**
+1. Create `.claude-plugin/marketplace.json` manifest in the repo
+2. Package the MCP server, skills (slash commands), hooks, and rules as a Claude Code plugin
+3. Test locally by installing from the local path
+4. Submit via [platform.claude.com/plugins/submit](https://platform.claude.com/plugins/submit)
+5. Alternatively, self-host the marketplace on GitHub (`owner/repo` format) for immediate distribution while awaiting official approval
+6. Add installation instructions to README and landing page
+
+**Cursor Marketplace — submit third:**
+1. Create `.cursor-plugin/plugin.json` manifest
+2. Package MCP server config, `.mdc` rules files, and documentation
+3. Add `README.md` and `CHANGELOG.md` to the plugin package
+4. Test locally within Cursor
+5. Submit via [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish)
+
+**npm ecosystem (ongoing):**
+- Package already on npm as `aide-memory`
+- Ensure `npx aide-memory` works for zero-install trial
+- Add keywords for discoverability: `mcp`, `memory`, `ai-agent`, `claude`, `cursor`, `context`
+- Keep README install instructions at the top (2-minute setup)
+
+#### 4. Analytics & Telemetry
+
+**What currently exists in the codebase:**
+
+AIDE Memory has a local analytics system built into `src/memory/analytics.ts`:
+- **Analytics table** in the project SQLite database — stores events with `event`, `value`, `tool`, and `timestamp` columns
+- **Event logging** via `Analytics.logEvent()` — called on memory operations (recall, remember, forget, etc.)
+- **Query methods**: `getEvents()` (filter by event type, date range, limit), `countEvents()` (count by type), `getStats()` (aggregate summary)
+- **Memory stats**: `getStats()` returns total memories, count by layer, most-recalled memories (top 5), capture source breakdown (hook vs. manual vs. agent), and stale memory count (0 recalls, 30+ days old)
+- **Pruning**: `Analytics.prune(days)` removes old analytics events to keep the DB lean
+
+**How to view usage metrics today:**
+- CLI command: `aide-memory stats` (in `src/cli/commands/memory/stats.ts`) — prints total memories, breakdown by layer, most recalled, and source breakdown to the terminal
+- Direct SQLite queries against the project database (`~/.aide/projects/<hash>/brain.db`, table: `analytics`)
+- No external dashboard — everything is local and terminal-based
+
+**What needs to be built:**
+- **Richer CLI output**: add recall hit rate (recalls that returned results vs. empty), memory growth over time, tokens saved estimate
+- **Export to JSON/CSV**: `aide-memory stats --format json` for piping into external tools
+- **Optional opt-in telemetry**: anonymous, aggregate usage data (memory count ranges, tool distribution, recall hit rates) to understand how the product is used in the wild — strictly opt-in, disabled by default, no PII
+- **Dashboard options** (if opt-in telemetry is built):
+  - PostHog (open-source, self-hostable) — best fit for a developer tool; free tier covers early usage
+  - Simple custom dashboard reading from exported JSON — lower dependency, but more build effort
+  - Grafana + SQLite datasource — works for power users who want local dashboards without sending data anywhere
+- **Per-project health check**: a command like `aide-memory health` that reports memory freshness, stale percentage, layer balance, and recall effectiveness — actionable output, not just numbers
+
+---
+
 ### Phase 2: Team Context -- "My team's agents don't break each other's work"
 
 **What we're proving:** Teams will pay for cross-developer context sharing that prevents agent-caused breakage. This is where the genuine differentiators live. This is the actual product.

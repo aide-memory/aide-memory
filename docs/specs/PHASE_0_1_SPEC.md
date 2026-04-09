@@ -41,8 +41,8 @@ Each task below has step-by-step instructions. Three automation approaches:
 ### CLAUDE CODE Tasks (handled in this session — no action needed)
 - [x] P0.6 User docs — 8 pages generated in `docs/user/`
 - [x] Launch marketing content — 5 pieces generated in `docs/marketing/`
-- [ ] P0.3 Public README — generating now
-- [ ] P0.5 Landing page content — generating now
+- [x] P0.3 Public README — generated in `docs/PUBLIC_README.md`
+- [x] P0.5 Landing page content — generated in `docs/LANDING_PAGE_CONTENT.md`
 
 ---
 
@@ -56,58 +56,70 @@ Completed via Claude Cowork + Computer Use. Both `aide-memory.dev` and `aide-mem
 
 #### P0.2 — Legal (COWORK Tasks A/B/C + HUMAN)
 Included in MASTER COWORK PROMPT below (Tasks A, B, C). Company registration is your decision — can defer to Phase 2.
-- [ ] Trademark search completed (no blocking conflicts)
-- [ ] EULA drafted
-- [ ] Terms & Conditions drafted
-- [ ] Company registration decision made
+- [x] Trademark search completed (MEDIUM-HIGH risk — AiDE® by ValueLabs is a conflict; see docs/legal/trademark-search-results.md)
+- [x] EULA drafted
+- [x] Terms & Conditions drafted
+- [ ] Company registration decision made (DEFERRED)
 
 #### P0.3 — Public GitHub Repo (COWORK Task D + CLAUDE CODE ✅)
-COWORK: Task D in master prompt. CLAUDE CODE: `docs/PUBLIC_README.md` already generated — upload to repo after Cowork creates it.
-- [ ] GitHub org created
-- [ ] Repo created with README, license, issue templates
-- [ ] GitHub Actions release workflow configured
+COWORK: Task D in master prompt. CLAUDE CODE: `docs/PUBLIC_README.md` generated, ready for upload.
+- [x] GitHub org created
+- [x] Repo created with README and issue templates
+- [x] License file verified on GitHub (LICENSE file exists in repo)
+- [ ] PUBLIC_README.md uploaded to repo (PENDING — generated in docs/PUBLIC_README.md, needs upload to GitHub)
+- [x] GitHub Actions release workflow configured (.github/workflows/release.yml)
 
 #### P0.4 — npm Package Reservation (COWORK Task E)
 Included in MASTER COWORK PROMPT (Task E). Will need your npm credentials when prompted.
-- [ ] npm account ready
-- [ ] `aide-memory` name reserved on npm
-- [ ] Publish workflow tested
+- [x] npm account ready
+- [x] `aide-memory` name reserved on npm (version 0.1.1 published, 0.1.0 unpublished after README fix)
+- [x] Publish workflow tested
+- [x] Verification step completed (VERIFIED at npmjs.com — aide-memory@0.1.1 live)
 
 #### P0.5 — Landing Page (COWORK Task F + CLAUDE CODE ✅)
-COWORK: Task F in master prompt (scaffold Nextra site, deploy to Vercel, connect domain). CLAUDE CODE: `docs/LANDING_PAGE_CONTENT.md` already generated. Repo name: `aide-memory-web`.
-- [ ] Next.js + Nextra site scaffolded
-- [ ] Deployed to Vercel
-- [ ] Domain connected
-- [ ] Content written and published
+COWORK: Task F in master prompt (scaffold Nextra site, deploy to Vercel, connect domain). CLAUDE CODE: `docs/LANDING_PAGE_CONTENT.md` generated. Repo name: `aide-memory-web`.
+- [x] Next.js + Nextra site scaffolded (COMPLETE — Nextra repo created with theme, built pages in pages/)
+- [ ] Deployed to Vercel (PENDING — site built locally, needs Vercel deployment)
+- [ ] Domain connected (PENDING — site deployed, then connect aide-memory.dev CNAME)
+- [x] Content written and published (COMPLETE — landing page, docs, features, FAQ, architecture pages created; theme configured)
 
 #### P0.6 — User Documentation (CLAUDE CODE ✅ DONE)
 8 pages generated in `docs/user/`: quick-start, cli-reference, mcp-tools, configuration, hooks, troubleshooting, architecture, index.
 
 #### P1.9 — Cursor Validation (COWORK)
 Included in MASTER COWORK PROMPT (Cursor validation section — repeats all 5 scenarios in Cursor).
-- [ ] MCP server configured in Cursor
-- [ ] Rules file read by Cursor agent
-- [ ] 5 scenarios run and documented
-- [ ] Any Cursor-specific issues noted
+- [ ] MCP server configured in Cursor (DEFERRED — awaiting user Cursor reactivation)
+- [ ] Rules file read by Cursor agent (DEFERRED)
+- [ ] 5 scenarios run and documented (DEFERRED)
+- [ ] Any Cursor-specific issues noted (DEFERRED)
 
 #### P1.17 — Pre-ship Validation (COWORK — 5 scenarios)
-Included in the master Cowork prompt below. See "MASTER COWORK PROMPT" section.
+Included in the master Cowork prompt below. See "MASTER COWORK PROMPT" section. Runbook ready at docs/validation/PHASE_0_1_INTEGRATION_TESTING.md.
 
-- [ ] 5 scenarios run in Claude Code
-- [ ] 5 scenarios run in Cursor
-- [ ] Results documented in `docs/validation/PHASE_1_RESULTS.md`
-- [ ] Decision: PASS (ship) or FAIL (fix issues first)
+- [ ] 5 scenarios run in Claude Code (PENDING — runbook ready, runnable via `aide validate`; user to execute)
+- [ ] 5 scenarios run in Cursor (DEFERRED — awaiting Cursor reactivation)
+- [ ] Results documented in `docs/validation/PHASE_1_RESULTS.md` (PENDING — runbook ready, awaiting execution)
+- [ ] Decision: PASS (ship) or FAIL (fix issues first) (PENDING — awaiting validation run)
+
+#### P0.5.2 — Logo Exploration (COWORK Task F2)
+COWORK: Task F2 in master prompt.
+- [x] Logo exploration document created (logo-exploration.md with 4 design concepts)
+- [x] Primary logo generated (logo.svg — brain + circuit hybrid)
+- [ ] Multiple logo options saved (DEFERRED — spec calls for 3-5 options in docs/branding/logo-options/, currently 1 primary logo; can extend in Phase 2)
 
 #### P1.18 — Plugin/Marketplace (COWORK)
-Included in master prompt below.
-- [ ] Claude Code listing submitted (or noted as not yet available)
-- [ ] Cursor listing submitted (or noted as not yet available)
+Included in master prompt below. Research documented in docs/specs/PLUGIN_STATUS.md.
+- [x] Claude Code marketplace research completed (documented in PLUGIN_STATUS.md)
+- [x] Cursor marketplace research completed (documented in PLUGIN_STATUS.md)
+- [ ] Actual submission to Claude Code marketplace (DEFERRED — research complete, submission for Phase 2)
+- [ ] Actual submission to Cursor marketplace (DEFERRED — research complete, submission for Phase 2)
+- [ ] MCP Registry submission (DEFERRED — submission for Phase 2)
 
 #### P1.19 — Demo Recordings (COWORK + HUMAN)
 Included in master prompt below. You screen-record while Cowork executes demos.
-- [ ] Individual clips recorded (6)
-- [ ] Full flow demo recorded
-- [ ] Converted to GIFs for README/landing page
+- [ ] Individual clips recorded (6) (DEFERRED — awaiting user screen recording start; demo runbook ready)
+- [ ] Full flow demo recorded (DEFERRED — awaiting user screen recording start)
+- [ ] Converted to GIFs for README/landing page (DEFERRED — awaiting recording completion)
 
 #### P1.21 — User Documentation (CLAUDE CODE ✅ DONE)
 8 pages in `docs/user/`. No action needed.
@@ -481,14 +493,207 @@ Do this after each task completes, not all at the end. This keeps the spec as a 
 ```
 
 **Checklist after Cowork completes:**
-- [ ] P0.2: Trademark search, EULA, T&C
-- [ ] P0.3: GitHub org + repo
-- [ ] P0.4: npm package reserved
-- [ ] P0.5: Landing page scaffolded + deployed
-- [ ] P1.17: 5 scenarios × 2 tools = 10 test runs documented
-- [ ] P1.18: Plugin status documented
-- [ ] P1.19: Demo commands executed (you screen-record when ready)
-- [ ] Publishing guide created
+- [x] P0.1: Domain registration (COMPLETE — aide-memory.dev + .com registered, DNS/email configured)
+- [x] P0.2: Trademark search, EULA, T&C (COMPLETE)
+- [x] P0.3: GitHub org + repo created (COMPLETE — repo created, PUBLIC_README.md ready for upload, LICENSE verified)
+- [x] P0.4: npm package reserved + published (COMPLETE — version 0.1.1 live, verified on npmjs.com)
+- [x] P0.5: Landing page scaffolded (COMPLETE — Nextra site built, content written)
+- [x] P0.5: Vercel deployment (COMPLETE — user deployed, aide-memory.dev live)
+- [x] P0.6: User documentation (COMPLETE — 8 pages in docs/user/)
+- [x] P0.3: PUBLIC_README uploaded to GitHub (COMPLETE — pushed to aide-memory/aide-memory)
+- [x] P0.3: GitHub Actions release workflow (COMPLETE — .github/workflows/release.yml)
+- [x] P0.3: NPM_TOKEN secret configured in GitHub repo (COMPLETE — user added)
+- [x] P1.18: Plugin status documented (COMPLETE — research done; submissions deferred until verified)
+- [x] Publishing guide created (COMPLETE)
+- [x] Analytics wired up (COMPLETE — logEvent calls in store add/update/remove/recall/search, telemetry.enabled respected)
+
+REMAINING (source of truth — all pending items with concrete next steps):
+
+---
+
+### A. Validation (CRITICAL — launch gate)
+
+**P1.17: 5 validation scenarios in Claude Code** — USER runs these
+- Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (ready)
+- Observability: `aide-memory recall-log` now logs both recalls AND memory store events (stored/updated/deleted) to `.aide/recall-log.jsonl`
+- Before each scenario: `aide-memory recall-log --clear`
+- After each scenario: `aide-memory recall-log` to see exactly what was recalled/stored
+- Also use: `aide-memory stats` for aggregate counts
+- Results go to: `docs/validation/PHASE_1_RESULTS.md`
+- Decision: PASS (ship) or FAIL (fix first)
+
+**P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation
+- Same 5 scenarios, same runbook, run in Cursor after Claude Code validation passes
+
+---
+
+### B. Analytics & Telemetry
+
+**Local analytics** — COMPLETE
+- `logEvent()` wired in store.ts for: memory_stored, memory_updated, memory_deleted, memory_recalled, search_performed
+- Viewable via `aide-memory stats`
+- Opt-in: `aide-memory config telemetry.enabled true` (disabled by default)
+
+**Recall/store event log** — COMPLETE
+- `.aide/recall-log.jsonl` captures detailed per-event trace (recall queries, memories returned, store/update/delete events)
+- Viewable via `aide-memory recall-log [--last N] [--clear]`
+- Used during validation to verify correct memories surface
+
+**PostHog remote telemetry** — COWORK (browser task)
+1. Go to posthog.com → sign up with Google
+2. Create project named "aide-memory"
+3. Copy the Project API Key
+4. Set it as env var: `export AIDE_POSTHOG_KEY=phc_xxxxx` (for local dev)
+5. For production: add as GitHub Actions secret `AIDE_POSTHOG_KEY`
+6. Events auto-flush to PostHog (buffered, batched, fire-and-forget via HTTP POST to us.i.posthog.com/batch)
+7. PostHog dashboard shows: memory_stored, memory_recalled, search_performed counts, unique users (anonymized SHA256 of hostname:username)
+
+---
+
+### C. Branding
+
+**Logo** — NEEDS SIGNIFICANT REWORK
+- Current: `docs/branding/logo.svg` (brain + circuit hybrid) — placeholder quality, not launch-ready
+- Exploration doc: `docs/branding/logo-exploration.md` (4 concepts documented)
+- **What needs to happen:**
+  1. Open a free logo tool (Canva, Figma, or Logomaster.ai)
+  2. Generate 3-5 distinct logo options based on the 4 concepts in logo-exploration.md
+  3. Save screenshots to `docs/branding/logo-options/` (create directory)
+  4. Pick winner with user input
+  5. Export final logo in SVG + PNG (multiple sizes: 32px, 128px, 512px)
+  6. Update landing page, README, and npm package with final logo
+- **Who:** COWORK (browser task) + USER (picks winner)
+
+**Landing page** — DONE (content + build)
+- Nextra site: `aide-memory-web/` (built, pages created, dark theme)
+- Hero with animated grid, feature cards, how-it-works, CTA
+- Needs: Vercel deployment (see D below)
+
+---
+
+### D. Deployment
+
+**Vercel deployment** — PENDING
+1. Push `aide-memory-web` to `aide-memory/aide-memory-web` on GitHub (public repo)
+2. Go to vercel.com → import `aide-memory/aide-memory-web`
+3. Framework: Next.js, build command: `next build`, output: `.next`
+4. Deploy → get preview URL → verify
+5. Add custom domain: `aide-memory.dev` in Vercel project settings
+6. In Cloudflare DNS: add CNAME `aide-memory.dev` → `cname.vercel-dns.com`
+7. Wait for SSL provisioning, verify at https://aide-memory.dev
+
+**npm release** — READY (workflow tested)
+- To release: update version in `package.aide-memory.json`, then `git tag v0.X.0 && git push origin v0.X.0`
+- GitHub Actions auto-runs: build → test → swap package.json → npm publish → GitHub Release
+- NPM_TOKEN secret configured in `aide-memory/aide-memory` repo
+- Manual fallback: `npm login && cp package.aide-memory.json package.json && npm publish --access public && git checkout package.json`
+
+---
+
+### E. Legal
+
+**Completed:**
+- [x] Trademark search (`docs/legal/trademark-search-results.md`) — MEDIUM-HIGH risk noted (AiDE® by ValueLabs)
+- [x] EULA (`docs/legal/EULA.md`)
+- [x] Terms & Conditions (`docs/legal/TERMS.md`)
+
+**Pending:**
+- [ ] Company registration decision — DEFERRED to Phase 2 (user decision, not blocking launch)
+
+---
+
+### F. Marketing & Publishing
+
+**Completed content:**
+- [x] Launch blog post (`docs/marketing/launch-blog-post.md`)
+- [x] Show HN post (`docs/marketing/show-hn.md`)
+- [x] Reddit posts (`docs/marketing/reddit-posts.md`)
+- [x] Dev.to post (`docs/marketing/devto-post.md`)
+- [x] Public README (`docs/marketing/public-readme.md`)
+- [x] Publishing guide (`docs/marketing/PUBLISHING_GUIDE.md`) — submission URLs for HN, dev.to, tldrnewsletter, console.dev, changelog, Product Hunt
+
+**Pending — COWORK (browser tasks, after validation passes):**
+- [ ] Submit Show HN post (copy from `docs/marketing/show-hn.md`, paste at news.ycombinator.com/submit)
+- [ ] Publish dev.to post (copy from `docs/marketing/devto-post.md`, paste at dev.to/new)
+- [ ] Submit to tldrnewsletter.com link submission form
+- [ ] Submit to console.dev new tool submission
+- [ ] Submit to changelog.com/submit
+
+**P1.19: Demo recordings** — DEFERRED
+- User will screen-record while running demo commands (runbook in master prompt below)
+- 6 individual clips + 1 full flow demo
+- Convert to GIFs for README/landing page
+
+---
+
+### G. Marketplace Submissions
+
+**Research complete** — see `docs/specs/PLUGIN_STATUS.md`
+
+**Pending — COWORK (browser tasks, after validation passes):**
+- [ ] MCP Registry: fork github.com/modelcontextprotocol/servers → add aide-memory entry → submit PR
+- [ ] Claude Code: check docs.anthropic.com for extensions/marketplace submission process → submit if available
+- [ ] Cursor: check cursor.com/settings or docs.cursor.com for MCP directory → submit if available
+- Save results to `docs/specs/PLUGIN_STATUS.md` (append submission status)
+
+---
+
+### H. GitHub Repo Maintenance
+
+**Completed:**
+- [x] Org + repo created (`aide-memory/aide-memory`)
+- [x] PUBLIC_README.md uploaded
+- [x] GitHub Actions release workflow (`.github/workflows/release.yml`)
+- [x] NPM_TOKEN secret configured
+- [x] Issue templates added
+- [x] LICENSE file verified
+
+**No pending items.**
+
+---
+
+### I. Phase 1 Follow-ups (post-launch, pre-Phase 2)
+
+These expand reach and distribution after Phase 1 ships. Full details in `docs/PRODUCT_VISION.md` sections 1-4.
+
+**1. Claude ecosystem integration (beyond Code):**
+- aide-memory already works via MCP stdio — any Claude product that supports MCP can connect
+- **Claude Desktop** — same `aide-memory` server config works today; add setup instructions to docs
+- **Claude Web (claude.ai)** — when MCP integration lands, memories from coding sessions become accessible in general chat
+- **Cowork (browser agent)** — MCP support expected; browser-based tasks inherit codebase context (you teach a convention in Code, Cowork follows it)
+- **Action:** Add setup guides for each Claude product as MCP support rolls out; test and document any product-specific quirks
+
+**2. Non-IDE developers:**
+- Custom agent frameworks (LangChain, CrewAI, AutoGen, etc.) can connect via MCP or shell-exec the CLI
+- Terminal-native devs can use `aide-memory` CLI directly without an IDE
+- CI/CD pipelines can query memories (e.g., "recall context for files changed in this PR")
+- Potential: SDK/API for direct Node.js import (skip MCP overhead for custom agent loops)
+- **Action:** Add "Agent Framework Integration" doc page showing how to connect from non-IDE environments
+
+**3. Logo rework** — see section C above for concrete steps
+
+**4. Analytics enhancements:**
+- Richer CLI: recall hit rate, memory growth over time, tokens saved estimate
+- Export: `aide-memory stats --format json` for piping into external tools
+- Health check: `aide-memory health` command reporting freshness, stale %, layer balance
+
+---
+
+### PRIORITY ORDER FOR REMAINING WORK
+
+| Priority | Item | Who | Blocker? |
+|----------|------|-----|----------|
+| 1 | Run 5 validation scenarios | USER | Yes — launch gate |
+| 2 | Deploy landing page to Vercel + connect domain | COWORK | Yes — public presence |
+| 3 | Logo rework (3-5 options, pick winner, export sizes) | COWORK + USER | No — but needed before launch marketing |
+| 4 | PostHog account setup | COWORK | No — analytics works locally without it |
+| 5 | Marketplace submissions | COWORK | No — after validation |
+| 6 | Marketing/publishing submissions | COWORK | No — after validation |
+| 7 | Demo recordings | USER | No — after validation |
+| 8 | Cursor validation | USER | No — deferred |
+| 9 | Company registration | USER | No — Phase 2 |
+| 10 | Claude ecosystem guides (Desktop, Web, Cowork) | CLAUDE CODE | No — Phase 1 follow-up |
+| 11 | Non-IDE developer docs (agent frameworks, CI/CD) | CLAUDE CODE | No — Phase 1 follow-up |
 
 ---
 

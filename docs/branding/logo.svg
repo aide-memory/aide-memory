@@ -1,0 +1,33 @@
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Brain outline with circuit elements -->
+  <!-- Left lobe -->
+  <path d="M 32 56 Q 28 56 28 48 Q 28 36 36 32 Q 44 28 52 32 Q 56 34 56 40 L 56 64 Q 54 68 48 70 Q 40 72 32 68 Q 28 66 28 60 Z"
+        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Right lobe -->
+  <path d="M 96 56 Q 100 56 100 48 Q 100 36 92 32 Q 84 28 76 32 Q 72 34 72 40 L 72 64 Q 74 68 80 70 Q 88 72 96 68 Q 100 66 100 60 Z"
+        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Brain corpus (bridge between lobes) -->
+  <path d="M 56 48 Q 64 44 72 48"
+        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Circuit connections - top -->
+  <line x1="40" y1="32" x2="40" y2="24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="88" y1="32" x2="88" y2="24" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Circuit connection dots -->
+  <circle cx="40" cy="24" r="2" fill="currentColor"/>
+  <circle cx="88" cy="24" r="2" fill="currentColor"/>
+
+  <!-- Horizontal circuit line at base -->
+  <line x1="36" y1="72" x2="56" y2="72" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="72" y1="72" x2="92" y2="72" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Circuit connection dots at base -->
+  <circle cx="36" cy="72" r="2" fill="currentColor"/>
+  <circle cx="92" cy="72" r="2" fill="currentColor"/>
+
+  <!-- Central memory connector -->
+  <circle cx="64" cy="56" r="3" fill="currentColor" opacity="0.6"/>
+</svg>

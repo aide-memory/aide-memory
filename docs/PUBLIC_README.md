@@ -1,6 +1,6 @@
 # aide-memory
 
-**Your AI coding agent forgets everything between sessions.** You correct it, it adjusts, you close the session, and next time it starts from zero. aide-memory fixes this -- persistent, path-scoped memory that captures context automatically via hooks and recalls it exactly when the agent needs it.
+AI coding agents have limited, fragmented memory. Claude has `CLAUDE.md`, Cursor has `.cursorrules`, but these are static files with no structure, no path scoping, and no automatic capture. aide-memory provides structured, persistent, path-scoped memory that works across sessions and tools.
 
 ```bash
 npx aide-memory init
@@ -185,23 +185,26 @@ aide-memory config capture.enabled false    # write
 
 ---
 
-## Comparison with Alternatives
+## Feature Comparison
 
-### vs. claude-mem
+How aide-memory compares to other memory and context tools for AI coding agents.
 
-[claude-mem](https://github.com/nicobailon/claude-mem) dumps all memories into the system prompt on every interaction (~2,000 tokens of overhead regardless of relevance). No path scoping -- every memory surfaces everywhere. No hooks -- relies on the agent voluntarily saving context, which in testing has a 0% adoption rate without explicit prompting.
+| Feature | aide-memory | Claude CLAUDE.md | Cursor .cursorrules | ConPort | mcp-memory-service | Windsurf memory | GitHub Copilot memory |
+|---------|-------------|------------------|---------------------|---------|--------------------|-----------------|-----------------------|
+| Persistent across sessions | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Path-scoped recall | Yes | No | No | No | No | No | No |
+| Cross-tool (works in multiple editors) | Yes | No (Claude only) | No (Cursor only) | Yes (MCP) | Yes (MCP) | No (Windsurf only) | No (Copilot only) |
+| Structured memory layers | Yes (4 layers) | No (flat file) | No (flat file) | Partial (entity types) | No (flat store) | No | No |
+| Auto-capture hooks | Yes (4 hooks) | No | No | No | No | Partial (built-in) | Partial (built-in) |
+| CLI access | Yes | No | No | No | No | No | No |
+| Git-syncable (team sharing) | Yes (file-per-memory) | Yes (single file) | Yes (single file) | No | No | No | No |
+| No cloud dependency | Yes | Yes | Yes | Yes | Yes | No | No |
 
-aide-memory uses a ~20 token nudge per file read, path-scoped recall so only relevant memories surface, and hook-driven capture that works without agent cooperation.
-
-### vs. engram
-
-[engram](https://github.com/cline/engram) stores memories as flat key-value pairs with no structural awareness of your codebase. No glob-based path scoping, no layered priority (preferences vs. technical vs. guidelines), no hook integration for automatic capture. Memories are workspace-global -- you cannot scope a memory to `src/auth/**` and have it surface only when working in auth code.
-
-aide-memory provides four structured layers, path-scoped recall with glob inheritance, and automatic capture via editor hooks.
-
-### What we share
-
-All three tools solve the same core problem: AI agents forget between sessions. The key architectural difference is **how memories are selected for recall**. Flat stores surface everything or nothing. Path-scoped stores surface what is relevant to the code you are working in right now.
+Notes:
+- Claude's `CLAUDE.md` and Cursor's `.cursorrules` are useful static context files, but they are manually maintained, unstructured, and editor-locked. aide-memory complements them -- `aide-memory init` writes rules for both.
+- ConPort uses a similar stack (SQLite + MCP) but stores memories workspace-flat without path scoping.
+- mcp-memory-service provides semantic search via embeddings but has no codebase structure awareness.
+- Windsurf and GitHub Copilot have built-in memory features but they are proprietary, not portable, and not user-inspectable.
 
 ---
 
@@ -232,37 +235,34 @@ No Docker. No external databases. No API keys. No cloud accounts.
 
 ---
 
-## Test Status
+## Features at a Glance
 
-- **544 tests passing** across 21 test files
-- **0 TypeScript errors**
-- 7 MCP tools, 11 CLI commands, 4 hooks -- all verified end-to-end
+- 7 MCP tools, 11 CLI commands, 4 hooks
+- Zero cloud dependencies — everything runs locally
+- Works with Claude Code, Cursor, and any MCP-compatible client
 
 ---
 
-## Contributing
+## Support
 
-Contributions welcome. Please open an issue first to discuss what you would like to change.
+For bug reports, feature requests, and questions, open an issue at:
 
-```bash
-git clone https://github.com/aide-memory/aide-memory.git
-cd aide-memory
-npm install
-npm test
-```
+https://github.com/aide-memory/aide-memory/issues
 
 ---
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+Free to use. See [EULA](https://aide-memory.dev/docs/legal) for full terms.
+
+aide-memory is proprietary freeware: free to install and use with no limits, but redistribution of source code is not permitted. Your data (memory files, configuration) is always yours.
 
 ---
 
 ## Documentation
 
-- [CLI Reference](docs/user/cli-reference.md) -- all 11 commands with flags, examples, and error messages
-- [MCP Tools Reference](docs/user/mcp-tools.md) -- all 7 tools with parameters and example calls
-- [Architecture Guide](docs/user/architecture.md) -- storage, hooks, recall, and sync internals
-- [Configuration Guide](docs/user/configuration.md) -- all settings with defaults
-- [FAQ](docs/user/faq.md) -- common questions and troubleshooting
+- [CLI Reference](https://aide-memory.dev/docs/cli-reference) -- all 11 commands with flags, examples, and error messages
+- [MCP Tools Reference](https://aide-memory.dev/docs/mcp-tools) -- all 7 tools with parameters and example calls
+- [Architecture Guide](https://aide-memory.dev/docs/architecture) -- storage, hooks, recall, and sync internals
+- [Configuration Guide](https://aide-memory.dev/docs/configuration) -- all settings with defaults
+- [FAQ](https://aide-memory.dev/docs/faq) -- common questions and troubleshooting

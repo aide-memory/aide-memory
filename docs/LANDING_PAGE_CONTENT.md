@@ -8,11 +8,11 @@
 
 ### Headline
 
-**Your AI agent forgets everything you teach it. AIDE Memory fixes that.**
+**AI coding agents have fragmented, limited memory. aide-memory fixes that.**
 
 ### Subheadline
 
-Persistent, path-scoped memory for AI coding agents -- captured automatically by hooks, recalled with a 20-token nudge, synced through git.
+Structured, persistent, path-scoped memory for AI coding agents -- captured automatically by hooks, recalled with a 20-token nudge, synced through git. Works across Claude Code, Cursor, and any MCP client.
 
 ### Install
 
@@ -22,15 +22,15 @@ npx aide-memory init
 
 ### Badge
 
-544 tests passing | Zero cloud dependencies | Works with Claude Code and Cursor
+Zero cloud dependencies | Local-first | Works with Claude Code and Cursor
 
 ---
 
 ## Problem
 
-**Every AI coding session starts from zero.**
+**AI coding agents have memory, but it is shallow and fragmented.**
 
-- **Agents forget your corrections between sessions.** You teach your agent "shorter files, composition over inheritance, use the existing utility." Next session, it generates a 400-line component with five levels of ternaries and reimplements a function that already exists in your utils folder. Everything you taught it is gone.
+- **Static context files do not scale.** Claude has `CLAUDE.md`, Cursor has `.cursorrules` -- useful for project-level instructions, but they are manually maintained, unstructured, and editor-locked. As your project grows, a single flat file cannot capture the nuance of what matters where. A memory about your checkout flow should not surface when you are working on database migrations.
 
 - **Context vanishes during compaction.** You spend 45 minutes building a plan with your agent -- skeleton loading states, backward compatibility, progressive disclosure. The context window fills. Compaction kicks in. The agent drops skeleton loading for spinners and removes the backward compat shim. It did not disagree with the plan. It forgot the plan existed. This is documented across 350+ GitHub issues in existing memory tools.
 
@@ -119,23 +119,24 @@ Everything runs locally. One npm package, SQLite for caching, JSON files for per
 
 ---
 
-## Comparison Table
+## Feature Comparison
 
-| Feature | AIDE Memory | claude-mem | engram |
-|---------|-------------|------------|--------|
-| **Adoption mechanism** | 4 hooks (100% automatic) | System prompt injection | None (0% voluntary -- [issue #87](https://github.com/Gentleman-Programming/engram/issues/87)) |
-| **Token cost per recall** | ~20 tokens (nudge) | ~2,000 tokens (full dump) | Variable |
-| **Path scoping** | Glob inheritance from day one | Folder Context Files (recent addition) | None |
-| **Storage** | JSON files + SQLite cache | ChromaDB + SQLite | SQLite |
-| **Infrastructure** | `npx`, nothing else | Docker + ChromaDB + HTTP server | Go binary |
-| **Memory reliability** | 544 tests, 0 controllable failures | 72% summary failure rate ([issue #1546](https://github.com/thedotmack/claude-mem/issues/1546)) | Empty/ghost observations ([issue #132](https://github.com/Gentleman-Programming/engram/issues/132)) |
-| **File pollution** | One directory: `.aide/` | Creates files in every directory ([issues #609, #632, #641](https://github.com/thedotmack/claude-mem/issues/609)) | Clean |
-| **Security** | Local-only, no network | Unauthenticated HTTP API on port 37777 ([issue #1251](https://github.com/thedotmack/claude-mem/issues/1251)) | Windows Defender flags binary ([issue #93](https://github.com/Gentleman-Programming/engram/issues/93)) |
-| **Git sync** | Native (memories are files) | No | No |
-| **Compaction protection** | PreCompact hook saves decisions | No | No |
-| **Structured layers** | 4 layers (preferences, technical, area_context, guidelines) | Flat | Flat |
-| **License** | FSL (auto-converts Apache 2.0) | AGPL-3.0 | MIT |
-| **Price** | Free | Free | Free |
+| Feature | aide-memory | Claude CLAUDE.md | Cursor .cursorrules | ConPort | mcp-memory-service | Windsurf memory | GitHub Copilot memory |
+|---------|-------------|------------------|---------------------|---------|--------------------|-----------------|-----------------------|
+| Persistent across sessions | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Path-scoped recall | Yes | No | No | No | No | No | No |
+| Cross-tool (multiple editors) | Yes | No | No | Yes (MCP) | Yes (MCP) | No | No |
+| Structured memory layers | Yes (4 layers) | No (flat file) | No (flat file) | Partial (entity types) | No (flat store) | No | No |
+| Auto-capture hooks | Yes (4 hooks) | No | No | No | No | Partial (built-in) | Partial (built-in) |
+| CLI access | Yes | No | No | No | No | No | No |
+| Git-syncable (team sharing) | Yes (file-per-memory) | Yes (single file) | Yes (single file) | No | No | No | No |
+| No cloud dependency | Yes | Yes | Yes | Yes | Yes | No | No |
+
+**Notes:**
+- `CLAUDE.md` and `.cursorrules` are useful static context files. aide-memory complements them -- `aide-memory init` writes rules for both editors.
+- ConPort uses a similar stack (SQLite + MCP) but stores memories workspace-flat without path scoping.
+- mcp-memory-service provides semantic search via embeddings but has no codebase structure awareness.
+- Windsurf and GitHub Copilot have built-in memory but it is proprietary, not portable, and not user-inspectable.
 
 ---
 
@@ -197,23 +198,29 @@ That is it. Two minutes to install. Zero ongoing maintenance. Your agent remembe
 
 ### Is it free?
 
-Yes. All individual memory features are free with no limits. No usage caps, no memory count limits, no feature gates for solo developers.
+Yes. All features are free with no limits. No usage caps, no memory count limits, no feature gates.
 
 ### Does it work with Cursor?
 
-Yes. AIDE Memory supports Claude Code and Cursor out of the box. The init command writes rules files for both editors and configures the MCP server. Same memories work across both tools.
+Yes. aide-memory supports Claude Code and Cursor out of the box. The init command writes rules files for both editors and configures the MCP server. Same memories work across both tools.
 
 ### Does it send data anywhere?
 
 No. Everything is local. Memories are JSON files on your disk. SQLite is a local cache. The MCP server communicates over stdio, not HTTP. Your data never leaves your machine unless you choose to commit it to your git repo.
 
-### How does it compare to claude-mem?
+### How is this different from CLAUDE.md or .cursorrules?
 
-claude-mem dumps all memories into the system prompt on every interaction (~2,000 tokens). AIDE Memory sends a 20-token nudge and lets the agent decide relevance. claude-mem requires Docker and ChromaDB. AIDE Memory requires only `npx`. claude-mem has a documented 72% summary failure rate (issue #1546) and creates files in every directory (issues #609, #632, #641). AIDE Memory keeps everything in one `.aide/` directory with 544 tests passing.
+Those are static context files -- useful for project-level instructions, but manually maintained, unstructured, and locked to a single editor. aide-memory adds path-scoped recall (memories surface only where relevant), structured layers (preferences vs. technical vs. guidelines), automatic capture via hooks, and cross-tool portability. aide-memory complements those files rather than replacing them.
 
 ### Can I use my own embedding model?
 
-Yes. AIDE Memory supports configurable embedding backends. Use the built-in Transformers.js pipeline for zero-setup local embeddings, or connect Ollama for a model you are already running. Configure via `npx aide-memory config set embeddings.provider ollama`.
+Yes. aide-memory supports configurable embedding backends. Use the built-in Transformers.js pipeline for zero-setup local embeddings, or connect Ollama for a model you are already running. Configure via `npx aide-memory config set embeddings.provider ollama`.
+
+---
+
+## Support
+
+Bug reports and feature requests: [github.com/aide-memory/aide-memory/issues](https://github.com/aide-memory/aide-memory/issues)
 
 ---
 
@@ -227,4 +234,4 @@ npx aide-memory init
 
 [Documentation](https://aide-memory.dev/docs) | [GitHub](https://github.com/aide-memory/aide-memory) | [npm](https://www.npmjs.com/package/aide-memory)
 
-Free. Local-only. Two minutes to install. Zero config.
+Free to use. Local-only. Two minutes to install. See [EULA](https://github.com/aide-memory/aide-memory/blob/main/docs/legal/EULA.md) for license terms.
