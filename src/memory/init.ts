@@ -35,6 +35,7 @@ const GITIGNORE_ENTRIES = [
   '.aide/memories/preferences/personal/',
   '.aide/cache/',
   '.aide/recall-log.jsonl',
+  '.aide/pending-memories.jsonl',
 ];
 
 const HOOK_START_MARKER = '# >>> aide-memory post-checkout hook >>>';

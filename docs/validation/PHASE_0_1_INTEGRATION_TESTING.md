@@ -10,18 +10,24 @@ Complete scenario-based validation for aide-memory Phase 0/1 using Claude Code.
 
 ## SETUP — 10 minutes
 
-### Step 1: Build and Link aide-memory
+### Step 1: Build and Link aide-memory (ALWAYS do this first)
+
+**IMPORTANT:** Always rebuild before testing to ensure you're validating the latest code.
 
 ```bash
 cd /Users/meky/code/aide-v0
-npm run build
-npm link
+git pull origin feature/phase-1   # get latest changes
+npm install                       # install any new deps
+npm run build                     # compile TypeScript → dist/
+npm link                          # link globally so `aide-memory` CLI uses latest build
 ```
 
 Verify the command works:
 ```bash
 aide-memory --version
 ```
+
+If version looks stale, run `which aide-memory` to confirm it points to the linked build.
 
 ### Step 2: Create Test Project
 

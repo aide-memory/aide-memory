@@ -22,7 +22,7 @@ if echo "$USER_MESSAGE" | grep -qiE "(no[, ]+(don.t|do not|use|instead|that.s wr
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "The user appears to be correcting you. After addressing their feedback, call aide_remember to store this correction so it persists across sessions. Use layer 'preferences' for style/approach preferences, or 'technical' for factual corrections about the codebase. Use source: \"hook\" to tag this as hook-captured."
+    "additionalContext": "The user appears to be correcting you. After addressing their feedback, call aide_remember to store this correction so it persists across sessions. Use layer 'preferences' for style/approach preferences, or 'technical' for factual corrections about the codebase. Use source: \"hook\" to tag this as hook-captured.\n\nIf aide_remember is not available (MCP server not running), append the memory as a JSON line to .aide/pending-memories.jsonl (fields: layer, what, why, scope, tags, source, timestamp) and tell the user: \"aide-memory MCP server is not running. Saved to .aide/pending-memories.jsonl — run aide-memory serve then aide-memory import --pending to store them.\""
   }
 }
 HOOK_OUTPUT
@@ -35,7 +35,7 @@ if echo "$USER_MESSAGE" | grep -qiE "(let.s (use|go with)|we should|go with|the 
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "The user appears to be making a decision. After acknowledging, call aide_remember to store this decision so it persists across sessions. Use layer 'area_context' for decisions about specific parts of the codebase, or 'technical' for architecture-wide decisions. Use source: \"hook\" to tag this as hook-captured."
+    "additionalContext": "The user appears to be making a decision. After acknowledging, call aide_remember to store this decision so it persists across sessions. Use layer 'area_context' for decisions about specific parts of the codebase, or 'technical' for architecture-wide decisions. Use source: \"hook\" to tag this as hook-captured.\n\nIf aide_remember is not available (MCP server not running), append the memory as a JSON line to .aide/pending-memories.jsonl (fields: layer, what, why, scope, tags, source, timestamp) and tell the user: \"aide-memory MCP server is not running. Saved to .aide/pending-memories.jsonl — run aide-memory serve then aide-memory import --pending to store them.\""
   }
 }
 HOOK_OUTPUT
@@ -48,7 +48,7 @@ if echo "$USER_MESSAGE" | grep -qiE "(I prefer|always use|never use|I like|my st
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "The user is expressing a preference. After acknowledging, call aide_remember to store this preference so it persists across sessions. Use layer 'preferences' for personal style and approach preferences. Use source: \"hook\" to tag this as hook-captured."
+    "additionalContext": "The user is expressing a preference. After acknowledging, call aide_remember to store this preference so it persists across sessions. Use layer 'preferences' for personal style and approach preferences. Use source: \"hook\" to tag this as hook-captured.\n\nIf aide_remember is not available (MCP server not running), append the memory as a JSON line to .aide/pending-memories.jsonl (fields: layer, what, why, scope, tags, source, timestamp) and tell the user: \"aide-memory MCP server is not running. Saved to .aide/pending-memories.jsonl — run aide-memory serve then aide-memory import --pending to store them.\""
   }
 }
 HOOK_OUTPUT
