@@ -16,6 +16,11 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
+# Skip non-existent files — no useful recall for files that dont exist
+if [ ! -f "$FILE_PATH" ] && [ ! -d "$FILE_PATH" ]; then
+  exit 0
+fi
+
 # Detect reads of .aide/memories/ files — log analytics nudge
 if echo "$FILE_PATH" | grep -q '\.aide/memories/'; then
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"memory_file_direct_read: You are reading a raw memory file. Use aide_recall for structured context."}}' | jq .

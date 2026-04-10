@@ -34,11 +34,23 @@ while IFS= read -r p; do
     abs_path="$PROJECT_ROOT/$p"
   fi
 
-  # Determine if path is a directory (ends with / or ** glob)
-  if [[ "$abs_path" == */ ]] || [[ "$abs_path" == */** ]]; then
+  # Determine if path is a directory:
+  #   - ends with /
+  #   - ends with /** or /*  (literal glob suffix)
+  #   - is an existing directory on disk
+  is_dir=false
+  if [[ "$abs_path" == */ ]]; then
+    is_dir=true
+  elif [[ "$abs_path" =~ /\*\*$ ]] || [[ "$abs_path" =~ /\*$ ]]; then
+    is_dir=true
+  elif [ -d "$abs_path" ]; then
+    is_dir=true
+  fi
+
+  if [ "$is_dir" = "true" ]; then
     # Strip trailing /** or /* for clean dir path
-    clean_dir="${abs_path%%/\*\*}"
-    clean_dir="${clean_dir%%/\*}"
+    clean_dir="${abs_path%/\*\*}"
+    clean_dir="${clean_dir%/\*}"
     # Ensure trailing slash
     [[ "$clean_dir" != */ ]] && clean_dir="${clean_dir}/"
     echo "dir|${clean_dir}" >> "$RECALLED_FILE"
