@@ -173,9 +173,23 @@ Run 14 validation scenarios. Use Desktop Commander to open Terminal + Claude Cod
 2. Read verification scenarios V1-V14 from this spec (section 12.3 in Hook & Recall Refinement Plan)
 3. Also read the runbook: /Users/meky/code/aide-v0/docs/validation/PHASE_0_1_INTEGRATION_TESTING.md
 4. Run ALL 14 scenarios — spin off parallel agents for independent scenarios (V1-V5 can run in parallel, V6 needs separate session, V10 needs two sessions, etc.)
-5. For each scenario: record PASS/FAIL, verify recall QUALITY (not just hook mechanics — check that returned memories are actually relevant to the queried path)
-6. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md
-7. If any scenario FAILS: document what failed and why, but continue with remaining scenarios
+5. For each scenario, observe and record BOTH:
+   QUANTITATIVE: Did the hook fire? Block or soft? Correct session tracking? Correct file format (file|/dir|)?
+   QUALITATIVE: Are returned memories relevant to the queried path? Scoped before project-wide? Correct layer ordering? Round-robin representation? Are topics in the nudge preview accurate?
+6. For each aide_recall call, verify:
+   - Top results are SCOPED to the queried path (not generic project-wide)
+   - area_context surfaces first for directory queries
+   - File-specific memories surface first for file queries
+   - All 4 layers get representation via round-robin
+   - Keyword boost works when query is provided
+7. For each hook interaction, verify orchestration:
+   - Read → block → recall → re-read soft (no double block)
+   - Dir trigger fires on 2nd file, not 1st or 3rd
+   - Edit shares tracking with Read (no redundant block)
+   - Search blocks only on scoped matches, silent on zero
+   - Correction flag lifecycle: created → stop enforces → cleared by aide_remember
+8. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md with per-scenario detail
+9. If any scenario FAILS: document what failed, whether it's quantitative (wrong hook behavior) or qualitative (wrong memories returned), and continue
 
 TASK 2 — PostHog Account Setup (browser agent)
 Set up analytics dashboard so we can see usage data.
