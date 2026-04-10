@@ -48,14 +48,13 @@ if [ -n "$TOPICS" ] && [ "$TOPICS" != "null" ] && [ "$TOPICS" != "" ]; then
 fi
 NUDGE="${NUDGE}. Call aide_recall."
 
-# Check if this path was already recalled in THIS session
-# Each entry in recalled-paths.txt is "PID|path" — only match current session's PID
+# Check if this path was already recalled in this session
+# SessionStart hook clears this file on new sessions
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths.txt"
-SESSION_PID="$PPID"
 
-# Check if path was already recalled by this session — if so, soft nudge
-if [ -f "$RECALLED_FILE" ] && grep -qF "${SESSION_PID}|${FILE_PATH}" "$RECALLED_FILE" 2>/dev/null; then
+# Check if path was already recalled — if so, soft nudge
+if [ -f "$RECALLED_FILE" ] && grep -qF "$FILE_PATH" "$RECALLED_FILE" 2>/dev/null; then
   # Already recalled in this session — soft nudge only
   echo "$NUDGE" | jq -Rs '{
     hookSpecificOutput: {

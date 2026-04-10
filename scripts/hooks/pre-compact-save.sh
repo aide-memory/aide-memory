@@ -9,10 +9,7 @@
 #
 # Blocks compaction until agent saves key context.
 
-# Clear recalled-paths so post-compaction reads trigger blocking recall again
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-rm -f "$PROJECT_ROOT/.aide/cache/recalled-paths.txt" 2>/dev/null
+# SessionStart hook clears recalled-paths after compaction (source: "compact")
 
 # Output blocking prompt
 cat <<'HOOK_OUTPUT'

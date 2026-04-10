@@ -53,14 +53,13 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       }
 
       // Track recalled paths so the Read hook knows not to block again
-      // Format: "PID|absolutePath" — PID scopes tracking to this session
+      // SessionStart hook clears this file on new sessions
       if (logDir && params.paths) {
         try {
           const cacheDir = path.join(logDir, 'cache');
           fs.mkdirSync(cacheDir, { recursive: true });
           const recalledFile = path.join(cacheDir, 'recalled-paths.txt');
-          const pid = process.ppid ?? process.pid;
-          const pathsToWrite = params.paths.map(p => `${pid}|${path.resolve(p)}`).join('\n') + '\n';
+          const pathsToWrite = params.paths.map(p => path.resolve(p)).join('\n') + '\n';
           fs.appendFileSync(recalledFile, pathsToWrite);
         } catch { /* Non-fatal */ }
       }
