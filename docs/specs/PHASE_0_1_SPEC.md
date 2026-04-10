@@ -188,8 +188,51 @@ Run 14 validation scenarios. Use Desktop Commander to open Terminal + Claude Cod
    - Edit shares tracking with Read (no redundant block)
    - Search blocks only on scoped matches, silent on zero
    - Correction flag lifecycle: created → stop enforces → cleared by aide_remember
-8. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md with per-scenario detail
+8. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md using the tables below
 9. If any scenario FAILS: document what failed, whether it's quantitative (wrong hook behavior) or qualitative (wrong memories returned), and continue
+
+RESULTS TABLE 1 — Hook Behavior (fill one row per scenario):
+
+| Scenario | Hook | Expected | Actual | Block/Soft/Silent | Session Tracked | Pass? |
+|----------|------|----------|--------|-------------------|-----------------|-------|
+| V1 | Read | block | | | | |
+| V2 | Read (dir) | block | | | | |
+| ... | | | | | | |
+
+RESULTS TABLE 2 — Recall Quality (fill for each aide_recall call):
+
+| Scenario | Path Queried | Limit | Total Returned | Scoped Count | Project-wide Count | Top Result Layer | Top Result Scope | Scoped Before Project-wide? | All 4 Layers Present? | area_context First (dir query)? | Pass? |
+|----------|-------------|-------|----------------|--------------|-------------------|-----------------|-----------------|---------------------------|---------------------|-------------------------------|-------|
+| V1 | src/memory/store.ts | 5 | | | | | | | | N/A | |
+| V2 | src/memory/ | 5 | | | | | | | | | |
+| ... | | | | | | | | | | | |
+
+RESULTS TABLE 3 — Hook Orchestration (fill per interaction chain):
+
+| Scenario | Step 1 | Step 2 | Step 3 | Double-block? | Tracking Format Correct? | Pass? |
+|----------|--------|--------|--------|---------------|-------------------------|-------|
+| V1 | Read→block | recall | Re-read→soft | No | file\|path ✓ | |
+| V4 | Edit→block | recall | Edit→soft | No | file\|path ✓ | |
+| ... | | | | | | |
+
+RESULTS TABLE 4 — Metrics Summary:
+
+| Metric | Value |
+|--------|-------|
+| Total scenarios run | /14 |
+| Scenarios passed | |
+| Scenarios failed | |
+| Total aide_recall calls made | |
+| Total aide_search calls made | |
+| Avg memories returned per recall | |
+| Avg scoped memories per recall | |
+| Avg project-wide per recall | |
+| Hook latency (Read) | ~ms |
+| Hook latency (Search preview) | ~ms |
+| SessionStart injection token estimate | ~tokens |
+| False blocks (blocked when shouldn't) | |
+| Missed blocks (soft when should block) | |
+| Recall quality failures (wrong mems) | |
 
 TASK 2 — PostHog Account Setup (browser agent)
 Set up analytics dashboard so we can see usage data.
