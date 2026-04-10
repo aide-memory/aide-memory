@@ -488,7 +488,7 @@ Stop hook wording maps directly to the four memory layers:
 
 **5.8 Pre-Compact Save (enhanced)**
 
-Blocks compaction. Clears ALL session tracking:
+Blocks compaction. Same "store in the right place" nudge as Stop hook — aide_remember for context, relevant docs for decisions. Then clears ALL session tracking:
 - `recalled-paths-{session_id}.txt`
 - `searched-queries-{session_id}.txt`
 - `correction-pending-{session_id}.txt`
