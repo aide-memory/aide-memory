@@ -495,6 +495,19 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 - Export: `aide-memory stats --format json` for piping into external tools
 - Health check: `aide-memory health` command reporting freshness, stale %, layer balance
 
+**5. Configurable hook intensity (Phase 2 pro feature):**
+- Users control: auto-injection volume at SessionStart, blocking vs soft per hook type, which hooks are active
+- Config via `aide-memory config` or `.aide/config.json`
+- Default: all hooks active, blocking where designed (free tier)
+- Pro: fine-grained control over injection volume, blocking thresholds, and hook selection
+
+**6. Automatic memory cleanup (Phase 2 pro feature):**
+- Detect and surface stale/conflicting/duplicate memories
+- Trigger points: PostToolUse (after edits that invalidate context), post-session (batch), or periodic background
+- Examples: memory says "auth uses bcrypt" but code now uses argon2, memory references deleted file, two memories contradict
+- Agent gets prompted: "3 memories may be stale — review and aide_forget or aide_update"
+- Both cleanup and configurability are monetization features — free tier gets opinionated defaults, paid tier gets customization + maintenance
+
 ---
 
 ### PRIORITY ORDER FOR REMAINING WORK
