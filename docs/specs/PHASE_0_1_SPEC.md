@@ -325,6 +325,366 @@ Do this after each task completes, not all at the end.
 - [x] Publishing guide created (COMPLETE)
 - [x] Analytics wired up (COMPLETE — logEvent calls in store add/update/remove/recall/search, telemetry.enabled respected)
 
+---
+
+### HOOK & RECALL REFINEMENT PLAN (April 9-10, 2026)
+
+**Context:** During Phase 1 work, the agent rewrote the Cowork master prompt and included "Deploy to Vercel" as a task despite Vercel being already deployed (marked `[x]` in the checklist AND mentioned in stored memories). The Read hook nudged "19 memories exist" but the agent ignored it. This revealed fundamental gaps in how memories are surfaced, tracked, and enforced.
+
+This plan covers all design decisions from the April 9-10 session: new hooks, ranking improvements, session tracking, search modes, auto-injection, and the testing strategy.
+
+---
+
+#### 1. ORIGIN PROBLEM
+
+- PreToolUse(Read) nudge said "19 memories exist, call aide_recall if relevant"
+- "If relevant" gave the agent an easy out — it skipped recall
+- Even if recalled, "Vercel deployed" was buried mid-sentence in a large area_context memory
+- The file's own checklist had `[x] Vercel deployment (COMPLETE)` 40 lines below where agent was editing
+- Root cause: weak nudge + no enforcement + no preview of what memories contain
+
+#### 2. DESIGN PRINCIPLES
+
+1. **Block when clear what call to make** — file reads have a clear path (aide_recall for that path), so block. Searches have a clear query, so block if matches exist.
+2. **Soft when action is ambiguous** — UserPromptSubmit corrections can't block (rejects user's message). Edit nudges are soft if Read already recalled.
+3. **No enforcement when not applicable** — zero memories for path → no nudge at all. Already recalled in this session → soft only. No stale cache triggering false blocks.
+4. **Session-scoped tracking** — each session gets its own tracking file via `session_id` from hook stdin JSON. Concurrent sessions are fully isolated.
+5. **Minimum tokens, maximum relevance** — preview layer counts + topics, not full memory dumps. Round-robin ranking prevents layer starvation.
+
+#### 3. CURRENT HOOK SYSTEM (6 hooks, as-built)
+
+| # | Script | Event | Strength | What it does |
+|---|--------|-------|----------|-------------|
+| 1 | pre-read-recall.sh | PreToolUse(Read) | Block/Soft | Shows layer counts + topics. Blocks first read per path per session. Soft after aide_recall called. |
+| 2 | track-recall.sh | PreToolUse(aide_recall) | Pass | Writes recalled paths to `recalled-paths-{session_id}.txt`. Resolves relative→absolute paths. |
+| 3 | detect-correction.sh | UserPromptSubmit | Soft | Detects corrections/decisions/preferences via regex. Nudges aide_remember. |
+| 4 | stop-remember.sh | Stop | Block | "Anything non-obvious worth persisting?" Blocks once per turn (stop_hook_active guard). |
+| 5 | pre-compact-save.sh | PreCompact | Block | "Save before context lost." Clears session's recalled-paths file. |
+| 6 | session-start-clear.sh | SessionStart | Silent | Cleans up stale tracking files from other sessions. |
+
+**Known bugs in current system:**
+- Relative/absolute path mismatch in track-recall.sh (FIXED: resolves to absolute before writing)
+- UserPromptSubmit was briefly set to blocking — broke all user input (FIXED: reverted to soft)
+- Read hook blocked infinitely when aide_recall was called with relative paths (FIXED: track-recall resolves paths)
+
+#### 4. TARGET HOOK SYSTEM (9 hooks)
+
+| # | Script | Event | Matcher | Strength | Purpose |
+|---|--------|-------|---------|----------|---------|
+| 1 | pre-read-recall.sh | PreToolUse | Read | Block/Soft | File + directory recall with preview |
+| 2 | track-recall.sh | PreToolUse | aide_recall | Pass | Track recalled paths + memory IDs |
+| 3 | pre-edit-recall.sh | PreToolUse | Edit, Write | Block/Soft | Recall before code changes (shares Read tracking) |
+| 4 | pre-search-nudge.sh | PreToolUse | Grep, Glob | Block/Soft | aide_search preview with match count |
+| 5 | detect-correction.sh | UserPromptSubmit | — | Soft + flag | Detect correction, write pending flag |
+| 6 | track-remember.sh | PostToolUse | aide_remember | Pass | Clear correction-pending flag |
+| 7 | stop-remember.sh | Stop | — | Block | Persist check + correction enforcement |
+| 8 | pre-compact-save.sh | PreCompact | — | Block | Save context + clear ALL session tracking |
+| 9 | session-start-clear.sh | SessionStart | — | Silent + inject | Clean stale files + auto-inject preferences/guidelines |
+
+#### 5. HOOK DETAILS
+
+**5.1 Pre-Read Recall (enhanced)**
+
+Nudge format:
+```
+N memories for {path} (X area_context, Y technical, Z preferences, W guidelines)
+  — topics: topic1, topic2, ...
+Call aide_recall({paths: ['{path}']}) if results not already in this conversation.
+```
+
+Behavior:
+- First read of a path with memories → **block**
+- After aide_recall called for that path → **soft nudge**
+- Zero memories for path → **no nudge at all**
+- 2+ files read in same directory without directory recall → **block for directory recall**
+
+Directory trigger: hook counts files from the same parent directory in the tracking file. If >=2 and `dir|{parent}` not tracked, nudge says:
+```
+You're reading multiple files in {dir}. N directory-level memories exist.
+Call aide_recall({paths: ['{dir}']}) for broader context.
+```
+
+Topics: top 8 by frequency overall + 1-2 extras from any layer with zero representation in top 8. Topics come from the same memory pool that aide_recall would return (same ranking).
+
+**5.2 Track Recall (enhanced)**
+
+PreToolUse fires before aide_recall. Writes to `recalled-paths-{session_id}.txt`:
+```
+file|/absolute/path/to/file.ts
+dir|/absolute/path/to/directory/
+```
+
+PostToolUse (NEW) fires after aide_recall returns. Parses response to extract memory IDs (`[id]` pattern), writes to tracking:
+```
+ids|5,11,15,22,33
+```
+
+Used for deduplication: subsequent aide_recall calls filter out already-returned IDs.
+
+**5.3 Pre-Edit Recall (NEW)**
+
+Fires before Edit and Write tool calls. Checks if the path was already recalled via Read hook (shares `recalled-paths-{session_id}.txt`).
+
+- Path already recalled (via Read) → **soft nudge** with layer counts
+- Path NOT recalled → **block** with same nudge format as Read
+- Zero memories for path → **no nudge**
+
+Nudge suggests relevant layers for editing:
+```
+N memories for {path} (X technical, Y preferences, Z guidelines)
+  — topics: ...
+Call aide_recall({paths: ['{path}'], layers: ['preferences', 'guidelines', 'technical']}) before editing.
+```
+
+**5.4 Pre-Search Nudge (NEW)**
+
+Fires before Grep and Glob. Runs keyword search preview inline (~80ms, imperceptible — benchmarked).
+
+- Matches > 0 → **block**: "N aide memories match '{query}'. Call aide_search({keyword: '{query}'})."
+- Matches = 0 → **no nudge at all**
+- Query already searched in this session → **soft nudge**
+
+Tracks searched queries in `searched-queries-{session_id}.txt` (normalized: lowercase, trimmed).
+
+Search preview runs full search (keyword + semantic fallback) since embeddings are pre-stored and total latency is ~80ms.
+
+**5.5 Detect Correction (enhanced)**
+
+UserPromptSubmit stays **soft** (blocking rejects user's message — discovered as bug).
+
+Enhancement: writes `correction-pending-{session_id}.txt` flag file when correction/decision/preference detected. Flag contains the detected category.
+
+Nudge wording:
+```
+{Category} detected. BEFORE doing anything else, store via aide_remember
+(layer: {suggested_layer}, source: hook). If aide_remember unavailable,
+write JSON lines to .aide/pending-memories.jsonl.
+```
+
+**5.6 Track Remember (NEW)**
+
+PostToolUse on aide_remember. Clears `correction-pending-{session_id}.txt` flag. Silent — no output.
+
+**5.7 Stop Remember (enhanced)**
+
+Checks for correction-pending flag before the standard persist prompt:
+
+```
+If correction flag exists:
+  "Correction from this turn wasn't stored. Call aide_remember for the correction.
+   Also: any decisions, technical constraints, preferences, or guidelines from this conversation?
+   Call aide_remember. If nothing, stop."
+
+If no flag:
+  "Any decisions, technical constraints, preferences, or guidelines from this conversation?
+   Call aide_remember. If nothing, stop."
+```
+
+Stop hook wording maps directly to the four memory layers:
+- decisions → area_context
+- technical constraints → technical
+- preferences → preferences  
+- guidelines → guidelines
+
+**5.8 Pre-Compact Save (enhanced)**
+
+Blocks compaction. Clears ALL session tracking:
+- `recalled-paths-{session_id}.txt`
+- `searched-queries-{session_id}.txt`
+- `correction-pending-{session_id}.txt`
+
+**5.9 Session Start (enhanced)**
+
+Cleans up stale tracking files from other sessions.
+
+Auto-injects preferences + guidelines as conversation context:
+- Top 15 most-recalled preferences (by recall frequency)
+- All guidelines (usually few — team rules)
+- Any memory with `priority: "always"` (user-marked)
+- Capped at ~300 tokens total
+- Scope-specific preferences still surfaced via Read/Edit hooks
+
+#### 6. RECALL RANKING IMPROVEMENTS
+
+**6.1 Round-robin with limit**
+
+Current: `limit: 5` returns top 5 by fixed layer priority (area_context > technical > preferences > guidelines). This starves lower-priority layers.
+
+New: return top 5 by normal ranking, THEN append 1-2 from any layer with zero representation in those 5. Total 5-9 results. Area_context priority preserved when truly needed, but every layer gets at least a showing.
+
+**6.2 Directory vs file query ranking**
+
+- File query (`src/auth/middleware.ts`) → more-specific scopes rank higher (file-specific first, then directory)
+- Directory query (`src/auth/`) → broader scopes rank higher (directory context first, then file-specific)
+- Detection: query path ends with `/` = directory query
+
+**6.3 Deduplication across recalls**
+
+Track returned memory IDs per session in `recalled-paths-{session_id}.txt` (ids| line). aide_recall filters out already-returned IDs. Zero duplicate tokens across file + directory recalls.
+
+Implementation: PostToolUse(aide_recall) hook parses response text for `[id]` patterns, appends to tracking file.
+
+#### 7. SEARCH IMPROVEMENTS
+
+**7.1 aide_search mode parameter**
+
+New parameter: `mode: "auto" | "keyword" | "semantic"`
+
+- `auto` (default): keyword match first → if <3 results, falls back to semantic
+- `keyword`: exact substring matching only. Fast, precise. Best for function names, specific terms.
+- `semantic`: embedding-based similarity only. Best for conceptual queries like "how do we handle auth."
+
+Mode descriptions added to aide_search tool schema so agent sees them when loading the tool.
+
+**7.2 Embedding fixes**
+
+- Bug: `update()` doesn't regenerate embeddings → stale embedding after content change. Fix: add same embedding generation logic from `add()` to update path.
+- Bug: MCP server never calls `attachEmbeddingService()`. Fix: wire up in `startServer()` if self-contained.
+
+#### 8. SESSION-START AUTO-INJECTION
+
+Preferences and guidelines are session-scoped (apply to all agent behavior, not file-specific). Auto-inject at SessionStart:
+
+- Solves cases like "don't skip numbers in lists" that no file-read hook would surface
+- Top 15 by recall frequency + user-marked `priority: "always"`
+- All guidelines (typically few)
+- Capped ~300 tokens
+- Path-specific preferences still surfaced via Read/Edit hooks (showing counts in preview)
+
+New `priority` field on memories: `"always"` = always injected at SessionStart, `"normal"` = subject to cap.
+
+#### 9. TRACKING MECHANISM
+
+All tracking is in hooks (not MCP server) because `session_id` is available in hook stdin JSON but NOT as an environment variable for MCP server child processes.
+
+Files in `.aide/cache/`:
+```
+recalled-paths-{session_id}.txt     — file|path, dir|path, ids|1,2,3 entries
+searched-queries-{session_id}.txt   — normalized query strings
+correction-pending-{session_id}.txt — flag file (exists = correction not stored)
+```
+
+Lifecycle:
+- SessionStart → cleans up files from OTHER sessions
+- PreCompact → clears ALL files for THIS session (context about to be lost)
+- Track hooks → write entries on tool calls
+- Read/Edit/Search hooks → check entries for block vs soft
+
+#### 10. EDGE CASES & MITIGATIONS
+
+| Edge case | What happens | Mitigation |
+|-----------|-------------|-----------|
+| Zero memories for path | No nudge at all | recall-for-path.js returns 0 → hook exits silently |
+| Agent already recalled in context | Soft nudge (path tracked) | Tracking file prevents re-block |
+| Concurrent sessions | Separate tracking files | session_id-scoped filenames |
+| Post-compaction | All tracking cleared | SessionStart(source:"compact") + PreCompact clearing |
+| Session restore/resume | SessionStart fires | Cleans stale files, re-injects preferences |
+| Relative vs absolute paths | Mismatch breaks tracking | track-recall.sh resolves to absolute |
+| UserPromptSubmit blocking | Rejects user message | MUST stay soft (architectural constraint) |
+| Many preferences (50+) | SessionStart dumps too many tokens | Capped at 15 + priority:"always" |
+| Many directory memories | aide_recall returns too many | `limit` parameter + ranking |
+| Grep with no memory matches | Unnecessary blocking | Preview checks match count → 0 = no nudge |
+| Stale embeddings after update | Semantic search matches wrong content | Regenerate embedding on update() |
+
+#### 11. IMPLEMENTATION ORDER
+
+| Step | What | Files | Dependencies |
+|------|------|-------|-------------|
+| 1 | Fix embedding update() bug | src/memory/store.ts | None |
+| 2 | Wire up EmbeddingService in MCP server | src/memory/server.ts | Step 1 |
+| 3 | aide_search mode parameter | src/memory/store.ts, server.ts | Step 2 |
+| 4 | Round-robin ranking + dir query inversion | src/memory/recall.ts | None |
+| 5 | recall-for-path.js: per-layer topics, dir/file split | scripts/hooks/recall-for-path.js | Step 4 |
+| 6 | Pre-read-recall.sh: directory trigger, enhanced nudge | scripts/hooks/pre-read-recall.sh | Step 5 |
+| 7 | Track-recall PostToolUse: ID extraction + dedup | scripts/hooks/track-recall.sh, settings.json | None |
+| 8 | Pre-edit-recall.sh (NEW) | scripts/hooks/pre-edit-recall.sh, settings.json | Step 6 |
+| 9 | Pre-search-nudge.sh (NEW) + search-preview.js | scripts/hooks/pre-search-nudge.sh, scripts/hooks/search-preview.js, settings.json | Step 3 |
+| 10 | Two-phase correction: flag + track-remember + stop enhancement | scripts/hooks/detect-correction.sh, track-remember.sh, stop-remember.sh, settings.json | None |
+| 11 | SessionStart auto-injection | scripts/hooks/session-start-clear.sh | Step 4 |
+| 12 | Stop hook wording update | scripts/hooks/stop-remember.sh | Step 10 |
+| 13 | Memory priority field | src/memory/types.ts, store.ts, server.ts | None |
+| 14 | PreCompact: clear all tracking types | scripts/hooks/pre-compact-save.sh | None |
+
+#### 12. TESTING PLAN
+
+**12.1 Unit Tests (vitest)**
+
+| Test | What it verifies |
+|------|-----------------|
+| recall ranking: round-robin with limit | limit:5 with 5 mems per layer → at least 1 from each layer |
+| recall ranking: file query specificity | file path query → file-specific memories rank above directory |
+| recall ranking: directory query inversion | directory path query → directory memories rank above file-specific |
+| recall dedup: exclude IDs | aide_recall with exclude_ids → returns only new memories |
+| search mode: keyword | mode:"keyword" → only substring matches, no semantic |
+| search mode: semantic | mode:"semantic" → embedding similarity matches |
+| search mode: auto | mode:"auto" → keyword first, semantic fallback if <3 results |
+| embedding on update | update memory content → embedding regenerated |
+| embedding on add | add memory → embedding generated in background |
+| embedding on remove | remove memory → embedding cleaned up |
+| memory priority field | priority:"always" stored and retrievable |
+| scopeMatchesPath: file covers dir | query file → matches dir-scoped memories |
+| scopeMatchesPath: dir covers files | query dir → matches file-scoped memories within |
+
+**12.2 Hook Smoke Tests (shell-based)**
+
+| Test | What it verifies |
+|------|-----------------|
+| Read hook blocks on first read | Read file with memories → decision:"block" in output |
+| Read hook soft after recall | Track recall → re-read → additionalContext (not block) |
+| Read hook silent on no memories | Read file with 0 memories → no output |
+| Read hook directory trigger | Track 2 files in same dir → block for directory recall |
+| Edit hook blocks if not recalled | Edit file with memories, no prior recall → block |
+| Edit hook soft if already recalled | Recall first, then edit → additionalContext |
+| Search hook blocks on matches | Grep with matching memories → block |
+| Search hook silent on no matches | Grep with 0 matching memories → no output |
+| Search hook soft after searched | Search same query twice → soft second time |
+| Correction detection | Send correction pattern → additionalContext with flag file |
+| Correction flag cleared | Call aide_remember → flag file deleted |
+| Stop checks correction flag | Flag exists → block includes "correction not stored" |
+| Stop normal without flag | No flag → block with standard persist prompt |
+| PreCompact clears all tracking | Trigger compact → all session tracking files removed |
+| SessionStart cleans stale | Create stale tracking → trigger session start → stale removed |
+| SessionStart injects prefs | Preferences exist → stdout includes preference content |
+| Path resolution | Recall with relative path → tracking file has absolute path |
+| Session isolation | Two different session_ids → separate tracking files |
+
+**12.3 Verification Scenarios (end-to-end in Claude Code)**
+
+| Scenario | Steps | Expected |
+|----------|-------|----------|
+| V1: Recall surfaces on read | Create test project, seed memories, read file | Hook blocks, aide_recall returns memories, subsequent read is soft |
+| V2: Directory recall triggers | Read 2 files in same dir | Second read triggers directory recall nudge |
+| V3: Search nudge works | Seed memories matching "auth", grep "auth" | Hook blocks with match count, aide_search returns results |
+| V4: Edit enforced if not recalled | Go directly to edit without reading | Hook blocks until recall |
+| V5: Correction stored | Type correction pattern, verify aide_remember called | Correction stored, flag cleared, stop hook normal |
+| V6: Post-compaction re-recall | Work in session, compact, read same file | Hook blocks again (tracking was cleared) |
+| V7: SessionStart injects prefs | Start new session with stored preferences | Preferences appear as context |
+| V8: Keyword vs semantic search | aide_search with mode:"keyword", mode:"semantic", mode:"auto" | Each mode returns appropriate results |
+| V9: Embedding update | Store memory, update content, search for new content | Semantic search finds updated content |
+| V10: Concurrent sessions | Two Claude Code sessions on same project | Tracking is isolated, no cross-contamination |
+
+**12.4 Bug Hunting Checklist**
+
+- [ ] Relative/absolute path mismatch (regression check)
+- [ ] UserPromptSubmit never blocks (regression check)
+- [ ] Empty tracking file doesn't crash hooks
+- [ ] Malformed JSON in hook input handled gracefully
+- [ ] Missing session_id falls back to "default"
+- [ ] aide_recall with no paths param doesn't write to tracking
+- [ ] Large number of memories (100+) doesn't slow hooks >500ms
+- [ ] Concurrent file writes to tracking file don't corrupt
+- [ ] PreCompact with no tracking files doesn't error
+- [ ] SessionStart with no stale files doesn't error
+
+#### 13. PHASE 2 PRO FEATURES (deferred, documented)
+
+1. **Configurable hook intensity** — users control injection volume, blocking vs soft, active hooks
+2. **Automatic memory cleanup** — detect stale/conflicting/duplicate memories, prompt agent to clean up
+
+See section I items 5-6 for full details.
+
+---
+
 REMAINING (source of truth — all pending items with concrete next steps):
 
 ---
