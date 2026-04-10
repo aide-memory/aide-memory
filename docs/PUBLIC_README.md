@@ -12,13 +12,13 @@ Two minutes. Zero config. No Docker, no cloud, no API keys.
 
 ## What It Does
 
-- **Hook-driven capture** -- 4 hooks fire automatically (PreToolUse, Stop, UserPromptSubmit, PreCompact). Your agent stores context without you asking it to. Tested: 0% voluntary adoption vs 100% hook-driven.
+- **Hook-driven capture** -- 9 hooks fire automatically across session lifecycle, file reads, edits, searches, corrections, and compaction. Your agent stores context without you asking it to. Tested: 0% voluntary adoption vs 100% hook-driven.
 - **Nudge, not dump** -- ~20 token nudge per file read instead of ~2,000 token system prompt injection. The agent decides what is relevant and recalls only that.
 - **Path-scoped recall** -- memories are tied to code paths via glob patterns. A memory about checkout code surfaces in checkout files, not everywhere.
 - **File-per-memory storage** -- each memory is a human-readable JSON file in `.aide/memories/`. Browsable, diffable, version-controlled.
 - **Git is the sync** -- memories are files, files are committed, git syncs them. No separate sync mechanism needed.
 - **Structured layers** -- preferences, technical, area context, guidelines. Recalled in priority order so the agent gets the most important context first.
-- **FTS5 search** -- BM25-ranked full-text search across all memories. Sub-millisecond path lookups.
+- **Multi-mode search** -- keyword (BM25-ranked), semantic (local embeddings, no API keys), or auto mode that picks the best strategy. Sub-millisecond path lookups.
 - **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both.
 
 ---
@@ -31,7 +31,7 @@ Two minutes. Zero config. No Docker, no cloud, no API keys.
 npx aide-memory init
 ```
 
-Creates `.aide/memories/`, installs 4 hooks, writes editor rules, configures the MCP server.
+Creates `.aide/memories/`, installs 9 hooks, writes editor rules, configures the MCP server.
 
 ### 2. Store a memory
 
@@ -55,7 +55,7 @@ Returns memories scoped to that path, plus project-wide context. Your agent does
 aide-memory search "authentication"
 ```
 
-FTS5 BM25-ranked keyword search, grouped by layer.
+Keyword, semantic, or auto-mode search across all memories, grouped by layer.
 
 ### 5. Inspect
 
@@ -73,9 +73,11 @@ See totals by layer, most-recalled memories, capture source breakdown, and stale
 
 | Hook | When it fires | What it does | Token cost |
 |------|--------------|--------------|------------|
-| **PreToolUse** | Before file reads | Nudges: "N memories exist for this path" | ~20 tokens |
-| **Stop** | Task completion | Prompts agent to reflect and store learnings | Hidden |
+| **SessionStart** | Session begins | Auto-injects your preferences and guidelines so the agent starts with your coding style | Hidden |
+| **PreToolUse** (x4) | Before file reads, edits, searches, recalls | Nudges: "N memories exist for this path" | ~20 tokens |
+| **PostToolUse** | After recall completes | Tracks which memories were surfaced to avoid re-nudging | Hidden |
 | **UserPromptSubmit** | User corrects agent | Detects correction patterns, stores scoped memory | Hidden |
+| **Stop** | Task completion | Prompts agent to reflect and store learnings | Hidden |
 | **PreCompact** | Before context compaction | Extracts planning decisions before context is lost | Hidden |
 
 All hooks use `additionalContext` -- invisible to you. Memory management happens silently in the background.
@@ -117,7 +119,7 @@ SQLite is a rebuildable cache. Delete it and it reconstructs from the JSON files
 
 1. **Path match** -- glob pattern lookup (sub-millisecond, deterministic)
 2. **FTS5** -- BM25-ranked keyword search for cross-cutting queries
-3. **Embeddings** -- cosine similarity via local model for semantic fallback (no API keys)
+3. **Embeddings** -- cosine similarity via local model for semantic fallback (auto-managed, no API keys)
 
 Path inheritance: a memory scoped to `src/**` surfaces for `src/checkout/CartSummary.tsx`. A memory scoped to `src/checkout/**` surfaces only in checkout code.
 
@@ -138,7 +140,7 @@ All commands use the `aide-memory` binary (aliased as `aide`).
 | `remember <what>` | Store a memory with `--layer`, `--scope`, `--tags`, `--why` |
 | `update <id>` | Update an existing memory's content, scope, or context |
 | `forget <id>` | Permanently delete a memory |
-| `search <query>` | FTS5 keyword search with BM25 ranking |
+| `search <query>` | Keyword, semantic, or auto-mode search across memories |
 | `list` | List memories with `--layer`, `--scope`, `--contributor`, `--tag` filters |
 | `stats` | Show analytics: counts by layer, most recalled, stale candidates |
 | `config <key> [value]` | Get or set configuration (dot-notation keys) |
@@ -159,7 +161,7 @@ Seven tools exposed to your AI agent (~1,400 tokens total schema -- GitHub MCP i
 | `aide_remember` | Store a new memory with layer, scope, tags, and context |
 | `aide_update` | Edit an existing memory's content or scope |
 | `aide_forget` | Permanently delete a memory |
-| `aide_search` | FTS5 keyword search, results grouped by layer |
+| `aide_search` | Keyword, semantic, or auto-mode search, results grouped by layer |
 | `aide_memories` | List memories with count and filter support |
 | `aide_import` | Import from markdown bullet/numbered lists into any layer |
 
@@ -177,9 +179,11 @@ aide-memory config capture.enabled false    # write
 | Key | Default | Description |
 |-----|---------|-------------|
 | `capture.enabled` | `true` | Enable/disable all automatic hook capture |
-| `capture.hooks.preToolUse` | `true` | PreToolUse hook (nudge on file read) |
-| `capture.hooks.stop` | `true` | Stop hook (reflection on task completion) |
+| `capture.hooks.sessionStart` | `true` | SessionStart hook (auto-inject preferences) |
+| `capture.hooks.preToolUse` | `true` | PreToolUse hooks (memory count nudge on reads, edits, searches) |
+| `capture.hooks.postToolUse` | `true` | PostToolUse hook (recall tracking) |
 | `capture.hooks.userPromptSubmit` | `true` | UserPromptSubmit hook (correction detection) |
+| `capture.hooks.stop` | `true` | Stop hook (reflection on task completion) |
 | `capture.hooks.preCompact` | `true` | PreCompact hook (save before compaction) |
 | `tags.presets` | `[architecture, testing, security, style, performance, api-contracts]` | Available tags for memory categorization |
 
@@ -195,7 +199,7 @@ How aide-memory compares to other memory and context tools for AI coding agents.
 | Path-scoped recall | Yes | No | No | No | No | No | No |
 | Cross-tool (works in multiple editors) | Yes | No (Claude only) | No (Cursor only) | Yes (MCP) | Yes (MCP) | No (Windsurf only) | No (Copilot only) |
 | Structured memory layers | Yes (4 layers) | No (flat file) | No (flat file) | Partial (entity types) | No (flat store) | No | No |
-| Auto-capture hooks | Yes (4 hooks) | No | No | No | No | Partial (built-in) | Partial (built-in) |
+| Auto-capture hooks | Yes (9 hooks) | No | No | No | No | Partial (built-in) | Partial (built-in) |
 | CLI access | Yes | No | No | No | No | No | No |
 | Git-syncable (team sharing) | Yes (file-per-memory) | Yes (single file) | Yes (single file) | No | No | No | No |
 | No cloud dependency | Yes | Yes | Yes | Yes | Yes | No | No |
@@ -237,7 +241,7 @@ No Docker. No external databases. No API keys. No cloud accounts.
 
 ## Features at a Glance
 
-- 7 MCP tools, 11 CLI commands, 4 hooks
+- 7 MCP tools, 11 CLI commands, 9 hooks
 - Zero cloud dependencies — everything runs locally
 - Works with Claude Code, Cursor, and any MCP-compatible client
 

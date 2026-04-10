@@ -4,14 +4,16 @@ Hooks are the core of AIDE Memory's capture system. Instead of relying on volunt
 
 ## Overview
 
-Four hooks fire at different points in the agent lifecycle:
+Six hook scripts fire at different points in the agent lifecycle, across four event types:
 
-| Hook | Fires when | What it does |
-|------|-----------|--------------|
-| PreToolUse | Agent is about to read/edit a file | Nudges: "N memories exist for this path" |
-| Stop | Agent finishes responding | Prompts: "Anything worth remembering?" |
-| UserPromptSubmit | User sends a message | Detects corrections, decisions, preferences |
-| PreCompact | Context is about to be compacted | Prompts: "Save key context before it is lost" |
+| Hook | Event type | Fires when | What it does |
+|------|-----------|-----------|--------------|
+| Read | PreToolUse:Read | Agent is about to read a file | Shows layer counts + topics, blocks until recalled |
+| Track recall | PreToolUse:aide_recall | Agent calls aide_recall | Records recalled paths for session-scoped tracking |
+| SessionStart | SessionStart | Session starts or resumes | Cleans up stale tracking files from other sessions |
+| UserPromptSubmit | UserPromptSubmit | User sends a message | Detects corrections, decisions, preferences (soft nudge) |
+| Stop | Stop | Agent finishes responding | Blocks: "Anything worth remembering?" |
+| PreCompact | PreCompact | Context is about to be compacted | Blocks + clears session tracking before context loss |
 
 An optional git hook handles sync:
 
@@ -19,17 +21,19 @@ An optional git hook handles sync:
 |------|-----------|--------------|
 | post-checkout | Branch switch or pull | Rebuilds SQLite cache from JSON files |
 
-## PreToolUse hook
+## Read hook (PreToolUse:Read)
 
 **File:** `scripts/hooks/pre-read-recall.sh`
 
-Fires before the agent reads a file. The hook counts memories scoped to that file path using direct SQLite access (via `scripts/hooks/recall-for-path.js`). If memories exist, it injects a nudge into the agent's context:
+Fires before the agent reads a file. The hook counts memories scoped to that file path using direct SQLite access (via `scripts/hooks/recall-for-path.js`) and shows a breakdown by layer and topic:
 
 ```
-5 memories exist for src/auth/middleware.ts. Call aide_recall if relevant.
+19 memories for src/auth/middleware.ts (5 technical, 8 area_context, 4 preferences, 2 guidelines) — topics: JWT, middleware, validation. Call aide_recall if results not already in this conversation.
 ```
 
-The hook never dumps memory content -- only the count. The agent decides whether to call `aide_recall` to fetch actual memories.
+The hook never dumps memory content -- only counts, layers, and topic keywords. The agent decides whether to call `aide_recall` to fetch actual memories.
+
+**Session-scoped blocking:** On the first read of a path in a session, the hook **blocks** until the agent calls `aide_recall`. After recall, subsequent reads of the same path get a soft nudge only. Tracking uses a session-scoped file (`.aide/cache/recalled-paths-{session_id}.txt`) written by the track-recall hook. Directory prefix matching applies -- recalling `src/auth/` covers `src/auth/middleware.ts`.
 
 **Special case:** If the agent tries to read a raw `.aide/memories/` file directly, the hook warns:
 ```
@@ -37,10 +41,35 @@ memory_file_direct_read: You are reading a raw memory file. Use aide_recall for 
 ```
 
 **How it works:**
-1. Hook receives tool input via stdin (JSON with `tool_input.file_path`)
-2. Calls `recall-for-path.js` which opens the MemoryStore, counts scope-matching memories
-3. If count > 0, outputs a JSON nudge via `hookSpecificOutput.additionalContext`
-4. The agent sees the nudge in its context and decides whether to call `aide_recall`
+1. Hook receives tool input via stdin (JSON with `tool_input.file_path` and `session_id`)
+2. Calls `recall-for-path.js` which opens the MemoryStore, counts scope-matching memories with layer breakdown and topic extraction
+3. Checks the session-scoped recalled-paths file for this path
+4. If not yet recalled: outputs `{"decision": "block", "reason": "..."}` to force recall
+5. If already recalled: outputs a soft nudge via `hookSpecificOutput.additionalContext`
+
+## Track recall hook (PreToolUse:aide_recall)
+
+**File:** `scripts/hooks/track-recall.sh`
+
+Fires before the agent calls `aide_recall`. The hook writes the recalled paths to a session-scoped tracking file so the Read hook knows not to block again for those paths.
+
+**How it works:**
+1. Hook receives tool input via stdin (JSON with `tool_input.paths` and `session_id`)
+2. Writes each path to `.aide/cache/recalled-paths-{session_id}.txt`
+3. Paths are resolved to absolute paths for consistent matching
+4. Exits cleanly (never blocks)
+
+## SessionStart hook
+
+**File:** `scripts/hooks/session-start-clear.sh`
+
+Fires when Claude Code starts, resumes, or clears a session. The hook cleans up stale recalled-paths tracking files from other sessions while preserving the current session's file.
+
+**How it works:**
+1. Hook reads `session_id` from stdin JSON
+2. Iterates over `.aide/cache/recalled-paths-*.txt` files
+3. Removes all tracking files except the current session's
+4. Exits cleanly (never blocks)
 
 ## Stop hook
 
@@ -49,11 +78,8 @@ memory_file_direct_read: You are reading a raw memory file. Use aide_recall for 
 Fires when the agent finishes its response. The hook blocks the first stop attempt and injects a reflection prompt:
 
 ```
-Before finishing: Did you learn anything non-obvious during this task?
-Constraints, patterns, decisions, or corrections worth persisting?
-If so, call aide_remember with the appropriate layer and scope.
-Use source: "hook" to tag hook-captured memories.
-If nothing worth storing, you may stop.
+Before finishing: anything non-obvious worth persisting (constraints, decisions,
+corrections)? Call aide_remember (layer, scope, source:hook). If nothing to store, stop.
 ```
 
 On the second stop (`stop_hook_active=true`), the hook exits cleanly to avoid infinite loops. This means the agent gets exactly one reflection prompt per task completion.
@@ -67,7 +93,7 @@ On the second stop (`stop_hook_active=true`), the hook exits cleanly to avoid in
 
 **File:** `scripts/hooks/detect-correction.sh`
 
-Fires when the user sends a message. The hook scans the message for three patterns:
+Fires when the user sends a message. The hook scans the message for three patterns and injects a **soft nudge** (never blocking -- blocking on UserPromptSubmit would reject the user's message entirely):
 
 **Corrections** -- user is fixing agent behavior:
 - Triggers on: "no, don't", "actually,", "that's wrong", "use X instead", "stop using", "I told you"
@@ -86,22 +112,21 @@ Only the first matching pattern fires. The hook does not store anything itself -
 **How it works:**
 1. Hook reads `prompt` from stdin JSON
 2. Runs regex patterns against the message text
-3. If a pattern matches, outputs a `hookSpecificOutput.additionalContext` message
+3. If a pattern matches, outputs a `hookSpecificOutput.additionalContext` message (soft nudge)
 4. The agent sees the suggestion and calls `aide_remember` as appropriate
 
 ## PreCompact hook
 
 **File:** `scripts/hooks/pre-compact-save.sh`
 
-Fires before both manual `/compact` and auto-compact. This is a high-value hook -- context loss from compaction is a common pain point. The hook prompts the agent to save anything important:
+Fires before both manual `/compact` and auto-compact. This is a high-value hook -- context loss from compaction is a common pain point. The hook **blocks** compaction and prompts the agent to save anything important:
 
 ```
-Context is about to be compacted. Extract any key decisions, plans, or
-constraints worth persisting via aide_remember before they are lost.
-Use source: "hook" to tag these as hook-captured.
+Context compacting. Save key decisions/constraints via aide_remember (source: hook)
+before they are lost. If nothing to store, stop.
 ```
 
-The hook never blocks compaction -- it only provides the prompt. The agent decides what (if anything) to save.
+The hook also **clears the current session's recalled-paths file**. After compaction, the agent's context no longer contains previous tool results, so paths must be re-recalled on next read.
 
 ## post-checkout hook
 
@@ -118,6 +143,14 @@ Fires after `git checkout` or `git pull` (branch checkout only, not file checkou
 3. Runs `sync-runner.js` in the background with a timeout
 4. Exits 0 regardless of success or failure
 
+## Session-scoped tracking
+
+All recall tracking is session-scoped via `session_id` (available in hook stdin JSON). Each session gets its own tracking file at `.aide/cache/recalled-paths-{session_id}.txt`. This means:
+
+- Different sessions (e.g., multiple terminal tabs) track independently
+- SessionStart cleans up stale tracking files from ended sessions
+- PreCompact clears the current session's file (context loss means paths must be re-recalled)
+
 ## Disabling individual hooks
 
 Each hook can be disabled independently via config:
@@ -129,11 +162,14 @@ aide-memory config capture.hooks.stop false
 # Disable correction detection
 aide-memory config capture.hooks.userPromptSubmit false
 
-# Disable the file-read nudge
+# Disable the file-read nudge and recall tracking
 aide-memory config capture.hooks.preToolUse false
 
 # Disable pre-compact save prompt
 aide-memory config capture.hooks.preCompact false
+
+# Disable session start cleanup
+aide-memory config capture.hooks.sessionStart false
 
 # Disable all hooks at once
 aide-memory config capture.enabled false

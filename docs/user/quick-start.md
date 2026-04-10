@@ -91,12 +91,14 @@ Memories are returned in priority order: area_context first, then technical, pre
 
 ## 4. What happens automatically
 
-Once initialized, hooks handle context capture without any manual effort:
+Once initialized, six hooks handle context capture without any manual effort:
 
-- **PreToolUse hook**: When your agent reads a file, the hook checks if memories exist for that path and nudges the agent to call `aide_recall`.
-- **Stop hook**: When the agent finishes a task, it is prompted to reflect and store any non-obvious decisions or discoveries.
+- **Read hook**: When your agent reads a file, the hook shows memory counts by layer and topic. On first read per session, it blocks until the agent calls `aide_recall`.
+- **Track recall hook**: When the agent calls `aide_recall`, the hook records the paths so subsequent reads are not blocked.
+- **SessionStart hook**: Cleans up stale tracking files from ended sessions.
 - **UserPromptSubmit hook**: When you correct the agent ("no, use X instead"), the hook detects the correction pattern and prompts the agent to store it.
-- **PreCompact hook**: Before context compaction, the agent is prompted to save important context that would otherwise be lost.
+- **Stop hook**: When the agent finishes a task, it is prompted to reflect and store any non-obvious decisions or discoveries.
+- **PreCompact hook**: Before context compaction, the agent is prompted to save important context and session tracking is cleared.
 
 You do not need to remember to call `aide remember` manually. The hooks make capture automatic.
 

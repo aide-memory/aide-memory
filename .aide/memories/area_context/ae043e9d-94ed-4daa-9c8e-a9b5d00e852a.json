@@ -1,8 +1,8 @@
 {
   "uuid": "ae043e9d-94ed-4daa-9c8e-a9b5d00e852a",
   "layer": "area_context",
-  "what": "Phase 1 implementation session complete (April 7-8, 2026). Final deliverables on feature/phase-1 branch: 592 tests passing, 17 engineering components, 8 user doc pages (docs/user/), 5 marketing pieces (docs/marketing/), PUBLIC_README.md, LANDING_PAGE_CONTENT.md. All remaining work consolidated into one MASTER COWORK PROMPT in docs/specs/PHASE_0_1_SPEC.md — covers Phase 0 (trademark, EULA, GitHub, npm, landing page), validation (5 scenarios × Claude Code + Cursor with fully scripted test projects and exact prompts), plugin research, demo execution, and publishing prep. User pastes one prompt into Cowork and it handles everything.",
-  "why": "Session handoff — next session or Cowork picks up from here. Everything is in the master prompt.",
+  "what": "Master Cowork prompt in PHASE_0_1_SPEC.md rewritten April 9, 2026. 8 tasks: (1) Validation — 6 scenarios run by Cowork, not user-only. (2) PostHog setup. (3) Logo rework. (4) MCP Registry submission. (5) Claude marketplace research only — user reviews before any submission. (6) Demo setup — Cowork creates demo project, recording script, and landing page embed plan; user records. Demo GIFs embedded on aide-memory.dev. (7) Content review gate — Cowork presents all public MDs, user iterates and approves. (8) Marketing submissions — only after demo + content approval. Cursor marketplace deferred until after Cursor validation. Vercel already deployed. All sub-agents must use Opus 4.6.",
+  "why": "Session handoff — Cowork prompt is the single source of truth for remaining work. Key gates: demo before publishing, user content review before submissions, Cursor deferred.",
   "scope": "docs/specs/**",
   "context_label": null,
   "contributor": "ahmedmmeky",
@@ -12,5 +12,5 @@
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-08T17:01:00.159Z",
-  "updated_at": "2026-04-08T17:01:00.159Z"
+  "updated_at": "2026-04-09T22:36:27.290Z"
 }

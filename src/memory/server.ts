@@ -5,6 +5,7 @@ import path from 'path';
 import { MemoryStore } from './store';
 import { recall } from './recall';
 import { logStoreEvent } from './store-log';
+import { EmbeddingService } from './embeddings';
 import type { MemoryLayer, MemorySource } from './types';
 
 const LAYER_VALUES: [string, ...string[]] = ['preferences', 'technical', 'area_context', 'guidelines'];
@@ -356,6 +357,18 @@ function parseMarkdownItems(content: string): string[] {
 // CLI entry point
 export async function startServer(projectPath: string): Promise<void> {
   const store = new MemoryStore({ projectRoot: projectPath });
+
+  // Initialize embedding service in background (non-blocking, graceful degradation)
+  const embeddingService = new EmbeddingService();
+  embeddingService.initialize().then((ready) => {
+    if (ready) {
+      store.setEmbeddingService(embeddingService);
+    }
+    // If not ready, store continues without embeddings — FTS5/LIKE search still works
+  }).catch(() => {
+    // Embedding init failure is non-fatal
+  });
+
   const logDir = path.join(projectPath, '.aide');
   const server = createServer(store, { logDir });
   const transport = new StdioServerTransport();

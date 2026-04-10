@@ -585,6 +585,13 @@ Lifecycle:
 | Many directory memories | aide_recall returns too many | `limit` parameter + ranking |
 | Grep with no memory matches | Unnecessary blocking | Preview checks match count → 0 = no nudge |
 | Stale embeddings after update | Semantic search matches wrong content | Regenerate embedding on update() |
+| Agent stores memory instead of updating doc | Project decisions end up only in aide_remember, not in spec/plan files | Two mitigations below |
+
+**Memory-vs-doc mitigation:**
+
+1. **Stop hook prompts for BOTH**: Wording changed to: "Any decisions for project docs (specs, plans, remaining work)? Update the relevant file. Any knowledge for aide_remember? Call aide_remember." Agent is forced to consider both actions.
+
+2. **PostToolUse(aide_remember) guard**: After storing a memory, check if content matches project-decision patterns ("Phase 2", "deferred", "remaining work", "follow-up", "pro feature"). If so, nudge: "This memory looks like a project decision. Should it also be added to the relevant spec/plan doc?"
 
 #### 11. IMPLEMENTATION ORDER
 

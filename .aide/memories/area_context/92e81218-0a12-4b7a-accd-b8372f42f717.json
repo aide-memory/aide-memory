@@ -1,0 +1,21 @@
+{
+  "uuid": "92e81218-0a12-4b7a-accd-b8372f42f717",
+  "layer": "area_context",
+  "what": "Phase 2 pro features: (1) Configurable hook intensity — users control auto-injection volume at SessionStart, blocking vs soft per hook type, which hooks are active. Config via aide-memory config or .aide/config.json. Default: all hooks active, blocking where designed. Pro users get fine-grained control. (2) Automatic memory cleanup — detect and surface stale/conflicting/duplicate memories. Could run as PostToolUse (after edits that invalidate stored context), post-session (batch cleanup), or periodic background task. Examples: memory says \"auth uses bcrypt\" but code now uses argon2, memory references deleted file, two memories contradict each other. Agent gets prompted: \"3 memories may be stale — review and aide_forget or aide_update.\" Both are monetization features — free tier gets opinionated defaults, paid tier gets customization + maintenance.",
+  "why": "User identified both as pro/Phase 2 features. Configurability for power users who want less aggressive prompting. Memory cleanup solves the inevitable staleness problem as codebases evolve — memories that were true when stored become wrong over time.",
+  "scope": "docs/specs/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "phase-2",
+    "monetization",
+    "hooks",
+    "configuration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-10T12:21:54.441Z",
+  "updated_at": "2026-04-10T12:25:55.610Z"
+}

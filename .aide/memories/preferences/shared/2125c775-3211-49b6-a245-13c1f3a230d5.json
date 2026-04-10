@@ -1,0 +1,19 @@
+{
+  "uuid": "2125c775-3211-49b6-a245-13c1f3a230d5",
+  "layer": "preferences",
+  "what": "User correction: when responding with numbered points, never skip numbers. If user's message has points 1-7, respond to all 7 in order (1, 2, 3, 4, 5, 6, 7). Don't renumber or skip any.",
+  "why": "User corrected this multiple times in this session — agent kept skipping numbers when addressing multi-point feedback.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "formatting",
+    "communication"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-10T12:21:04.843Z",
+  "updated_at": "2026-04-10T12:21:04.843Z"
+}

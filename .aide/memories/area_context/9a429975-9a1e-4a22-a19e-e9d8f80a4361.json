@@ -1,0 +1,21 @@
+{
+  "uuid": "9a429975-9a1e-4a22-a19e-e9d8f80a4361",
+  "layer": "area_context",
+  "what": "User decision: implement two-phase correction flow. UserPromptSubmit stays soft (detects correction, writes flag). Stop hook checks flag — if correction wasn't stored via aide_remember, blocks until it is. Also: agent should be prompted to use aide-memory tools at EVERY relevant moment — file reads (block), directory-level work, preferences, technical context, codebase searches. Each layer should surface at the right time, not just area_context on file reads. aide_search should support semantic-only option alongside keyword-first-semantic-fallback default.",
+  "why": "User wants aide-memory to be deeply integrated into the agent workflow at every touchpoint, not just file reads. The goal is that at every point the agent should be strongly prompted to use the available memory tools based on what's relevant.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "recall",
+    "search",
+    "design-direction"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-10T03:07:25.945Z",
+  "updated_at": "2026-04-10T03:07:25.945Z"
+}

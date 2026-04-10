@@ -576,6 +576,26 @@ export class MemoryStore {
       this.updateDirHash();
     }
 
+    // Regenerate embedding if content fields changed (fire-and-forget)
+    if (
+      this.embeddingService?.isReady() &&
+      (changes.what !== undefined || changes.why !== undefined || changes.context_label !== undefined)
+    ) {
+      const embeddingText = [updated.what, updated.why, updated.context_label]
+        .filter(Boolean)
+        .join(' ');
+      this.embeddingService
+        .generateEmbedding(embeddingText)
+        .then((vec) => {
+          if (vec && this.embeddingService) {
+            this.embeddingService.storeEmbedding(this.db, String(updated.id), vec);
+          }
+        })
+        .catch(() => {
+          // Embedding failure is non-fatal — LIKE search still works
+        });
+    }
+
     return updated;
   }
 

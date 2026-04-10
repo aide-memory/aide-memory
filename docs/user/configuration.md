@@ -21,7 +21,8 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
       "preToolUse": true,
       "stop": true,
       "userPromptSubmit": true,
-      "preCompact": true
+      "preCompact": true,
+      "sessionStart": true
     }
   },
   "nudge": {
@@ -60,10 +61,11 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
 |-----|------|---------|-------------|
 | `version` | number | `1` | Config schema version |
 | `capture.enabled` | boolean | `true` | Master switch for all hooks |
-| `capture.hooks.preToolUse` | boolean | `true` | Enable PreToolUse hook (memory count nudge) |
+| `capture.hooks.preToolUse` | boolean | `true` | Enable PreToolUse hooks (Read blocking + recall tracking) |
 | `capture.hooks.stop` | boolean | `true` | Enable Stop hook (reflection prompt) |
 | `capture.hooks.userPromptSubmit` | boolean | `true` | Enable UserPromptSubmit hook (correction detection) |
 | `capture.hooks.preCompact` | boolean | `true` | Enable PreCompact hook (save before compaction) |
+| `capture.hooks.sessionStart` | boolean | `true` | Enable SessionStart hook (stale tracking cleanup) |
 | `nudge.visible` | boolean | `false` | Show nudge text in terminal (normally hidden in agent context) |
 | `tags.presets` | string[] | _(see above)_ | Available tag presets for categorization |
 | `telemetry.enabled` | boolean | `true` | Send anonymous usage analytics |
