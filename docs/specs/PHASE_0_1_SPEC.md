@@ -144,9 +144,9 @@ Domain: aide-memory.dev (live on Vercel, connected via Cloudflare CNAME)
 
 IMPORTANT: All sub-agents MUST use Opus 4.6 — never Sonnet or Haiku.
 
-COMPUTER USE: You have access to Computer Use (desktop automation). Use it to interact with native Terminal, start/close Claude Code sessions, open browsers, and control desktop apps. For tasks that need a Claude Code session (like validation), open Terminal via Computer Use, run `claude` to start a session, execute the steps, then close it.
+DESKTOP COMMANDER: You have access to the Desktop Commander extension for terminal and desktop automation. Use it to open Terminal windows, start/close Claude Code sessions, run commands, and control desktop apps. For tasks that need a Claude Code session (like validation), use Desktop Commander to open Terminal, run `claude` to start a session, execute the steps, then close it.
 
-PARALLELIZATION: Spin off separate sub-agents for ALL independent tasks. Run as many in parallel as possible. Only go sequential when there's a dependency.
+PARALLELIZATION: Spin off separate sub-agents for ALL independent tasks. Run as many in parallel as possible. DO NOT wait sequentially when tasks are independent — kick off ALL parallel tasks at once. Only go sequential when there's an explicit dependency.
 
 WHAT'S ALREADY DONE (do NOT redo):
 - Domain registration (aide-memory.dev + .com on Cloudflare) ✅
@@ -159,19 +159,23 @@ WHAT'S ALREADY DONE (do NOT redo):
 - Marketing content: 5 pieces in docs/marketing/ + publishing guide ✅
 - Analytics: local SQLite + PostHog HTTP integration + recall-log CLI ✅
 - Plugin research: documented in docs/specs/PLUGIN_STATUS.md ✅
+- Hook & Recall Refinement: 9 hooks implemented, session-scoped tracking, scoped-only blocking, round-robin ranking, scope-first recall, search modes (auto/keyword/semantic), two-phase correction flow, SessionStart auto-injection, priority field, embedding fix ✅
+- All hook smoke tests (28 automated + 14 live scenarios) passing ✅
+- Recall quality verified across 22 aide_recall combinations ✅
 
 ============================
 PHASE 1 — PARALLEL GROUP (all independent — run simultaneously)
 ============================
 
-TASK 1 — Validation (Claude Code agent)
-Run 6 validation scenarios from the runbook.
-1. Read the full runbook: /Users/meky/code/aide-v0/docs/validation/PHASE_0_1_INTEGRATION_TESTING.md
-2. Follow the "Before each scenario" steps: rebuild (git pull, npm install, npm run build, npm link)
-3. Run ALL 6 scenarios in order, following exact steps in the runbook
-4. For each scenario: record PASS/FAIL and any issues encountered
-5. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md
-6. If any scenario FAILS: document what failed and why, but continue with remaining scenarios
+TASK 1 — Validation (Claude Code agent via Desktop Commander)
+Run 14 validation scenarios. Use Desktop Commander to open Terminal + Claude Code sessions.
+1. Rebuild first: cd /Users/meky/code/aide-v0 && git pull && npm install && npm run build && npm link
+2. Read verification scenarios V1-V14 from this spec (section 12.3 in Hook & Recall Refinement Plan)
+3. Also read the runbook: /Users/meky/code/aide-v0/docs/validation/PHASE_0_1_INTEGRATION_TESTING.md
+4. Run ALL 14 scenarios — spin off parallel agents for independent scenarios (V1-V5 can run in parallel, V6 needs separate session, V10 needs two sessions, etc.)
+5. For each scenario: record PASS/FAIL, verify recall QUALITY (not just hook mechanics — check that returned memories are actually relevant to the queried path)
+6. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md
+7. If any scenario FAILS: document what failed and why, but continue with remaining scenarios
 
 TASK 2 — PostHog Account Setup (browser agent)
 Set up analytics dashboard so we can see usage data.
@@ -664,21 +668,28 @@ This nudges the agent to consider both persistence targets without overfitting t
 
 | Scenario | Steps | Expected |
 |----------|-------|----------|
-| V1: Recall surfaces on read | Create test project, seed memories, read file | Hook blocks, aide_recall returns memories, subsequent read is soft |
-| V2: Directory recall triggers | Read 2 files in same dir | Second read triggers directory recall nudge |
-| V3: Search nudge works | Seed memories matching "auth", grep "auth" | Hook blocks with match count, aide_search returns results |
-| V4: Edit enforced if not recalled | Go directly to edit without reading | Hook blocks until recall |
+| V1: Recall surfaces on read | Create test project, seed scoped memories, read file | Hook blocks (scoped memories exist), aide_recall returns scoped memories FIRST, subsequent read is soft |
+| V2: Directory recall triggers | Read 2 files in same dir | Second read triggers directory recall nudge, dir recall returns area_context first |
+| V3: Search nudge works | Seed scoped memories matching "auth", grep "auth" | Hook blocks with match count (scoped matches), aide_search returns results |
+| V4: Edit enforced if not recalled | Go directly to edit without reading (file with scoped mems) | Hook blocks until recall |
 | V5: Correction stored | Type correction pattern, verify aide_remember called | Correction stored, flag cleared, stop hook normal |
 | V6: Post-compaction re-recall | Work in session, compact, read same file | Hook blocks again (tracking was cleared) |
 | V7: SessionStart injects prefs | Start new session with stored preferences | Preferences appear as context |
 | V8: Keyword vs semantic search | aide_search with mode:"keyword", mode:"semantic", mode:"auto" | Each mode returns appropriate results |
 | V9: Embedding update | Store memory, update content, search for new content | Semantic search finds updated content |
 | V10: Concurrent sessions | Two Claude Code sessions on same project | Tracking is isolated, no cross-contamination |
+| V11: Scoped vs project-wide blocking | Read file with only project-wide mems, read file with scoped mems | Project-wide → soft nudge, scoped → block |
+| V12: Recall quality | aide_recall for file with scoped mems | Top results are scoped to the queried path, not project-wide. Round-robin includes all 4 layers |
+| V13: File vs dir recall ranking | aide_recall for file path vs directory path | File query → specific scopes first. Dir query → area_context first |
+| V14: New project softening | Project with < 10 memories, read file | All hooks soft (no blocking) |
 
 **12.4 Bug Hunting Checklist**
 
-- [ ] Relative/absolute path mismatch (regression check)
-- [ ] UserPromptSubmit never blocks (regression check)
+- [ ] Relative/absolute path mismatch (regression — was root cause of recall quality failure)
+- [ ] UserPromptSubmit never blocks (regression — broke all user input when set to blocking)
+- [ ] Track-recall.sh glob pattern doesn't match file paths as dirs (regression — `*/**` matched everything)
+- [ ] Scoped-only blocking: project-wide-only files get soft, not block
+- [ ] New project (<10 mems) gets soft everywhere, not block
 - [ ] Empty tracking file doesn't crash hooks
 - [ ] Malformed JSON in hook input handled gracefully
 - [ ] Missing session_id falls back to "default"
@@ -687,6 +698,10 @@ This nudges the agent to consider both persistence targets without overfitting t
 - [ ] Concurrent file writes to tracking file don't corrupt
 - [ ] PreCompact with no tracking files doesn't error
 - [ ] SessionStart with no stale files doesn't error
+- [ ] MCP server restart required after code changes (document, don't fix — architectural)
+- [ ] Recall quality: scoped memories rank above project-wide for file queries
+- [ ] Recall quality: area_context ranks first for directory queries
+- [ ] Directory trigger fires on 2nd file (threshold >= 1 sibling, not >= 2)
 
 #### 13. PHASE 2 PRO FEATURES (deferred, documented)
 
@@ -703,8 +718,9 @@ REMAINING (source of truth — all pending items with concrete next steps):
 
 ### A. Validation (CRITICAL — launch gate)
 
-**P1.17: 6 validation scenarios in Claude Code** — COWORK runs these
-- Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (ready)
+**P1.17: 14 validation scenarios in Claude Code** — COWORK runs these
+- Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (needs update to include V7-V14)
+- Verification scenarios V1-V14 defined in Hook & Recall Refinement Plan section 12.3
 - Observability: `aide-memory recall-log` now logs both recalls AND memory store events (stored/updated/deleted) to `.aide/recall-log.jsonl`
 - Before each scenario: `aide-memory recall-log --clear`
 - After each scenario: `aide-memory recall-log` to see exactly what was recalled/stored
