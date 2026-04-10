@@ -50,6 +50,13 @@ try {
     process.exit(0);
   }
 
+  // Count scoped vs project-wide matches
+  let scoped_count = 0;
+  for (const m of matching) {
+    const s = m.scope;
+    if (s && s !== 'project') scoped_count++;
+  }
+
   // Build top 3 matches — truncate what field to 30 chars
   const topMatches = matching.slice(0, 3).map(m => {
     const what = m.what || '';
@@ -58,6 +65,8 @@ try {
 
   const result = {
     count: matching.length,
+    scoped_count,
+    total_memories: allMemories.length,
     topMatches,
   };
   process.stdout.write(JSON.stringify(result));

@@ -62,19 +62,26 @@ try {
     layers[m.layer] = (layers[m.layer] || 0) + 1;
   }
 
-  // Classify memories as file-specific vs directory-scoped
-  // File-specific: scope points to an exact file (no glob, no trailing slash)
-  // Directory-scoped: scope ends with /, /**, /*, or is null/project (broad)
+  // Classify memories: file-specific vs directory-scoped vs project-wide
   let file_count = 0;
   let dir_count = 0;
+  let project_count = 0;
+  let scoped_count = 0;
   for (const m of matching) {
     const s = m.scope;
-    if (!s || s === 'project' || s.endsWith('/') || s.endsWith('/**') || s.endsWith('/*')) {
+    if (!s || s === 'project') {
+      project_count++;
+    } else if (s.endsWith('/') || s.endsWith('/**') || s.endsWith('/*')) {
       dir_count++;
+      scoped_count++;
     } else {
       file_count++;
+      scoped_count++;
     }
   }
+
+  // Total memories in the store (for new-project < 10 threshold)
+  const total_memories = allMemories.length;
 
   // Extract topic keywords from all matching memories
   // Grab: capitalized words (not sentence starters), hyphenated compounds, path-like strings
@@ -178,6 +185,9 @@ try {
   // Output as JSON — the hook script handles formatting
   const result = {
     count: matching.length,
+    scoped_count,
+    project_count,
+    total_memories,
     layers,
     file_count,
     dir_count,

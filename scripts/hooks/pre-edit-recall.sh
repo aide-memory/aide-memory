@@ -84,10 +84,23 @@ if [ -n "$TOPICS" ] && [ "$TOPICS" != "null" ] && [ "$TOPICS" != "" ]; then
 fi
 NUDGE="${NUDGE}. Call aide_recall({paths: ['${FILE_PATH}']}) before editing."
 
-# Block — memories exist but haven't been recalled
-echo "$NUDGE" | jq -Rs '{
-  decision: "block",
-  reason: .
-}'
+# Parse scoped vs project-wide counts for block/soft decision
+SCOPED_COUNT=$(echo "$RESULT" | jq -r '.scoped_count // 0' 2>/dev/null)
+TOTAL_MEMORIES=$(echo "$RESULT" | jq -r '.total_memories // 0' 2>/dev/null)
+
+# Block only if: scoped memories exist AND total memories >= 10
+if [ "$SCOPED_COUNT" -gt 0 ] 2>/dev/null && [ "$TOTAL_MEMORIES" -ge 10 ] 2>/dev/null; then
+  echo "$NUDGE" | jq -Rs '{
+    decision: "block",
+    reason: .
+  }'
+else
+  echo "$NUDGE" | jq -Rs '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      additionalContext: .
+    }
+  }'
+fi
 
 exit 0

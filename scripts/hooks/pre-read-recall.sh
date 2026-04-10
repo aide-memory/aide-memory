@@ -53,6 +53,10 @@ LAYERS=$(echo "$RESULT" | jq -r '[.layers | to_entries[] | "\(.value) \(.key)"] 
 # Build topics string
 TOPICS=$(echo "$RESULT" | jq -r '.topics | join(", ")' 2>/dev/null)
 
+# Parse scoped vs project-wide counts for block/soft decision
+SCOPED_COUNT=$(echo "$RESULT" | jq -r '.scoped_count // 0' 2>/dev/null)
+TOTAL_MEMORIES=$(echo "$RESULT" | jq -r '.total_memories // 0' 2>/dev/null)
+
 # Compute parent directory display name from suggested_path or file path
 PARENT_DIR=""
 if [ -n "$SUGGESTED_PATH" ] && [ "$SUGGESTED_PATH" != "null" ]; then
@@ -149,10 +153,22 @@ if [ "$ALREADY_RECALLED" = "true" ]; then
   exit 0
 fi
 
-# Not yet recalled in this session — block until agent calls aide_recall
-echo "$NUDGE" | jq -Rs '{
-  decision: "block",
-  reason: .
-}'
+# Not yet recalled — decide block vs soft based on scoped memories + project size
+# Block only if: scoped memories exist (file/dir-specific) AND total memories >= 10
+if [ "$SCOPED_COUNT" -gt 0 ] 2>/dev/null && [ "$TOTAL_MEMORIES" -ge 10 ] 2>/dev/null; then
+  # Scoped memories + mature project → block
+  echo "$NUDGE" | jq -Rs '{
+    decision: "block",
+    reason: .
+  }'
+else
+  # Project-wide only OR new project (<10 mems) → soft nudge
+  echo "$NUDGE" | jq -Rs '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      additionalContext: .
+    }
+  }'
+fi
 
 exit 0

@@ -68,11 +68,26 @@ if [ "$ALREADY_SEARCHED" = "true" ]; then
   exit 0
 fi
 
-# Not yet searched in this session — block until agent calls aide_search
+# Parse scoped vs project-wide counts for block/soft decision
+SCOPED_COUNT=$(echo "$RESULT" | jq -r '.scoped_count // 0' 2>/dev/null)
+TOTAL_MEMORIES=$(echo "$RESULT" | jq -r '.total_memories // 0' 2>/dev/null)
+
+# Not yet searched — decide block vs soft
 NUDGE="${COUNT} aide memories match '${QUERY}' (${TOP_MATCHES}). Call aide_search({keyword: '${QUERY}'})."
-echo "$NUDGE" | jq -Rs '{
-  decision: "block",
-  reason: .
-}'
+
+# Block only if: scoped memories match AND total memories >= 10
+if [ "$SCOPED_COUNT" -gt 0 ] 2>/dev/null && [ "$TOTAL_MEMORIES" -ge 10 ] 2>/dev/null; then
+  echo "$NUDGE" | jq -Rs '{
+    decision: "block",
+    reason: .
+  }'
+else
+  echo "$NUDGE" | jq -Rs '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      additionalContext: .
+    }
+  }'
+fi
 
 exit 0
