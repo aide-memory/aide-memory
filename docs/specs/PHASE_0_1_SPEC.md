@@ -345,11 +345,12 @@ This plan covers all design decisions from the April 9-10 session: new hooks, ra
 
 #### 2. DESIGN PRINCIPLES
 
-1. **Block when clear what call to make** — file reads have a clear path (aide_recall for that path), so block. Searches have a clear query, so block if matches exist.
-2. **Soft when action is ambiguous** — UserPromptSubmit corrections can't block (rejects user's message). Edit nudges are soft if Read already recalled.
-3. **No enforcement when not applicable** — zero memories for path → no nudge at all. Already recalled in this session → soft only. No stale cache triggering false blocks.
-4. **Session-scoped tracking** — each session gets its own tracking file via `session_id` from hook stdin JSON. Concurrent sessions are fully isolated.
-5. **Minimum tokens, maximum relevance** — preview layer counts + topics, not full memory dumps. Round-robin ranking prevents layer starvation.
+1. **Block only when scoped memories exist** — block on Read/Edit/Search only when file-specific or directory-scoped memories match the path. Project-wide-only matches get soft nudge, not block. This prevents friction on files with no targeted context.
+2. **Soft for new projects** — if total memory count < 10, all hooks use soft nudges. Not enough context stored yet to justify blocking.
+3. **Soft when action is ambiguous** — UserPromptSubmit corrections can't block (rejects user's message). Edit nudges are soft if Read already recalled.
+4. **No enforcement when not applicable** — zero memories for path → no nudge at all. Already recalled in this session → soft only. No stale cache triggering false blocks.
+5. **Session-scoped tracking** — each session gets its own tracking file via `session_id` from hook stdin JSON. Concurrent sessions are fully isolated.
+6. **Minimum tokens, maximum relevance** — preview layer counts + topics, not full memory dumps. Round-robin ranking prevents layer starvation.
 
 #### 3. CURRENT HOOK SYSTEM (6 hooks, as-built)
 
