@@ -9,7 +9,13 @@
 #
 # Blocks compaction until agent saves key context.
 
-# SessionStart hook clears recalled-paths after compaction (source: "compact")
+# Clear this session's recalled-paths — agent is about to lose context
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SID="${SESSION_ID:-default}"
+rm -f "$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt" 2>/dev/null
 
 # Output blocking prompt
 cat <<'HOOK_OUTPUT'
