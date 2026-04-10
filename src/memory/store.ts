@@ -94,6 +94,7 @@ export class MemoryStore {
 
   // File-per-memory fields (null when using legacy dbPath-only mode)
   private memoriesDir: string | null = null;
+  private projectRoot: string | null = null;
   private defaultContributor: string;
 
   /**
@@ -112,6 +113,7 @@ export class MemoryStore {
     } else if ('projectRoot' in arg) {
       // New: file-per-memory mode
       const projectRoot = arg.projectRoot;
+      this.projectRoot = projectRoot;
       this.memoriesDir = path.join(projectRoot, '.aide', 'memories');
       const hash = projectHash(projectRoot);
       this.dbPath = path.join(os.homedir(), '.aide', 'projects', hash, 'memory.db');
@@ -879,6 +881,10 @@ export class MemoryStore {
 
   close(): void {
     this.db.close();
+  }
+
+  getProjectRoot(): string | null {
+    return this.projectRoot;
   }
 
   /**

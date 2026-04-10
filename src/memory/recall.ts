@@ -135,9 +135,19 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
   // Filter by path scope matching
   const matchedScopes = new Set<string>();
 
-  if (query.paths && query.paths.length > 0) {
+  // Normalize query paths: convert absolute paths to relative for scope matching
+  // Scopes are stored as relative (e.g., "src/memory/**") but callers may pass absolute paths
+  const normalizedPaths = query.paths?.map(p => {
+    if (path.isAbsolute(p) && store.getProjectRoot()) {
+      const rel = path.relative(store.getProjectRoot()!, p);
+      return rel || p;
+    }
+    return p;
+  });
+
+  if (normalizedPaths && normalizedPaths.length > 0) {
     candidates = candidates.filter(m => {
-      for (const p of query.paths!) {
+      for (const p of normalizedPaths) {
         if (scopeMatchesPath(m.scope, p)) {
           if (m.scope) matchedScopes.add(m.scope);
           return true;
@@ -148,22 +158,35 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
   }
 
   // Determine if any query path is a directory query (ends with '/')
-  const isDirectoryQuery = query.paths?.some(p => p.endsWith('/')) ?? false;
+  const isDirectoryQuery = normalizedPaths?.some(p => p.endsWith('/')) ?? false;
 
   // Score and sort
-  const scored = candidates.map(m => ({
-    memory: m,
-    layerRank: LAYER_ORDER.indexOf(m.layer),
-    relevance: query.query ? keywordScore(m, query.query) : 0,
-    scopeSpecificity: m.scope && m.scope !== 'project' ? m.scope.split('/').length : 0,
-  }));
+  const scored = candidates.map(m => {
+    const scopeDepth = m.scope && m.scope !== 'project' ? m.scope.split('/').length : 0;
+    // isScoped: 1 if memory has a specific scope (not project-wide), 0 if project-wide
+    // This is the primary signal — scoped memories always rank above project-wide
+    const isScoped = scopeDepth > 0 ? 1 : 0;
+    return {
+      memory: m,
+      isScoped,
+      layerRank: LAYER_ORDER.indexOf(m.layer),
+      relevance: query.query ? keywordScore(m, query.query) : 0,
+      scopeSpecificity: scopeDepth,
+    };
+  });
 
-  // Sort: layer priority first, then keyword relevance, then scope specificity.
-  // For directory queries (path ends with '/'), broader scopes rank higher (invert specificity).
-  // For file queries, more specific scopes rank higher (current behavior).
+  // Sort: scope match first (scoped > project-wide), then layer priority,
+  // then keyword relevance, then scope specificity as tiebreaker.
+  // For directory queries (path ends with '/'), broader scopes rank higher within scoped group.
+  // For file queries, more specific scopes rank higher within scoped group.
   scored.sort((a, b) => {
+    // Primary: scoped memories always beat project-wide
+    if (a.isScoped !== b.isScoped) return b.isScoped - a.isScoped;
+    // Secondary: layer priority (area_context > technical > preferences > guidelines)
     if (a.layerRank !== b.layerRank) return a.layerRank - b.layerRank;
+    // Tertiary: keyword relevance
     if (b.relevance !== a.relevance) return b.relevance - a.relevance;
+    // Quaternary: scope specificity
     if (isDirectoryQuery) {
       return a.scopeSpecificity - b.scopeSpecificity; // broader first
     }
