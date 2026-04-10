@@ -22,7 +22,13 @@ mkdir -p "$CACHE_DIR" 2>/dev/null
 SID="${SESSION_ID:-default}"
 RECALLED_FILE="$CACHE_DIR/recalled-paths-${SID}.txt"
 
-# Write each path to the session-scoped tracking file
-echo "$PATHS" >> "$RECALLED_FILE"
+# Write each path to the session-scoped tracking file (resolved to absolute)
+while IFS= read -r p; do
+  if [[ "$p" = /* ]]; then
+    echo "$p" >> "$RECALLED_FILE"
+  else
+    echo "$PROJECT_ROOT/$p" >> "$RECALLED_FILE"
+  fi
+done <<< "$PATHS"
 
 exit 0

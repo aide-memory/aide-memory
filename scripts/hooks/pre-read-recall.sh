@@ -54,8 +54,25 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SID="${SESSION_ID:-default}"
 RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt"
 
-# Check if path was already recalled in this session — if so, soft nudge
-if [ -f "$RECALLED_FILE" ] && grep -qF "$FILE_PATH" "$RECALLED_FILE" 2>/dev/null; then
+# Check if path (or a parent directory) was already recalled in this session
+# Exact file match OR any recalled path is a prefix of this file path
+ALREADY_RECALLED=false
+if [ -f "$RECALLED_FILE" ]; then
+  while IFS= read -r recalled_path; do
+    # Exact match
+    if [ "$recalled_path" = "$FILE_PATH" ]; then
+      ALREADY_RECALLED=true
+      break
+    fi
+    # Directory prefix match (recalled src/auth/ covers src/auth/middleware.ts)
+    if [[ "$FILE_PATH" == "$recalled_path"* ]]; then
+      ALREADY_RECALLED=true
+      break
+    fi
+  done < "$RECALLED_FILE"
+fi
+
+if [ "$ALREADY_RECALLED" = "true" ]; then
   # Already recalled in this session — soft nudge only
   echo "$NUDGE" | jq -Rs '{
     hookSpecificOutput: {
