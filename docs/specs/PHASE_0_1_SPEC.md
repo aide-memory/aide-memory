@@ -589,9 +589,13 @@ Lifecycle:
 
 **Memory-vs-doc mitigation:**
 
-1. **Stop hook prompts for BOTH**: Wording changed to: "Any decisions for project docs (specs, plans, remaining work)? Update the relevant file. Any knowledge for aide_remember? Call aide_remember." Agent is forced to consider both actions.
-
-2. **PostToolUse(aide_remember) guard**: After storing a memory, check if content matches project-decision patterns ("Phase 2", "deferred", "remaining work", "follow-up", "pro feature"). If so, nudge: "This memory looks like a project decision. Should it also be added to the relevant spec/plan doc?"
+Stop hook wording broadened to prompt for appropriate persistence — not just aide_remember:
+```
+"Any decisions, constraints, preferences, or guidelines worth persisting?
+ Store in the right place — aide_remember for cross-session context,
+ relevant project docs for plans and decisions. If nothing, stop."
+```
+This nudges the agent to consider both persistence targets without overfitting to specific docs or patterns.
 
 #### 11. IMPLEMENTATION ORDER
 
@@ -873,7 +877,14 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 - Trigger points: PostToolUse (after edits that invalidate context), post-session (batch), or periodic background
 - Examples: memory says "auth uses bcrypt" but code now uses argon2, memory references deleted file, two memories contradict
 - Agent gets prompted: "3 memories may be stale — review and aide_forget or aide_update"
-- Both cleanup and configurability are monetization features — free tier gets opinionated defaults, paid tier gets customization + maintenance
+
+**7. Contributor-aware auto-injection (Phase 2 pro feature):**
+- SessionStart auto-injection and recall should prioritize current contributor's memories over others'
+- If user A is working, their preferences/guidelines rank above user B's in injection and recall
+- Contributor identity from git config (`user.name` / `user.email`) or explicit `aide-memory config contributor`
+- Team memories (shared: true) still surface but personal preferences of the current contributor rank first
+
+Both cleanup, configurability, and contributor prioritization are monetization features — free tier gets opinionated defaults, paid tier gets customization + maintenance + contributor awareness
 
 ---
 
