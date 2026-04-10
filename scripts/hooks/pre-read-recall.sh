@@ -101,7 +101,9 @@ if [ -f "$RECALLED_FILE" ]; then
   done < "$RECALLED_FILE"
 fi
 
-# Directory trigger: if >=2 files from same parent dir have been read,
+# Directory trigger: only if current file is NOT already recalled
+if [ "$ALREADY_RECALLED" = "false" ]; then
+# If >=2 files from same parent dir have been read,
 # and dir|{parent} is NOT in tracking, suggest a directory-level recall
 if [ -f "$RECALLED_FILE" ] && [ -n "$PARENT_DIR" ]; then
   # Get absolute parent dir for matching
@@ -133,6 +135,7 @@ if [ -f "$RECALLED_FILE" ] && [ -n "$PARENT_DIR" ]; then
     }'
     exit 0
   fi
+fi
 fi
 
 if [ "$ALREADY_RECALLED" = "true" ]; then
