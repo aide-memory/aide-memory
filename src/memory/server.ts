@@ -86,6 +86,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       tags: z.array(z.string()).optional().describe('Tags for categorization.'),
       source: z.enum(SOURCE_VALUES).optional().describe('How this was captured. Default: conversation.'),
       shared: z.boolean().optional().describe('Whether this memory is shared (true, default) or personal (false). Only affects preferences layer file placement.'),
+      priority: z.enum(['always', 'normal']).optional().describe('always = auto-injected at session start. normal = standard recall.'),
     },
     async (params) => {
       const memory = store.add({
@@ -98,6 +99,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
         tags: params.tags,
         source: (params.source as MemorySource) ?? 'conversation',
         shared: params.shared,
+        priority: params.priority as 'always' | 'normal' | undefined,
       });
 
       logStoreEvent(logDir, 'memory_stored', memory);
@@ -121,6 +123,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       why: z.string().optional().describe('Updated context.'),
       scope: z.string().optional().describe('Updated scope pattern.'),
       context_label: z.string().optional().describe('Updated feature label.'),
+      priority: z.enum(['always', 'normal']).optional().describe('always = auto-injected at session start. normal = standard recall.'),
     },
     async (params) => {
       const id = toNumber(params.id);
@@ -137,6 +140,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       if (params.why !== undefined) changes.why = params.why;
       if (params.scope !== undefined) changes.scope = params.scope;
       if (params.context_label !== undefined) changes.context_label = params.context_label;
+      if (params.priority !== undefined) changes.priority = params.priority;
 
       if (Object.keys(changes).length === 0) {
         return {
@@ -272,12 +276,22 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       keyword: z.string().describe('Text to search for in memory content (case-insensitive substring match on what and why fields).'),
       layer: z.enum(LAYER_VALUES).optional().describe('Filter to a specific layer.'),
       limit: z.number().optional().describe('Max results (default 50).'),
+      mode: z.enum(['auto', 'keyword', 'semantic']).optional().describe(
+        "Search mode. 'auto' (default): keyword first, semantic fallback if <3 results. 'keyword': exact substring only. 'semantic': embedding similarity only."
+      ),
     },
     async (params) => {
-      const memories = store.search(params.keyword, {
+      const searchMode = params.mode as 'auto' | 'keyword' | 'semantic' | undefined;
+      const searchOptions = {
         layer: params.layer as MemoryLayer | undefined,
         limit: params.limit,
-      });
+        mode: searchMode,
+      };
+
+      // Use searchWithEmbeddings for auto/semantic modes to enable async embedding fallback
+      const memories = (searchMode === 'semantic' || searchMode === 'auto' || !searchMode)
+        ? await store.searchWithEmbeddings(params.keyword, searchOptions)
+        : store.search(params.keyword, searchOptions);
 
       if (memories.length === 0) {
         return {

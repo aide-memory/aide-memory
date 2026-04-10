@@ -6,7 +6,7 @@
           {
             "type": "command",
             "command": "bash scripts/hooks/session-start-clear.sh",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       }
@@ -56,11 +56,73 @@
         ]
       },
       {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/pre-edit-recall.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/pre-edit-recall.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/pre-search-nudge.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/pre-search-nudge.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "mcp__aide-memory__aide_recall",
         "hooks": [
           {
             "type": "command",
             "command": "bash scripts/hooks/track-recall.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__aide-memory__aide_recall",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/track-recall-post.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__aide-memory__aide_remember",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/track-remember.sh",
             "timeout": 5
           }
         ]

@@ -2,7 +2,9 @@
 # PreToolUse hook — track when aide_recall is called.
 # Fires before mcp__aide-memory__aide_recall tool.
 # Writes recalled paths to session-scoped tracking file so the
-# Read hook knows not to block again for these paths.
+# Read/Edit hooks know not to block again for these paths.
+#
+# Entry format: file|{path} for file paths, dir|{path} for directories.
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
@@ -23,11 +25,25 @@ SID="${SESSION_ID:-default}"
 RECALLED_FILE="$CACHE_DIR/recalled-paths-${SID}.txt"
 
 # Write each path to the session-scoped tracking file (resolved to absolute)
+# Use file| prefix for file paths, dir| prefix for directory paths
 while IFS= read -r p; do
+  # Resolve to absolute path
   if [[ "$p" = /* ]]; then
-    echo "$p" >> "$RECALLED_FILE"
+    abs_path="$p"
   else
-    echo "$PROJECT_ROOT/$p" >> "$RECALLED_FILE"
+    abs_path="$PROJECT_ROOT/$p"
+  fi
+
+  # Determine if path is a directory (ends with / or ** glob)
+  if [[ "$abs_path" == */ ]] || [[ "$abs_path" == */** ]]; then
+    # Strip trailing /** or /* for clean dir path
+    clean_dir="${abs_path%%/\*\*}"
+    clean_dir="${clean_dir%%/\*}"
+    # Ensure trailing slash
+    [[ "$clean_dir" != */ ]] && clean_dir="${clean_dir}/"
+    echo "dir|${clean_dir}" >> "$RECALLED_FILE"
+  else
+    echo "file|${abs_path}" >> "$RECALLED_FILE"
   fi
 done <<< "$PATHS"
 

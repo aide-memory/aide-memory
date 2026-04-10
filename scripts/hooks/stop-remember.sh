@@ -9,16 +9,33 @@
 
 INPUT=$(cat)
 STOP_HOOK_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 
 # Prevent infinite loop — if already in a stop-hook continuation, let it stop
 if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
   exit 0
 fi
 
-# Block the stop and inject a reflection prompt via additionalContext
-cat <<'HOOK_OUTPUT'
+# Check if a correction-pending flag exists for this session
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SID="${SESSION_ID:-default}"
+FLAG_FILE="$PROJECT_ROOT/.aide/cache/correction-pending-${SID}.txt"
+
+if [ -f "$FLAG_FILE" ]; then
+  # Correction was detected but not yet stored — block with stronger message
+  cat <<'HOOK_OUTPUT'
 {
   "decision": "block",
-  "reason": "Before finishing: anything non-obvious worth persisting (constraints, decisions, corrections)? Call aide_remember (layer, scope, source:hook). If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server. If nothing to store, stop."
+  "reason": "A correction from this turn wasn't stored. Call aide_remember for it. Also: any decisions, technical constraints, preferences, or guidelines worth persisting? Store in the right place — aide_remember for cross-session context, relevant project docs for plans and decisions. If nothing, stop."
 }
 HOOK_OUTPUT
+else
+  # No pending correction — standard reflection prompt
+  cat <<'HOOK_OUTPUT'
+{
+  "decision": "block",
+  "reason": "Any decisions, technical constraints, preferences, or guidelines worth persisting? Store in the right place — aide_remember for cross-session context, relevant project docs for plans and decisions. If nothing, stop."
+}
+HOOK_OUTPUT
+fi

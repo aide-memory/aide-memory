@@ -15,11 +15,19 @@
 
 INPUT=$(cat)
 USER_MESSAGE=$(echo "$INPUT" | jq -r '.prompt // empty')
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 
 # Exit early if no message
 if [ -z "$USER_MESSAGE" ]; then
   exit 0
 fi
+
+# Setup for flag file
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CACHE_DIR="$PROJECT_ROOT/.aide/cache"
+SID="${SESSION_ID:-default}"
+FLAG_FILE="$CACHE_DIR/correction-pending-${SID}.txt"
 
 # Shared fallback instruction (appended to all nudges)
 FALLBACK="If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server."
@@ -30,10 +38,12 @@ if echo "$USER_MESSAGE" | grep -qiE "(no[, ]+(don.t|do not|use|instead|that.s wr
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "User correction detected. Store via aide_remember (layer: preferences or technical, source: hook). ${FALLBACK}"
+    "additionalContext": "BEFORE doing anything else, store via aide_remember (layer: preferences or technical, source: hook). ${FALLBACK}"
   }
 }
 HOOK_OUTPUT
+  mkdir -p "$CACHE_DIR" 2>/dev/null
+  echo "correction" > "$FLAG_FILE"
   exit 0
 fi
 
@@ -43,10 +53,12 @@ if echo "$USER_MESSAGE" | grep -qiE "(let.s (use|go with)|we should|go with|the 
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "User decision detected. Store via aide_remember (layer: area_context or technical, source: hook). ${FALLBACK}"
+    "additionalContext": "BEFORE doing anything else, store via aide_remember (layer: area_context or technical, source: hook). ${FALLBACK}"
   }
 }
 HOOK_OUTPUT
+  mkdir -p "$CACHE_DIR" 2>/dev/null
+  echo "decision" > "$FLAG_FILE"
   exit 0
 fi
 
@@ -56,10 +68,12 @@ if echo "$USER_MESSAGE" | grep -qiE "(I prefer|always use|never use|I like|my st
 {
   "hookSpecificOutput": {
     "hookEventName": "UserPromptSubmit",
-    "additionalContext": "User preference detected. Store via aide_remember (layer: preferences, source: hook). ${FALLBACK}"
+    "additionalContext": "BEFORE doing anything else, store via aide_remember (layer: preferences, source: hook). ${FALLBACK}"
   }
 }
 HOOK_OUTPUT
+  mkdir -p "$CACHE_DIR" 2>/dev/null
+  echo "preference" > "$FLAG_FILE"
   exit 0
 fi
 

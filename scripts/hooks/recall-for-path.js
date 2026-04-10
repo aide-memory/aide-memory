@@ -38,7 +38,7 @@ try {
   }
 
   // Open store using projectRoot (constructor accepts string project path)
-  const store = new MemoryStore(projectRoot);
+  const store = new MemoryStore({ projectRoot });
 
   // Get all active memories matching the path scope
   const allMemories = store.list();
@@ -62,6 +62,20 @@ try {
     layers[m.layer] = (layers[m.layer] || 0) + 1;
   }
 
+  // Classify memories as file-specific vs directory-scoped
+  // File-specific: scope points to an exact file (no glob, no trailing slash)
+  // Directory-scoped: scope ends with /, /**, /*, or is null/project (broad)
+  let file_count = 0;
+  let dir_count = 0;
+  for (const m of matching) {
+    const s = m.scope;
+    if (!s || s === 'project' || s.endsWith('/') || s.endsWith('/**') || s.endsWith('/*')) {
+      dir_count++;
+    } else {
+      file_count++;
+    }
+  }
+
   // Extract topic keywords from all matching memories
   // Grab: capitalized words (not sentence starters), hyphenated compounds, path-like strings
   const stopWords = new Set([
@@ -75,16 +89,16 @@ try {
     'TRUE', 'FALSE', 'YES', 'NO', 'NEVER', 'ALWAYS',
   ]);
 
-  const topicCounts = {};
-  for (const m of matching) {
-    const text = [m.what, m.why || '', m.context_label || ''].join(' ');
+  // Extract topics per layer AND overall
+  function extractTopics(text) {
+    const counts = {};
 
     // Hyphenated compounds (aide-memory, npm-publish, etc.)
     const hyphenated = text.match(/[a-zA-Z]+-[a-zA-Z]+(?:-[a-zA-Z]+)*/g) || [];
     for (const h of hyphenated) {
       const lower = h.toLowerCase();
       if (!stopWords.has(lower)) {
-        topicCounts[lower] = (topicCounts[lower] || 0) + 1;
+        counts[lower] = (counts[lower] || 0) + 1;
       }
     }
 
@@ -96,24 +110,80 @@ try {
         if (/^[A-Z][a-z]{2,}/.test(word)) {
           const clean = word.replace(/[^a-zA-Z]/g, '');
           if (clean.length > 2 && !stopWords.has(clean) && !stopWords.has(clean.toUpperCase())) {
-            topicCounts[clean] = (topicCounts[clean] || 0) + 1;
+            counts[clean] = (counts[clean] || 0) + 1;
           }
         }
       }
     }
+
+    return counts;
   }
 
-  // Sort by frequency, take top 8
-  const topics = Object.entries(topicCounts)
+  // Build overall topic counts and per-layer topic counts
+  const overallCounts = {};
+  const layerTexts = {}; // layer -> concatenated text
+
+  for (const m of matching) {
+    const text = [m.what, m.why || '', m.context_label || ''].join(' ');
+    const counts = extractTopics(text);
+    for (const [t, c] of Object.entries(counts)) {
+      overallCounts[t] = (overallCounts[t] || 0) + c;
+    }
+    // Accumulate text per layer for per-layer topic extraction
+    if (!layerTexts[m.layer]) layerTexts[m.layer] = '';
+    layerTexts[m.layer] += ' ' + text;
+  }
+
+  // Sort by frequency, take top 8 overall
+  const top8 = Object.entries(overallCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([t]) => t);
+  const top8Set = new Set(top8);
+
+  // Per-layer: top 2 topics per layer
+  const per_layer_topics = {};
+  for (const [layer, text] of Object.entries(layerTexts)) {
+    const counts = extractTopics(text);
+    per_layer_topics[layer] = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([t]) => t);
+  }
+
+  // Add 1-2 extras from layers with zero representation in top 8
+  const extras = [];
+  for (const [layer, layerTopics] of Object.entries(per_layer_topics)) {
+    const hasRepresentation = layerTopics.some(t => top8Set.has(t));
+    if (!hasRepresentation && layerTopics.length > 0) {
+      // Add up to 2 topics from this underrepresented layer
+      for (const t of layerTopics) {
+        if (!top8Set.has(t) && extras.length < 2) {
+          extras.push(t);
+        }
+      }
+    }
+  }
+  const topics = [...top8, ...extras];
+
+  // Compute suggested_path: parent directory if query is a file
+  let suggested_path = null;
+  if (relativePath && !relativePath.endsWith('/') && relativePath.includes('/')) {
+    const parentDir = path.dirname(relativePath);
+    if (parentDir && parentDir !== '.') {
+      suggested_path = parentDir + '/';
+    }
+  }
 
   // Output as JSON — the hook script handles formatting
   const result = {
     count: matching.length,
     layers,
+    file_count,
+    dir_count,
     topics,
+    per_layer_topics,
+    suggested_path,
   };
   process.stdout.write(JSON.stringify(result));
 } catch (err) {

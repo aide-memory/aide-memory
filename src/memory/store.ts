@@ -9,7 +9,7 @@ import { initFts5, backfillFts5Index, escapeFts5Query } from './fts5';
 import type { EmbeddingService } from './embeddings';
 import { Analytics } from './analytics';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const CREATE_TABLE = `
 CREATE TABLE IF NOT EXISTS memories (
@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS memories (
   derived_from TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  priority TEXT DEFAULT 'normal',
   recalled_count INTEGER NOT NULL DEFAULT 0,
   last_recalled_at TEXT
 );
@@ -254,6 +255,7 @@ export class MemoryStore {
       tags: mem.tags,
       source: mem.source,
       shared: mem.shared,
+      priority: mem.priority,
       generated_by: mem.generated_by,
       derived_from: mem.derived_from,
       created_at: mem.created_at,
@@ -368,13 +370,14 @@ export class MemoryStore {
             // Update from file (preserve recall stats)
             this.db.prepare(`
               UPDATE memories SET layer = ?, what = ?, why = ?, scope = ?, context_label = ?,
-                contributor = ?, tags = ?, source = ?, shared = ?, generated_by = ?,
+                contributor = ?, tags = ?, source = ?, shared = ?, priority = ?, generated_by = ?,
                 derived_from = ?, created_at = ?, updated_at = ?
               WHERE uuid = ?
             `).run(
               data.layer, data.what, data.why ?? null, data.scope ?? null,
               data.context_label ?? null, data.contributor, JSON.stringify(data.tags ?? []),
               data.source ?? 'conversation', data.shared ? 1 : 0,
+              data.priority ?? 'normal',
               data.generated_by ? JSON.stringify(data.generated_by) : null,
               data.derived_from ? JSON.stringify(data.derived_from) : null,
               data.created_at, data.updated_at,
@@ -384,12 +387,13 @@ export class MemoryStore {
             // Insert new
             this.db.prepare(`
               INSERT INTO memories (uuid, layer, what, why, scope, context_label, contributor,
-                tags, source, shared, generated_by, derived_from, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tags, source, shared, priority, generated_by, derived_from, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
               data.uuid, data.layer, data.what, data.why ?? null, data.scope ?? null,
               data.context_label ?? null, data.contributor, JSON.stringify(data.tags ?? []),
               data.source ?? 'conversation', data.shared ? 1 : 0,
+              data.priority ?? 'normal',
               data.generated_by ? JSON.stringify(data.generated_by) : null,
               data.derived_from ? JSON.stringify(data.derived_from) : null,
               data.created_at, data.updated_at
@@ -429,11 +433,12 @@ export class MemoryStore {
     const shared = input.shared ?? true;
     const derivedJson = input.derived_from ? JSON.stringify(input.derived_from) : null;
     const generatedByJson = input.generated_by ? JSON.stringify(input.generated_by) : null;
+    const priority = input.priority ?? 'normal';
 
     const result = this.db.prepare(`
       INSERT INTO memories (uuid, layer, what, why, scope, context_label, contributor,
-        tags, source, shared, generated_by, derived_from, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        tags, source, shared, priority, generated_by, derived_from, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       uuid,
       input.layer,
@@ -445,6 +450,7 @@ export class MemoryStore {
       JSON.stringify(tags),
       input.source ?? 'conversation',
       shared ? 1 : 0,
+      priority,
       generatedByJson,
       derivedJson,
       now,
@@ -495,6 +501,7 @@ export class MemoryStore {
     layer?: MemoryLayer;
     scope?: string;
     contributor?: string;
+    priority?: 'always' | 'normal';
     limit?: number;
   }): Memory[] {
     const conditions: string[] = [];
@@ -512,6 +519,10 @@ export class MemoryStore {
       conditions.push('contributor = ?');
       params.push(options.contributor);
     }
+    if (options?.priority) {
+      conditions.push('priority = ?');
+      params.push(options.priority);
+    }
 
     let sql = 'SELECT * FROM memories';
     if (conditions.length > 0) {
@@ -527,7 +538,7 @@ export class MemoryStore {
     return rows.map(r => this.rowToMemory(r));
   }
 
-  update(id: number, changes: Partial<Pick<Memory, 'what' | 'why' | 'scope' | 'context_label' | 'contributor' | 'tags' | 'shared' | 'generated_by'>>): Memory | null {
+  update(id: number, changes: Partial<Pick<Memory, 'what' | 'why' | 'scope' | 'context_label' | 'contributor' | 'tags' | 'shared' | 'priority' | 'generated_by'>>): Memory | null {
     const existing = this.get(id);
     if (!existing) return null;
 
@@ -667,22 +678,42 @@ export class MemoryStore {
     return row.count;
   }
 
-  search(keyword: string, options?: { layer?: MemoryLayer; limit?: number }): Memory[] {
+  search(keyword: string, options?: { layer?: MemoryLayer; limit?: number; mode?: 'auto' | 'keyword' | 'semantic' }): Memory[] {
+    const mode = options?.mode ?? 'auto';
     let results: Memory[];
     let searchType: string;
-    if (this._fts5Available) {
-      const ftsResults = this.searchFts5(keyword, options);
-      if (ftsResults.length > 0) {
-        results = ftsResults;
-        searchType = 'fts5';
+
+    if (mode === 'semantic') {
+      // Semantic-only: return empty synchronously — callers wanting semantic must use searchWithEmbeddings()
+      results = [];
+      searchType = 'semantic';
+    } else if (mode === 'keyword') {
+      // Keyword-only: LIKE search, no fallback
+      if (this._fts5Available) {
+        const ftsResults = this.searchFts5(keyword, options);
+        results = ftsResults.length > 0 ? ftsResults : this.searchLike(keyword, options);
+        searchType = ftsResults.length > 0 ? 'fts5' : 'like';
       } else {
         results = this.searchLike(keyword, options);
         searchType = 'like';
       }
     } else {
-      results = this.searchLike(keyword, options);
-      searchType = 'like';
+      // Auto: keyword first, semantic fallback if <3 results (handled in searchWithEmbeddings)
+      if (this._fts5Available) {
+        const ftsResults = this.searchFts5(keyword, options);
+        if (ftsResults.length > 0) {
+          results = ftsResults;
+          searchType = 'fts5';
+        } else {
+          results = this.searchLike(keyword, options);
+          searchType = 'like';
+        }
+      } else {
+        results = this.searchLike(keyword, options);
+        searchType = 'like';
+      }
     }
+
     this.logEvent('search_performed', searchType);
     return results;
   }
@@ -759,8 +790,37 @@ export class MemoryStore {
    * If search returns < 3 results and embeddings are available,
    * supplements with semantic search results (deduplicated).
    */
-  async searchWithEmbeddings(keyword: string, options?: { layer?: MemoryLayer; limit?: number }): Promise<Memory[]> {
+  async searchWithEmbeddings(keyword: string, options?: { layer?: MemoryLayer; limit?: number; mode?: 'auto' | 'keyword' | 'semantic' }): Promise<Memory[]> {
     const limit = options?.limit ?? 50;
+    const mode = options?.mode ?? 'auto';
+
+    // Semantic-only mode: skip keyword search entirely
+    if (mode === 'semantic') {
+      if (!this.embeddingService?.isReady()) return [];
+      try {
+        const semanticHits = await this.embeddingService.semanticSearch(this.db, keyword, limit);
+        const results: Memory[] = [];
+        for (const hit of semanticHits) {
+          if (hit.score < 0.3) continue;
+          const memory = this.getByUuid(hit.uuid);
+          if (!memory) continue;
+          if (options?.layer && memory.layer !== options.layer) continue;
+          results.push(memory);
+          if (results.length >= limit) break;
+        }
+        this.logEvent('search_performed', 'semantic');
+        return results;
+      } catch {
+        return [];
+      }
+    }
+
+    // Keyword-only mode: no semantic fallback
+    if (mode === 'keyword') {
+      return this.search(keyword, options);
+    }
+
+    // Auto mode: keyword first, semantic fallback if <3 results
     const likeResults = this.search(keyword, options);
 
     // Supplement with semantic search if too few results
@@ -848,6 +908,7 @@ export class MemoryStore {
       tags: row.tags ? JSON.parse(row.tags) : [],
       source: row.source as any,
       shared: row.shared === 1,
+      priority: row.priority === 'always' ? 'always' : 'normal',
       generated_by: row.generated_by ? JSON.parse(row.generated_by) as GeneratedBy : null,
       derived_from: row.derived_from ? JSON.parse(row.derived_from) : null,
       created_at: row.created_at,

@@ -22,6 +22,7 @@ export interface Memory {
   tags: string[];
   source: MemorySource;
   shared: boolean;
+  priority?: 'always' | 'normal';
   generated_by: GeneratedBy | null;
   derived_from: string[] | null;  // UUIDs, not numbers
   created_at: string;
@@ -45,6 +46,7 @@ export interface MemoryFile {
   tags: string[];
   source: MemorySource;
   shared: boolean;
+  priority?: 'always' | 'normal';
   generated_by: GeneratedBy | null;
   derived_from: string[] | null;
   created_at: string;
@@ -61,6 +63,7 @@ export interface CreateMemory {
   tags?: string[];
   source?: MemorySource;
   shared?: boolean;
+  priority?: 'always' | 'normal';
   generated_by?: GeneratedBy;
   derived_from?: string[];   // UUIDs
 }

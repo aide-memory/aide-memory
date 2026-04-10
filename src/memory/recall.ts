@@ -147,6 +147,9 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
     });
   }
 
+  // Determine if any query path is a directory query (ends with '/')
+  const isDirectoryQuery = query.paths?.some(p => p.endsWith('/')) ?? false;
+
   // Score and sort
   const scored = candidates.map(m => ({
     memory: m,
@@ -155,14 +158,38 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
     scopeSpecificity: m.scope && m.scope !== 'project' ? m.scope.split('/').length : 0,
   }));
 
-  // Sort: layer priority first, then keyword relevance, then scope specificity (more specific = better)
+  // Sort: layer priority first, then keyword relevance, then scope specificity.
+  // For directory queries (path ends with '/'), broader scopes rank higher (invert specificity).
+  // For file queries, more specific scopes rank higher (current behavior).
   scored.sort((a, b) => {
     if (a.layerRank !== b.layerRank) return a.layerRank - b.layerRank;
     if (b.relevance !== a.relevance) return b.relevance - a.relevance;
-    return b.scopeSpecificity - a.scopeSpecificity;
+    if (isDirectoryQuery) {
+      return a.scopeSpecificity - b.scopeSpecificity; // broader first
+    }
+    return b.scopeSpecificity - a.scopeSpecificity; // more specific first
   });
 
-  const results = scored.slice(0, limit).map(s => s.memory);
+  // Select top N, then ensure round-robin layer representation
+  let results: Memory[];
+  if (limit) {
+    const topN = scored.slice(0, limit);
+    const representedLayers = new Set(topN.map(s => s.memory.layer));
+    const extras: typeof scored[number][] = [];
+
+    // For each layer not represented in top N, pull 1-2 from remaining
+    const remaining = scored.slice(limit);
+    for (const layer of LAYER_ORDER) {
+      if (!representedLayers.has(layer)) {
+        const fromLayer = remaining.filter(s => s.memory.layer === layer);
+        extras.push(...fromLayer.slice(0, 2));
+      }
+    }
+
+    results = [...topN, ...extras].map(s => s.memory);
+  } else {
+    results = scored.map(s => s.memory);
+  }
 
   // Record that these memories were recalled
   const ids = results.map(m => m.id);
