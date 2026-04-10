@@ -125,7 +125,7 @@ if [ -f "$RECALLED_FILE" ] && [ -n "$PARENT_DIR" ]; then
     fi
   done < "$RECALLED_FILE"
 
-  if [ "$DIR_RECALLED" = "false" ] && [ "$SIBLING_COUNT" -ge 2 ]; then
+  if [ "$DIR_RECALLED" = "false" ] && [ "$SIBLING_COUNT" -ge 1 ]; then
     DIR_NUDGE="You're reading multiple files in ${PARENT_DIR}. Call aide_recall({paths: ['${PARENT_DIR}']}) for broader context."
     echo "$DIR_NUDGE" | jq -Rs '{
       decision: "block",
