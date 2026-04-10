@@ -3,11 +3,12 @@
 # Fires before Read tool. Calls recall-for-path.js to get layer counts
 # and topic keywords for memories scoped to the file being read.
 #
-# Blocking if aide_recall has NOT been called for this path since last
-# compaction. Soft nudge if already recalled (tracked via recalled-paths.txt).
+# Blocking if aide_recall has NOT been called for this path in this session.
+# Soft nudge if already recalled (tracked via session-scoped recalled-paths file).
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 
 # No file path = nothing to recall
 if [ -z "$FILE_PATH" ]; then
@@ -46,14 +47,14 @@ NUDGE="${COUNT} memories for ${FILE_PATH} (${LAYERS})"
 if [ -n "$TOPICS" ] && [ "$TOPICS" != "null" ] && [ "$TOPICS" != "" ]; then
   NUDGE="${NUDGE} — topics: ${TOPICS}"
 fi
-NUDGE="${NUDGE}. Call aide_recall."
+NUDGE="${NUDGE}. Call aide_recall if results not already in this conversation."
 
-# Check if this path was already recalled in this session
-# SessionStart hook clears this file on new sessions
+# Check session-scoped tracking file
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths.txt"
+SID="${SESSION_ID:-default}"
+RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt"
 
-# Check if path was already recalled — if so, soft nudge
+# Check if path was already recalled in this session — if so, soft nudge
 if [ -f "$RECALLED_FILE" ] && grep -qF "$FILE_PATH" "$RECALLED_FILE" 2>/dev/null; then
   # Already recalled in this session — soft nudge only
   echo "$NUDGE" | jq -Rs '{
