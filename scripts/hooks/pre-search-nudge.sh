@@ -22,7 +22,7 @@ fi
 
 # Get memory search results via direct store access
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RESULT=$(node "$SCRIPT_DIR/search-preview.js" "$QUERY" "$CWD" 2>/dev/null)
+RESULT=$(node "$SCRIPT_DIR/search-preview.js" "$QUERY" "$PROJECT_ROOT" 2>/dev/null)
 
 # No result or zero count = nothing to nudge about
 if [ -z "$RESULT" ] || [ "$RESULT" = "0" ]; then

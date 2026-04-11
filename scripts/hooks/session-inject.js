@@ -9,9 +9,11 @@ const fs = require('fs');
 
 try {
   // Determine project root — walk up from the script location
-  // Script is at <projectRoot>/scripts/hooks/session-inject.js
-  const scriptDir = __dirname;
-  const projectRoot = path.resolve(scriptDir, '..', '..');
+  // packageRoot = where aide-memory is installed (has dist/)
+  const packageRoot = path.resolve(__dirname, '..', '..');
+  // projectRoot = the actual project (has .aide/), passed as argv[2] or fallback
+  const projectRootArg = process.argv[2];
+  const projectRoot = projectRootArg || packageRoot;
 
   // Check if .aide/ directory exists — if not, no memories to inject
   const aideDir = path.join(projectRoot, '.aide');
@@ -19,7 +21,8 @@ try {
     process.exit(0);
   }
 
-  const distPath = path.join(projectRoot, 'dist', 'memory');
+  // Load MemoryStore from the package's compiled dist
+  const distPath = path.join(packageRoot, 'dist', 'memory');
   const { MemoryStore } = require(path.join(distPath, 'store'));
 
   // Open store using projectRoot (constructor accepts string project path)
