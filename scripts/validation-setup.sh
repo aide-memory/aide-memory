@@ -60,7 +60,7 @@ export const Button = ({ label, onClick }: { label: string; onClick: () => void 
 };
 EOF
 
-echo "=== Initializing aide-memory ==="
+echo "=== Initializing aide-memory (creates dirs, rules, hooks, config) ==="
 aide-memory init
 
 echo "=== Seeding memories ==="

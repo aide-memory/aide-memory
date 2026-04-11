@@ -49,6 +49,89 @@ if command -v aide >/dev/null 2>&1; then
 fi
 `;
 
+/**
+ * Get the root directory of the aide-memory package installation.
+ * This is where scripts/hooks/ lives — needed for absolute hook paths in settings.json.
+ */
+function getPackageRoot(): string {
+  // init.ts is at src/memory/init.ts or dist/memory/init.js
+  // Package root is two levels up
+  return path.resolve(__dirname, '..', '..');
+}
+
+/**
+ * Generate the Claude Code hook configuration with absolute paths to hook scripts.
+ */
+function generateHookConfig(packageRoot: string): object {
+  const h = (script: string) => `bash ${path.join(packageRoot, 'scripts', 'hooks', script)}`;
+  return {
+    hooks: {
+      SessionStart: [{ hooks: [{ type: 'command', command: h('session-start-clear.sh'), timeout: 10 }] }],
+      PreCompact: [{ hooks: [{ type: 'command', command: h('pre-compact-save.sh'), timeout: 30 }] }],
+      Stop: [{ hooks: [{ type: 'command', command: h('stop-remember.sh'), timeout: 30 }] }],
+      UserPromptSubmit: [{ hooks: [{ type: 'command', command: h('detect-correction.sh'), timeout: 5 }] }],
+      PreToolUse: [
+        { matcher: 'Read', hooks: [{ type: 'command', command: h('pre-read-recall.sh'), timeout: 10 }] },
+        { matcher: 'Edit', hooks: [{ type: 'command', command: h('pre-edit-recall.sh'), timeout: 10 }] },
+        { matcher: 'Write', hooks: [{ type: 'command', command: h('pre-edit-recall.sh'), timeout: 10 }] },
+        { matcher: 'Grep', hooks: [{ type: 'command', command: h('pre-search-nudge.sh'), timeout: 10 }] },
+        { matcher: 'Glob', hooks: [{ type: 'command', command: h('pre-search-nudge.sh'), timeout: 10 }] },
+        { matcher: 'mcp__aide-memory__aide_recall', hooks: [{ type: 'command', command: h('track-recall.sh'), timeout: 5 }] },
+      ],
+      PostToolUse: [
+        { matcher: 'mcp__aide-memory__aide_recall', hooks: [{ type: 'command', command: h('track-recall-post.sh'), timeout: 5 }] },
+        { matcher: 'mcp__aide-memory__aide_remember', hooks: [{ type: 'command', command: h('track-remember.sh'), timeout: 5 }] },
+      ],
+    },
+  };
+}
+
+/**
+ * Write .claude/settings.json with hook configuration.
+ * If the file already exists and has hooks, merge (don't overwrite user's other settings).
+ */
+function writeHookConfig(
+  projectRoot: string,
+  force: boolean
+): { created: string[]; skipped: string[] } {
+  const created: string[] = [];
+  const skipped: string[] = [];
+
+  const settingsPath = path.join(projectRoot, '.claude', 'settings.json');
+  const settingsDir = path.dirname(settingsPath);
+
+  if (!fs.existsSync(settingsDir)) {
+    fs.mkdirSync(settingsDir, { recursive: true });
+  }
+
+  const packageRoot = getPackageRoot();
+  const hookConfig = generateHookConfig(packageRoot);
+
+  if (fs.existsSync(settingsPath) && !force) {
+    // Merge: read existing, add hooks if not present
+    try {
+      const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      if (existing.hooks) {
+        skipped.push('.claude/settings.json (hooks already configured)');
+        return { created, skipped };
+      }
+      // No hooks yet — add them
+      const merged = { ...existing, ...hookConfig };
+      fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+      created.push('.claude/settings.json (hooks added)');
+    } catch {
+      // Malformed JSON — overwrite
+      fs.writeFileSync(settingsPath, JSON.stringify(hookConfig, null, 2) + '\n', 'utf8');
+      created.push('.claude/settings.json');
+    }
+  } else {
+    fs.writeFileSync(settingsPath, JSON.stringify(hookConfig, null, 2) + '\n', 'utf8');
+    created.push('.claude/settings.json');
+  }
+
+  return { created, skipped };
+}
+
 const MCP_TOOLS_LIST = `- \`aide_recall\` — retrieve stored context for file paths you're about to work on
 - \`aide_remember\` — store discoveries, decisions, corrections, and preferences
 - \`aide_forget\` — remove outdated memories
@@ -337,6 +420,11 @@ export async function initProject(
   const rules = writeRulesFiles(resolvedRoot, contributor, force);
   result.created.push(...rules.created);
   result.skipped.push(...rules.skipped);
+
+  // 2.5. Install hook configuration (.claude/settings.json)
+  const hooks = writeHookConfig(resolvedRoot, force);
+  result.created.push(...hooks.created);
+  result.skipped.push(...hooks.skipped);
 
   // 3. Write config
   const config = writeConfig(resolvedRoot, contributor, force);
