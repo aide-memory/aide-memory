@@ -1,0 +1,21 @@
+{
+  "uuid": "40ded1da-1da0-437b-a89b-725dc4d35faf",
+  "layer": "preferences",
+  "what": "User likes the emerald green color from docs/branding/logo-idea.svg. Brain isn't attractive, tree may be basic. Wants SVG with more of a \"memory\" look. Emerald/green palette is approved. Icon should visually convey memory/persistence, not brain or generic tree.",
+  "why": "User gave specific brand direction for logo — color preference confirmed, concept direction narrowed.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "branding",
+    "logo",
+    "design"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-11T17:53:52.866Z",
+  "updated_at": "2026-04-11T17:53:52.866Z"
+}

@@ -313,6 +313,7 @@ describe('E2E: AIDE Memory', () => {
 
 describe('E2E: ConPort', () => {
   let client: Client;
+  let connected = false;
   let workspaceDir: string;
   let cleanup: (() => void) | null = null;
 
@@ -329,6 +330,7 @@ describe('E2E: ConPort', () => {
 
       client = new Client({ name: 'e2e-conport', version: '0.1.0' });
       await client.connect(transport);
+      connected = true;
       cleanup = () => {
         transport.close();
       };
@@ -389,7 +391,7 @@ describe('E2E: ConPort', () => {
 
   describe('Scenario 1: Style Continuity — path-scoped recall', () => {
     it('attempt to recall preferences for src/components/', async () => {
-      if (!client) {
+      if (!connected) {
         console.log('ConPort: SKIPPED (not connected)');
         return;
       }
@@ -423,7 +425,7 @@ describe('E2E: ConPort', () => {
 
   describe('Scenario 3: Technical Knowledge — unrelated area isolation', () => {
     it('attempt to get only memory-area technical context', async () => {
-      if (!client) {
+      if (!connected) {
         console.log('ConPort: SKIPPED (not connected)');
         return;
       }
@@ -452,6 +454,7 @@ describe('E2E: ConPort', () => {
 
 describe('E2E: mcp-memory-service', () => {
   let client: Client;
+  let connected = false;
   let dbDir: string;
   let cleanup: (() => void) | null = null;
 
@@ -472,6 +475,7 @@ describe('E2E: mcp-memory-service', () => {
 
       client = new Client({ name: 'e2e-mcpmem', version: '0.1.0' });
       await client.connect(transport);
+      connected = true;
       cleanup = () => {
         transport.close();
       };
@@ -514,7 +518,7 @@ describe('E2E: mcp-memory-service', () => {
 
   describe('Scenario 1: Style Continuity — semantic recall', () => {
     it('attempt to recall preferences for component work', async () => {
-      if (!client) {
+      if (!connected) {
         console.log('mcp-memory-service: SKIPPED (not connected)');
         return;
       }
@@ -536,7 +540,7 @@ describe('E2E: mcp-memory-service', () => {
 
   describe('Scenario 3: Technical Knowledge — area isolation', () => {
     it('attempt to get only memory-area technical context', async () => {
-      if (!client) {
+      if (!connected) {
         console.log('mcp-memory-service: SKIPPED (not connected)');
         return;
       }

@@ -19,7 +19,7 @@ describe('package.aide-memory.json', () => {
 
   it('has version 0.1.0', () => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    expect(pkg.version).toBe('0.1.0');
+    expect(pkg.version).toBe('0.2.0');
   });
 
   it('has bin entries for aide and aide-memory', () => {
@@ -37,9 +37,11 @@ describe('package.aide-memory.json', () => {
   it('files array includes required paths', () => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     expect(pkg.files).toBeDefined();
-    expect(pkg.files).toContain('dist/memory/');
+    expect(pkg.files).toContain('dist/memory/*.js');
     expect(pkg.files).toContain('dist/cli/aide-memory.js');
+    expect(pkg.files).toContain('dist/cli/commands/memory/');
     expect(pkg.files).toContain('scripts/hooks/');
+    expect(pkg.files).toContain('src/templates/rules/');
     expect(pkg.files).toContain('README.md');
     expect(pkg.files).toContain('LICENSE');
   });

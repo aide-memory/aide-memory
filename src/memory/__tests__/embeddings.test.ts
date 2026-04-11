@@ -5,6 +5,8 @@ import {
   bufferToVector,
   ensureEmbeddingsTable,
   EmbeddingService,
+  TransformersBackend,
+  OllamaBackend,
   type EmbeddingBackend,
 } from '../embeddings';
 import Database from 'better-sqlite3';
@@ -213,14 +215,18 @@ describe('EmbeddingService', () => {
     it('returns false when backend fails to initialize', async () => {
       const backend = new MockBackend(false);
       const service = new EmbeddingService(backend);
-      // This will try the failing preferred backend, then try Transformers.js
-      // (which won't be installed in test env), then Ollama (not running).
-      // All should fail gracefully.
-      const ok = await service.initialize();
-      // The preferred backend fails, Transformers.js won't be available,
-      // and Ollama isn't running in tests, so this should be false.
-      expect(ok).toBe(false);
-      expect(service.isReady()).toBe(false);
+      // Mock fallback backends so they also fail — otherwise the service
+      // may successfully initialize via Transformers.js or Ollama.
+      const transformersSpy = vi.spyOn(TransformersBackend.prototype, 'initialize').mockResolvedValue(false);
+      const ollamaSpy = vi.spyOn(OllamaBackend.prototype, 'initialize').mockResolvedValue(false);
+      try {
+        const ok = await service.initialize();
+        expect(ok).toBe(false);
+        expect(service.isReady()).toBe(false);
+      } finally {
+        transformersSpy.mockRestore();
+        ollamaSpy.mockRestore();
+      }
     });
 
     it('generateEmbedding returns null when not initialized', async () => {
@@ -471,15 +477,22 @@ describe('EmbeddingService', () => {
       const failing = new MockBackend(false);
       const service = new EmbeddingService(failing);
 
-      // initialize will try preferred (fails), then Transformers (not installed),
-      // then Ollama (not running). All fail gracefully.
-      const ok = await service.initialize();
-      expect(ok).toBe(false);
-      expect(service.isReady()).toBe(false);
+      // Mock fallback backends so they also fail — otherwise the service
+      // may successfully initialize via Transformers.js or Ollama.
+      const transformersSpy = vi.spyOn(TransformersBackend.prototype, 'initialize').mockResolvedValue(false);
+      const ollamaSpy = vi.spyOn(OllamaBackend.prototype, 'initialize').mockResolvedValue(false);
+      try {
+        const ok = await service.initialize();
+        expect(ok).toBe(false);
+        expect(service.isReady()).toBe(false);
 
-      // generateEmbedding returns null safely
-      const vec = await service.generateEmbedding('test');
-      expect(vec).toBeNull();
+        // generateEmbedding returns null safely
+        const vec = await service.generateEmbedding('test');
+        expect(vec).toBeNull();
+      } finally {
+        transformersSpy.mockRestore();
+        ollamaSpy.mockRestore();
+      }
     });
 
     it('storeEmbedding and getEmbedding work independently of backend readiness', async () => {

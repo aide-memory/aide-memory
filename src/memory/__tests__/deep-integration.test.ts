@@ -265,10 +265,10 @@ describe('1. Storage Edge Cases', () => {
     const filePath = path.join(projectRoot, '.aide', 'memories', 'area_context', `${mem.uuid}.json`);
     const fileContent = readJsonFile(filePath);
 
-    // Exact expected keys
+    // Exact expected keys (includes priority added in schema v3)
     const expectedKeys = [
       'uuid', 'layer', 'what', 'why', 'scope', 'context_label',
-      'contributor', 'tags', 'source', 'shared', 'generated_by',
+      'contributor', 'tags', 'source', 'shared', 'priority', 'generated_by',
       'derived_from', 'created_at', 'updated_at',
     ].sort();
 
@@ -538,13 +538,16 @@ describe('3. Recall Edge Cases', () => {
     expect(result.memories[3].layer).toBe('guidelines');
   });
 
-  it('limit=1 returns only highest-priority memory', () => {
+  it('limit=1 returns highest-priority memory first, plus round-robin extras from underrepresented layers', () => {
     store.add({ layer: 'guidelines', what: 'guideline' });
     store.add({ layer: 'area_context', what: 'area context is top priority' });
     store.add({ layer: 'technical', what: 'technical' });
 
     const result = recall(store, { limit: 1 });
-    expect(result.memories.length).toBe(1);
+    // Round-robin adds 1-2 from each layer not represented in top N.
+    // Top 1 is area_context; technical and guidelines are underrepresented,
+    // so they each get pulled in as extras (up to 2 per layer).
+    expect(result.memories.length).toBe(3);
     expect(result.memories[0].layer).toBe('area_context');
     expect(result.memories[0].what).toBe('area context is top priority');
   });

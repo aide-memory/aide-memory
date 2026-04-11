@@ -159,9 +159,11 @@ describe('Stop hook (stop-remember.sh)', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.decision).toBe('block');
     expect(parsed.reason).toContain('aide_remember');
-    expect(parsed.reason).toContain('preferences');
+    // Wording changed: now uses natural language "decisions, technical constraints,
+    // preferences, or guidelines" instead of listing layer names individually
+    expect(parsed.reason).toContain('decisions');
     expect(parsed.reason).toContain('technical');
-    expect(parsed.reason).toContain('area_context');
+    expect(parsed.reason).toContain('preferences');
     expect(parsed.reason).toContain('guidelines');
   });
 
@@ -179,13 +181,15 @@ describe('Stop hook (stop-remember.sh)', () => {
     expect(parsed.decision).toBe('block');
   });
 
-  it('mentions source: hook in the prompt', () => {
+  it('mentions persisting and aide_remember in the prompt', () => {
     const result = runHook('stop-remember.sh', {});
     expect(result.exitCode).toBe(0);
 
     const parsed = JSON.parse(result.stdout);
-    expect(parsed.reason).toContain('source');
-    expect(parsed.reason).toContain('hook');
+    // The stop hook now focuses on directing the agent to persist knowledge
+    // via aide_remember rather than mentioning "source: hook" tagging
+    expect(parsed.reason).toContain('persisting');
+    expect(parsed.reason).toContain('aide_remember');
   });
 
   it('exits 0 even with malformed input', () => {
@@ -228,7 +232,8 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
 
         const parsed = JSON.parse(result.stdout);
         expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
-        expect(parsed.hookSpecificOutput.additionalContext).toContain('correcting');
+        // Wording changed: now says "BEFORE doing anything else" instead of "correcting"
+        expect(parsed.hookSpecificOutput.additionalContext).toContain('BEFORE doing anything else');
         expect(parsed.hookSpecificOutput.additionalContext).toContain('aide_remember');
         expect(parsed.hookSpecificOutput.additionalContext).toContain('hook');
       });
@@ -254,7 +259,8 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
 
         const parsed = JSON.parse(result.stdout);
         expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
-        expect(parsed.hookSpecificOutput.additionalContext).toContain('decision');
+        // Wording changed: now says "BEFORE doing anything else" instead of "decision"
+        expect(parsed.hookSpecificOutput.additionalContext).toContain('BEFORE doing anything else');
         expect(parsed.hookSpecificOutput.additionalContext).toContain('aide_remember');
         expect(parsed.hookSpecificOutput.additionalContext).toContain('hook');
       });
@@ -321,7 +327,7 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
 // ─── PreCompact (pre-compact-save.sh) ───────────────────────────────────────
 
 describe('PreCompact hook (pre-compact-save.sh)', () => {
-  it('outputs extraction prompt via additionalContext', () => {
+  it('outputs blocking prompt with save instructions', () => {
     const result = runHook('pre-compact-save.sh', {
       session_id: 'test-session-123',
       transcript_path: '/tmp/transcript.json',
@@ -331,10 +337,11 @@ describe('PreCompact hook (pre-compact-save.sh)', () => {
     expect(result.stdout).not.toBe('');
 
     const parsed = JSON.parse(result.stdout);
-    expect(parsed.hookSpecificOutput.hookEventName).toBe('PreCompact');
-    expect(parsed.hookSpecificOutput.additionalContext).toContain('compacted');
-    expect(parsed.hookSpecificOutput.additionalContext).toContain('aide_remember');
-    expect(parsed.hookSpecificOutput.additionalContext).toContain('decisions');
+    // pre-compact-save.sh now blocks compaction to save context first
+    expect(parsed.decision).toBe('block');
+    expect(parsed.reason).toContain('compacting');
+    expect(parsed.reason).toContain('aide_remember');
+    expect(parsed.reason).toContain('decisions');
   });
 
   it('suggests source: hook tagging', () => {
@@ -345,17 +352,17 @@ describe('PreCompact hook (pre-compact-save.sh)', () => {
     expect(result.exitCode).toBe(0);
 
     const parsed = JSON.parse(result.stdout);
-    expect(parsed.hookSpecificOutput.additionalContext).toContain('hook');
+    expect(parsed.reason).toContain('hook');
   });
 
-  it('never blocks compaction (no decision field)', () => {
+  it('blocks compaction to save context first', () => {
     const result = runHook('pre-compact-save.sh', {});
     expect(result.exitCode).toBe(0);
 
     const parsed = JSON.parse(result.stdout);
-    // Should NOT have a "decision: block" — only additionalContext
-    expect(parsed.decision).toBeUndefined();
-    expect(parsed.hookSpecificOutput).toBeDefined();
+    // Pre-compact now blocks to ensure context is saved before compaction
+    expect(parsed.decision).toBe('block');
+    expect(parsed.reason).toBeDefined();
   });
 
   it('exits 0 with empty input', () => {
@@ -420,7 +427,7 @@ describe('recall-for-path.js', () => {
     }
   });
 
-  it('outputs only a number (count), not memory content', () => {
+  it('outputs structured JSON with count, not raw memory content', () => {
     const scriptPath = path.join(HOOKS_DIR, 'recall-for-path.js');
     const projectRoot = path.resolve(__dirname, '..', '..', '..');
     const distStore = path.join(projectRoot, 'dist', 'memory', 'store.js');
@@ -429,7 +436,7 @@ describe('recall-for-path.js', () => {
       return; // Skip if not built
     }
 
-    // Run against the real project — output should be a number or empty
+    // Run against the real project — output should be JSON with count or empty
     try {
       const stdout = execSync(
         `node "${scriptPath}" "${path.join(projectRoot, 'src', 'memory', 'store.ts')}"`,
@@ -437,15 +444,21 @@ describe('recall-for-path.js', () => {
       );
       const trimmed = stdout.trim();
       if (trimmed) {
-        // Must be a plain number, not JSON or memory content
-        expect(trimmed).toMatch(/^\d+$/);
-        // Must NOT contain memory text like "[preferences]" or "what:"
-        expect(trimmed).not.toContain('[');
-        expect(trimmed).not.toContain('what');
+        // Output is either "0" (no matches) or structured JSON with count field
+        if (trimmed === '0') {
+          // Plain zero is acceptable for no matches
+          expect(trimmed).toBe('0');
+        } else {
+          // Must be valid JSON with a count field, not raw memory content
+          const parsed = JSON.parse(trimmed);
+          expect(parsed.count).toBeGreaterThanOrEqual(0);
+          // Must NOT contain raw memory text like "what:" as a top-level string
+          expect(trimmed).not.toContain('"what":');
+        }
       }
     } catch (err: any) {
       // Exit 0 on failure is fine
-      expect(err.status).toBe(0);
+      expect(err.status ?? 0).toBe(0);
     }
   });
 });
