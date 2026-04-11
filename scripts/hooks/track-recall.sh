@@ -16,7 +16,8 @@ if [ -z "$PATHS" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 CACHE_DIR="$PROJECT_ROOT/.aide/cache"
 mkdir -p "$CACHE_DIR" 2>/dev/null
 

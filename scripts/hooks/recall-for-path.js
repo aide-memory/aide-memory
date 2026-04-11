@@ -8,16 +8,17 @@ const path = require('path');
 const fs = require('fs');
 
 const filePath = process.argv[2];
+const projectRootArg = process.argv[3]; // optional: passed by hook scripts
 
 if (!filePath) {
   process.exit(0);
 }
 
 try {
-  // Determine project root — walk up from the script location
-  // Script is at <projectRoot>/scripts/hooks/recall-for-path.js
-  const scriptDir = __dirname;
-  const projectRoot = path.resolve(scriptDir, '..', '..');
+  // packageRoot = where aide-memory is installed (has dist/ and scripts/)
+  const packageRoot = path.resolve(__dirname, '..', '..');
+  // projectRoot = the actual project being worked on (has .aide/)
+  const projectRoot = projectRootArg || packageRoot;
 
   // Check if .aide/ directory exists — if not, no memories to count
   const aideDir = path.join(projectRoot, '.aide');
@@ -25,7 +26,8 @@ try {
     process.exit(0);
   }
 
-  const distPath = path.join(projectRoot, 'dist', 'memory');
+  // Load MemoryStore from the package's compiled dist
+  const distPath = path.join(packageRoot, 'dist', 'memory');
   const { MemoryStore } = require(path.join(distPath, 'store'));
   const { scopeMatchesPath } = require(path.join(distPath, 'recall'));
 

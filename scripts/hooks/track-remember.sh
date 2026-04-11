@@ -8,7 +8,8 @@ INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 SID="${SESSION_ID:-default}"
 
 # Delete the correction-pending flag file

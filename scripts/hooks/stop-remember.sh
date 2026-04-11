@@ -18,7 +18,8 @@ fi
 
 # Check if a correction-pending flag exists for this session
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 SID="${SESSION_ID:-default}"
 FLAG_FILE="$PROJECT_ROOT/.aide/cache/correction-pending-${SID}.txt"
 

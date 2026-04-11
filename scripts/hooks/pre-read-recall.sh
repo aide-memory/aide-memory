@@ -10,6 +10,8 @@
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+PROJECT_ROOT="${CWD:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 # No file path = nothing to recall
 if [ -z "$FILE_PATH" ]; then
@@ -29,7 +31,7 @@ fi
 
 # Get memory info via direct store access
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" 2>/dev/null)
+RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
 
 # No result or zero count = nothing to recall
 if [ -z "$RESULT" ] || [ "$RESULT" = "0" ]; then
@@ -73,7 +75,6 @@ fi
 NUDGE="${NUDGE}. Call aide_recall if results not already in this conversation."
 
 # Check session-scoped tracking file
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SID="${SESSION_ID:-default}"
 RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt"
 

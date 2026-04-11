@@ -9,6 +9,8 @@
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+PROJECT_ROOT="${CWD:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 # Extract search query from tool_input — both Grep and Glob use .pattern
 QUERY=$(echo "$INPUT" | jq -r '.tool_input.pattern // empty')
@@ -20,7 +22,7 @@ fi
 
 # Get memory search results via direct store access
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RESULT=$(node "$SCRIPT_DIR/search-preview.js" "$QUERY" 2>/dev/null)
+RESULT=$(node "$SCRIPT_DIR/search-preview.js" "$QUERY" "$CWD" 2>/dev/null)
 
 # No result or zero count = nothing to nudge about
 if [ -z "$RESULT" ] || [ "$RESULT" = "0" ]; then
@@ -37,7 +39,7 @@ fi
 TOP_MATCHES=$(echo "$RESULT" | jq -r '.topMatches | join(", ")' 2>/dev/null)
 
 # Session-scoped tracking
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 SID="${SESSION_ID:-default}"
 SEARCHED_FILE="$PROJECT_ROOT/.aide/cache/searched-queries-${SID}.txt"
 

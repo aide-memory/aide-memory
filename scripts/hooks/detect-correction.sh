@@ -24,7 +24,8 @@ fi
 
 # Setup for flag file
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 CACHE_DIR="$PROJECT_ROOT/.aide/cache"
 SID="${SESSION_ID:-default}"
 FLAG_FILE="$CACHE_DIR/correction-pending-${SID}.txt"
