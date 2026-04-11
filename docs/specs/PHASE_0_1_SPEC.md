@@ -924,6 +924,7 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 - **Claude Desktop** — same `aide-memory` server config works today; add setup instructions to docs
 - **Claude Web (claude.ai)** — when MCP integration lands, memories from coding sessions become accessible in general chat
 - **Cowork (browser agent)** — MCP support expected; browser-based tasks inherit codebase context (you teach a convention in Code, Cowork follows it)
+- **Claude Code Marketplace → Cowork availability:** Research whether publishing aide-memory as a Claude Code marketplace plugin automatically makes it available as a Cowork connector, or if Cowork has a separate connector/plugin system that needs independent submission. Determine what controls exist for targeting specific Claude products.
 - **Action:** Add setup guides for each Claude product as MCP support rolls out; test and document any product-specific quirks
 
 **2. Non-IDE developers:**
