@@ -52,7 +52,7 @@ Pricing: **Free** (generous, unlimited -- all individual features), **Team** ($1
 
 The market is moving fast. claude-mem gained 7,000 stars in 15 days. Qodo raised $120M. Massu appeared with ~90% overlap to our original vision. But the market also rewards simplicity and quality over feature count — claude-mem has 44K stars with no path scoping, no config generation, no team features. memories.sh has path scoping + 8-tool config generation and only 20 stars. **Quality and distribution win, not features.** Ship Phase 1 fast, compete on reliability and efficiency, validate with real users before building more.
 
-The name: **AIDE** -- the English word for helper. Not an acronym. Package: `aide-memory` (npm). CLI: `aide`. MCP tools: `aide_recall`, `aide_remember`, `aide_forget`, `aide_search`, `aide_memories`. Domain: `aide-memory.dev` or `useaide.dev` (aide.dev is taken by CodeStory IDE).
+The name: **AIDE** -- the English word for helper. Not an acronym. Package: `aide-memory` (npm). CLI: `aide`. MCP tools: `aide_recall`, `aide_remember`, `aide_update`, `aide_forget`, `aide_search`, `aide_memories`, `aide_import`. Domain: `aide-memory.dev` or `useaide.dev` (aide.dev is taken by CodeStory IDE).
 
 ---
 
@@ -150,7 +150,7 @@ This is the competitor that should concern us most architecturally. They have te
 | Rule source | Static curated packs (SOC2, React) -- pre-written, not learned | Dynamic -- learned from accumulated corrections, frequency-based graduation. Also ships preset packs, but the pipeline from correction to rule is the differentiator. |
 | Cross-dev reasoning | Not documented | Human-readable format with contributor, why field, browsable by humans and agents. Query filter: `contributor != me`. |
 | Proactive cross-dev nudge | Not documented | PreToolUse hook includes teammate context for current path. Nudge, not dump -- agent told context exists, decides relevance. |
-| MCP tools | 72 tools (bloat risk -- agent must choose among too many) | 5 focused MCP tools + CLI (agent reliability over feature count) |
+| MCP tools | 72 tools (bloat risk -- agent must choose among too many) | 7 focused MCP tools + CLI (agent reliability over feature count) |
 | Human readability | Unclear -- likely internal DB only | One JSON file per memory, committed to repo, browsable in any editor |
 | Storage architecture | Unclear | One file per memory in `.aide/memories/<layer>/`. Local SQLite is cached index. Git is the sync. No separate sync mechanism. |
 | License | BSL (converts to Apache 2.0 in 2029) | FSL (auto-converts to Apache 2.0 after 2 years) |
@@ -291,14 +291,19 @@ These 7 capabilities are baseline expectations. Without them we do not get evalu
 
 9 hooks ship on by default -- no developer action required to start accumulating useful memories:
 
-- **SessionStart** -- fires at session start. Auto-injects preferences and guidelines (~300 tokens) so the agent has your style context from the first prompt.
-- **PreToolUse** -- fires before the agent reads, edits, writes, or searches files. Lightweight nudge: "8 memories exist for this path." Agent decides whether to pull them.
-- **UserPromptSubmit** -- detects correction patterns ("no, don't use that pattern", "instead use..."). Tells the agent to store the correction scoped to the relevant path.
-- **PostToolUse** -- fires after aide_remember to confirm storage and trigger embedding generation.
-- **PreCompact** -- fires before context compaction. Extracts decisions and context before they are lost.
-- **Stop** -- fires on task completion. Enforces pending corrections detected by UserPromptSubmit and prompts the agent to remember session discoveries.
+- **SessionStart** -- fires at session start. Auto-injects preferences and guidelines with `priority: 'always'` (~300 tokens) so the agent has your style context from the first prompt. Clears the session's recalled-paths tracking file for a clean slate.
+- **PreToolUse (Read)** -- fires before the agent reads a file. Lightweight nudge: "8 memories exist for this path." Agent decides whether to pull them. Triggers directory-level recall when 2+ files from the same parent directory have been read.
+- **PreToolUse (Edit/Write)** -- fires before the agent edits or writes a file. Same nudge mechanism as Read.
+- **PreToolUse (Grep/Glob)** -- fires before the agent searches files. Nudges with memory counts for the search path.
+- **UserPromptSubmit** -- detects correction patterns ("no, don't use that pattern", "instead use..."). Flags the correction for the Stop hook to enforce.
+- **PostToolUse (aide_recall)** -- fires after aide_recall to track recalled paths and clear any pending correction flag.
+- **PostToolUse (aide_remember)** -- fires after aide_remember to confirm storage and trigger embedding generation.
+- **PreCompact** -- fires before context compaction. Extracts decisions and context before they are lost. Clears the session's recalled-paths file to allow re-recall after compaction.
+- **Stop** -- fires on task completion. Enforces pending corrections detected by UserPromptSubmit (two-phase correction flow) and prompts the agent to remember session discoveries.
 
 All hooks are shell scripts in `scripts/hooks/`, tool-agnostic, with separate configs per tool. Session-scoped tracking via `session_id` ensures concurrent sessions don't interfere. Auto-capture is ON by default. Developers who find the nudge noisy can disable individual hooks via `aide config nudge off`.
+
+**Blocking behavior:** Hooks use scoped-only blocking -- they only block the agent (requiring recall before proceeding) when file or directory-scoped memories exist. If only project-wide memories match, the hook returns a soft nudge instead. New projects with fewer than 10 total memories always get soft nudges to avoid friction during early adoption.
 
 **Hidden nudging:** The memory management prompts ("anything worth remembering?") are injected via `additionalContext` -- invisible in the terminal. The developer sees only the agent's actual response, not the memory management happening behind the scenes. The agent's decision to store or skip is silent.
 
@@ -373,7 +378,9 @@ Four fixed memory layers, each with different retrieval priority:
 | **Guidelines**   | Team/project principles                                | "Don't use `waitFor` unless async state is genuinely uncertain" | Project-wide         |
 
 
-When an agent opens `src/checkout/CartSummary.tsx`, recalled memories are ranked using round-robin across layers to prevent any single layer from dominating results. The agent gets a balanced mix of area context, technical context, preferences, and guidelines.
+When an agent opens `src/checkout/CartSummary.tsx`, recalled memories are ranked with two signals: **scope-first ranking** (file/directory-scoped memories rank above project-wide memories as the primary signal) and **round-robin layer representation** across layers to prevent any single layer from dominating results (layer starvation prevention). The agent gets a balanced mix of area context, technical context, preferences, and guidelines, with the most path-relevant memories first.
+
+**Directory query inversion:** When recalling for a directory path (vs. a specific file), the ranking inverts -- broader scopes rank first, specific scopes rank lower. This reflects the intent: a directory query seeks the big picture, while a file query seeks precise context.
 
 **Sub-types via tags, not sub-layers:** The four layers are fixed. Sub-types are handled through tags from a configurable preset list: `architecture`, `testing`, `security`, `style`, `performance`, `api-contracts`, etc. Tags are used for filtering, search, and config generation -- not for recall priority. `aide config tags.add "custom-tag"` adds project-specific tags. For example, architecture practices (SOLID principles, clean architecture patterns, composition over inheritance) would be `guidelines` layer with `architecture` tag. This addresses the "bad architecture from AI agents" problem without inflating the layer count. See also: pre-set rule packs (capability #16).
 
@@ -385,7 +392,7 @@ When an agent opens `src/checkout/CartSummary.tsx`, recalled memories are ranked
 
 AIDE Memory works via MCP (the protocol Claude Code, Cursor, Windsurf, and Cline all speak) plus native config file generation for tools that read their own formats.
 
-- **MCP server** -- 5 tools (~1,400 tokens to load, 38x smaller than GitHub MCP's 54K). Works in any MCP-compatible client. Tools: `aide_recall`, `aide_remember`, `aide_forget`, `aide_search`, `aide_memories`.
+- **MCP server** -- 7 tools (~1,400 tokens to load, 38x smaller than GitHub MCP's 54K). Works in any MCP-compatible client. Tools: `aide_recall`, `aide_remember`, `aide_update`, `aide_forget`, `aide_memories`, `aide_import`, `aide_search`.
 - **CLI commands** -- `aide recall`, `aide remember`, `aide search`, `aide list`. First-class alternatives to every MCP tool. Gives debuggability, composability, and fallback for non-MCP tools. CLI is the fallback for non-agent contexts -- there is no bridge between the CLI and a running agent.
 - **Native config generation** -- generates CLAUDE.md, .cursorrules, copilot-instructions.md from the same store. Each tool reads its own format natively. No MCP needed for consumption.
 
@@ -558,7 +565,7 @@ This is not a chat log or an activity feed. It is structured reasoning organized
 
 Corrections recalled N times, or corrected independently by multiple developers, get proposed as rules and promoted to config files. A frequency-based pipeline from observed behavior to enforced standard.
 
-- Correction detected via two-phase flow: UserPromptSubmit detects the correction, Stop enforces it at task completion. Stored with `source:hook` tag
+- Correction detected via two-phase flow: UserPromptSubmit detects and flags the correction, Stop enforces storage at task completion, PostToolUse(aide_recall) clears the flag after context is recalled. Stored with `source:hook` tag
 - System tracks `recalled_count` and unique contributor count per correction
 - When a threshold is crossed (e.g., recalled 5+ times, or corrected by 3+ developers): proposed as a candidate rule
 - Developer reviews and approves. Agent formats into the appropriate config file section.
@@ -676,17 +683,17 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 | Area | What ships | Tier |
 |------|-----------|------|
 | **Install** | One-command install: `npx aide-memory init`. Writes rules files for ALL supported tools by default. Sets up hooks, creates `.aide/` directory structure, config defaults, downloads embedding model, configures `.gitignore`. | FREE |
-| **Capture** | 9 hooks on by default (SessionStart preferences injection, PreToolUse nudge on read/edit/write/search, UserPromptSubmit correction detection, PostToolUse embedding generation, PreCompact extract-before-loss, Stop correction enforcement + remember prompt). Session-scoped tracking via `session_id`. Source tagging. Hidden nudging via `additionalContext`. Dedup across hooks. Contributor + `generated_by` (tool/model/author_type) stored from day one. | FREE |
-| **Recall** | Smart nudge approach — YOUR memories only. Path-scoped with glob matching and parent inheritance. | FREE (your mems) |
+| **Capture** | 9 hooks on by default: SessionStart (preferences/guidelines auto-injection with `priority: 'always'`), PreToolUse on Read (nudge + directory recall trigger at 2+ files from same dir), PreToolUse on Edit/Write (nudge), PreToolUse on Grep/Glob (nudge), UserPromptSubmit (correction detection + flag), PostToolUse on aide_recall (track + clear correction flag), PostToolUse on aide_remember (confirm + embedding generation), PreCompact (extract-before-loss + clear recalled paths), Stop (two-phase correction enforcement + remember prompt). Session-scoped tracking via `session_id`. Scoped-only blocking (soft for project-wide-only, always soft for <10 total memories). Source tagging. Hidden nudging via `additionalContext`. Dedup across hooks. Contributor + `generated_by` (tool/model/author_type) stored from day one. | FREE |
+| **Recall** | Smart nudge approach — YOUR memories only. Path-scoped with glob matching and parent inheritance. Scope-first ranking (scoped above project-wide), round-robin layer representation, directory query inversion (broader scopes first for dir queries). Memory `priority` field (`always` = auto-injected at session start, `normal` = standard). | FREE (your mems) |
 | **Structure** | 4 memory layers with priority ordering. Tags from configurable preset list. Model auto-assigns. | FREE |
 | **CLI** | `aide recall`, `aide remember`, `aide update`, `aide forget`, `aide search`, `aide list`, `aide stats`, `aide config`, `aide sync import/export`. Full parity with MCP tools. Binary: `aide` (default), `aide-memory` (fallback). | FREE |
 | **Search** | FTS5 + sqlite-vec semantic search with mode parameter (auto/keyword/semantic). YOUR memories only on free. | FREE (your mems) |
-| **Embeddings** | Local embedding model downloaded at init. No API keys. sqlite-vec. Auto-generated on add/update, cleaned on remove. | FREE |
+| **Embeddings** | Local embedding model downloaded at init. No API keys. sqlite-vec. Embedding auto-management: generated on add, regenerated on update (when content fields change), cleaned on remove. Fire-and-forget background generation. | FREE |
 | **Multi-tool** | Rules files for all tools at init. Claude Code + Cursor support via MCP + hooks. | FREE (CC + Cursor) |
 | **Storage** | `.aide/memories/<layer>/` directory structure. One JSON file per memory. Local SQLite index. Post-checkout git hook. | FREE |
 | **Config** | `aide config` for customization. Nudge visibility default OFF. Capture defaults ON. Configurable thresholds, tags. | FREE |
 | **Memory editing** | Agent can update/remove existing memories via `aide_update` and `aide_forget` MCP tools. | FREE (your mems) |
-| **Analytics** | Basic: memory count, last recalled, hook breakdown. Default telemetry ON (opt-out). Track: installs vs inits, memories stored/recalled, hook trigger source, tool used, retention. | FREE (basic) |
+| **Analytics** | Dual architecture: local SQLite analytics table + remote PostHog (anonymized, opt-out via `aide-memory config telemetry.enabled false`). Basic: memory count, last recalled, hook breakdown. Track: installs vs inits, memories stored/recalled, hook trigger source, tool used, retention. | FREE (basic) |
 | **Pre-train scan** | `aide init --scan` scans codebase and pre-populates ~20-30 structural memories (project type, stack, key patterns, existing docs). Agent has context from session 1, not session 5. | FREE |
 
 
@@ -694,8 +701,11 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 
 - SQLite store with schema, WAL mode, synchronous API (20 tests)
 - Recall engine with path-scoped glob matching, layer ordering (18 tests)
-- MCP server with 5 tools: aide_recall, aide_remember, aide_forget, aide_search, aide_memories (9 tests)
-- 9 hooks: SessionStart (preferences injection), PreToolUse (nudge on read/edit/write/search), UserPromptSubmit (correction detection), PostToolUse (embedding generation), PreCompact (extract-before-loss), Stop (correction enforcement + remember prompt)
+- MCP server with 7 tools: aide_recall, aide_remember, aide_update, aide_forget, aide_search, aide_memories, aide_import (9 tests)
+- 9 hooks: SessionStart (preferences/guidelines auto-injection with `priority: 'always'`), PreToolUse on Read (nudge + directory recall trigger at 2+ files from same dir), PreToolUse on Edit/Write (nudge), PreToolUse on Grep/Glob (nudge), UserPromptSubmit (correction detection + flag), PostToolUse on aide_recall (track + clear correction flag), PostToolUse on aide_remember (confirm + embedding generation), PreCompact (extract-before-loss + clear recalled paths), Stop (two-phase correction enforcement + remember prompt)
+- Scope-first recall ranking with round-robin layer representation, directory query inversion, scoped-only blocking, new-project softening (<10 memories)
+- Memory priority field (`always` for auto-injected, `normal` for standard)
+- Embedding auto-management: generated on add, regenerated on update, cleaned on remove
 - 47 tests passing, zero type errors
 
 **What remains to ship:**
@@ -706,7 +716,6 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 - Cursor MCP config + hooks config
 - `.aide/memories/` file-per-memory architecture (migrate from single SQLite to JSON files + SQLite index)
 - Post-checkout git hook for auto-sync
-- `aide_update` MCP tool for editing existing memories
 - `aide config` CLI for customization (nudge visibility, capture settings, tags, cleanup thresholds)
 - `aide stats` CLI command with analytics
 - Default-on telemetry (opt-out)
@@ -722,6 +731,7 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 - Token tracking / cost measurement
 - Config generation from memories
 - Pre-set rule packs
+- Contributor-aware injection (SessionStart and recall include teammate context)
 - Configurable hook intensity (per-hook enable/disable and sensitivity tuning)
 - Automatic memory cleanup (model-assisted pruning of stale/duplicate/contradictory memories)
 
@@ -868,14 +878,12 @@ AIDE Memory has a local analytics system built into `src/memory/analytics.ts`:
 - Direct SQLite queries against the project database (`~/.aide/projects/<hash>/brain.db`, table: `analytics`)
 - No external dashboard — everything is local and terminal-based
 
+**What has been added (April 2026):**
+- **PostHog remote telemetry**: dual architecture — local SQLite `analytics` table + remote PostHog (anonymized events only, never memory content). Opt-out via `aide-memory config telemetry.enabled false`. PostHog project key hardcoded, events buffered and sent fire-and-forget.
+
 **What needs to be built:**
 - **Richer CLI output**: add recall hit rate (recalls that returned results vs. empty), memory growth over time, tokens saved estimate
 - **Export to JSON/CSV**: `aide-memory stats --format json` for piping into external tools
-- **Optional opt-in telemetry**: anonymous, aggregate usage data (memory count ranges, tool distribution, recall hit rates) to understand how the product is used in the wild — strictly opt-in, disabled by default, no PII
-- **Dashboard options** (if opt-in telemetry is built):
-  - PostHog (open-source, self-hostable) — best fit for a developer tool; free tier covers early usage
-  - Simple custom dashboard reading from exported JSON — lower dependency, but more build effort
-  - Grafana + SQLite datasource — works for power users who want local dashboards without sending data anywhere
 - **Per-project health check**: a command like `aide-memory health` that reports memory freshness, stale percentage, layer balance, and recall effectiveness — actionable output, not just numbers
 
 ---
@@ -901,6 +909,7 @@ AIDE Memory has a local analytics system built into `src/memory/analytics.ts`:
 | **Rich analytics** | Full usage patterns, memory health, team metrics. Token savings tracking (if validated). | PRO |
 | **Additional tools** | Windsurf, Copilot, Cline adapters via tool onboarding framework. | PRO |
 | **Stale context detection** | PostToolUse hook flags when code edits contradict existing memories. | PRO |
+| **Contributor-aware injection** | SessionStart and recall include teammate context based on contributor field. Proactive cross-dev nudge surfaces memories by contributor for the current path. | PRO |
 | **Configurable hook intensity** | Per-hook enable/disable and sensitivity tuning for advanced users. | PRO |
 | **Automatic memory cleanup** | Model-assisted pruning of stale, duplicate, and contradictory memories. | PRO |
 
@@ -998,8 +1007,8 @@ The pricing is simple. Individual features are free. Team features cost money. E
 
 **What you get:**
 
-- Capture: 9 hooks on by default (SessionStart preferences injection, PreToolUse nudge, UserPromptSubmit correction detection, PostToolUse embeddings, PreCompact extract, Stop enforcement)
-- Recall: path-scoped nudge with round-robin layer ranking, YOUR memories only
+- Capture: 9 hooks on by default (SessionStart auto-injection, PreToolUse on Read/Edit/Write/Grep/Glob, UserPromptSubmit correction detection, PostToolUse on aide_recall/aide_remember, PreCompact extract, Stop two-phase enforcement). Scoped-only blocking, new-project softening (<10 memories).
+- Recall: scope-first ranking (scoped above project-wide), round-robin layer representation, directory query inversion, memory priority field (`always`/`normal`), YOUR memories only
 - Search: FTS5 keyword + sqlite-vec semantic search with mode parameter (auto/keyword/semantic)
 - Structure: 4 memory layers with priority ordering, configurable tags
 - Storage: one file per memory, local SQLite index, git sync
@@ -1086,7 +1095,7 @@ The pricing is simple. Individual features are free. Team features cost money. E
 - **FTS5 + sqlite-vec in one database.** FTS5 for keyword search with BM25 ranking. sqlite-vec for semantic similarity via local embeddings. Both live in the same SQLite file. No external processes, no Python subprocess, no Chroma, no Qdrant.
 - **Native model for all reasoning.** We CANNOT tap into Claude Code or Cursor's model programmatically. MCP tools do DATA RETRIEVAL (SQLite queries). The agent the developer is already running does REASONING (formatting, drafting, deciding relevance). Rules files (written during init) are the interface -- they tell the model when and how to call MCP tools. For EACH tool we support, we write native rules files in that tool's format. Zero separate model. Zero extra API cost.
 - **Store is the brain. Files are projections.** SQLite is the structured, queryable source of truth. CLAUDE.md, .cursorrules, and `.aide/context/` files are readable projections generated on command from the store. One source, multiple outputs.
-- **9 hooks at launch.** SessionStart (auto-inject preferences/guidelines), PreToolUse (nudge on read/edit/write/search), UserPromptSubmit (correction detection), PostToolUse (embedding generation on aide_remember), PreCompact (extract decisions before compaction), Stop (enforce corrections + prompt to remember). Session-scoped tracking via `session_id` for concurrent session isolation. Recall ranking uses round-robin across layers to prevent starvation.
+- **9 hooks at launch.** SessionStart (auto-inject preferences/guidelines with `priority: 'always'`), PreToolUse on Read (nudge + directory recall trigger at 2+ files), PreToolUse on Edit/Write (nudge), PreToolUse on Grep/Glob (nudge), UserPromptSubmit (correction detection + flag), PostToolUse on aide_recall (track recalled paths + clear correction flag), PostToolUse on aide_remember (confirm + trigger embedding generation), PreCompact (extract decisions before compaction + clear recalled paths), Stop (enforce corrections via two-phase flow + prompt to remember). Session-scoped tracking via `session_id` for concurrent session isolation. Recall ranking uses scope-first ordering (scoped above project-wide) with round-robin across layers to prevent starvation. Scoped-only blocking: hooks block only when file/directory-scoped memories exist; project-wide-only matches get soft nudges. New projects (<10 total memories) always get soft nudges.
 - **Command-triggered generation, not automatic background.** `aide generate-rules` and `aide generate-context` are explicit commands. The model assists with drafting content. Nothing runs without the developer asking for it.
 - **Hot path bypasses MCP.** Hooks query SQLite directly via a JS script. Zero protocol overhead for recall on the critical path. MCP is for cross-tool portability and explicit tool calls, not for the read-on-every-file-open loop.
 - **Proprietary freeware distribution.** Licensing decision pending (see Repo Strategy & Licensing), but the design assumes code protection is important. Pro/Enterprise features are always proprietary, never visible, never convert to open source.
@@ -1324,6 +1333,8 @@ The framework may evolve to offer orchestration for memory management automation
 | Search | FTS5 + sqlite-vec | Keyword and semantic in one DB, no external processes |
 | Reasoning | Native model only | Zero extra API cost, no Docker/cloud dependency |
 | Source of truth | Store is brain, files are projections | One structured source, multiple readable outputs |
+| Recall ranking | Scope-first + round-robin layers | Scoped memories most relevant; prevents layer starvation |
+| Blocking | Scoped-only, soft for project-wide | Avoids noise; new projects (<10 memories) always soft |
 | Capture | 9 hooks at launch | Proven adoption (0% voluntary to 100% hook-driven) |
 | Generation | Command-triggered | No background processes, developer controls when |
 | Hot path | Bypasses MCP | Direct SQLite query, zero protocol overhead |
@@ -1489,7 +1500,7 @@ Using aide-memory on employer projects is a gray area worth noting: most employm
 
 ### Monitoring
 
-**Internal:** PostHog for product analytics (self-hosted option, 1M free events/month), Sentry for error tracking. Key metrics: install rate, day-1 retention, memories per session (leading); WAU, retrieval hit rate, cross-tool usage (lagging); MRR, churn, conversion rate, trial-to-paid (revenue).
+**Internal:** Dual analytics architecture -- local SQLite `analytics` table for per-machine metrics + remote PostHog (1M free events/month) for centralized usage dashboard. Anonymized events only (event type + counts, never memory content). Opt-out via `aide-memory config telemetry.enabled false`. Sentry for error tracking. Key metrics: install rate, day-1 retention, memories per session (leading); WAU, retrieval hit rate, cross-tool usage (lagging); MRR, churn, conversion rate, trial-to-paid (revenue).
 
 **User-facing:** `aide stats` CLI command showing memory count by layer, retrieval frequency, health indicators. Team tier adds richer analytics and config generation history.
 
@@ -1524,7 +1535,7 @@ Ship as `aide-memory` on npm. CLI binary is `aide`. MCP tools are `aide_recall`,
 | --------------- | ----------------------------------------------------------------------------- |
 | npm package     | `aide-memory`                                                                 |
 | CLI binary      | `aide`                                                                        |
-| MCP tools       | `aide_recall`, `aide_remember`, `aide_forget`, `aide_search`, `aide_memories` |
+| MCP tools       | `aide_recall`, `aide_remember`, `aide_update`, `aide_forget`, `aide_search`, `aide_memories`, `aide_import` |
 | GitHub (public) | `aide-memory`                                                                 |
 | Scoped packages | `@aide/memory`, `@aide/core`                                                  |
 
