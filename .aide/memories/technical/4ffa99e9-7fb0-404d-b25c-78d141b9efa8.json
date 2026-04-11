@@ -1,0 +1,22 @@
+{
+  "uuid": "4ffa99e9-7fb0-404d-b25c-78d141b9efa8",
+  "layer": "technical",
+  "what": "macOS bash doesn't source .bashrc for login shells — only .bash_profile. Claude CLI is at ~/.local/bin/claude, PATH export is in .bashrc. Fixed by adding `[ -f ~/.bashrc ] && source ~/.bashrc` to .bash_profile. User was annoyed by having to restart bash every time.",
+  "why": "User correction — recurring annoyance with claude not being in PATH in new terminals.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "shell",
+    "PATH",
+    "macos",
+    "setup"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-11T19:35:51.192Z",
+  "updated_at": "2026-04-11T19:35:51.192Z"
+}

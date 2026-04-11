@@ -1,0 +1,22 @@
+{
+  "uuid": "13157550-040a-4916-89b9-014612db7568",
+  "layer": "technical",
+  "what": "GitHub Actions npm publish fails with E404 \"Not found\" on PUT to registry.npmjs.org/aide-memory. Tests pass, build succeeds, but the NPM_TOKEN in the repo secrets may not have write permission to the aide-memory package. The package exists (0.1.1 live) but was likely published from a different token or account. Manual publish works: cp package.aide-memory.json package.json && npm publish --access public && git checkout package.json.",
+  "why": "Release workflow failed twice — first time tests, second time npm auth. Need to fix NPM_TOKEN permissions in aide-memory/aide-memory repo secrets, or the token may need to be regenerated with publish scope for the aide-memory package.",
+  "scope": "docs/specs/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "npm",
+    "publish",
+    "github-actions",
+    "auth"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-11T18:13:34.550Z",
+  "updated_at": "2026-04-11T18:13:34.550Z"
+}

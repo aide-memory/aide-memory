@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
-import { LAYER_LABELS, VALID_LAYERS, requireProjectRoot } from './utils';
+import { LAYER_LABELS, VALID_LAYERS, requireProjectRoot, brand } from './utils';
 
 export function runStats(): void {
   const projectRoot = requireProjectRoot();
@@ -18,7 +18,7 @@ export function runStats(): void {
     console.log();
 
     // Count by layer
-    console.log(chalk.magenta.bold('  By Layer:'));
+    console.log(brand.bold('  By Layer:'));
     for (const layer of VALID_LAYERS) {
       const count = store.count({ layer: layer as any });
       console.log(`    ${LAYER_LABELS[layer]}: ${count}`);
@@ -31,7 +31,7 @@ export function runStats(): void {
     const topRecalled = sorted.filter(m => m.recalled_count > 0).slice(0, 5);
 
     if (topRecalled.length > 0) {
-      console.log(chalk.magenta.bold('  Most Recalled:'));
+      console.log(brand.bold('  Most Recalled:'));
       for (const m of topRecalled) {
         console.log(`    [${m.id}] ${m.what} (${m.recalled_count}x)`);
       }
@@ -45,7 +45,7 @@ export function runStats(): void {
     }
 
     if (sourceCounts.size > 0) {
-      console.log(chalk.magenta.bold('  By Source:'));
+      console.log(brand.bold('  By Source:'));
       for (const [source, count] of sourceCounts) {
         console.log(`    ${source}: ${count}`);
       }

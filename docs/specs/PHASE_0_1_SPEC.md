@@ -959,6 +959,11 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 - Contributor identity from git config (`user.name` / `user.email`) or explicit `aide-memory config contributor`
 - Team memories (shared: true) still surface but personal preferences of the current contributor rank first
 
+**8. Cursor hook setup in `aide-memory init`:**
+- `aide-memory init` currently installs Claude Code hooks (`.claude/settings.json` hooks section) — Cursor needs equivalent hook configuration (`.cursor/hooks.json`) so the capture-recall loop works out of the box in Cursor too
+- Blocked on Cursor validation (priority item 12) — once validated, update init to write Cursor hook config alongside Claude Code hooks
+- P1.9 and P1.14 have the detailed checklist items; this is the coordination note
+
 Both cleanup, configurability, and contributor prioritization are monetization features — free tier gets opinionated defaults, paid tier gets customization + maintenance + contributor awareness
 
 ---

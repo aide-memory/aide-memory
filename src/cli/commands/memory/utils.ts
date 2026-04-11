@@ -7,6 +7,9 @@ import fs from 'fs';
 import chalk from 'chalk';
 import type { Memory } from '../../../memory/types';
 
+/** Brand color from docs/branding — used for success/accent output */
+export const brand = chalk.hex('#00c2cb');
+
 export const LAYER_LABELS: Record<string, string> = {
   preferences: 'Preferences',
   technical: 'Technical Context',
@@ -68,7 +71,7 @@ export function groupByLayer(memories: Memory[]): [string, Memory[]][] {
  */
 export function formatMemoryLine(m: Memory): string {
   let line = `  [${m.id}] ${m.what}`;
-  if (m.contributor) line += chalk.cyan(` (from ${m.contributor})`);
+  if (m.contributor) line += brand(` (from ${m.contributor})`);
   if (m.scope && m.scope !== 'project') line += chalk.gray(` [${m.scope}]`);
   return line;
 }

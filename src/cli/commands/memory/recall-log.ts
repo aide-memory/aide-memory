@@ -8,7 +8,7 @@
 import path from 'path';
 import fs from 'fs';
 import chalk from 'chalk';
-import { requireProjectRoot, LAYER_LABELS } from './utils';
+import { requireProjectRoot, LAYER_LABELS, brand } from './utils';
 
 interface RecallLogEntry {
   timestamp: string;
@@ -48,7 +48,7 @@ export function runRecallLog(options: { last?: string; clear?: boolean }): void 
   if (options.clear) {
     if (fs.existsSync(logPath)) {
       fs.unlinkSync(logPath);
-      console.log(chalk.green('Recall log cleared.'));
+      console.log(brand('Recall log cleared.'));
     } else {
       console.log(chalk.yellow('No recall log to clear.'));
     }
@@ -95,7 +95,7 @@ export function runRecallLog(options: { last?: string; clear?: boolean }): void 
     if (entry.event && entry.memory) {
       // Store event (memory_stored, memory_updated, memory_deleted)
       storeNum++;
-      const eventLabel = entry.event === 'memory_stored' ? chalk.green('STORED')
+      const eventLabel = entry.event === 'memory_stored' ? brand('STORED')
         : entry.event === 'memory_updated' ? chalk.yellow('UPDATED')
         : chalk.red('DELETED');
 
@@ -109,7 +109,7 @@ export function runRecallLog(options: { last?: string; clear?: boolean }): void 
     } else if (entry.query && entry.memories_returned) {
       // Recall event
       recallNum++;
-      console.log(chalk.cyan.bold(`── Recall #${recallNum} `) + chalk.gray(`(${time})`));
+      console.log(brand.bold(`── Recall #${recallNum} `) + chalk.gray(`(${time})`));
       console.log(chalk.gray(`   Query paths: ${entry.query.paths.length > 0 ? entry.query.paths.join(', ') : '(none)'}`));
       if (entry.query.text) {
         console.log(chalk.gray(`   Query text:  ${entry.query.text}`));
@@ -127,7 +127,7 @@ export function runRecallLog(options: { last?: string; clear?: boolean }): void 
         console.log();
         for (const m of entry.memories_returned) {
           const layerLabel = LAYER_LABELS[m.layer] ?? m.layer;
-          console.log(`   ${chalk.green('✓')} [${m.id}] ${chalk.white(m.what)}`);
+          console.log(`   ${brand('✓')} [${m.id}] ${chalk.white(m.what)}`);
           console.log(chalk.gray(`     Layer: ${layerLabel} | Scope: ${m.scope ?? 'project-wide'} | Recalled: ${m.recalled_count}x`));
           if (m.tags.length > 0) {
             console.log(chalk.gray(`     Tags: ${m.tags.join(', ')}`));

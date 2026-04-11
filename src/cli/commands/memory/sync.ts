@@ -10,7 +10,7 @@ import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
 import { MemorySync } from '../../../memory/sync';
 import type { SyncResult } from '../../../memory/sync';
-import { requireProjectRoot } from './utils';
+import { requireProjectRoot, brand } from './utils';
 
 function printSyncResult(action: string, result: SyncResult, exportMode: boolean = false): void {
   const parts: string[] = [];
@@ -19,7 +19,7 @@ function printSyncResult(action: string, result: SyncResult, exportMode: boolean
   if (result.removed > 0) parts.push(`${result.removed} removed`);
 
   if (parts.length > 0) {
-    console.log(chalk.green(`${action} complete: ${parts.join(', ')}.`));
+    console.log(brand(`${action} complete: ${parts.join(', ')}.`));
   } else {
     console.log(chalk.gray(`${action}: everything up to date.`));
   }

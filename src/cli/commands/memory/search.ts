@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
 import type { MemoryLayer } from '../../../memory/types';
-import { LAYER_LABELS, groupByLayer, formatMemoryLine, requireProjectRoot } from './utils';
+import { LAYER_LABELS, groupByLayer, formatMemoryLine, requireProjectRoot, brand } from './utils';
 
 export interface MemorySearchOptions {
   layer?: string;
@@ -31,7 +31,7 @@ export function runSearch(query: string, options: MemorySearchOptions): void {
 
     const grouped = groupByLayer(memories);
     for (const [layer, mems] of grouped) {
-      console.log(chalk.magenta.bold(`  ${LAYER_LABELS[layer] ?? layer}`));
+      console.log(brand.bold(`  ${LAYER_LABELS[layer] ?? layer}`));
       for (const m of mems) {
         console.log(formatMemoryLine(m));
         if (m.why) {

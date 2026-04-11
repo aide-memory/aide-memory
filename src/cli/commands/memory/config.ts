@@ -8,7 +8,7 @@
 import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs';
-import { requireProjectRoot } from './utils';
+import { requireProjectRoot, brand } from './utils';
 
 function getConfigPath(projectRoot: string): string {
   return path.join(projectRoot, '.aide', 'config.json');
@@ -91,6 +91,6 @@ export function runConfig(key: string, value?: string): void {
     const parsed = parseValue(value);
     setNestedValue(config, key, parsed);
     writeConfig(configPath, config);
-    console.log(chalk.green(`Set ${key} = ${JSON.stringify(parsed)}`));
+    console.log(brand(`Set ${key} = ${JSON.stringify(parsed)}`));
   }
 }

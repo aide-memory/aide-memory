@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
-import { requireProjectRoot } from './utils';
+import { requireProjectRoot, brand } from './utils';
 
 export interface UpdateOptions {
   what?: string;
@@ -47,7 +47,7 @@ export function runUpdate(idStr: string, options: UpdateOptions): void {
       process.exit(1);
     }
 
-    console.log(chalk.green(`Updated memory (id: ${updated.id}):`));
+    console.log(brand(`Updated memory (id: ${updated.id}):`));
     console.log(`  Layer: ${updated.layer}`);
     console.log(`  What:  ${updated.what}`);
     if (updated.scope) console.log(`  Scope: ${updated.scope}`);

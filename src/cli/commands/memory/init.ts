@@ -4,6 +4,7 @@
 
 import chalk from 'chalk';
 import { initProject, type InitOptions } from '../../../memory/init';
+import { brand } from './utils';
 
 export function runInit(options: { scan?: boolean; updateRules?: boolean; force?: boolean }): void {
   const projectRoot = process.cwd();
@@ -17,15 +18,15 @@ export function runInit(options: { scan?: boolean; updateRules?: boolean; force?
   initProject(projectRoot, initOptions)
     .then((result) => {
       if (options.updateRules) {
-        console.log(chalk.green('Rules files updated.'));
+        console.log(brand('Rules files updated.'));
       } else {
-        console.log(chalk.green('Project initialized for aide-memory.'));
+        console.log(brand('Project initialized for aide-memory.'));
       }
 
       if (result.created.length > 0) {
         console.log(chalk.white('\nCreated:'));
         for (const item of result.created) {
-          console.log(chalk.green(`  + ${item}`));
+          console.log(brand(`  + ${item}`));
         }
       }
 
@@ -44,7 +45,7 @@ export function runInit(options: { scan?: boolean; updateRules?: boolean; force?
       }
 
       if (result.memoriesGenerated !== undefined) {
-        console.log(chalk.cyan(`\nGenerated ${result.memoriesGenerated} memories from pre-train scan.`));
+        console.log(brand(`\nGenerated ${result.memoriesGenerated} memories from pre-train scan.`));
       }
     })
     .catch((err) => {

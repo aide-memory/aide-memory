@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
 import { recall } from '../../../memory/recall';
-import { LAYER_LABELS, groupByLayer, formatMemoryLine, requireProjectRoot } from './utils';
+import { LAYER_LABELS, groupByLayer, formatMemoryLine, requireProjectRoot, brand } from './utils';
 
 export function runRecall(filePath: string): void {
   const projectRoot = requireProjectRoot();
@@ -23,7 +23,7 @@ export function runRecall(filePath: string): void {
 
     const grouped = groupByLayer(result.memories);
     for (const [layer, memories] of grouped) {
-      console.log(chalk.magenta.bold(`## ${LAYER_LABELS[layer] ?? layer}`));
+      console.log(brand.bold(`## ${LAYER_LABELS[layer] ?? layer}`));
       for (const m of memories) {
         console.log(formatMemoryLine(m));
         if (m.why) {

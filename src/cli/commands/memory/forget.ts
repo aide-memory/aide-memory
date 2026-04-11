@@ -4,7 +4,7 @@
 
 import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
-import { requireProjectRoot } from './utils';
+import { requireProjectRoot, brand } from './utils';
 
 export function runForget(idStr: string): void {
   const id = parseInt(idStr, 10);
@@ -24,7 +24,7 @@ export function runForget(idStr: string): void {
     }
 
     store.remove(id);
-    console.log(chalk.green(`Deleted memory ${id}: "${existing.what}"`));
+    console.log(brand(`Deleted memory ${id}: "${existing.what}"`));
   } finally {
     store.close();
   }

@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
 import type { MemoryLayer } from '../../../memory/types';
-import { VALID_LAYERS, requireProjectRoot } from './utils';
+import { VALID_LAYERS, requireProjectRoot, brand } from './utils';
 
 export interface RememberOptions {
   layer: string;
@@ -34,7 +34,7 @@ export function runRemember(what: string, options: RememberOptions): void {
       contributor: options.contributor,
     });
 
-    console.log(chalk.green(`Stored memory (id: ${memory.id}):`));
+    console.log(brand(`Stored memory (id: ${memory.id}):`));
     console.log(`  Layer: ${memory.layer}`);
     console.log(`  What:  ${memory.what}`);
     if (memory.scope) console.log(`  Scope: ${memory.scope}`);

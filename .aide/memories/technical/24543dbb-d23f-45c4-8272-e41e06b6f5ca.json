@@ -1,0 +1,22 @@
+{
+  "uuid": "24543dbb-d23f-45c4-8272-e41e06b6f5ca",
+  "layer": "technical",
+  "what": "CRITICAL GAP: aide-memory init does NOT install .claude/settings.json with hook config. It only creates .claude/rules/aide-memory.md and .git/hooks/post-checkout. All 9 hooks (Read blocking, recall tracking, correction detection, search nudge, etc.) are never installed for users. Init must be updated to create settings.json with the full hook configuration. Without this, the entire hook system is invisible to users who install via npm.",
+  "why": "Discovered during validation — hooks didn't fire in test project because init doesn't install them. This means every user since 0.1.1 has been running without hooks. Must fix in init.ts before any marketing/publishing.",
+  "scope": "src/memory/init.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "init",
+    "hooks",
+    "critical-gap",
+    "bug"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-11T19:45:39.234Z",
+  "updated_at": "2026-04-11T19:45:39.234Z"
+}
