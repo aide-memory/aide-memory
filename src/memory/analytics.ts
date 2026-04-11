@@ -2,8 +2,9 @@ import Database from 'better-sqlite3';
 import crypto from 'crypto';
 import os from 'os';
 
-// PostHog project key — set via AIDE_POSTHOG_KEY env var or hardcode after account setup
-const POSTHOG_KEY = process.env.AIDE_POSTHOG_KEY || '';
+// PostHog project key — hardcoded for anonymous usage telemetry
+// Users can disable by setting AIDE_TELEMETRY=off
+const POSTHOG_KEY = process.env.AIDE_TELEMETRY === 'off' ? '' : 'phc_ztrzpvbZQTa4ymkGxVdYZnFKiFFLyJMcf5zYUXVAqPzS';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 
 export interface AnalyticsEvent {

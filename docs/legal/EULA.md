@@ -87,22 +87,24 @@ This End User License Agreement ("Agreement") is entered into between AIDE Memor
 - File paths or personal system configuration
 
 6.2 **Collected Information**. Usage Data may include:
-- Feature usage frequency and patterns
-- Error and exception logs (without User Data context)
-- Software version and general system environment (OS, Node.js version)
-- Session duration and tool interactions
+- Event types (remember, recall, search, forget, update, list, stats, sync operations)
+- Platform and architecture information
+- Node.js version
+- Feature usage patterns and frequency
 - Aggregate anonymized statistics
 
-6.3 **Opt-Out**. User may disable telemetry collection at any time by:
-- Setting the environment variable: `AIDE_TELEMETRY=false`
-- Using the configuration option: `--disable-telemetry`
-- Modifying the configuration file as documented in the Software's README
+6.3 **Machine Anonymization**. Machine identification is a SHA256 hash of hostname and username (not a personal identifier). This hash enables deduplication of usage patterns from the same machine but cannot be reverse-engineered to identify the user.
 
-6.4 **No Re-identification**. Licensor commits to not attempting to re-identify anonymous Usage Data or combine it with personal information to identify individual Users.
+6.4 **Opt-Out**. User may disable telemetry collection at any time by setting the environment variable:
+```bash
+export AIDE_TELEMETRY=off
+```
 
-6.5 **Third-Party Processors**. Usage Data may be processed by third-party analytics providers. Licensor is responsible for ensuring these third parties maintain appropriate data protection standards.
+6.5 **No Re-identification**. Licensor commits to not attempting to re-identify anonymous Usage Data or combine it with personal information to identify individual Users.
 
-6.6 **Data Retention**. Usage Data is retained for up to 90 days for analysis purposes, then deleted or anonymized further.
+6.6 **Third-Party Processors**. Usage Data may be processed by third-party analytics providers (currently PostHog). Licensor is responsible for ensuring these third parties maintain appropriate data protection standards.
+
+6.7 **Data Retention**. Usage Data is retained for up to 90 days for analysis purposes, then deleted or anonymized further.
 
 ---
 

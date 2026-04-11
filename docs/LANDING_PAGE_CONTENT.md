@@ -206,7 +206,7 @@ Yes. aide-memory supports Claude Code and Cursor out of the box. The init comman
 
 ### Does it send data anywhere?
 
-No. Everything is local. Memories are JSON files on your disk. SQLite is a local cache. The MCP server communicates over stdio, not HTTP. Your data never leaves your machine unless you choose to commit it to your git repo.
+aide-memory collects anonymous usage telemetry by default (event types, platform, node version) to help improve the product. **Your memory content is never sent.** You can disable telemetry by setting `AIDE_TELEMETRY=off`. Memories are JSON files on your disk. SQLite is a local cache. Your data never leaves your machine unless you choose to commit it to your git repo.
 
 ### How is this different from CLAUDE.md or .cursorrules?
 

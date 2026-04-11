@@ -15,6 +15,10 @@ npx aide-memory init
 - **Works with Claude Code and Cursor** -- installs as an MCP server, integrating natively with your coding tools.
 - **Zero-config setup** -- one command creates the memory directory, installs hooks, and configures your editor.
 
+## Privacy
+
+aide-memory collects anonymous telemetry by default (event types, platform, Node version) to help improve the product. Your memory content is never sent. Disable telemetry: `export AIDE_TELEMETRY=off`
+
 ## Documentation
 
 Full documentation: [https://aide-memory.dev](https://aide-memory.dev)

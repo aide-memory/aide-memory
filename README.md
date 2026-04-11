@@ -185,6 +185,22 @@ aide-memory config capture.enabled false    # write
 
 ---
 
+## Privacy & Telemetry
+
+aide-memory collects **anonymous usage telemetry by default** to help improve the product. Here's what you should know:
+
+**What's collected:** Event types (remember, recall, search, etc.), platform, architecture, Node version. **What's NOT collected:** Memory content, file paths, code, or personal information. Machine identification is a SHA256 hash of hostname:username for deduplication only.
+
+**How to opt out:** Set the `AIDE_TELEMETRY=off` environment variable:
+```bash
+export AIDE_TELEMETRY=off
+npx aide-memory stats
+```
+
+All telemetry is local-first — events are buffered in SQLite and sent to PostHog asynchronously. Your memories never leave your machine unless you commit them to git.
+
+---
+
 ## Comparison with Alternatives
 
 ### vs. claude-mem

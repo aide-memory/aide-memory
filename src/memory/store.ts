@@ -880,6 +880,10 @@ export class MemoryStore {
   }
 
   close(): void {
+    // Flush any pending analytics events before closing
+    if (this.analytics) {
+      this.analytics.shutdown();
+    }
     this.db.close();
   }
 
