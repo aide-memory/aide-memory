@@ -1,0 +1,20 @@
+{
+  "uuid": "8ae85236-f5f5-4a65-b232-c3f37f227d4f",
+  "layer": "technical",
+  "what": "MCP server is long-running — changes to recall.ts, store.ts, or server.ts require an MCP server restart to take effect. npm run build compiles to dist/ but the running server process still has old code in memory. Bash tests work (fresh Node process each time) but aide_recall/aide_search via MCP use stale code until server restarts. Restart by restarting the Claude Code session or re-running aide-memory serve.",
+  "why": "Ranking fix was compiled and verified via bash but aide_recall via MCP still returned project-wide memories. Wasted a full round of live testing before realizing the server needed a restart.",
+  "scope": "src/memory/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "mcp-server",
+    "restart",
+    "gotcha"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-10T13:34:59.963Z",
+  "updated_at": "2026-04-10T13:34:59.963Z"
+}

@@ -1,0 +1,22 @@
+{
+  "uuid": "43cde5dc-3f73-4d39-94e2-6b94be3be6d7",
+  "layer": "area_context",
+  "what": "Hook blocking refinement: only block when SCOPED memories exist for the path (file-specific or directory-scoped). Project-wide-only matches get soft nudge, not block. Applies to all hooks (Read, Edit, Search). Also: new projects with < 10 total memories use soft nudges everywhere — not enough context stored yet to justify blocking. These two rules reduce friction for new users and quick tasks while preserving blocking for cases where it matters (scoped context that would prevent mistakes).",
+  "why": "User agreed these adjustments are needed. Blocking on project-wide-only matches adds friction without value (agent gets generic context unrelated to the specific file). The Vercel scenario was caught by a SCOPED memory — project-wide wouldn't have helped.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "blocking",
+    "user-experience",
+    "decision"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-10T14:05:07.677Z",
+  "updated_at": "2026-04-10T14:05:07.677Z"
+}

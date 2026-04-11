@@ -1,0 +1,20 @@
+{
+  "uuid": "2a4c5e2b-9e2f-454c-9f82-8a137015a0d2",
+  "layer": "preferences",
+  "what": "Always test recall QUALITY, not just hook mechanics. Verifying \"does it block/unblock\" is insufficient — must also verify the returned memories are actually relevant to the queried path. The absolute vs relative path mismatch went undetected through multiple rounds of testing because no test checked WHAT was returned, only WHETHER something was returned.",
+  "why": "User called out that I claimed things were fixed when they weren't. Multiple smoke test rounds tested hook behavior (block/soft/silent) but never verified recall content. The core value proposition — relevant memories surfacing — was broken the entire time.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "recall-quality",
+    "correction"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-10T13:32:27.140Z",
+  "updated_at": "2026-04-10T13:32:27.140Z"
+}

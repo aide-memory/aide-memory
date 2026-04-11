@@ -1,0 +1,20 @@
+{
+  "uuid": "6787cf23-5cce-4275-920c-8241f52d6733",
+  "layer": "technical",
+  "what": "Recall ranking quality issue: with limit, project-wide memories (scope=project) outrank file-specific memories (scope=src/memory/**) because layer priority dominates over scope specificity. A recall for src/memory/store.ts returns 5 project-wide technical memories before any file-scoped ones. The scope specificity tiebreaker is too weak — needs to be weighted higher so file-specific memories surface first for file queries. Round-robin helped for layer diversity but didn't fix the scope relevance problem.",
+  "why": "Discovered during live testing — aide_recall for store.ts returned PostHog decisions and deployment strategy instead of the embedding fix memory that's actually scoped to src/memory/**. The recall \"works\" but returns unhelpful results.",
+  "scope": "src/memory/recall.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "ranking",
+    "recall-quality",
+    "bug"
+  ],
+  "source": "hook",
+  "shared": true,
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-10T13:25:11.308Z",
+  "updated_at": "2026-04-10T13:25:11.308Z"
+}
