@@ -132,6 +132,54 @@ function writeHookConfig(
   return { created, skipped };
 }
 
+/**
+ * Write .mcp.json with MCP server configuration.
+ * This enables aide_recall, aide_remember, etc. tools in Claude Code sessions.
+ */
+function writeMcpConfig(
+  projectRoot: string,
+  force: boolean
+): { created: string[]; skipped: string[] } {
+  const created: string[] = [];
+  const skipped: string[] = [];
+
+  const mcpPath = path.join(projectRoot, '.mcp.json');
+  const packageRoot = getPackageRoot();
+  const serverScript = path.join(packageRoot, 'dist', 'memory', 'cli.js');
+
+  const mcpConfig = {
+    mcpServers: {
+      'aide-memory': {
+        command: 'node',
+        args: [serverScript, projectRoot],
+      },
+    },
+  };
+
+  if (fs.existsSync(mcpPath) && !force) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+      if (existing.mcpServers?.['aide-memory']) {
+        skipped.push('.mcp.json (aide-memory already configured)');
+        return { created, skipped };
+      }
+      // Merge: add aide-memory to existing servers
+      existing.mcpServers = existing.mcpServers || {};
+      existing.mcpServers['aide-memory'] = mcpConfig.mcpServers['aide-memory'];
+      fs.writeFileSync(mcpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
+      created.push('.mcp.json (aide-memory server added)');
+    } catch {
+      fs.writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf8');
+      created.push('.mcp.json');
+    }
+  } else {
+    fs.writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf8');
+    created.push('.mcp.json');
+  }
+
+  return { created, skipped };
+}
+
 const MCP_TOOLS_LIST = `- \`aide_recall\` — retrieve stored context for file paths you're about to work on
 - \`aide_remember\` — store discoveries, decisions, corrections, and preferences
 - \`aide_forget\` — remove outdated memories
@@ -425,6 +473,11 @@ export async function initProject(
   const hooks = writeHookConfig(resolvedRoot, force);
   result.created.push(...hooks.created);
   result.skipped.push(...hooks.skipped);
+
+  // 2.6. Install MCP server configuration (.mcp.json)
+  const mcp = writeMcpConfig(resolvedRoot, force);
+  result.created.push(...mcp.created);
+  result.skipped.push(...mcp.skipped);
 
   // 3. Write config
   const config = writeConfig(resolvedRoot, contributor, force);
