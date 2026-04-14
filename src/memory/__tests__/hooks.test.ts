@@ -328,79 +328,46 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
 
 // ─── PreCompact (pre-compact-save.sh) ───────────────────────────────────────
 
-describe('PreCompact hook (pre-compact-save.sh) — two-phase blocking', () => {
-  it('Phase 1: blocks compaction (exit 2) when no flag exists', () => {
-    // Clean up any stale flag
-    const flagPath = path.join(REPO_ROOT, '.aide', 'cache', 'compact-pending-test-compact-123.txt');
-    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+describe('PreCompact hook (pre-compact-save.sh) — cleanup only', () => {
+  it('exits 0 and clears session tracking files', () => {
+    const sid = 'test-compact-cleanup';
+    const cacheDir = path.join(REPO_ROOT, '.aide', 'cache');
+    fs.mkdirSync(cacheDir, { recursive: true });
 
-    const result = runHook('pre-compact-save.sh', {
-      session_id: 'test-compact-123',
-      trigger: 'manual',
-    });
-    expect(result.exitCode).toBe(2);
-    expect(result.stdout).not.toBe('');
+    // Create tracking files to be cleaned
+    fs.writeFileSync(path.join(cacheDir, `recalled-paths-${sid}.txt`), 'file|test');
+    fs.writeFileSync(path.join(cacheDir, `searched-queries-${sid}.txt`), 'query');
+    fs.writeFileSync(path.join(cacheDir, `correction-pending-${sid}.txt`), 'pending');
 
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.decision).toBe('block');
-    expect(parsed.reason).toContain('aide_remember');
-
-    // Flag file should now exist
-    expect(fs.existsSync(flagPath)).toBe(true);
-
-    // Clean up
-    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
-  });
-
-  it('Phase 2: allows compaction (exit 0) when flag exists', () => {
-    const sid = 'test-compact-phase2';
-    const flagPath = path.join(REPO_ROOT, '.aide', 'cache', `compact-pending-${sid}.txt`);
-
-    // Create flag to simulate Phase 1 already happened
-    fs.mkdirSync(path.dirname(flagPath), { recursive: true });
-    fs.writeFileSync(flagPath, 'pending');
-
-    const result = runHook('pre-compact-save.sh', {
-      session_id: sid,
-      trigger: 'auto',
-    });
+    const result = runHook('pre-compact-save.sh', { session_id: sid, trigger: 'manual' });
     expect(result.exitCode).toBe(0);
 
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.decision).toBe('allow');
-
-    // Flag should be deleted
-    expect(fs.existsSync(flagPath)).toBe(false);
+    // All tracking files should be cleared
+    expect(fs.existsSync(path.join(cacheDir, `recalled-paths-${sid}.txt`))).toBe(false);
+    expect(fs.existsSync(path.join(cacheDir, `searched-queries-${sid}.txt`))).toBe(false);
+    expect(fs.existsSync(path.join(cacheDir, `correction-pending-${sid}.txt`))).toBe(false);
   });
 
-  it('Phase 1 output includes save instructions with source: hook', () => {
-    const sid = 'test-compact-source';
-    const flagPath = path.join(REPO_ROOT, '.aide', 'cache', `compact-pending-${sid}.txt`);
-    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
-
-    const result = runHook('pre-compact-save.sh', {
-      session_id: sid,
-      trigger: 'auto',
-    });
-
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.reason).toContain('aide_remember');
-    expect(parsed.reason).toContain('source: hook');
-
-    // Clean up
-    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+  it('exits 0 with no tracking files (no crash)', () => {
+    const result = runHook('pre-compact-save.sh', { session_id: 'no-files' });
+    expect(result.exitCode).toBe(0);
   });
 
-  it('exits 2 with empty input (Phase 1, no flag)', () => {
-    // With empty input, session_id defaults to "default"
-    const flagPath = path.join(REPO_ROOT, '.aide', 'cache', 'compact-pending-default.txt');
-    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+  it('does not affect other sessions tracking files', () => {
+    const cacheDir = path.join(REPO_ROOT, '.aide', 'cache');
+    fs.mkdirSync(cacheDir, { recursive: true });
 
-    const result = runHook('pre-compact-save.sh', {});
-    expect(result.exitCode).toBe(2);
+    // Create tracking for another session
+    fs.writeFileSync(path.join(cacheDir, 'recalled-paths-other-session.txt'), 'file|other');
+
+    const result = runHook('pre-compact-save.sh', { session_id: 'my-session' });
+    expect(result.exitCode).toBe(0);
+
+    // Other session's file should still exist
+    expect(fs.existsSync(path.join(cacheDir, 'recalled-paths-other-session.txt'))).toBe(true);
 
     // Clean up
-    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+    fs.unlinkSync(path.join(cacheDir, 'recalled-paths-other-session.txt'));
   });
 });
 
@@ -411,8 +378,8 @@ describe('All hooks handle empty input without crashing', () => {
     { script: 'pre-read-recall.sh', expectedExit: 0 },
     { script: 'stop-remember.sh', expectedExit: 0 },
     { script: 'detect-correction.sh', expectedExit: 0 },
-    // pre-compact-save.sh exits 2 on Phase 1 (no flag) — that's correct, not a crash
-    { script: 'pre-compact-save.sh', expectedExit: 2 },
+    // pre-compact-save.sh is cleanup-only, always exits 0
+    { script: 'pre-compact-save.sh', expectedExit: 0 },
   ];
 
   for (const { script, expectedExit } of hookScripts) {
