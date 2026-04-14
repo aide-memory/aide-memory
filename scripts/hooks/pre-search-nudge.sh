@@ -74,22 +74,16 @@ fi
 SCOPED_COUNT=$(echo "$RESULT" | jq -r '.scoped_count // 0' 2>/dev/null)
 TOTAL_MEMORIES=$(echo "$RESULT" | jq -r '.total_memories // 0' 2>/dev/null)
 
-# Not yet searched — decide block vs soft
-NUDGE="${COUNT} aide memories match '${QUERY}' (${TOP_MATCHES}). Call aide_search({keyword: '${QUERY}'})."
+# Not yet searched — always soft nudge (never block).
+# The agent may already have these memories from a path-based aide_recall,
+# so blocking forces redundant aide_search calls. Soft lets the agent decide.
+NUDGE="${COUNT} aide memories match '${QUERY}' (${TOP_MATCHES}). Call aide_search({keyword: '${QUERY}'}) if not already in context."
 
-# Block only if: scoped memories match AND total memories >= 10
-if [ "$SCOPED_COUNT" -gt 0 ] 2>/dev/null && [ "$TOTAL_MEMORIES" -ge 10 ] 2>/dev/null; then
-  echo "$NUDGE" | jq -Rs '{
-    decision: "block",
-    reason: .
-  }'
-else
-  echo "$NUDGE" | jq -Rs '{
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      additionalContext: .
-    }
-  }'
-fi
+echo "$NUDGE" | jq -Rs '{
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    additionalContext: .
+  }
+}'
 
 exit 0
