@@ -75,10 +75,39 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 - Read src/lib/logger.ts first (hook blocked for src/lib/, recalled, then read)
 - Stop hook: correctly said nothing new to store
 
-## Pivots and Feedback During Validation
+## Changes Made During Validation
 
-1. **Search hook changed from blocking to always-soft** — agent had memories from prior recall, blocking forced redundant aide_search calls
+### Bugs Fixed
+1. **PreCompact two-phase blocking** — exit 0 → exit 2 for Phase 1. Previously never actually blocked compaction.
+2. **SessionStart cleanup** — only clear THIS session on clear/compact. Don't touch concurrent sessions.
+3. **Search hook tracked on block** — agent could bypass by retrying grep. Fixed: tracking only via PostToolUse:aide_search.
+4. **Directory path trailing slash stripped** — path.relative() broke isDirectoryQuery detection.
+5. **Project-root path normalization** — path.relative() returns "" for root, fell back to absolute path.
+6. **MCP_TOOLS_LIST missing aide_update/aide_import** — rules templates referenced them but tools list didn't.
+7. **Broad scope blocking** — src/** (depth 1) triggered blocking for every file under src/. Fixed: minimum scope depth of 2 path segments required for blocking.
+
+### Features Added
+8. **Auto-update on MCP server start** — checks _aideMemoryVersion, auto-merges hooks/MCP/rules/dirs/.gitignore/post-checkout. No manual init needed after upgrade.
+9. **--force merge** — preserves user settings instead of overwriting.
+10. **--reset flag** — resets config to factory defaults without deleting memories.
+11. **Round-robin hard cap** — limit is now a true cap. Swaps underrepresented layers into over-represented slots within the limit.
+12. **session-inject.js efficiency** — SQL-level priority filter instead of fetching all memories.
+13. **Scope trailing slash normalization** — src/memory/ treated like src/memory/** in scopeMatchesPath.
+14. **`.ignore` file** — hides .aide/memories/ from grep. Config: memories.hideFromGrep.
+15. **track-search.sh** — new PostToolUse hook for aide_search tracking.
+16. **Search hook always soft** — no longer blocks grep. Agent decides whether to call aide_search.
+
+### Design Decisions
+17. **Stop hook always blocks** — intentional (block until reflect pattern). UX concern logged as P1.18.
+18. **Minimum scope depth = 2** — src/** too broad for blocking, src/api/** specific enough. Configurable later.
+19. **Session cleanup rules** — start/resume: don't touch. clear/compact: clear this session only.
+
+## Pivots and Observations
+
+1. **Search hook blocking → soft** — agent had memories from prior recall, blocking forced redundant aide_search calls
 2. **`.ignore` file added** — grep was returning raw memory JSON, bypassing structured access
-3. **Claude Code UI labels** — soft hooks may show as "returned blocking error" in collapsed view (debug log confirms they're actually soft). Added to P1.18 investigation.
-4. **Stop hook fires every turn** — confirmed intentional (block until reflect pattern), but UX concern with "error" label
-5. **Agent proactively recalled directory** — directory trigger (A4) didn't fire because agent was smart enough to recall src/api/ in first call
+3. **Claude Code UI labels** — soft hooks may show as "returned blocking error" in collapsed/expanded view. Debug log is source of truth. Added to P1.18.
+4. **Stop hook fires every turn** — confirmed intentional, but "error" label is confusing. P1.18.
+5. **Agent proactively recalled directory** — directory trigger (A4) didn't fire because agent recalled src/api/ on first call
+6. **Broad scope blocking was major friction** — src/** caused useless blocks on src/lib/logger.ts returning only generic preferences. Fixed with depth-based rule.
+7. **Stale validation docs consolidated** — INTEGRATION_TESTING.md and RUN_VALIDATION.md deleted (-2446 lines). Gaps extracted into Sessions J-N.
