@@ -140,7 +140,10 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
   const normalizedPaths = query.paths?.map(p => {
     if (path.isAbsolute(p) && store.getProjectRoot()) {
       const rel = path.relative(store.getProjectRoot()!, p);
-      return rel || p;
+      // path.relative() strips trailing slashes — preserve them for directory query detection
+      const hadTrailingSlash = p.endsWith('/');
+      const result = rel || p;
+      return hadTrailingSlash && !result.endsWith('/') ? result + '/' : result;
     }
     return p;
   });

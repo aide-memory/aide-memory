@@ -183,8 +183,10 @@ function writeMcpConfig(
 
 const MCP_TOOLS_LIST = `- \`aide_recall\` — retrieve stored context for file paths you're about to work on
 - \`aide_remember\` — store discoveries, decisions, corrections, and preferences
+- \`aide_update\` — update an existing memory when information changes
 - \`aide_forget\` — remove outdated memories
 - \`aide_search\` — find memories by keyword
+- \`aide_import\` — seed knowledge from existing markdown docs
 - \`aide_memories\` — list all stored memories`;
 
 /**
