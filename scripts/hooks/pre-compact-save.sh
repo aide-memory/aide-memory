@@ -24,4 +24,15 @@ rm -f "$PROJECT_ROOT/.aide/cache/searched-queries-${SID}.txt" 2>/dev/null
 rm -f "$PROJECT_ROOT/.aide/cache/correction-pending-${SID}.txt" 2>/dev/null
 rm -f "$PROJECT_ROOT/.aide/cache/compact-pending-${SID}.txt" 2>/dev/null
 
+# Advisory: remind agent to save (exit 0 = compaction proceeds, but agent sees this)
+# Post-compact SessionStart also prompts saving as a backup.
+cat <<'HOOK_OUTPUT'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreCompact",
+    "additionalContext": "Context is about to be compacted. Any key decisions, technical constraints, or guidelines from this session should be saved via aide_remember. The post-compact prompt will remind you, but saving now preserves full detail."
+  }
+}
+HOOK_OUTPUT
+
 exit 0
