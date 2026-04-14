@@ -398,6 +398,55 @@ function updateGitignore(projectRoot: string): { created: string[]; skipped: str
 }
 
 /**
+ * Create/update .ignore file to hide memory files from grep (ripgrep).
+ * Controlled by config `memories.hideFromGrep` (default: true).
+ * .ignore is respected by ripgrep but does not affect git.
+ */
+function updateIgnoreFile(projectRoot: string): { created: string[]; skipped: string[] } {
+  const created: string[] = [];
+  const skipped: string[] = [];
+  const ignorePath = path.join(projectRoot, '.ignore');
+  const entry = '.aide/memories/';
+
+  let hideFromGrep = true;
+  try {
+    const configPath = path.join(projectRoot, '.aide', 'config.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.memories?.hideFromGrep === false) {
+        hideFromGrep = false;
+      }
+    }
+  } catch { /* default to true */ }
+
+  if (!hideFromGrep) {
+    if (fs.existsSync(ignorePath)) {
+      const content = fs.readFileSync(ignorePath, 'utf8');
+      if (content.includes(entry)) {
+        const updated = content.split('\n').filter(l => l.trim() !== entry).join('\n');
+        fs.writeFileSync(ignorePath, updated, 'utf8');
+        skipped.push('.ignore (memories.hideFromGrep disabled, entry removed)');
+      }
+    }
+    return { created, skipped };
+  }
+
+  let content = '';
+  if (fs.existsSync(ignorePath)) {
+    content = fs.readFileSync(ignorePath, 'utf8');
+    if (content.includes(entry)) {
+      skipped.push('.ignore (already has .aide/memories/)');
+      return { created, skipped };
+    }
+  }
+
+  const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
+  fs.writeFileSync(ignorePath, content + `${separator}${entry}\n`, 'utf8');
+  created.push('.ignore (.aide/memories/ hidden from grep)');
+  return { created, skipped };
+}
+
+/**
  * Install post-checkout git hook.
  * If the hook file exists, append the aide section wrapped in markers.
  * If not, create it with the aide section.
@@ -525,7 +574,12 @@ export async function initProject(
   result.created.push(...gitignore.created);
   result.skipped.push(...gitignore.skipped);
 
-  // 5. Install post-checkout hook
+  // 5. Create/update .ignore file (hides memories from grep/ripgrep)
+  const ignoreResult = updateIgnoreFile(resolvedRoot);
+  result.created.push(...ignoreResult.created);
+  result.skipped.push(...ignoreResult.skipped);
+
+  // 6. Install post-checkout hook
   const hook = installPostCheckoutHook(resolvedRoot, force);
   result.created.push(...hook.created);
   result.skipped.push(...hook.skipped);
@@ -638,6 +692,10 @@ export function autoUpdateIfNeeded(projectRoot: string, currentVersion: string):
         updated.push(`.gitignore (${missing.length} entries added)`);
       }
     }
+
+    // Update .ignore file (hide memories from grep based on config)
+    const ignoreResult = updateIgnoreFile(projectRoot);
+    updated.push(...ignoreResult.created);
 
     // Update git post-checkout hook (merge, uses markers to replace aide section only)
     const hookResult = installPostCheckoutHook(projectRoot, true);
