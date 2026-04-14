@@ -65,29 +65,29 @@ try {
   }
 
   // Classify memories: file-specific vs directory-scoped vs project-wide
-  // For blocking decisions, only count "narrowly scoped" memories — scoped to
-  // the file itself or its immediate parent directory. Broad ancestor scopes
-  // (e.g., src/** for src/lib/logger.ts) get soft nudge, not block.
-  const fileParent = path.dirname(relativePath); // e.g., "src/lib" for "src/lib/logger.ts"
+  // For blocking decisions, only count scopes with depth >= 2 path segments.
+  // Broad scopes like src/** (depth 1) are too generic to justify blocking —
+  // they match every file in the project. Specific scopes like src/api/**
+  // (depth 2) are worth blocking for.
+  const MIN_SCOPE_DEPTH = 2;
   let file_count = 0;
   let dir_count = 0;
   let project_count = 0;
-  let scoped_count = 0; // only narrow scopes (file + direct parent) — used for blocking
+  let scoped_count = 0; // only specific-enough scopes — used for blocking
   for (const m of matching) {
     const s = m.scope;
     if (!s || s === 'project') {
       project_count++;
     } else if (s.endsWith('/') || s.endsWith('/**') || s.endsWith('/*')) {
       dir_count++;
-      // Check if scope base matches the file's direct parent directory
       const scopeBase = s.replace(/\/?\*\*\/?$/, '').replace(/\/?\*$/, '').replace(/\/$/, '');
-      if (scopeBase === fileParent) {
+      const depth = scopeBase ? scopeBase.split('/').length : 0;
+      if (depth >= MIN_SCOPE_DEPTH) {
         scoped_count++;
       }
     } else {
       file_count++;
-      // Exact file scope — always counts as narrowly scoped
-      scoped_count++;
+      scoped_count++; // exact file scope — always specific enough
     }
   }
 
