@@ -208,8 +208,7 @@ RESULTS TABLE 1 — Per-Step Results (fill during each session):
 | C | C1 | UserPromptSubmit | soft+flag | | |
 | C | C2 | PostToolUse | passthrough+clear | | |
 | C | C4 | Stop | block | | |
-| D | D2 | PreCompact | block (exit 2) | | |
-| D | D4 | PreCompact | allow (exit 0) | | |
+| D | D2 | PreCompact+SessionStart | cleanup + post-compact prompt | | |
 | D | D5 | Read | block (re-recall) | | |
 | E | E1 | SessionStart | inject | | |
 | F | F2 | Read | soft (<10 mems) | | |
@@ -233,7 +232,7 @@ RESULTS TABLE 3 — Remember Quality (fill for each aide_remember call):
 |---------|------|---------|---------------|-------|---------------|-------|---------------|------------------------|-----------|----------------------|-------|
 | C | C2 | Correction | | | Y/N | | Y/N | Y/N | Y/N | E2 | |
 | C | C4 | Stop prompt | | | Y/N | | Y/N | Y/N | Y/N | E3 | |
-| D | D3 | PreCompact | | | Y/N | | Y/N | Y/N | Y/N (post-compact) | E4 | |
+| D | D3 | Post-compact SessionStart | | | Y/N | | Y/N | Y/N | Y/N (post-compact) | E5 | |
 
 RESULTS TABLE 4 — Aggregate Metrics:
 
@@ -266,7 +265,7 @@ RESULTS TABLE 4 — Aggregate Metrics:
 | Memories stored in C/D that were recalled in E | / |
 | Correction from C2 appears in E2 recall? | Y/N |
 | Stop memory from C4 found via E3 aide_memories? | Y/N |
-| Compact memory from D3 found via E4 aide_memories? | Y/N |
+| Compact memory from D3 found via E5 aide_memories? | Y/N |
 | **Hook Metrics** | |
 | Hook latency (Read) | ~ms |
 | Hook latency (Search preview) | ~ms |
@@ -909,19 +908,19 @@ _Same project. Tests correction detection, flag lifecycle, remember quality, sto
 | C7 | Verify via aide_memories | | All memories from C2, C5, C6 exist | remember_count |
 
 **Session D: Compact + Clear + Re-recall**
-_Same project. Tests PreCompact two-phase, /clear re-blocking, tracking lifecycle._
+_Same project. Tests post-compact save, /clear re-blocking, tracking lifecycle._
+_Note: PreCompact is cleanup-only (exit 0). Cannot force agent tool calls — Claude Code limitation. Save prompting happens via post-compact SessionStart injection._
 
 | Step | Action | Hook Expected | Recall/Remember Check | Metric |
 |------|--------|---------------|----------------------|--------|
 | D1 | Read file, recall, work normally | Read → block → soft | | baseline |
-| D2 | Run /compact | PreCompact Phase 1 → **block** (exit 2) | compact-pending flag created | precompact_phase1 |
-| D3 | Agent calls aide_remember (prompted by block) | | Memory stored with correct layer/scope | remember_from_compact |
-| D4 | Compaction retriggers | PreCompact Phase 2 → **allow** (exit 0) | Flag deleted, all tracking cleared | precompact_phase2 |
-| D5 | Read same file as D1 | Read → **block** again (tracking was cleared) | | post_compact_rerecall |
-| D6 | Verify D3 memory persists post-compaction | aide_memories | Memory from D3 still exists | remember_survives_compact |
-| D7 | Recall file, re-read (soft), then run /clear | SessionStart fires | All tracking for current session cleared | clear_resets_tracking |
-| D8 | Read same file again after /clear | Read → **block** (must re-recall) | | post_clear_rerecall |
-| D9 | Recall file again, re-read (soft). Close terminal, resume session. | SessionStart(source:resume) fires | Tracking files PRESERVED. Re-read is still **soft** (not re-blocked). | resume_preserves_tracking |
+| D2 | Run /compact | PreCompact clears tracking (exit 0). Compaction proceeds. SessionStart(source:compact) fires post-compact. | Agent sees: "Context was just compacted. Review summary... Call aide_remember for anything important." | post_compact_prompt |
+| D3 | Agent calls aide_remember (prompted by post-compact SessionStart) | | Memory stored with correct layer/scope from compacted summary | remember_from_compact |
+| D4 | Read same file as D1 | Read → **block** again (tracking was cleared) | | post_compact_rerecall |
+| D5 | Verify D3 memory persists post-compaction | aide_memories | Memory from D3 still exists | remember_survives_compact |
+| D6 | Recall file, re-read (soft), then run /clear | SessionStart(source:clear) fires | All tracking for current session cleared | clear_resets_tracking |
+| D7 | Read same file again after /clear | Read → **block** (must re-recall) | | post_clear_rerecall |
+| D8 | Recall file again, re-read (soft). Close terminal, resume session. | SessionStart(source:resume) fires | Tracking files PRESERVED. Re-read is still **soft** (not re-blocked). | resume_preserves_tracking |
 
 **Session E: Persistence + SessionStart** (MUST be new session on same project)
 _Verifies memories from Sessions C and D persisted. Tests remember→recall loop, stale cleanup._
@@ -1182,6 +1181,7 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - **Action**: After validation sessions, do a dedicated UX exploration session — collect all hook output samples (block, soft, silent, stop, precompact) from both test and dev sessions, compare labels/rendering, identify patterns, and determine what can be fixed vs what's a Claude Code platform limitation
 - **Config mapping to Cursor**: All settings (memories.hideFromGrep, telemetry, hook intensity) should map to Cursor's equivalent config system. Audit all .aide/config.json keys and ensure they work across both Claude Code and Cursor environments
 - **Audit hook usage patterns**: Are blocking hooks, flag files, two-phase patterns, and multi-hook coordination (blocker + tracker) the correct/intended way to use Claude Code hooks? Or are there simpler/better patterns? Research Claude Code hook best practices, check community examples, file questions with Anthropic if needed
+- **Cursor compaction behavior**: Cursor may handle compaction differently — investigate what context survives compaction in Cursor, whether Cursor has equivalent hooks, and whether the post-compact save prompt works there. Cursor's compacted summaries may retain less/more context than Claude Code's, affecting whether aide_remember captures useful info post-compact
 
 **P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation
 - Same 5 scenarios, same runbook, run in Cursor after Claude Code validation passes
