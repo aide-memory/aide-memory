@@ -1356,7 +1356,7 @@ Configurable settings (identified during validation):
 | `hooks.edit` | `"block"` | Edit/Write hook: "block", "soft", or "off" |
 | `hooks.search` | `"soft"` | Grep/Glob hook: "block", "soft", or "off" |
 | `hooks.stop` | `"block"` | Stop hook: "block", "soft", or "off" |
-| `hooks.precompact` | `"block"` | PreCompact hook: "block", "soft", or "off" |
+| `hooks.precompact` | `"cleanup"` | PreCompact hook: "cleanup" (clear tracking, allow compact), "prompt" (block first time — user prompts agent to save, /compact again to proceed), or "off" |
 | `hooks.correction` | `"soft"` | UserPromptSubmit correction detection: "soft" or "off" |
 | `hooks.sessionStart` | `"inject"` | SessionStart: "inject", or "off" |
 | `recall.limit` | `20` | Max memories returned per aide_recall |
