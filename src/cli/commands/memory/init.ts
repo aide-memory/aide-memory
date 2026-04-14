@@ -6,8 +6,20 @@ import chalk from 'chalk';
 import { initProject, type InitOptions } from '../../../memory/init';
 import { brand } from './utils';
 
-export function runInit(options: { scan?: boolean; updateRules?: boolean; force?: boolean }): void {
+export function runInit(options: { scan?: boolean; updateRules?: boolean; force?: boolean; reset?: boolean }): void {
   const projectRoot = process.cwd();
+
+  // Handle --reset: reset config to factory defaults, then run normal init
+  if (options.reset) {
+    const configPath = require('path').join(projectRoot, '.aide', 'config.json');
+    const fs = require('fs');
+    if (fs.existsSync(configPath)) {
+      fs.unlinkSync(configPath);
+      console.log(brand('Config reset to factory defaults.'));
+    }
+    // Also reset hooks and rules by running with force
+    options.force = true;
+  }
 
   const initOptions: InitOptions = {
     scan: options.scan,

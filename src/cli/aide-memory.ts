@@ -178,8 +178,9 @@ export function createProgram(): Command {
     .description('Initialize a new .aide/ project')
     .option('--scan', 'Run pre-train scan to generate initial memories')
     .option('--update-rules', 'Only refresh rules files (idempotent)')
-    .option('--force', 'Overwrite existing files')
-    .action((options: { scan?: boolean; updateRules?: boolean; force?: boolean }) => {
+    .option('--force', 'Update all config to current version (merges, preserves user settings)')
+    .option('--reset', 'Reset config to factory defaults (does not delete memories)')
+    .action((options: { scan?: boolean; updateRules?: boolean; force?: boolean; reset?: boolean }) => {
       runInit(options);
     });
 
