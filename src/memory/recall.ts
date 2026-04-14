@@ -144,7 +144,8 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
       const rel = path.relative(store.getProjectRoot()!, p);
       // path.relative() strips trailing slashes — preserve them for directory query detection
       const hadTrailingSlash = p.endsWith('/');
-      const result = rel || p;
+      // path.relative() returns "" when query equals project root — use "." not the absolute path
+      const result = rel !== '' ? rel : '.';
       return hadTrailingSlash && !result.endsWith('/') ? result + '/' : result;
     }
     return p;

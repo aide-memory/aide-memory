@@ -93,7 +93,8 @@ function generateHookConfig(packageRoot: string): object {
  */
 function writeHookConfig(
   projectRoot: string,
-  force: boolean
+  force: boolean,
+  stampVersion?: string
 ): { created: string[]; skipped: string[] } {
   const created: string[] = [];
   const skipped: string[] = [];
@@ -117,27 +118,30 @@ function writeHookConfig(
         return { created, skipped };
       }
       // No hooks yet — add them
-      const merged = { ...existing, ...hookConfig };
+      const merged = { ...existing, ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
       fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
       created.push('.claude/settings.json (hooks added)');
     } catch {
       // Malformed JSON — overwrite
-      fs.writeFileSync(settingsPath, JSON.stringify(hookConfig, null, 2) + '\n', 'utf8');
+      const stamped = { ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
+      fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
       created.push('.claude/settings.json');
     }
   } else if (force && fs.existsSync(settingsPath)) {
     // Force: merge hooks into existing settings, preserving user's other keys
     try {
       const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      const merged = { ...existing, ...hookConfig };
+      const merged = { ...existing, ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
       fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
       created.push('.claude/settings.json (hooks force-updated)');
     } catch {
-      fs.writeFileSync(settingsPath, JSON.stringify(hookConfig, null, 2) + '\n', 'utf8');
+      const stamped = { ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
+      fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
       created.push('.claude/settings.json');
     }
   } else {
-    fs.writeFileSync(settingsPath, JSON.stringify(hookConfig, null, 2) + '\n', 'utf8');
+    const stamped = { ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
+    fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
     created.push('.claude/settings.json');
   }
 
@@ -495,8 +499,14 @@ export async function initProject(
   result.created.push(...rules.created);
   result.skipped.push(...rules.skipped);
 
-  // 2.5. Install hook configuration (.claude/settings.json)
-  const hooks = writeHookConfig(resolvedRoot, force);
+  // 2.5. Install hook configuration (.claude/settings.json) with version stamp
+  const packageRoot = getPackageRoot();
+  let pkgVersion: string | undefined;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
+    pkgVersion = pkg.version;
+  } catch { /* non-fatal */ }
+  const hooks = writeHookConfig(resolvedRoot, force, pkgVersion);
   result.created.push(...hooks.created);
   result.skipped.push(...hooks.skipped);
 
@@ -607,6 +617,26 @@ export function autoUpdateIfNeeded(projectRoot: string, currentVersion: string):
     if (fs.existsSync(claudeRulesPath)) {
       const rulesResult = writeRulesFiles(projectRoot, '', true);
       updated.push(...rulesResult.created);
+    }
+
+    // Ensure directory structure exists (new version may add new directories)
+    for (const dir of AIDE_DIRS) {
+      const fullPath = path.join(projectRoot, dir);
+      if (!fs.existsSync(fullPath)) {
+        fs.mkdirSync(fullPath, { recursive: true });
+        updated.push(`${dir}/ (created)`);
+      }
+    }
+
+    // Ensure .gitignore entries exist
+    const gitignorePath = path.join(projectRoot, '.gitignore');
+    if (fs.existsSync(gitignorePath)) {
+      const content = fs.readFileSync(gitignorePath, 'utf8');
+      const missing = GITIGNORE_ENTRIES.filter(e => !content.includes(e));
+      if (missing.length > 0) {
+        fs.appendFileSync(gitignorePath, '\n' + missing.join('\n') + '\n', 'utf8');
+        updated.push(`.gitignore (${missing.length} entries added)`);
+      }
     }
   } catch {
     // Auto-update failure is non-fatal — server continues normally

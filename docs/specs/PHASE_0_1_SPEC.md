@@ -914,6 +914,21 @@ _First-time user experience. Nothing should block, nudge, or error._
 | G5 | Session X runs /clear → only X's tracking cleared, Y's intact | clear_isolation |
 | G6 | Session Y still gets soft (not block) on already-recalled files | y_unaffected |
 
+**Session H: Auto-Update on Server Start** (separate project, simulates version upgrade)
+_Verifies that MCP server start auto-updates hooks, MCP config, rules, directories, and .gitignore._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| H1 | Init project with aide-memory, verify _aideMemoryVersion in .claude/settings.json | Version stamp matches current package version | version_stamped |
+| H2 | Manually edit settings.json: set _aideMemoryVersion to "0.0.1", add "customSetting": true | File has old version + custom key | setup |
+| H3 | Manually delete a .aide/ subdirectory (e.g., .aide/memories/guidelines/) | Directory missing | setup |
+| H4 | Start MCP server (start new claude session or restart) | autoUpdateIfNeeded fires | trigger |
+| H5 | Check .claude/settings.json | _aideMemoryVersion updated, hooks updated, customSetting PRESERVED | auto_update_hooks |
+| H6 | Check .aide/memories/guidelines/ | Directory re-created | auto_update_dirs |
+| H7 | Check .mcp.json | aide-memory server config present | auto_update_mcp |
+| H8 | Check .gitignore | All required entries present | auto_update_gitignore |
+| H9 | Verify no user data was lost (memories, other settings) | Everything preserved | no_data_loss |
+
 **--- USER SCENARIOS (U1-U3): Does the system actually help? ---**
 
 Anti-false-positive design: conventions must be (a) COUNTER to LLM defaults and (b) NOT discoverable from existing code.
