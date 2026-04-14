@@ -1103,8 +1103,8 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - Decision: PASS (ship) or FAIL (fix first)
 
 **P1.18: Hook UX/UI Readability (fast follow after validation)**
-- **Labels are generally correct**: block = "blocking error", soft = "additional context". Works in both normal and debug mode.
-- **Expanded view (ctrl+o) may show misleading labels**: When expanding a collapsed tool call sequence (block → recall → re-read), the blocking error from the first attempt may display alongside the successful second read, making it look like the second read was also blocked. This is a Claude Code UI rendering issue in collapsed/expanded views.
+- **Inconsistent labels across sessions**: In some sessions, soft hooks show correctly as "additional context." In others (observed in /tmp/aide-val test session), soft hooks show as "returned blocking error" even though the tool proceeded. Root cause unknown — may be related to collapsed tool call sequences (block → recall → retry) where the block label persists. Needs further investigation.
+- **Known limitation**: Claude Code may display "blocking error" for hook output that didn't actually block. The debug log is the source of truth — `permissionDecision: deny` = blocked, `additionalContext` = soft.
 - **Stop hook always shows "error"**: Stop hook intentionally blocks every turn to prompt aide_remember. Claude Code displays this as "Stop hook blocking error" which sounds like something broke. Consider: can the Stop hook use a different output format that Claude Code labels less alarmingly?
 - **Soft nudge on already-recalled files**: In normal mode shows as "additional context" (correct label). Could make silent (exit 0, no output) to reduce noise — the agent already has recalled context in conversation.
 - Investigate: can we improve Stop hook JSON format so Claude Code doesn't say "error"?
