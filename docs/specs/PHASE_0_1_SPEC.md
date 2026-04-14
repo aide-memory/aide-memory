@@ -982,6 +982,18 @@ _Verifies that MCP server start auto-updates hooks, MCP config, rules, directori
 | H8 | Check .gitignore | All required entries present | auto_update_gitignore |
 | H9 | Verify no user data was lost (memories, other settings) | Everything preserved | no_data_loss |
 
+**Session I: .ignore Hides Memories from Grep** (separate project or fresh init)
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| I1 | `aide-memory init` on project | `.ignore` file created with `.aide/memories/` entry | ignore_created |
+| I2 | Store a memory with keyword "foobar" | Memory JSON saved to `.aide/memories/` | setup |
+| I3 | Grep for "foobar" | Returns NO results from `.aide/memories/` (only code files) | grep_excluded |
+| I4 | `aide-memory config memories.hideFromGrep false` | Config updated | config_toggle |
+| I5 | `aide-memory init --force` (re-runs updateIgnoreFile) | `.ignore` entry removed | ignore_updated |
+| I6 | Grep for "foobar" | NOW returns results from `.aide/memories/` JSON files | grep_included |
+| I7 | `aide-memory config memories.hideFromGrep true` + `aide-memory init --force` | `.ignore` entry restored | restore_default |
+
 **--- USER SCENARIOS (U1-U3): Does the system actually help? ---**
 
 Anti-false-positive design: conventions must be (a) COUNTER to LLM defaults and (b) NOT discoverable from existing code.
