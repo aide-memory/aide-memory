@@ -54,9 +54,9 @@ if [ -f "$SEARCHED_FILE" ]; then
   fi
 fi
 
-# Write normalized query to tracking file
-mkdir -p "$PROJECT_ROOT/.aide/cache" 2>/dev/null
-echo "$NORMALIZED_QUERY" >> "$SEARCHED_FILE"
+# NOTE: Do NOT write to tracking file here. Tracking is written by
+# track-search.sh (PostToolUse:aide_search) so grep keeps blocking
+# until aide_search is actually called. Same pattern as read hooks.
 
 if [ "$ALREADY_SEARCHED" = "true" ]; then
   # Already searched in this session — soft nudge only
