@@ -101,6 +101,10 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 17. **Stop hook always blocks** — intentional (block until reflect pattern). UX concern logged as P1.18.
 18. **Minimum scope depth = 2** — src/** too broad for blocking, src/api/** specific enough. Configurable later.
 19. **Session cleanup rules** — start/resume: don't touch. clear/compact: clear this session only.
+20. **Scope depth replaces parent-only check** — first iteration used parent-directory match (N=1). Replaced with minimum depth (≥2 segments) which is more general and directly answers "is this scope specific enough?"
+21. **23 configurable settings identified** — hooks, recall, injection, search, auto-update, embeddings. Documented in Phase 2 item 5 with project-type presets (monorepo, small, team, security-sensitive).
+22. **Validation docs consolidated** — deleted 2 stale runbooks (-2446 lines), extracted 5 missing sessions (J-N) into spec.
+23. **P1.18 UX exploration scope expanded** — includes hook usage pattern audit (are blocking/flag-file patterns correct practice?), config-to-Cursor mapping, and all UI label issues.
 
 ## Pivots and Observations
 
@@ -109,5 +113,8 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 3. **Claude Code UI labels** — soft hooks may show as "returned blocking error" in collapsed/expanded view. Debug log is source of truth. Added to P1.18.
 4. **Stop hook fires every turn** — confirmed intentional, but "error" label is confusing. P1.18.
 5. **Agent proactively recalled directory** — directory trigger (A4) didn't fire because agent recalled src/api/ on first call
-6. **Broad scope blocking was major friction** — src/** caused useless blocks on src/lib/logger.ts returning only generic preferences. Fixed with depth-based rule.
+6. **Broad scope blocking was major friction** — src/** caused useless blocks on src/lib/logger.ts returning only generic preferences. Fixed with depth-based rule (MIN_SCOPE_DEPTH=2).
 7. **Stale validation docs consolidated** — INTEGRATION_TESTING.md and RUN_VALIDATION.md deleted (-2446 lines). Gaps extracted into Sessions J-N.
+8. **Preview message misleading** — "2 from src/lib/" implied lib-specific memories but they were src/** broad scopes. Preview should show actual scope. Follow-up fix.
+9. **Agent bypassed search hook** — used Read instead of Grep for "search the codebase" prompt. Search hook only fires on Grep/Glob tools, not agent's choice to read files directly.
+10. **Correction quality excellent** — memory id 36 stored with correct layer (guidelines), scope (src/api/**), specific content, meaningful why field. Best result of validation.

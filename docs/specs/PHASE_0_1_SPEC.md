@@ -1181,6 +1181,7 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - Goal: Stop hook should not look like an error, soft nudges on re-reads could be silent
 - **Action**: After validation sessions, do a dedicated UX exploration session — collect all hook output samples (block, soft, silent, stop, precompact) from both test and dev sessions, compare labels/rendering, identify patterns, and determine what can be fixed vs what's a Claude Code platform limitation
 - **Config mapping to Cursor**: All settings (memories.hideFromGrep, telemetry, hook intensity) should map to Cursor's equivalent config system. Audit all .aide/config.json keys and ensure they work across both Claude Code and Cursor environments
+- **Audit hook usage patterns**: Are blocking hooks, flag files, two-phase patterns, and multi-hook coordination (blocker + tracker) the correct/intended way to use Claude Code hooks? Or are there simpler/better patterns? Research Claude Code hook best practices, check community examples, file questions with Anthropic if needed
 
 **P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation
 - Same 5 scenarios, same runbook, run in Cursor after Claude Code validation passes
