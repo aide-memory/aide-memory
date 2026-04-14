@@ -49,9 +49,31 @@ Date: 2026-04-14
 - Grep returned .aide/memories/ JSON files mixed with code → led to .ignore implementation
 - Agent sometimes uses Read instead of Grep for search tasks — search hook doesn't fire in those cases
 
-## Session C: Correction + Remember (in progress)
+## Session C: Correction + Remember
 
-_Pending — correction prompt about structured logger next_
+Prompt: "No, always add request logging with the structured logger from src/lib/logger.ts — you should have included it in the endpoint you wrote"
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| C1 | User types correction | UserPromptSubmit soft + flag | Agent immediately acted on correction | PASS |
+| C2 | aide_remember called | Memory stored, flag cleared | Memory id 36 stored, no correction-pending flag | PASS |
+| C3 | Verify memory quality | Correct layer/scope/content | layer=guidelines, scope=src/api/**, content="All API endpoints must include request logging using structured logger" | PASS |
+| C4 | Stop hook | No double-store | Agent said "Already persisted the guideline (memory id 36)" | PASS |
+
+### Remember Quality (C2-C3)
+
+| Field | Value | Correct? |
+|-------|-------|----------|
+| Layer | guidelines | Yes (not "technical" or "preferences") |
+| Scope | src/api/** | Yes (not project-wide) |
+| What | "All API endpoints must include request logging using the structured logger from src/lib/logger.ts" | Yes — specific, actionable |
+| Why | "User correction after getUsers endpoint was written without logging — structured logger is the project standard for request observability" | Yes — captures context |
+| Tags | ["api-contract"] | Reasonable |
+
+### Agent Behavior
+- Applied the fix immediately (added import + log.info to routes.ts)
+- Read src/lib/logger.ts first (hook blocked for src/lib/, recalled, then read)
+- Stop hook: correctly said nothing new to store
 
 ## Pivots and Feedback During Validation
 
