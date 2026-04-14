@@ -893,6 +893,7 @@ _Same project. Tests search hooks, 3 search modes, embedding lifecycle._
 | B5 | Grep "auth" again | Search → **soft** | | tracking_works |
 | B6 | Grep "zzz_nonexistent" (no mems match) | Search → **silent** (no hook output) | | silent_on_no_matches |
 | B7 | aide_update a memory's content, aide_search for new content | | Embedding regenerated, semantic finds updated text | embedding_update |
+| B8 | aide_search for the OLD content text | | Old phrasing no longer matches (or ranks much lower) | negative_assertion |
 
 **Session C: Correction + Remember + Stop**
 _Same project. Tests correction detection, flag lifecycle, remember quality, stop enforcement._
@@ -993,6 +994,62 @@ _Verifies that MCP server start auto-updates hooks, MCP config, rules, directori
 | I5 | `aide-memory init --force` (re-runs updateIgnoreFile) | `.ignore` entry removed | ignore_updated |
 | I6 | Grep for "foobar" | NOW returns results from `.aide/memories/` JSON files | grep_included |
 | I7 | `aide-memory config memories.hideFromGrep true` + `aide-memory init --force` | `.ignore` entry restored | restore_default |
+
+**Session J: MCP Server Unavailable — Graceful Degradation**
+_Tests what happens when the MCP server is down. Hooks should not crash, pending memories should be saved._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| J1 | Init project, seed memories, verify working | aide_recall works normally | setup |
+| J2 | Rename `.mcp.json` to `.mcp.json.bak` (disables MCP server) | MCP server stops | setup |
+| J3 | Start new session, read a file with scoped memories | Read hook blocks (hook scripts don't need MCP). Agent tries aide_recall → fails (MCP unavailable) | mcp_unavailable_detected |
+| J4 | Agent should notify user and/or write to `.aide/pending-memories.jsonl` | Graceful fallback, no crash | fallback_works |
+| J5 | Restore `.mcp.json` from backup | MCP server available again | restore |
+| J6 | Verify pending memories can be imported | aide_recall works, pending memories processed | recovery |
+
+**Session K: Plan Persistence Across Sessions** (2 sessions)
+_Tests that organic plans (not pre-seeded) are stored and recalled in a new session._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| K1 | Session 1: "Plan a refactor of src/api/ to add input validation, error handling, and rate limiting. Don't implement yet." | Agent creates a multi-step plan | plan_created |
+| K2 | Agent should call aide_remember to store the plan (prompted by Stop hook) | Plan stored with scope=src/api/**, layer=area_context | plan_stored |
+| K3 | Verify via aide_memories | Plan memory exists with correct layer/scope | plan_persisted |
+| K4 | Session 2 (new session): "Continue the API refactor we planned" | Agent recalls the plan without being told what it was | plan_recalled |
+| K5 | Agent picks up at the right step (not starting over) | Shows awareness of prior plan | plan_continuity |
+
+**Session L: Multiple Corrections in One Session** (2 sessions)
+_Tests that 3+ corrections stored rapidly in one session are all recalled in the next._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| L1 | Session 1: Ask agent to write a utility module | Agent writes code | setup |
+| L2 | Correct #1: "Use arrow functions, not function declarations" | aide_remember called, stored | correction_1_stored |
+| L3 | Correct #2: "Always add JSDoc with @param and @returns" | aide_remember called, stored | correction_2_stored |
+| L4 | Correct #3: "Export as named exports, never default exports" | aide_remember called, stored | correction_3_stored |
+| L5 | Verify all 3 via aide_memories | 3 separate memories exist | all_3_persisted |
+| L6 | Session 2 (new session): "Write another utility module in src/utils/" | Agent should follow ALL 3 corrections without being told | all_3_recalled |
+| L7 | Check: arrow functions? JSDoc? Named exports? | All 3 conventions followed | conventions_followed (/3) |
+
+**Session M: Scope Exclusion Precision**
+_Tests that memories scoped to OTHER directories do NOT leak into the current scope._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| M1 | aide_recall for src/components/Button.tsx | Returns ONLY memories scoped to src/components/** or project-wide | scoped_only |
+| M2 | Verify: NO auth memories (src/auth/**) in results | Auth memories excluded | no_leak_auth |
+| M3 | Verify: NO api memories (src/api/**) in results | API memories excluded | no_leak_api |
+| M4 | aide_recall for src/auth/middleware.ts | Returns ONLY auth-scoped + project-wide | scoped_only |
+| M5 | Verify: NO api or component memories in results | Other scopes excluded | no_cross_leak |
+
+**Session N: SessionStart Injection Verification**
+_Tests that the agent can demonstrate awareness of injected preferences._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| N1 | Start new session on test project | SessionStart injects preferences + guidelines | injection_fires |
+| N2 | Ask: "What coding conventions should I follow in this project?" | Agent references injected preferences (explain first, <30 lines, no TODOs, etc.) | agent_aware |
+| N3 | At least 2 specific conventions mentioned | Agent shows awareness, not generic advice | specificity |
 
 **--- USER SCENARIOS (U1-U3): Does the system actually help? ---**
 
