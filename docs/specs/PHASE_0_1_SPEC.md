@@ -1343,10 +1343,30 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 - Before/after comparison demo — same task without aide-memory (agent makes mistake) vs with (gets it right)
 
 **5. Configurable hook intensity (Phase 2 pro feature):**
-- Users control: auto-injection volume at SessionStart, blocking vs soft per hook type, which hooks are active
 - Config via `aide-memory config` or `.aide/config.json`
-- Default: all hooks active, blocking where designed (free tier)
-- Pro: fine-grained control over injection volume, blocking thresholds, and hook selection
+- Default: all hooks active, current blocking/soft rules (free tier)
+- Pro: fine-grained control over every aspect of hook behavior
+
+Configurable settings (identified during validation):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `hooks.read` | `"block"` | Read hook: "block", "soft", or "off" |
+| `hooks.edit` | `"block"` | Edit/Write hook: "block", "soft", or "off" |
+| `hooks.search` | `"soft"` | Grep/Glob hook: "block", "soft", or "off" |
+| `hooks.stop` | `"block"` | Stop hook: "block", "soft", or "off" |
+| `hooks.precompact` | `"block"` | PreCompact hook: "block", "soft", or "off" |
+| `hooks.correction` | `"soft"` | UserPromptSubmit correction detection: "soft" or "off" |
+| `hooks.sessionStart` | `"inject"` | SessionStart: "inject", or "off" |
+| `recall.limit` | `20` | Max memories returned per aide_recall |
+| `recall.minScopeDepth` | `2` | Minimum scope path depth to trigger blocking (1=src/**, 2=src/api/**) |
+| `recall.roundRobinMinLimit` | `5` | Minimum limit before round-robin kicks in |
+| `injection.maxPreferences` | `15` | Max preferences injected at SessionStart |
+| `injection.maxTokens` | `300` | Approximate token cap for SessionStart injection |
+| `memories.hideFromGrep` | `true` | Hide .aide/memories/ from grep via .ignore |
+| `memories.softening.threshold` | `10` | Below this total memory count, all hooks are soft |
+
+All settings should also map to Cursor's equivalent config system (see P1.18).
 
 **6. Automatic memory cleanup (Phase 2 pro feature):**
 - Detect and surface stale/conflicting/duplicate memories
