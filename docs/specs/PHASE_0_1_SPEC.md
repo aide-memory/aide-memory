@@ -828,6 +828,59 @@ _One session, same test project with seeded memories. Tests read/edit/dir hooks,
 | A11 | User types normal message (not a correction) | UserPromptSubmit → **does NOT block** (soft or silent) | User input accepted normally | userprompt_never_blocks |
 | A12 | Read a file that doesn't exist (e.g. src/api/nonexistent.ts) | Read → **silent** (no hook output, no error) | | silent_nonexistent_file |
 
+**Session A2: Blocking Permutations**
+_Same test project as Session A, fresh session (tracking cleared). Exhaustively tests every combination of block/soft/silent for reads, edits, and directory triggers. Covers the state matrix below._
+
+**Block/Soft State Matrix — every row maps to a specific step:**
+
+| State | Read | Edit | Search | Step(s) |
+|-------|------|------|--------|---------|
+| Never recalled | **BLOCK** | **BLOCK** | **BLOCK** (if scoped matches) | A2.1, A2.5, A2.9 |
+| File recalled | soft | soft | N/A | A2.3, A2.6 |
+| Directory recalled | soft (all files under dir) | soft (all files under dir) | N/A | A2.4, A2.7, A2.8 |
+| Only project-wide mems | soft | soft | N/A | A2.10, A2.11 |
+| < 10 total mems | soft | soft | soft | (covered by Session F) |
+| 0 mems for path | silent | silent | silent | A2.12, A2.13 |
+| 0 mems total | silent | silent | silent | (covered by Session F0) |
+
+**Prerequisite:** Seed project with scoped memories for `src/auth/middleware.ts`, `src/auth/types.ts`, `src/auth/` (directory), `src/components/Button.tsx`, and project-wide memories only (no scoped) for `src/utils/helpers.ts`. Ensure `src/auth/` has at least 3 files. Ensure `tests/setup.ts` and `lib/constants.ts` have zero memories.
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| | **--- Directory Trigger Isolation ---** | | | |
+| A2.1 | Read `src/auth/middleware.ts` (1st file in src/auth/, never recalled) | Read → **block** | | hook_behavior, file_block |
+| A2.2 | Agent calls aide_recall for `src/auth/middleware.ts` (file only) | Track → passthrough | Tracking file shows `file\|src/auth/middleware.ts`. Directory `src/auth/` is NOT tracked yet. | tracking_format, file_only_recall |
+| A2.3 | Re-read `src/auth/middleware.ts` | Read → **soft** (file recalled) | | file_recall_soft |
+| A2.4 | Read `src/auth/types.ts` (2nd file in src/auth/, directory NOT recalled) | Read → **block** (directory trigger: 2nd file in same dir) | | dir_trigger_block |
+| A2.5 | Agent calls aide_recall for `src/auth/` (directory) | Track → passthrough | Tracking file shows `dir\|src/auth/`. Memories from A2.2 excluded (dedup). | dir_recall, dedup_count |
+| A2.6 | Re-read `src/auth/types.ts` | Read → **soft** (directory recalled covers all files under dir) | | dir_recall_covers_files |
+| A2.7 | Read `src/auth/index.ts` (3rd file, never individually read) | Read → **soft** (directory already recalled) | | dir_recall_covers_new_files |
+| A2.8 | Edit `src/auth/index.ts` (never individually recalled, but dir recalled) | Edit → **soft** (directory recall covers edits too) | | dir_recall_covers_edits |
+| | **--- Edit Blocking Without Prior Read ---** | | | |
+| A2.9 | Edit `src/components/Button.tsx` (never read or recalled in session) | Edit → **block** | | edit_block_no_prior_read |
+| A2.10 | Agent calls aide_recall for `src/components/Button.tsx` | Track → passthrough | Scoped memories returned | edit_recall |
+| A2.11 | Re-attempt edit `src/components/Button.tsx` | Edit → **soft** (file recalled) | | edit_soft_after_recall |
+| | **--- Project-Wide Only (no scoped mems for path) ---** | | | |
+| A2.12 | Read `src/utils/helpers.ts` (has only project-wide mems, no scoped) | Read → **soft** (not block — scoped-only blocking) | | scoped_only_blocking |
+| A2.13 | Edit `src/utils/helpers.ts` | Edit → **soft** (same rationale) | | scoped_only_blocking_edit |
+| | **--- Zero Memories for Path ---** | | | |
+| A2.14 | Read `tests/setup.ts` (zero memories of any kind for this path) | Read → **silent** (no hook output) | | silent_zero_mems_read |
+| A2.15 | Edit `tests/setup.ts` | Edit → **silent** (no hook output) | | silent_zero_mems_edit |
+| A2.16 | Grep "setup" (no scoped mems match the keyword) | Search → **silent** (no hook output) | | silent_zero_mems_search |
+| | **--- Search Blocking ---** | | | |
+| A2.17 | Grep "auth" (scoped mems match, never searched in session) | Search → **block** | | search_block |
+| A2.18 | Agent calls aide_search keyword:"auth" | | Results returned | search_recall |
+| A2.19 | Grep "auth" again | Search → **soft** (already searched) | | search_soft_after_recall |
+| | **--- Cross-Check: File vs Directory Tracking ---** | | | |
+| A2.20 | Inspect tracking file | | Verify ALL entries: `file\|src/auth/middleware.ts`, `dir\|src/auth/`, `file\|src/components/Button.tsx`, `file\|src/utils/helpers.ts`. No entry for `tests/setup.ts` (silent paths not tracked). No entry for `lib/constants.ts`. IDs deduped across file + dir recalls. | tracking_completeness, path_resolution |
+
+**Key behaviors validated by A2 that Session A does not cover:**
+1. **Directory trigger fires on 2nd file, not 1st** — A2.1 blocks as file, A2.4 blocks as directory trigger.
+2. **Directory recall covers ALL files under that dir** — A2.7 and A2.8 are soft even though those files were never individually recalled.
+3. **Edit blocks independently of read** — A2.9 blocks on an edit even though no read was attempted.
+4. **Silent paths leave no tracking footprint** — A2.20 confirms tests/setup.ts is absent from tracking.
+5. **Project-wide-only paths are soft, not block** — A2.12 and A2.13 confirm scoped-only blocking applies to edits too.
+
 **Session B: Search Flow**
 _Same project. Tests search hooks, 3 search modes, embedding lifecycle._
 
@@ -1048,6 +1101,16 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - Also use: `aide-memory stats` for aggregate counts
 - Results go to: `docs/validation/PHASE_1_RESULTS.md`
 - Decision: PASS (ship) or FAIL (fix first)
+
+**P1.18: Hook UX/UI Readability (fast follow after validation)**
+- Claude Code UI labels ALL hook output (both blocking and soft) as "returned blocking error" — confusing for users
+- Stop hook shows as "stop hook error" even though it's intentional behavior, not an error
+- Soft nudges on already-recalled files show confusing error labels (consider making silent instead)
+- Investigate: does debug mode vs normal mode display differently? User reports seeing "blocking error" in debug mode
+- Investigate: is there a way to suppress hook output display for soft/silent hooks?
+- Investigate: can we improve the JSON output format so Claude Code labels it better?
+- File Claude Code issue at github.com/anthropics/claude-code/issues if UI labeling is a platform bug
+- Goal: blocks should look like blocks, soft context should be invisible or subtle, stop prompts should not say "error"
 
 **P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation
 - Same 5 scenarios, same runbook, run in Cursor after Claude Code validation passes
