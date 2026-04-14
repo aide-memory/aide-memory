@@ -6,6 +6,8 @@ import os from 'os';
 
 // All hook scripts live here
 const HOOKS_DIR = path.resolve(__dirname, '..', '..', '..', 'scripts', 'hooks');
+// Project root — hooks fall back to SCRIPT_DIR/../.. when no cwd in input
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 /**
  * Helper: run a hook script with JSON piped to stdin.
@@ -326,65 +328,104 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
 
 // ─── PreCompact (pre-compact-save.sh) ───────────────────────────────────────
 
-describe('PreCompact hook (pre-compact-save.sh)', () => {
-  it('outputs blocking prompt with save instructions', () => {
+describe('PreCompact hook (pre-compact-save.sh) — two-phase blocking', () => {
+  it('Phase 1: blocks compaction (exit 2) when no flag exists', () => {
+    // Clean up any stale flag
+    const flagPath = path.join(REPO_ROOT, '.aide', 'cache', 'compact-pending-test-compact-123.txt');
+    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+
     const result = runHook('pre-compact-save.sh', {
-      session_id: 'test-session-123',
-      transcript_path: '/tmp/transcript.json',
+      session_id: 'test-compact-123',
       trigger: 'manual',
     });
-    expect(result.exitCode).toBe(0);
+    expect(result.exitCode).toBe(2);
     expect(result.stdout).not.toBe('');
 
     const parsed = JSON.parse(result.stdout);
-    // pre-compact-save.sh now blocks compaction to save context first
     expect(parsed.decision).toBe('block');
-    expect(parsed.reason).toContain('compacting');
     expect(parsed.reason).toContain('aide_remember');
-    expect(parsed.reason).toContain('decisions');
+
+    // Flag file should now exist
+    expect(fs.existsSync(flagPath)).toBe(true);
+
+    // Clean up
+    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
   });
 
-  it('suggests source: hook tagging', () => {
+  it('Phase 2: allows compaction (exit 0) when flag exists', () => {
+    const sid = 'test-compact-phase2';
+    const flagPath = path.join(REPO_ROOT, '.aide', 'cache', `compact-pending-${sid}.txt`);
+
+    // Create flag to simulate Phase 1 already happened
+    fs.mkdirSync(path.dirname(flagPath), { recursive: true });
+    fs.writeFileSync(flagPath, 'pending');
+
     const result = runHook('pre-compact-save.sh', {
-      session_id: 'abc',
+      session_id: sid,
       trigger: 'auto',
     });
     expect(result.exitCode).toBe(0);
 
     const parsed = JSON.parse(result.stdout);
-    expect(parsed.reason).toContain('hook');
+    expect(parsed.decision).toBe('allow');
+
+    // Flag should be deleted
+    expect(fs.existsSync(flagPath)).toBe(false);
   });
 
-  it('blocks compaction to save context first', () => {
-    const result = runHook('pre-compact-save.sh', {});
-    expect(result.exitCode).toBe(0);
+  it('Phase 1 output includes save instructions with source: hook', () => {
+    const sid = 'test-compact-source';
+    const flagPath = path.join(REPO_ROOT, '.aide', 'cache', `compact-pending-${sid}.txt`);
+    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+
+    const result = runHook('pre-compact-save.sh', {
+      session_id: sid,
+      trigger: 'auto',
+    });
 
     const parsed = JSON.parse(result.stdout);
-    // Pre-compact now blocks to ensure context is saved before compaction
-    expect(parsed.decision).toBe('block');
-    expect(parsed.reason).toBeDefined();
+    expect(parsed.reason).toContain('aide_remember');
+    expect(parsed.reason).toContain('source: hook');
+
+    // Clean up
+    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
   });
 
-  it('exits 0 with empty input', () => {
+  it('exits 2 with empty input (Phase 1, no flag)', () => {
+    // With empty input, session_id defaults to "default"
+    const flagPath = path.join(REPO_ROOT, '.aide', 'cache', 'compact-pending-default.txt');
+    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+
     const result = runHook('pre-compact-save.sh', {});
-    expect(result.exitCode).toBe(0);
+    expect(result.exitCode).toBe(2);
+
+    // Clean up
+    if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
   });
 });
 
 // ─── General: all hooks exit 0 on errors ────────────────────────────────────
 
-describe('All hooks exit 0 on errors', () => {
+describe('All hooks handle empty input without crashing', () => {
   const hookScripts = [
-    'pre-read-recall.sh',
-    'stop-remember.sh',
-    'detect-correction.sh',
-    'pre-compact-save.sh',
+    { script: 'pre-read-recall.sh', expectedExit: 0 },
+    { script: 'stop-remember.sh', expectedExit: 0 },
+    { script: 'detect-correction.sh', expectedExit: 0 },
+    // pre-compact-save.sh exits 2 on Phase 1 (no flag) — that's correct, not a crash
+    { script: 'pre-compact-save.sh', expectedExit: 2 },
   ];
 
-  for (const script of hookScripts) {
-    it(`${script} exits 0 with empty JSON input`, () => {
+  for (const { script, expectedExit } of hookScripts) {
+    it(`${script} exits ${expectedExit} with empty JSON input (no crash)`, () => {
+      // Clean up any compact-pending flag for pre-compact
+      const flagPath = path.join(REPO_ROOT, '.aide', 'cache', 'compact-pending-default.txt');
+      if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
+
       const result = runHook(script, {});
-      expect(result.exitCode).toBe(0);
+      expect(result.exitCode).toBe(expectedExit);
+
+      // Clean up
+      if (fs.existsSync(flagPath)) fs.unlinkSync(flagPath);
     });
   }
 });

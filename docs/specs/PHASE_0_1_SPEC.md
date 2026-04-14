@@ -191,55 +191,125 @@ Run 16 validation scenarios. Use Desktop Commander to open Terminal + Claude Cod
 8. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md using the tables below
 9. If any scenario FAILS: document what failed, whether it's quantitative (wrong hook behavior) or qualitative (wrong memories returned), and continue
 
-RESULTS TABLE 1 — Hook Behavior (fill one row per scenario):
+RESULTS TABLE 1 — Per-Step Results (fill during each session):
 
-| Scenario | Hook | Expected | Actual | Block/Soft/Silent | Session Tracked | Pass? |
-|----------|------|----------|--------|-------------------|-----------------|-------|
-| V1 | Read | block | | | | |
-| V2 | Read (dir) | block | | | | |
-| ... | | | | | | |
+| Session | Step | Hook | Expected | Actual | Pass? |
+|---------|------|------|----------|--------|-------|
+| A | A1 | Read | block | | |
+| A | A2 | Track | passthrough | | |
+| A | A3 | Read | soft | | |
+| A | A4 | Read | block (dir) | | |
+| A | A5 | Track | passthrough | | |
+| A | A6 | Edit | block | | |
+| A | A7 | Edit | soft | | |
+| A | A8 | Read | soft (proj-wide only) | | |
+| B | B1 | Search | block | | |
+| B | B5 | Search | soft | | |
+| C | C1 | UserPromptSubmit | soft+flag | | |
+| C | C2 | PostToolUse | passthrough+clear | | |
+| C | C4 | Stop | block | | |
+| D | D2 | PreCompact | block (exit 2) | | |
+| D | D4 | PreCompact | allow (exit 0) | | |
+| D | D5 | Read | block (re-recall) | | |
+| E | E1 | SessionStart | inject | | |
+| F | F2 | Read | soft (<10 mems) | | |
+| F | F3 | Edit | soft (<10 mems) | | |
+| F | F4 | Search | soft (<10 mems) | | |
 
-RESULTS TABLE 2 — Recall Quality (fill for each aide_recall call):
+RESULTS TABLE 2 — Recall Quality (fill for each aide_recall/aide_search call):
 
-| Scenario | Path Queried | Limit | Total Returned | Scoped Count | Project-wide Count | Top Result Layer | Top Result Scope | Scoped Before Project-wide? | All 4 Layers Present? | area_context First (dir query)? | Pass? |
-|----------|-------------|-------|----------------|--------------|-------------------|-----------------|-----------------|---------------------------|---------------------|-------------------------------|-------|
-| V1 | src/memory/store.ts | 5 | | | | | | | | N/A | |
-| V2 | src/memory/ | 5 | | | | | | | | | |
-| ... | | | | | | | | | | | |
+| Session | Step | Path/Query | Type | Total Returned | Scoped | Project-wide | Top Result Layer | Scoped First? | All 4 Layers? | Dedup (IDs excluded) | Pass? |
+|---------|------|-----------|------|----------------|--------|-------------|-----------------|---------------|---------------|---------------------|-------|
+| A | A2 | src/api/routes.ts | file recall | | | | | Y/N | Y/N | N/A (first recall) | |
+| A | A5 | src/api/ | dir recall | | | | | Y/N | Y/N | (count excluded) | |
+| B | B2 | "auth" keyword | search:keyword | | | | | | | | |
+| B | B3 | "authentication flow" | search:semantic | | | | | | | | |
+| B | B4 | "auth" auto | search:auto | | | | | | | | |
+| E | E2 | src/api/ | file recall | | | | | Y/N | Y/N | | |
 
-RESULTS TABLE 3 — Hook Orchestration (fill per interaction chain):
+RESULTS TABLE 3 — Remember Quality (fill for each aide_remember call):
 
-| Scenario | Step 1 | Step 2 | Step 3 | Double-block? | Tracking Format Correct? | Pass? |
-|----------|--------|--------|--------|---------------|-------------------------|-------|
-| V1 | Read→block | recall | Re-read→soft | No | file\|path ✓ | |
-| V4 | Edit→block | recall | Edit→soft | No | file\|path ✓ | |
-| ... | | | | | | |
+| Session | Step | Trigger | Content Stored | Layer | Layer Correct? | Scope | Scope Correct? | Specific (not generic)? | Persisted? | Recalled Later? (step) | Pass? |
+|---------|------|---------|---------------|-------|---------------|-------|---------------|------------------------|-----------|----------------------|-------|
+| C | C2 | Correction | | | Y/N | | Y/N | Y/N | Y/N | E2 | |
+| C | C4 | Stop prompt | | | Y/N | | Y/N | Y/N | Y/N | E3 | |
+| D | D3 | PreCompact | | | Y/N | | Y/N | Y/N | Y/N (post-compact) | E4 | |
 
-RESULTS TABLE 4 — Metrics Summary:
+RESULTS TABLE 4 — Aggregate Metrics:
 
 | Metric | Value |
 |--------|-------|
-| Total scenarios run | /14 |
-| Scenarios passed | |
-| Scenarios failed | |
-| Total aide_recall calls made | |
-| Total aide_search calls made | |
+| **Sessions & Coverage** | |
+| Functional sessions run | /7 (A-G) |
+| User scenarios run | /3 (U1-U3) |
+| Total steps passed | / |
+| Total steps failed | |
+| **Recall Metrics** | |
+| Total aide_recall calls | |
+| Total aide_search calls | |
 | Avg memories returned per recall | |
 | Avg scoped memories per recall | |
 | Avg project-wide per recall | |
+| Duplicate memories across recalls (should be 0) | |
+| Recall quality failures (wrong mems returned) | |
+| Scoped ranked before project-wide (all queries) | /  |
+| Round-robin: all 4 layers represented | / |
+| Dir query: area_context ranked first | / |
+| **Remember Metrics** | |
+| Total aide_remember calls | |
+| Layer correct | / |
+| Scope correct (not always project-wide) | / |
+| Content specific (not generic) | / |
+| Persisted post-compaction | / |
+| Persisted across sessions | / |
+| **Remember→Recall Loop** | |
+| Memories stored in C/D that were recalled in E | / |
+| Correction from C2 appears in E2 recall? | Y/N |
+| Stop memory from C4 found via E3 aide_memories? | Y/N |
+| Compact memory from D3 found via E4 aide_memories? | Y/N |
+| **Hook Metrics** | |
 | Hook latency (Read) | ~ms |
 | Hook latency (Search preview) | ~ms |
 | SessionStart injection token estimate | ~tokens |
 | False blocks (blocked when shouldn't) | |
 | Missed blocks (soft when should block) | |
-| Recall quality failures (wrong mems) | |
-| **Without vs With Comparison** | |
-| V15 conventions followed (without) | /4 |
-| V16 conventions followed (with) | /4 |
-| V15 first-attempt correct (without) | Y/N |
-| V16 first-attempt correct (with) | Y/N |
-| V15 back-and-forth messages (without) | |
-| V16 back-and-forth messages (with) | |
+| PreCompact Phase 1 blocked (exit 2) | Y/N |
+| PreCompact Phase 2 allowed (exit 0) | Y/N |
+| Correction flag created on detect | Y/N |
+| Correction flag cleared after aide_remember | Y/N |
+| Tracking file format correct (file\|, dir\|, ids\|) | Y/N |
+| Session isolation (no cross-contamination) | Y/N |
+| **User Scenarios** | |
+| **U1: Team Decisions (un-discoverable from code)** | |
+| Conventions followed (without) | /4 |
+| Conventions followed (with) | /4 |
+| First-attempt correct (without) | Y/N |
+| First-attempt correct (with) | Y/N |
+| Tool calls to discover patterns (without) | |
+| Tool calls with aide_recall (with) | |
+| aide_recall returned all 4 conventions (debug log) | Y/N |
+| **U2: Correction Learning Loop** | |
+| Session 1: correction stored via aide_remember | Y/N |
+| Session 1: layer=guidelines (not technical) | Y/N |
+| Session 1: scope=src/** (not project-wide) | Y/N |
+| Session 2 (without): same mistake repeated | Y/N (expected: Y) |
+| Session 3 (with): learned from correction | Y/N (expected: Y) |
+| Session 3: debug log shows correction in aide_recall response | Y/N |
+| Session 2 vs 3: tool call difference | |
+| **U3: Behavioral Preferences** | |
+| Explained approach before coding (without) | Y/N |
+| Explained approach before coding (with) | Y/N |
+| Functions under 30 lines (without) | Y/N |
+| Functions under 30 lines (with) | Y/N |
+| TODO comments added (without) | Y/N (expected: Y) |
+| TODO comments added (with) | Y/N (expected: N) |
+| **Efficiency (all scenarios)** | |
+| Avg tool calls (without) | |
+| Avg tool calls (with) | |
+| Avg file reads to discover patterns (without) | |
+| Avg file reads with aide-memory (with) | |
+| Avg back-and-forth messages (without) | |
+| Avg back-and-forth messages (with) | |
 
 TASK 2 — PostHog Account Setup (browser agent)
 Set up analytics dashboard so we can see usage data.
@@ -557,7 +627,7 @@ Stop hook wording maps directly to the four memory layers:
 
 **5.8 Pre-Compact Save (enhanced)**
 
-Blocks compaction. Same "store in the right place" nudge as Stop hook — aide_remember for context, relevant docs for decisions. Then clears ALL session tracking:
+Two-phase blocking to force aide_remember before compaction. Phase 1: blocks compaction (exit 2), prompts agent to save via aide_remember. Phase 2: flag exists from Phase 1, allows compaction (exit 0), clears ALL session tracking:
 - `recalled-paths-{session_id}.txt`
 - `searched-queries-{session_id}.txt`
 - `correction-pending-{session_id}.txt`
@@ -723,31 +793,201 @@ This nudges the agent to consider both persistence targets without overfitting t
 | Stop checks correction flag | Flag exists → block includes "correction not stored" |
 | Stop normal without flag | No flag → block with standard persist prompt |
 | PreCompact clears all tracking | Trigger compact → all session tracking files removed |
-| SessionStart cleans stale | Create stale tracking → trigger session start → stale removed |
+| SessionStart on clear | Trigger /clear → THIS session's tracking removed, other sessions' untouched |
 | SessionStart injects prefs | Preferences exist → stdout includes preference content |
 | Path resolution | Recall with relative path → tracking file has absolute path |
 | Session isolation | Two different session_ids → separate tracking files |
 
-**12.3 Verification Scenarios (end-to-end in Claude Code)**
+**12.3 Verification Sessions (end-to-end in Claude Code)**
 
-| Scenario | Steps | Expected |
-|----------|-------|----------|
-| V1: Recall surfaces on read | Create test project, seed scoped memories, read file | Hook blocks (scoped memories exist), aide_recall returns scoped memories FIRST, subsequent read is soft |
-| V2: Directory recall triggers | Read 2 files in same dir | Second read triggers directory recall nudge, dir recall returns area_context first |
-| V3: Search nudge works | Seed scoped memories matching "auth", grep "auth" | Hook blocks with match count (scoped matches), aide_search returns results |
-| V4: Edit enforced if not recalled | Go directly to edit without reading (file with scoped mems) | Hook blocks until recall |
-| V5: Correction stored | Type correction pattern, verify aide_remember called | Correction stored, flag cleared, stop hook normal |
-| V6: Post-compaction re-recall | Work in session, compact, read same file | Hook blocks again (tracking was cleared) |
-| V7: SessionStart injects prefs | Start new session with stored preferences | Preferences appear as context |
-| V8: Keyword vs semantic search | aide_search with mode:"keyword", mode:"semantic", mode:"auto" | Each mode returns appropriate results |
-| V9: Embedding update | Store memory, update content, search for new content | Semantic search finds updated content |
-| V10: Concurrent sessions | Two Claude Code sessions on same project | Tracking is isolated, no cross-contamination |
-| V11: Scoped vs project-wide blocking | Read file with only project-wide mems, read file with scoped mems | Project-wide → soft nudge, scoped → block |
-| V12: Recall quality | aide_recall for file with scoped mems | Top results are scoped to the queried path, not project-wide. Round-robin includes all 4 layers |
-| V13: File vs dir recall ranking | aide_recall for file path vs directory path | File query → specific scopes first. Dir query → area_context first |
-| V14: New project softening | Project with < 10 memories, read file | All hooks soft (no blocking) |
-| V15: Without aide-memory baseline | Same test project, NO aide-memory. Ask agent to "add GET /users/:id endpoint to src/api/routes.ts". Record: conventions followed, mistakes made, back-and-forth count | Agent lacks context — may use wrong patterns, miss conventions |
-| V16: With aide-memory comparison | Same task WITH aide-memory. Ask agent to "add GET /users/:id endpoint to src/api/routes.ts". Record same metrics | Agent recalls conventions (camelCase, async/await, ISO timestamps), gets it right first try |
+Consolidated into 7 functional sessions + 3 user scenarios. Each session tracks recall AND remember metrics.
+Sessions are ordered so that memories stored in earlier sessions are verified as recalled in later sessions (the remember→recall loop).
+
+**Setup for ALL sessions:**
+- Run with `claude --debug` to capture full MCP tool I/O to `~/.claude/debug/<session-id>.txt`
+- After each session, grep debug log for `aide_recall` and `aide_remember` responses to verify content
+- Record tool call count and token usage per session for efficiency comparison
+
+**--- FUNCTIONAL SESSIONS (A-G): Does the system work correctly? ---**
+
+**Session A: Hook + Recall Flow**
+_One session, same test project with seeded memories. Tests read/edit/dir hooks, recall quality, tracking, dedup._
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| A1 | Read `src/api/routes.ts` (has scoped mems) | Read → **block** | | hook_behavior |
+| A2 | Agent calls aide_recall for src/api/routes.ts | Track → passthrough | Scoped mems ranked FIRST, round-robin all 4 layers | recall_quality, scoped_count, layer_coverage |
+| A3 | Re-read same file | Read → **soft** | | tracking_works |
+| A4 | Read `src/api/middleware.ts` (2nd file same dir) | Read → **block** (dir trigger) | | dir_trigger |
+| A5 | Agent calls aide_recall for src/api/ (directory) | Track → passthrough | area_context ranked first (dir query), IDs from A2 excluded (dedup) | ranking_order, dedup_count |
+| A6 | Edit `src/api/routes.ts` without reading first | Edit → **block** | | edit_enforcement |
+| A7 | Agent calls aide_recall, then edit proceeds | Edit → **soft** | | tracking_works |
+| A8 | Read `src/db/connection.ts` (only project-wide mems) | Read → **soft** (not block) | | scoped_only_blocking |
+| A9 | Read `README.md` (no memories at all) | Read → **silent** (no hook output) | | silent_on_empty |
+| A10 | Inspect tracking file | | file\|path, dir\|path, ids\|1,2,3 format correct. Paths are absolute. | tracking_format, path_resolution |
+| A11 | User types normal message (not a correction) | UserPromptSubmit → **does NOT block** (soft or silent) | User input accepted normally | userprompt_never_blocks |
+| A12 | Read a file that doesn't exist (e.g. src/api/nonexistent.ts) | Read → **silent** (no hook output, no error) | | silent_nonexistent_file |
+
+**Session B: Search Flow**
+_Same project. Tests search hooks, 3 search modes, embedding lifecycle._
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| B1 | Grep "auth" (scoped mems match) | Search → **block** | | hook_behavior |
+| B2 | Agent calls aide_search keyword:"auth" mode:"keyword" | | Substring matches only | search_mode |
+| B3 | aide_search keyword:"authentication flow" mode:"semantic" | | Embedding similarity matches | search_mode |
+| B4 | aide_search keyword:"auth" mode:"auto" | | Keyword first, semantic fallback if <3 | search_mode |
+| B5 | Grep "auth" again | Search → **soft** | | tracking_works |
+| B6 | Grep "zzz_nonexistent" (no mems match) | Search → **silent** (no hook output) | | silent_on_no_matches |
+| B7 | aide_update a memory's content, aide_search for new content | | Embedding regenerated, semantic finds updated text | embedding_update |
+
+**Session C: Correction + Remember + Stop**
+_Same project. Tests correction detection, flag lifecycle, remember quality, stop enforcement._
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| C1 | User types correction: "No, use epoch timestamps not ISO" | UserPromptSubmit → **soft** (NEVER block) | Flag file `correction-pending-{sid}.txt` created | correction_detect |
+| C2 | Agent calls aide_remember for correction | PostToolUse(aide_remember) → passthrough | Flag file **cleared** (deleted). Memory stored with: layer=guidelines (not "technical"), scope=src/api/** (not project-wide), content=specific (not generic) | remember_quality, flag_lifecycle |
+| C3 | Verify via aide_memories | | Memory exists with correct layer, scope, content | remember_persisted |
+| C4 | User types another correction but agent DOESN'T call aide_remember | Stop → **block** with "correction not stored" warning | Flag file exists at stop time | stop_enforces_correction |
+| C5 | Agent calls aide_remember (prompted by stop) | | Correction stored, flag cleared | stop_remember |
+| C6 | Continue working (no correction), then end session | Stop → **block** (standard prompt, no correction warning) | Agent calls aide_remember. Stored memory has appropriate layer + scope | remember_from_stop |
+| C7 | Verify via aide_memories | | All memories from C2, C5, C6 exist | remember_count |
+
+**Session D: Compact + Clear + Re-recall**
+_Same project. Tests PreCompact two-phase, /clear re-blocking, tracking lifecycle._
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| D1 | Read file, recall, work normally | Read → block → soft | | baseline |
+| D2 | Run /compact | PreCompact Phase 1 → **block** (exit 2) | compact-pending flag created | precompact_phase1 |
+| D3 | Agent calls aide_remember (prompted by block) | | Memory stored with correct layer/scope | remember_from_compact |
+| D4 | Compaction retriggers | PreCompact Phase 2 → **allow** (exit 0) | Flag deleted, all tracking cleared | precompact_phase2 |
+| D5 | Read same file as D1 | Read → **block** again (tracking was cleared) | | post_compact_rerecall |
+| D6 | Verify D3 memory persists post-compaction | aide_memories | Memory from D3 still exists | remember_survives_compact |
+| D7 | Recall file, re-read (soft), then run /clear | SessionStart fires | All tracking for current session cleared | clear_resets_tracking |
+| D8 | Read same file again after /clear | Read → **block** (must re-recall) | | post_clear_rerecall |
+| D9 | Recall file again, re-read (soft). Close terminal, resume session. | SessionStart(source:resume) fires | Tracking files PRESERVED. Re-read is still **soft** (not re-blocked). | resume_preserves_tracking |
+
+**Session E: Persistence + SessionStart** (MUST be new session on same project)
+_Verifies memories from Sessions C and D persisted. Tests remember→recall loop, stale cleanup._
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| E1 | Start new session | SessionStart → inject | Top preferences + all guidelines injected as context (~300 tokens). C/D tracking files still exist (harmless, different session_id). | injection_tokens |
+| E2 | aide_recall for src/api/ | | Returns correction memory from C2 (epoch timestamps guideline) | **remember_then_recall** |
+| E3 | Verify C5 stop-enforced correction persists | aide_memories | Memory from C5 exists | cross_session_persist |
+| E4 | Verify C6 stop memory persists | aide_memories | Memory from C6 exists | cross_session_persist |
+| E5 | Verify D3 compact memory persists | aide_memories | Memory from D3 exists | cross_session_persist |
+| E6 | Read file with priority:"always" memory | | Memory appears in SessionStart injection AND in recall | priority_always |
+
+**Session F0: Empty Project — Zero Memories** (separate project, just initialized)
+_First-time user experience. Nothing should block, nudge, or error._
+
+| Step | Action | Hook Expected | Metric |
+|------|--------|---------------|--------|
+| F0.1 | `aide-memory init` on fresh project | Init succeeds, .aide/ created, hooks + MCP configured | init_works |
+| F0.2 | Start `claude --debug` in the project | SessionStart → inject | No errors, injection is empty or minimal | no_crash |
+| F0.3 | Read any file | Read → **silent** (no hook output, no nudge) | silent_on_zero_mems |
+| F0.4 | Edit any file | Edit → **silent** | silent_on_zero_mems |
+| F0.5 | Grep any keyword | Search → **silent** | silent_on_zero_mems |
+| F0.6 | User types normal prompt | UserPromptSubmit → **silent** | no_false_triggers |
+| F0.7 | End session | Stop → **block** (standard prompt) | Agent may or may not call aide_remember (both OK — nothing to store yet) | stop_still_fires |
+
+**Session F: New Project Softening** (separate project with <10 mems but >0)
+
+| Step | Action | Hook Expected | Metric |
+|------|--------|---------------|--------|
+| F1 | Init project, seed 5 memories (below threshold) | | setup |
+| F2 | Read file with scoped mems | Read → **soft** (not block) | softening_works |
+| F3 | Edit file with scoped mems | Edit → **soft** (not block) | softening_works |
+| F4 | Grep matching keyword | Search → **soft** (not block) | softening_works |
+
+**Session G: Concurrent Sessions** (two Claude Code sessions on same project)
+
+| Step | Action | Metric |
+|------|--------|--------|
+| G1 | Session X reads src/api/routes.ts, recalls | tracking file has session X's ID |
+| G2 | Session Y reads src/auth/middleware.ts, recalls | tracking file has session Y's ID |
+| G3 | Verify X's tracking doesn't contain Y's paths | session_isolation |
+| G4 | Verify Y's tracking doesn't contain X's paths | session_isolation |
+| G5 | Session X runs /clear → only X's tracking cleared, Y's intact | clear_isolation |
+| G6 | Session Y still gets soft (not block) on already-recalled files | y_unaffected |
+
+**--- USER SCENARIOS (U1-U3): Does the system actually help? ---**
+
+Anti-false-positive design: conventions must be (a) COUNTER to LLM defaults and (b) NOT discoverable from existing code.
+All sessions run with `claude --debug` for full tool I/O inspection.
+
+**Scenario U1: Team Decisions the Code Can't Tell You** (two sessions — without then with)
+_Tests knowledge that is impossible to infer from reading code alone._
+
+Why this works: These are team process decisions, not code patterns. No amount of grepping will reveal them. Without aide-memory, the agent MUST guess or ask. With aide-memory, it knows.
+
+Seeded memories (un-discoverable from code):
+- "All timestamps as Unix epoch ms, never ISO 8601 — frontend team parses epoch directly" (guidelines, src/api/**)
+- "Soft deletes only (deleted_at column), never hard DELETE — legal requires 90-day retention" (guidelines, src/**)
+- "Error responses must include requestId from X-Request-ID header for support ticket correlation" (guidelines, src/api/**)
+- "Rate limit is 50 req/min per user, enforced via rateLimiter('user', 50) from src/middleware/rate-limit.ts" (technical, src/api/**)
+
+Test project setup: code files exist but do NOT contain examples of these patterns (no existing endpoint shows epoch timestamps, no existing delete uses deleted_at, no existing error includes requestId).
+
+| Step | Without aide-memory | With aide-memory | Metric |
+|------|-------------------|-----------------|--------|
+| U1.1 | Ask: "Add DELETE /users/:id endpoint to src/api/routes.ts" | Same prompt | task |
+| U1.2 | Record: used epoch ms (not ISO)? | Same | convention_1 (Y/N) |
+| U1.3 | Record: used soft delete (not hard DELETE)? | Same | convention_2 (Y/N) |
+| U1.4 | Record: included requestId in error response? | Same | convention_3 (Y/N) |
+| U1.5 | Record: added rate limiting? | Same | convention_4 (Y/N) |
+| U1.6 | Record: first-attempt correct? | Same | first_attempt (Y/N) |
+| U1.7 | Record: back-and-forth messages | Same | message_count |
+| U1.8 | Record: total mistakes | Same | mistake_count |
+| U1.9 | Record: tool calls made (reads/greps to discover patterns) | Same | tool_call_count |
+| U1.10 | | Verify aide_recall was called BEFORE writing code | recall_before_write (Y/N) |
+| U1.11 | | Check debug log: what did aide_recall return? Were all 4 conventions in response? | recall_content_quality |
+
+**Scenario U2: Correction Learning Loop** (3 sessions)
+_The core product promise: "correct once, remembered forever." Hardest to false-positive._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| U2.1 | Session 1 (with aide-memory): "Write a DELETE /posts/:id endpoint" | Agent does hard DELETE (no memory yet) | baseline_mistake |
+| U2.2 | Correct: "We use soft deletes with deleted_at, never hard DELETE — legal requires 90-day retention" | aide_remember stores it | remember_called (Y/N) |
+| U2.3 | Verify via debug log: layer=guidelines? scope=src/**? content specific? | Check debug log | remember_quality |
+| U2.4 | Session 2 (WITHOUT aide-memory, fresh session, same project): "Write a DELETE /comments/:id endpoint" | Agent does hard DELETE again — same mistake, no memory | repeated_mistake (Y/N, expected: Y) |
+| U2.5 | Session 3 (WITH aide-memory, fresh session, same project): Same task as U2.4 | Agent recalls soft-delete, uses deleted_at | learned (Y/N, expected: Y) |
+| U2.6 | Check debug log for Session 3: was the correction from U2.2 in aide_recall response? | Verify the actual memory content was returned | recall_returned_correction (Y/N) |
+| U2.7 | Record: tool calls in Session 2 vs Session 3 | Session 3 should have fewer exploratory reads | efficiency_gain |
+
+**Scenario U3: Behavioral Preferences** (two sessions — without then with)
+_Tests preferences that are about HOW the agent works, not code patterns. Cannot be discovered from code._
+
+Seeded memories (preferences layer, project-wide):
+- "Always explain your approach before writing code — never start coding without a brief plan" (preferences, project-wide)
+- "Keep functions under 30 lines — split into helpers if longer" (preferences, src/**)
+- "Never add TODO comments — either fix it now or create a GitHub issue" (preferences, project-wide)
+
+| Step | Without aide-memory | With aide-memory | Metric |
+|------|-------------------|-----------------|--------|
+| U3.1 | Ask: "Add input validation to the POST /users endpoint" | Same prompt | task |
+| U3.2 | Record: explained approach before coding? | Same | explained_first (Y/N) |
+| U3.3 | Record: all functions under 30 lines? | Same | function_length_ok (Y/N) |
+| U3.4 | Record: any TODO comments added? | Same | no_todos (Y/N) |
+| U3.5 | Record: first-attempt followed all preferences? | Same | first_attempt (Y/N) |
+| U3.6 | Record: tool calls made | Same | tool_call_count |
+
+**Efficiency Metrics (recorded for ALL user scenarios):**
+
+| Metric | U1 Without | U1 With | U2.S2 Without | U2.S3 With | U3 Without | U3 With |
+|--------|-----------|---------|---------------|------------|-----------|---------|
+| Total tool calls | | | | | | |
+| File reads (to discover patterns) | | | | | | |
+| Grep/search calls | | | | | | |
+| aide_recall calls | N/A | | N/A | | N/A | |
+| aide_remember calls | N/A | | N/A | | N/A | |
+| Back-and-forth messages | | | | | | |
+| Conventions/preferences followed | /4 | /4 | N/A | N/A | /3 | /3 |
+| First-attempt correct | Y/N | Y/N | Y/N | Y/N | Y/N | Y/N |
 
 **12.4 Bug Hunting Checklist**
 
@@ -784,9 +1024,9 @@ REMAINING (source of truth — all pending items with concrete next steps):
 
 ### A. Validation (CRITICAL — launch gate)
 
-**P1.17: 16 validation scenarios in Claude Code** — COWORK runs these
-- Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (needs update to include V7-V14)
-- Verification scenarios V1-V14 defined in Hook & Recall Refinement Plan section 12.3
+**P1.17: 7 functional sessions (A-G) + 3 user scenarios (U1-U3) in Claude Code**
+- Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (needs update to match Sessions A-H)
+- Verification sessions A-H defined in Hook & Recall Refinement Plan section 12.3
 - Observability: `aide-memory recall-log` now logs both recalls AND memory store events (stored/updated/deleted) to `.aide/recall-log.jsonl`
 - Before each scenario: `aide-memory recall-log --clear`
 - After each scenario: `aide-memory recall-log` to see exactly what was recalled/stored
@@ -1372,7 +1612,7 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
   - Prompts agent: "Context is about to be compacted. Extract any key decisions, plans, or constraints worth persisting via aide_remember before they are lost."
   - Output via `additionalContext` (hidden from terminal)
   - This is a high-value hook — 350+ GitHub comments document context loss pain from compaction
-  - **Never blocks compaction** — observability only, prompt to save before loss
+  - **Two-phase blocking** — Phase 1: blocks compaction (exit 2), agent saves via aide_remember. Phase 2: allows compaction (exit 0), clears session tracking. Uses compact-pending-{session_id}.txt flag to distinguish phases.
   - Note: Cursor equivalent hook name may differ — verify during Cursor integration testing
 - [ ] recall-for-path.js updated to work with new storage architecture (reads SQLite cache, not old DB path)
 - [ ] Dedup logic: within a single interaction, if PreToolUse already triggered and Stop also fires, the agent should not store the same memory twice. Implemented via session-scoped dedup check (hash of what + scope stored in temp file, checked before each store)

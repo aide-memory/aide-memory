@@ -1,0 +1,22 @@
+{
+  "uuid": "8fe48988-2ba5-4dba-8df2-961f0178c688",
+  "layer": "technical",
+  "what": "PreCompact hook bug: pre-compact-save.sh exits with code 0 (line 31), so it NEVER actually blocks compaction despite outputting {\"decision\":\"block\"} in JSON. Exit code is what matters for blocking, not the JSON content. Fix: use exit 2 for true blocking, with a two-phase flag pattern (compact-pending-{sid}.txt) to avoid infinite loop — first trigger blocks (agent saves), second trigger allows compaction through.",
+  "why": "PreCompact was supposed to force the agent to call aide_remember before context loss, but exit 0 means compaction proceeds immediately. The agent sees the blocking text but can't act on it because compaction already started. This is why no aide_remember calls were made during /compact.",
+  "scope": "scripts/hooks/pre-compact-save.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "bug",
+    "hooks",
+    "precompact",
+    "blocking"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T03:36:06.864Z",
+  "updated_at": "2026-04-14T03:36:06.864Z"
+}

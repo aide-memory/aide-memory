@@ -1,0 +1,22 @@
+{
+  "uuid": "6f09a180-815c-4a61-b6a0-0c6def7d835a",
+  "layer": "technical",
+  "what": "SessionStart hook cleanup rules: (1) start/resume: DON'T touch any tracking files — other sessions might be concurrent, no reliable way to detect ended/crashed sessions. (2) clear: clear only THIS session's tracking (recalled-paths, searched-queries, correction-pending, compact-pending). (3) compact: don't clean — PreCompact hook already handles it. Never clean other sessions' files. Orphaned files from crashes are harmless tiny txt files.",
+  "why": "User corrected: original implementation cleaned ALL other sessions' files on start, which would break concurrent sessions. No mechanism exists to know if another session ended or crashed. Each session manages only its own tracking.",
+  "scope": "scripts/hooks/session-start-clear.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "session-start",
+    "clear",
+    "tracking"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T04:10:49.004Z",
+  "updated_at": "2026-04-14T04:35:29.966Z"
+}

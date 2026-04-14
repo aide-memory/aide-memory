@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .DS_Store
+.env
 .claude/worktrees/
 
 # AIDE Memory local data (should not be committed)
