@@ -1,0 +1,21 @@
+{
+  "uuid": "aa66cc62-2274-45fe-88ee-71e0309bff62",
+  "layer": "preferences",
+  "what": "User wants before/after comparison (without vs with aide-memory) in BOTH demo recordings AND validation scenarios — not just demos. Validation should include running the same task without aide-memory to establish a baseline, then with aide-memory to show improvement.",
+  "why": "User explicitly said \"in scenarios and demos, lets do comparison for both\" — I only added it to demos and missed adding comparison scenarios to the validation plan.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "validation",
+    "demo",
+    "comparison"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T03:15:27.428Z",
+  "updated_at": "2026-04-14T03:15:27.428Z"
+}

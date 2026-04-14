@@ -168,11 +168,11 @@ PHASE 1 — PARALLEL GROUP (all independent — run simultaneously)
 ============================
 
 TASK 1 — Validation (Claude Code agent via Desktop Commander)
-Run 14 validation scenarios. Use Desktop Commander to open Terminal + Claude Code sessions.
+Run 16 validation scenarios. Use Desktop Commander to open Terminal + Claude Code sessions.
 1. Rebuild first: cd /Users/meky/code/aide-v0 && git pull && npm install && npm run build && npm link
 2. Read verification scenarios V1-V14 from this spec (section 12.3 in Hook & Recall Refinement Plan)
 3. Also read the runbook: /Users/meky/code/aide-v0/docs/validation/PHASE_0_1_INTEGRATION_TESTING.md
-4. Run ALL 14 scenarios — spin off parallel agents for independent scenarios (V1-V5 can run in parallel, V6 needs separate session, V10 needs two sessions, etc.)
+4. Run ALL 16 scenarios — spin off parallel agents for independent scenarios (V1-V5 can run in parallel, V6 needs separate session, V10 needs two sessions, etc.)
 5. For each scenario, observe and record BOTH:
    QUANTITATIVE: Did the hook fire? Block or soft? Correct session tracking? Correct file format (file|/dir|)?
    QUALITATIVE: Are returned memories relevant to the queried path? Scoped before project-wide? Correct layer ordering? Round-robin representation? Are topics in the nudge preview accurate?
@@ -233,6 +233,13 @@ RESULTS TABLE 4 — Metrics Summary:
 | False blocks (blocked when shouldn't) | |
 | Missed blocks (soft when should block) | |
 | Recall quality failures (wrong mems) | |
+| **Without vs With Comparison** | |
+| V15 conventions followed (without) | /4 |
+| V16 conventions followed (with) | /4 |
+| V15 first-attempt correct (without) | Y/N |
+| V16 first-attempt correct (with) | Y/N |
+| V15 back-and-forth messages (without) | |
+| V16 back-and-forth messages (with) | |
 
 TASK 2 — PostHog Account Setup (browser agent)
 Set up analytics dashboard so we can see usage data.
@@ -739,6 +746,8 @@ This nudges the agent to consider both persistence targets without overfitting t
 | V12: Recall quality | aide_recall for file with scoped mems | Top results are scoped to the queried path, not project-wide. Round-robin includes all 4 layers |
 | V13: File vs dir recall ranking | aide_recall for file path vs directory path | File query → specific scopes first. Dir query → area_context first |
 | V14: New project softening | Project with < 10 memories, read file | All hooks soft (no blocking) |
+| V15: Without aide-memory baseline | Same test project, NO aide-memory. Ask agent to "add GET /users/:id endpoint to src/api/routes.ts". Record: conventions followed, mistakes made, back-and-forth count | Agent lacks context — may use wrong patterns, miss conventions |
+| V16: With aide-memory comparison | Same task WITH aide-memory. Ask agent to "add GET /users/:id endpoint to src/api/routes.ts". Record same metrics | Agent recalls conventions (camelCase, async/await, ISO timestamps), gets it right first try |
 
 **12.4 Bug Hunting Checklist**
 
@@ -775,7 +784,7 @@ REMAINING (source of truth — all pending items with concrete next steps):
 
 ### A. Validation (CRITICAL — launch gate)
 
-**P1.17: 14 validation scenarios in Claude Code** — COWORK runs these
+**P1.17: 16 validation scenarios in Claude Code** — COWORK runs these
 - Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (needs update to include V7-V14)
 - Verification scenarios V1-V14 defined in Hook & Recall Refinement Plan section 12.3
 - Observability: `aide-memory recall-log` now logs both recalls AND memory store events (stored/updated/deleted) to `.aide/recall-log.jsonl`
