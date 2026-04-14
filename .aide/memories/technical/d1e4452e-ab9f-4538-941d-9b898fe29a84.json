@@ -1,0 +1,21 @@
+{
+  "uuid": "d1e4452e-ab9f-4538-941d-9b898fe29a84",
+  "layer": "technical",
+  "what": "PostHog API key is hardcoded in src/memory/analytics.ts (phc_ztrzpvb...). It's baked into the npm package — users don't need .env or any config for analytics. Opt-out via AIDE_TELEMETRY=off env var. The .env file at project root is for local dev only and stays in .gitignore.",
+  "why": "User asked if .env needs to be pushed for analytics to work. It doesn't — key is in source code.",
+  "scope": "src/memory/analytics.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "posthog",
+    "analytics",
+    "api-key"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T02:51:40.647Z",
+  "updated_at": "2026-04-14T02:51:40.647Z"
+}

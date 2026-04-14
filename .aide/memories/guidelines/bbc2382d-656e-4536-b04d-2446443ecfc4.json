@@ -1,0 +1,22 @@
+{
+  "uuid": "bbc2382d-656e-4536-b04d-2446443ecfc4",
+  "layer": "guidelines",
+  "what": "RULE: Hook scripts must NEVER use __dirname or SCRIPT_DIR as project root for data access (.aide/, memories, tracking files). Always use 'cwd' from hook stdin JSON as PROJECT_ROOT. __dirname is only valid for packageRoot (finding dist/ and other package files). This applies to all JS scripts (recall-for-path.js, search-preview.js, session-inject.js) and all shell scripts.",
+  "why": "Hardcoded __dirname as project root meant hooks only worked in the aide-v0 dev directory, not in any user's actual project. Caught during validation — hooks returned aide-v0's 50 memories instead of the test project's 10. Every future hook script must follow this rule.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "cwd",
+    "hardcoding",
+    "rule"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-11T23:46:12.975Z",
+  "updated_at": "2026-04-11T23:46:12.975Z"
+}

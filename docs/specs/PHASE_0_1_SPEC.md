@@ -940,6 +940,10 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 - Richer CLI: recall hit rate, memory growth over time, tokens saved estimate
 - Export: `aide-memory stats --format json` for piping into external tools
 - Health check: `aide-memory health` command reporting freshness, stale %, layer balance
+- Version check on CLI/MCP server start — warn if outdated, recommend update (updater.ts exists)
+- "Last seen" tracking in PostHog for churn inference (no reliable npm uninstall hook)
+- Consider `preuninstall` script in package.json as best-effort uninstall tracking
+- Before/after comparison demo — same task without aide-memory (agent makes mistake) vs with (gets it right)
 
 **5. Configurable hook intensity (Phase 2 pro feature):**
 - Users control: auto-injection volume at SessionStart, blocking vs soft per hook type, which hooks are active
