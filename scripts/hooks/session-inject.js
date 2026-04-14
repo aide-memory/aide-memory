@@ -36,9 +36,8 @@ try {
   // Load all guidelines (no limit)
   const guidelines = store.list({ layer: 'guidelines' });
 
-  // Load any memory with priority="always" from any layer
-  const allMemories = store.list();
-  const alwaysPriority = allMemories.filter(m => m.priority === 'always');
+  // Load any memory with priority="always" from any layer (SQL-level filter)
+  const alwaysPriority = store.list({ priority: 'always' });
 
   store.close();
 

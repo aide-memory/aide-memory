@@ -62,10 +62,12 @@ export function scopeMatchesPath(scope: string | null, filePath: string): boolea
   const normalizedScope = scope.replace(/\\/g, '/');
   const normalizedPath = filePath.replace(/\\/g, '/');
 
-  // Strip trailing glob patterns for prefix matching
+  // Strip trailing glob patterns and trailing slashes for prefix matching
+  // "src/memory/**" → "src/memory", "src/memory/" → "src/memory"
   const scopeBase = normalizedScope
     .replace(/\/?\*\*\/?$/, '')  // remove trailing /** or **
-    .replace(/\/?\*$/, '');       // remove trailing /*
+    .replace(/\/?\*$/, '')       // remove trailing /*
+    .replace(/\/$/, '');         // remove trailing slash (treat "src/memory/" like "src/memory/**")
 
   if (!scopeBase) return true; // scope was just '**' or '*'
 
@@ -196,23 +198,50 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
     return b.scopeSpecificity - a.scopeSpecificity; // more specific first
   });
 
-  // Select top N, then ensure round-robin layer representation
+  // Select top N with round-robin layer representation.
+  // Total never exceeds limit. If limit >= 5, swap lowest-ranked entries
+  // with 1 from each unrepresented layer to ensure diversity.
   let results: Memory[];
   if (limit) {
     const topN = scored.slice(0, limit);
-    const representedLayers = new Set(topN.map(s => s.memory.layer));
-    const extras: typeof scored[number][] = [];
 
-    // For each layer not represented in top N, pull 1-2 from remaining
-    const remaining = scored.slice(limit);
-    for (const layer of LAYER_ORDER) {
-      if (!representedLayers.has(layer)) {
-        const fromLayer = remaining.filter(s => s.memory.layer === layer);
-        extras.push(...fromLayer.slice(0, 2));
+    if (limit >= 5) {
+      const representedLayers = new Set(topN.map(s => s.memory.layer));
+      const remaining = scored.slice(limit);
+
+      // For each missing layer, swap in 1 from remaining.
+      // Only replace entries from OVER-represented layers (>1 entry) to avoid
+      // swapping out the only entry from a represented layer.
+      for (const layer of LAYER_ORDER) {
+        if (!representedLayers.has(layer)) {
+          const fromLayer = remaining.filter(s => s.memory.layer === layer);
+          if (fromLayer.length > 0) {
+            // Find last entry from an over-represented layer to swap out
+            const layerCounts = new Map<string, number>();
+            for (const s of topN) layerCounts.set(s.memory.layer, (layerCounts.get(s.memory.layer) || 0) + 1);
+
+            let swapped = false;
+            for (let i = topN.length - 1; i >= 0; i--) {
+              const entryLayer = topN[i].memory.layer;
+              if ((layerCounts.get(entryLayer) || 0) > 1) {
+                topN[i] = fromLayer[0];
+                layerCounts.set(entryLayer, (layerCounts.get(entryLayer) || 0) - 1);
+                representedLayers.add(layer);
+                swapped = true;
+                break;
+              }
+            }
+            // If no over-represented layer found, swap last entry as fallback
+            if (!swapped) {
+              topN[topN.length - 1] = fromLayer[0];
+              representedLayers.add(layer);
+            }
+          }
+        }
       }
     }
 
-    results = [...topN, ...extras].map(s => s.memory);
+    results = topN.map(s => s.memory);
   } else {
     results = scored.map(s => s.memory);
   }

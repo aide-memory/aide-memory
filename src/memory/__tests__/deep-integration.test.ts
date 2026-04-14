@@ -538,18 +538,32 @@ describe('3. Recall Edge Cases', () => {
     expect(result.memories[3].layer).toBe('guidelines');
   });
 
-  it('limit=1 returns highest-priority memory first, plus round-robin extras from underrepresented layers', () => {
+  it('limit=1 returns exactly 1 (no round-robin when limit < 5)', () => {
     store.add({ layer: 'guidelines', what: 'guideline' });
     store.add({ layer: 'area_context', what: 'area context is top priority' });
     store.add({ layer: 'technical', what: 'technical' });
 
     const result = recall(store, { limit: 1 });
-    // Round-robin adds 1-2 from each layer not represented in top N.
-    // Top 1 is area_context; technical and guidelines are underrepresented,
-    // so they each get pulled in as extras (up to 2 per layer).
-    expect(result.memories.length).toBe(3);
+    // Round-robin only kicks in when limit >= 5 (enough slots for diversity).
+    // With limit=1, just return the top result — no swaps.
+    expect(result.memories.length).toBe(1);
     expect(result.memories[0].layer).toBe('area_context');
     expect(result.memories[0].what).toBe('area context is top priority');
+  });
+
+  it('limit=5 with round-robin swaps in underrepresented layers within the limit', () => {
+    // Add 4 area_context + 1 each of other layers
+    for (let i = 0; i < 4; i++) store.add({ layer: 'area_context', what: `area ${i}` });
+    store.add({ layer: 'technical', what: 'tech mem' });
+    store.add({ layer: 'preferences', what: 'pref mem' });
+    store.add({ layer: 'guidelines', what: 'guide mem' });
+
+    const result = recall(store, { limit: 5 });
+    // Total must not exceed limit
+    expect(result.memories.length).toBe(5);
+    // All 4 layers should be represented via round-robin swaps
+    const layers = new Set(result.memories.map(m => m.layer));
+    expect(layers.size).toBe(4);
   });
 
   it('recalled_count increments for each recalled memory', () => {

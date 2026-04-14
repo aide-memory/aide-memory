@@ -387,6 +387,17 @@ export async function startServer(projectPath: string): Promise<void> {
     if (latest) printUpdateNotice(currentVersion, latest);
   }).catch(() => { /* non-fatal */ });
 
+  // Auto-update hooks, MCP config, and rules files if version changed
+  try {
+    const { autoUpdateIfNeeded } = await import('./init');
+    const updated = autoUpdateIfNeeded(projectPath, currentVersion);
+    if (updated.length > 0) {
+      console.error(`  aide-memory: auto-updated ${updated.length} config(s) to v${currentVersion}`);
+    }
+  } catch {
+    // Auto-update failure is non-fatal
+  }
+
   const store = new MemoryStore({ projectRoot: projectPath });
 
   // Initialize embedding service in background (non-blocking, graceful degradation)

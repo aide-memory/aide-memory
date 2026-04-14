@@ -125,6 +125,17 @@ function writeHookConfig(
       fs.writeFileSync(settingsPath, JSON.stringify(hookConfig, null, 2) + '\n', 'utf8');
       created.push('.claude/settings.json');
     }
+  } else if (force && fs.existsSync(settingsPath)) {
+    // Force: merge hooks into existing settings, preserving user's other keys
+    try {
+      const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const merged = { ...existing, ...hookConfig };
+      fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+      created.push('.claude/settings.json (hooks force-updated)');
+    } catch {
+      fs.writeFileSync(settingsPath, JSON.stringify(hookConfig, null, 2) + '\n', 'utf8');
+      created.push('.claude/settings.json');
+    }
   } else {
     fs.writeFileSync(settingsPath, JSON.stringify(hookConfig, null, 2) + '\n', 'utf8');
     created.push('.claude/settings.json');
@@ -169,6 +180,18 @@ function writeMcpConfig(
       existing.mcpServers['aide-memory'] = mcpConfig.mcpServers['aide-memory'];
       fs.writeFileSync(mcpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
       created.push('.mcp.json (aide-memory server added)');
+    } catch {
+      fs.writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf8');
+      created.push('.mcp.json');
+    }
+  } else if (force && fs.existsSync(mcpPath)) {
+    // Force: merge aide-memory into existing MCP config, preserving other servers
+    try {
+      const existing = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+      existing.mcpServers = existing.mcpServers || {};
+      existing.mcpServers['aide-memory'] = mcpConfig.mcpServers['aide-memory'];
+      fs.writeFileSync(mcpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
+      created.push('.mcp.json (aide-memory force-updated)');
     } catch {
       fs.writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf8');
       created.push('.mcp.json');
@@ -520,4 +543,86 @@ export async function initProject(
   }
 
   return result;
+}
+
+/**
+ * Auto-update hooks, MCP config, and rules files on MCP server start.
+ * Checks _aideMemoryVersion in .claude/settings.json — if missing or older
+ * than current package version, merges new config preserving user settings.
+ * Called from startServer() so updates happen seamlessly without manual init.
+ */
+export function autoUpdateIfNeeded(projectRoot: string, currentVersion: string): string[] {
+  const updated: string[] = [];
+
+  try {
+    const settingsPath = path.join(projectRoot, '.claude', 'settings.json');
+
+    // Check version stamp
+    let needsUpdate = false;
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const installedVersion = existing._aideMemoryVersion;
+        if (!installedVersion || isOlderVersion(installedVersion, currentVersion)) {
+          needsUpdate = true;
+        }
+      } catch {
+        needsUpdate = true; // Malformed JSON
+      }
+    } else {
+      needsUpdate = true; // No settings file at all
+    }
+
+    if (!needsUpdate) return updated;
+
+    // Update hooks (merge, don't overwrite)
+    const packageRoot = getPackageRoot();
+    const hookConfig = generateHookConfig(packageRoot);
+
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const merged = { ...existing, ...hookConfig, _aideMemoryVersion: currentVersion };
+        fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+        updated.push('.claude/settings.json (hooks auto-updated)');
+      } catch {
+        const stamped = { ...hookConfig, _aideMemoryVersion: currentVersion };
+        fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
+        updated.push('.claude/settings.json (created)');
+      }
+    } else {
+      const settingsDir = path.dirname(settingsPath);
+      if (!fs.existsSync(settingsDir)) fs.mkdirSync(settingsDir, { recursive: true });
+      const stamped = { ...hookConfig, _aideMemoryVersion: currentVersion };
+      fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
+      updated.push('.claude/settings.json (created)');
+    }
+
+    // Update MCP config (merge, don't overwrite)
+    const mcpResult = writeMcpConfig(projectRoot, true);
+    updated.push(...mcpResult.created);
+
+    // Update rules files (only if they exist — don't create in projects that weren't init'd)
+    const claudeRulesPath = path.join(projectRoot, '.claude', 'rules', 'aide-memory.md');
+    if (fs.existsSync(claudeRulesPath)) {
+      const rulesResult = writeRulesFiles(projectRoot, '', true);
+      updated.push(...rulesResult.created);
+    }
+  } catch {
+    // Auto-update failure is non-fatal — server continues normally
+  }
+
+  return updated;
+}
+
+/** Simple semver comparison: is `a` older than `b`? */
+function isOlderVersion(a: string, b: string): boolean {
+  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return true;
+    if ((pa[i] || 0) > (pb[i] || 0)) return false;
+  }
+  return false; // equal
 }
