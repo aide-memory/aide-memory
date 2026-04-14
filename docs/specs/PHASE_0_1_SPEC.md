@@ -1365,8 +1365,22 @@ Configurable settings (identified during validation):
 | `injection.maxTokens` | `300` | Approximate token cap for SessionStart injection |
 | `memories.hideFromGrep` | `true` | Hide .aide/memories/ from grep via .ignore |
 | `memories.softening.threshold` | `10` | Below this total memory count, all hooks are soft |
+| `hooks.stop.mode` | `"always"` | When Stop blocks: "always" (every turn), "correction-only" (only when flag), or "off" |
+| `hooks.directoryTrigger.threshold` | `1` | Number of sibling files read before directory recall triggers (0=off) |
+| `recall.layerOrder` | `["area_context","technical","preferences","guidelines"]` | Priority order for recall ranking |
+| `recall.searchMode` | `"auto"` | Default aide_search mode: "auto", "keyword", or "semantic" |
+| `autoUpdate.enabled` | `true` | Auto-update hooks/config on MCP server start when version changes |
+| `postCheckout.reindex` | `true` | Run reindex on git branch switch |
+| `embedding.model` | `"bge-small-en-v1.5"` | Embedding model for semantic search |
+| `embedding.enabled` | `true` | Enable/disable embedding generation (falls back to keyword search) |
 
 All settings should also map to Cursor's equivalent config system (see P1.18).
+
+Settings that vary by project nature:
+- **Monorepo/large codebase**: higher minScopeDepth (3-4), higher recall.limit (30+), more aggressive blocking
+- **Small project/solo dev**: lower softening threshold (5), Stop on correction-only, search off
+- **Team project**: injection.maxPreferences higher (25+), contributor-aware injection (item 7)
+- **Security-sensitive**: all hooks blocking, no grep visibility, strict correction enforcement
 
 **6. Automatic memory cleanup (Phase 2 pro feature):**
 - Detect and surface stale/conflicting/duplicate memories
