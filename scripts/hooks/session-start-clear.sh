@@ -5,9 +5,9 @@
 # Cleanup rules:
 #   - start/resume: DON'T touch anything. Other sessions might be concurrent.
 #     No reliable way to know if another session ended or crashed.
-#   - clear: Clear THIS session's tracking (agent loses context, must re-recall).
-#     Don't touch other sessions.
-#   - compact: PreCompact hook handles clearing. SessionStart just re-injects.
+#   - clear/compact: Clear THIS session's tracking (agent loses context, must re-recall).
+#     Don't touch other sessions. For compact, PreCompact also clears in Phase 2
+#     but this is belt-and-suspenders for reliability.
 #
 # Orphaned files from crashed sessions are harmless (tiny txt files).
 # Users can clean manually: rm .aide/cache/*.txt
@@ -24,17 +24,16 @@ CACHE_DIR="$PROJECT_ROOT/.aide/cache"
 if [ -d "$CACHE_DIR" ]; then
   SID="${SESSION_ID:-default}"
 
-  if [ "$SOURCE" = "clear" ]; then
-    # Clear: THIS session's agent loses context — clear only THIS session's tracking.
+  if [ "$SOURCE" = "clear" ] || [ "$SOURCE" = "compact" ]; then
+    # Clear/compact: THIS session's agent loses context — clear only THIS session's tracking.
     # Other concurrent sessions keep their tracking intact.
+    # For compact: PreCompact also clears in Phase 2, but this is belt-and-suspenders.
     rm -f "$CACHE_DIR/recalled-paths-${SID}.txt" 2>/dev/null
     rm -f "$CACHE_DIR/searched-queries-${SID}.txt" 2>/dev/null
     rm -f "$CACHE_DIR/correction-pending-${SID}.txt" 2>/dev/null
     rm -f "$CACHE_DIR/compact-pending-${SID}.txt" 2>/dev/null
   fi
-  # start/resume/compact: don't clean anything.
-  # start/resume: nothing to clean (fresh or continuing).
-  # compact: PreCompact hook already cleared this session's tracking.
+  # start/resume: don't clean anything (fresh or continuing).
 fi
 
 # Inject preferences + guidelines as session context
