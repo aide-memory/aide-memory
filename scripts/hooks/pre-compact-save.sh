@@ -30,7 +30,7 @@ cat <<'HOOK_OUTPUT'
 {
   "hookSpecificOutput": {
     "hookEventName": "PreCompact",
-    "additionalContext": "Context is about to be compacted. Any key decisions, technical constraints, or guidelines from this session should be saved via aide_remember. The post-compact prompt will remind you, but saving now preserves full detail."
+    "additionalContext": "IMPORTANT: Context is about to be compacted and detail will be lost. BEFORE anything else, save any key decisions, technical constraints, preferences, or guidelines from this session via aide_remember (source: hook). You have full context RIGHT NOW — after compaction you will only have a summary. Save what matters."
   }
 }
 HOOK_OUTPUT
