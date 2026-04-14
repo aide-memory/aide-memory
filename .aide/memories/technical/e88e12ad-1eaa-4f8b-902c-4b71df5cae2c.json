@@ -1,0 +1,22 @@
+{
+  "uuid": "e88e12ad-1eaa-4f8b-902c-4b71df5cae2c",
+  "layer": "technical",
+  "what": "Full audit completed April 14, 2026: 6 parallel agents audited all hooks, recall.ts, store.ts, init.ts, JS helpers, and settings.json registration. Bugs found and fixed: (1) search hook tracked on block allowing bypass — fixed with track-search.sh, (2) path.relative() strips trailing slashes breaking directory query detection — fixed in recall.ts, (3) MCP_TOOLS_LIST missing aide_update and aide_import — fixed in init.ts. Known low-severity: scope with trailing slash (no glob) won't match, --force overwrites non-aide settings. All 1192 tests pass.",
+  "why": "Comprehensive audit after discovering multiple bugs in hooks and recall. Documents what was checked so future sessions don't re-audit the same things.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "audit",
+    "hooks",
+    "recall",
+    "bugs"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T05:07:05.912Z",
+  "updated_at": "2026-04-14T05:07:05.912Z"
+}
