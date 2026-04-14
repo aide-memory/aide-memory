@@ -638,6 +638,10 @@ export function autoUpdateIfNeeded(projectRoot: string, currentVersion: string):
         updated.push(`.gitignore (${missing.length} entries added)`);
       }
     }
+
+    // Update git post-checkout hook (merge, uses markers to replace aide section only)
+    const hookResult = installPostCheckoutHook(projectRoot, true);
+    if (hookResult.created.length > 0) updated.push(...hookResult.created);
   } catch {
     // Auto-update failure is non-fatal — server continues normally
   }
