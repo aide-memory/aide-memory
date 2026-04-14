@@ -135,14 +135,40 @@ export async function checkForUpdates(currentVersion: string): Promise<string | 
 }
 
 /**
+ * Minimum required version. Set this to force users to update.
+ * When null, updates are recommended but not required.
+ * Change this to e.g. "0.3.0" to block older versions from running.
+ */
+const MIN_REQUIRED_VERSION: string | null = null;
+
+/**
+ * Check if the current version meets the minimum requirement.
+ * Returns the minimum version if not met, null if OK.
+ */
+export function checkMinVersion(currentVersion: string): string | null {
+  if (!MIN_REQUIRED_VERSION) return null;
+  if (isNewer(currentVersion, MIN_REQUIRED_VERSION)) {
+    return MIN_REQUIRED_VERSION;
+  }
+  return null;
+}
+
+/**
  * Print a user-friendly update notice to stderr.
- *
- * @param currentVersion The currently installed version.
- * @param latestVersion The newer version available.
  */
 export function printUpdateNotice(currentVersion: string, latestVersion: string): void {
   console.error(
     `\n  aide-memory v${latestVersion} available (current: v${currentVersion}).` +
+    `\n  Run \`npm update -g aide-memory\` to update.\n`
+  );
+}
+
+/**
+ * Print a required update notice to stderr.
+ */
+export function printRequiredUpdateNotice(currentVersion: string, minVersion: string): void {
+  console.error(
+    `\n  ⚠ aide-memory v${currentVersion} is below minimum required v${minVersion}.` +
     `\n  Run \`npm update -g aide-memory\` to update.\n`
   );
 }

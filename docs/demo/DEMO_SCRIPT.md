@@ -493,6 +493,79 @@ No cloud. No API keys. Just files in git."
 
 ## Tips for Recording All Demos
 
+---
+
+## Demo Sequence 8: Before/After Comparison — Without vs With AIDE Memory
+
+### Objective
+Show the same task performed twice: once without aide-memory (agent lacks context, makes mistakes or asks unnecessary questions), and once with aide-memory (agent has context, gets it right immediately). This is the strongest marketing asset.
+
+### Setup State
+- Two separate terminal windows side by side (or recorded sequentially, edited together)
+- Same test project with realistic code (use validation-setup.sh)
+- Left/first: no aide-memory installed (clean project, no .aide/)
+- Right/second: aide-memory initialized with seeded memories
+
+### Scenario A: "Add a new API endpoint"
+
+**WITHOUT aide-memory:**
+```
+User: "Add a GET /users/:id endpoint to src/api/routes.ts"
+```
+Expected agent behavior (no context):
+- Reads the file — no hook, no context
+- Writes the endpoint — may use callbacks instead of async/await
+- May use `moment` for date formatting
+- May return snake_case response fields
+- Doesn't know about rate limiting or auth requirements
+
+**WITH aide-memory:**
+```
+User: "Add a GET /users/:id endpoint to src/api/routes.ts"
+```
+Expected agent behavior (with context):
+- Reads the file — hook blocks, recalls 5+ memories for src/api/
+- Gets context: "Use async/await", "All API responses use camelCase", "API rate limiting is 100 req/min", "API handlers return ISO 8601 timestamps"
+- Writes the endpoint correctly: async/await, camelCase, ISO timestamps
+- Follows all conventions without being told
+
+### Scenario B: "Fix the auth middleware"
+
+**WITHOUT aide-memory:**
+```
+User: "The auth middleware needs to validate tokens, not just check they exist"
+```
+Expected agent behavior (no context):
+- Reads middleware — no hook, no context
+- May implement bcrypt/argon2 password checking instead of JWT
+- Doesn't know it's JWT RS256
+- Doesn't know "never log auth tokens to console"
+
+**WITH aide-memory:**
+```
+User: "The auth middleware needs to validate tokens, not just check they exist"
+```
+Expected agent behavior (with context):
+- Reads middleware — hook blocks, recalls: "Auth uses JWT with RS256", "Auth middleware validates Bearer tokens only", "Never log auth tokens to console"
+- Implements JWT verification with RS256
+- Doesn't add console.log for tokens
+- Gets it right first try
+
+### Recording Notes
+- Record each scenario separately, edit together as split-screen or sequential
+- Highlight the hook nudge and recall output in the "with" version
+- Total duration: ~3-4 minutes (1.5-2 min each side)
+- Narration: "Watch what happens when the agent has no context... now watch the same task with aide-memory."
+
+### Key Metrics to Capture
+- Number of back-and-forth messages needed (without > with)
+- Correctness of first attempt (without: partial, with: complete)
+- Conventions followed automatically (without: 0, with: all)
+
+---
+
+## General Recording Tips
+
 1. **Font Size:** Use 16pt terminal font for legibility
 2. **Colors:** Dark theme preferred (matches most developer workflows)
 3. **Pacing:** 

@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import path from 'path';
+import fs from 'fs';
 import { MemoryStore } from './store';
 import { recall } from './recall';
 import { logStoreEvent } from './store-log';
@@ -370,6 +371,22 @@ function parseMarkdownItems(content: string): string[] {
 
 // CLI entry point
 export async function startServer(projectPath: string): Promise<void> {
+  const { checkForUpdates, printUpdateNotice, checkMinVersion, printRequiredUpdateNotice } = await import('./updater');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
+  const currentVersion: string = pkg.version;
+
+  // Check minimum version requirement (blocks if set)
+  const minRequired = checkMinVersion(currentVersion);
+  if (minRequired) {
+    printRequiredUpdateNotice(currentVersion, minRequired);
+    process.exit(1);
+  }
+
+  // Check for updates in background (non-blocking warning)
+  checkForUpdates(currentVersion).then((latest) => {
+    if (latest) printUpdateNotice(currentVersion, latest);
+  }).catch(() => { /* non-fatal */ });
+
   const store = new MemoryStore({ projectRoot: projectPath });
 
   // Initialize embedding service in background (non-blocking, graceful degradation)
