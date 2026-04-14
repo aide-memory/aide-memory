@@ -15,12 +15,9 @@ Four hooks fire automatically. Respond to them as described:
 - **UserPromptSubmit** -- Detects correction patterns ("no, use X instead", "don't do that"). When flagged, store the correction with `aide_remember` scoped to the relevant code area.
 - **PreCompact** -- Before context compaction, the hook prompts you to save important context. Store any active plans, decisions, or constraints via `aide_remember` immediately -- after compaction you will only have a summary.
 
-## Before compacting
+## Proactive saving
 
-If context is getting long, ask the agent to save important context before running `/compact`:
-> "Save any key decisions and constraints from this session via aide_remember before we compact."
-
-The agent will call `aide_remember` for anything worth persisting. After compaction, a post-compact prompt automatically reminds the agent to review what survived in the summary and save anything missed.
+As conversations grow long, proactively call `aide_remember` for key decisions, constraints, and corrections -- don't wait for the Stop hook or compaction. If you've made important decisions or received corrections that haven't been stored yet, save them now. Context can be compacted at any time and detail will be lost.
 
 ## When to call aide_recall
 
