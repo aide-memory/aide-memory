@@ -71,9 +71,11 @@ if [ "$SHOULD_BLOCK" = "true" ]; then
     reason: .
   }'
 else
-  # Soft: agent sees the reminder as context but doesn't have to respond
+  # Soft: agent sees the reminder as context but doesn't have to respond.
+  # suppressOutput hides from user view — agent still sees systemMessage.
   echo "$PROMPT" | jq -Rs '{
     decision: "approve",
+    suppressOutput: true,
     systemMessage: .
   }'
 fi
