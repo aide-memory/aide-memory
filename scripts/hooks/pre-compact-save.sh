@@ -24,14 +24,15 @@ rm -f "$PROJECT_ROOT/.aide/cache/searched-queries-${SID}.txt" 2>/dev/null
 rm -f "$PROJECT_ROOT/.aide/cache/correction-pending-${SID}.txt" 2>/dev/null
 rm -f "$PROJECT_ROOT/.aide/cache/compact-pending-${SID}.txt" 2>/dev/null
 
-# Block compaction — prompt agent to save context first.
-# With Claude Code v2.1.105+ PreCompact hook support, "decision": "block"
-# should give the agent an agentic turn to call aide_remember before compaction.
+# Advisory: compaction proceeds (exit 0), but inject a system message
+# reminding the agent to save. Post-compact SessionStart is the backup.
+# Blocking (exit 2) doesn't give the agent an agentic turn — confirmed.
 cat <<'HOOK_OUTPUT'
 {
-  "decision": "block",
-  "reason": "IMPORTANT: Context is about to be compacted and detail will be lost. BEFORE anything else, save any key decisions, technical constraints, preferences, or guidelines from this session via aide_remember (source: hook). You have full context RIGHT NOW — after compaction you will only have a summary. Save what matters. If nothing to save, proceed."
+  "decision": "approve",
+  "reason": "Compaction proceeding. Session tracking cleared.",
+  "systemMessage": "IMPORTANT: Context was just compacted. Review the summary for any key decisions, technical constraints, preferences, or guidelines worth persisting. Call aide_remember for anything important — after compaction you only have a summary. Save what matters."
 }
 HOOK_OUTPUT
 
-exit 2
+exit 0
