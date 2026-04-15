@@ -1193,12 +1193,14 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - Goal: Stop hook should not look like an error, soft nudges on re-reads could be silent
 - **Action**: After validation sessions, do a dedicated UX exploration session — collect all hook output samples (block, soft, silent, stop, precompact) from both test and dev sessions, compare labels/rendering, identify patterns, and determine what can be fixed vs what's a Claude Code platform limitation
 - **Config mapping to Cursor**: All settings (memories.hideFromGrep, telemetry, hook intensity) should map to Cursor's equivalent config system. Audit all .aide/config.json keys and ensure they work across both Claude Code and Cursor environments
-- **Optimize defaults from validation data**: Review all 23+ configurable settings and set best defaults based on validation findings. This is NOT Phase 2/pro — ship with optimal defaults NOW, configurability comes later. Key changes to evaluate:
-  - Stop hook interval: analyze this session's prompt count vs actual aide_remember calls to determine optimal N (every 3? 5? 10 turns?)
-  - Correction detection patterns: tighten to reduce false positives
-  - Scope depth threshold: validated at 2, confirm with more projects
-  - Search hook: already soft (validated)
-  - All other settings: determine best default from observed behavior
+- **Optimize defaults from validation data**: Ship with optimal defaults NOW — configurability comes later (Phase 2/pro). Status of defaults optimization:
+  - Stop hook interval: **IMPLEMENTED** — dynamic (every 3 for first 9 turns, every 5 after). Based on Anthropic data (avg 4 prompts/session) + ProAIDE research (mid-task interruptions 62% dismissed) + this session's data (1 aide_remember per 9 prompts, 51% signal-to-noise ratio). Correction-pending always blocks.
+  - Search hook: **IMPLEMENTED** — always soft (validated: agent correctly skips aide_search when memories already recalled)
+  - Scope depth: **IMPLEMENTED** — minimum depth 2 (src/** too broad, src/api/** specific enough)
+  - .ignore file: **IMPLEMENTED** — hides memories from grep by default
+  - Correction detection: **TODO** — patterns too broad, false positives. Tighten regex.
+  - Stop hook soft format: **TODO** — verify hookSpecificOutput works for Stop events (same format was invalid for PreCompact). If not, non-block turns are truly silent (acceptable but differs from "always aware" intent).
+  - All other settings: confirm with more project types and session data
 - **Correction detection false positives**: detect-correction.sh regex patterns are too broad — "no, don't", "we should", "I want you to" match normal conversation. Creates stale correction-pending flags that make Stop hook say "correction not stored" on every turn. Tighten patterns or add negative filters.
 - **Audit hook usage patterns**: Are blocking hooks, flag files, two-phase patterns, and multi-hook coordination (blocker + tracker) the correct/intended way to use Claude Code hooks? Or are there simpler/better patterns? Research Claude Code hook best practices, check community examples, file questions with Anthropic if needed
 - **Progressive context warnings**: File feature request with Claude Code for a `ContextThreshold` hook event (fires at 70%, 80%, 90% context usage). Would enable progressive "save your context" warnings before auto-compaction triggers. For now, Stop hook on every turn is the closest approximation.
