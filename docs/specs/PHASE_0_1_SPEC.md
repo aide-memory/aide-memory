@@ -1055,13 +1055,15 @@ _Verifies soft/block schedule and correction override._
 
 | Step | Action | Expected | Metric |
 |------|--------|----------|--------|
-| O1 | Turns 1-2: simple prompts | Stop → **soft** (no block) | soft_early |
-| O2 | Turn 3: prompt | Stop → **block** (first save point) | block_at_3 |
-| O3 | Turns 4-5: prompts | Stop → **soft** | soft_between |
+| O1 | Turns 1-2: simple prompts | Stop → **silent** (no output, no block) | silent_early |
+| O2 | Turn 3: prompt | Stop → **block** (first save point, visible) | block_at_3 |
+| O3 | Turns 4-5: prompts | Stop → **silent** | silent_between |
 | O4 | Turn 6: prompt | Stop → **block** | block_at_6 |
-| O5 | Turn 10+: count turns | Stop → **block every 5** (not every 3) | interval_switch |
-| O6 | Any turn with correction-pending flag | Stop → **block** regardless of interval | correction_override |
-| O7 | After /clear: counter resets, next block at turn 3 again | Stop schedule restarts | counter_reset |
+| O5 | Turns 10-13: prompts | Stop → **silent** (interval switches to every 5) | interval_switch |
+| O6 | Turn 14: prompt | Stop → **block** (first long-interval block, 9+5=14) | block_at_14 |
+| O7 | Any turn with correction-pending flag | Stop → **block** regardless of interval, flag cleared after | correction_override |
+| O8 | After /clear: counter resets, next block at turn 3 again | Stop schedule restarts | counter_reset |
+| O9 | Verify: user sees nothing on silent turns | No "Stop says:" or "Stop hook error:" output | ux_clean |
 
 **--- USER SCENARIOS (U1-U3): Does the system actually help? ---**
 
