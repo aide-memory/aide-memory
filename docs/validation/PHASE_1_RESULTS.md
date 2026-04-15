@@ -147,11 +147,16 @@ Prompt: "Read src/index.ts and explain it" (5 memories seeded, below threshold)
 | F2 | Read file with scoped mems (<10 total) | Soft (not block) | Soft nudge delivered (debug log line 242: additionalContext). Agent proactively called aide_recall from the nudge. | PASS |
 | F2b | Agent acts on soft | aide_recall called | Debug log: ToolSearch → aide_recall at line 259, 307. Agent chose to recall — not forced. | PASS |
 
+| F4 | Grep with matching keyword (<10 total) | Search → soft | Hook fired soft (debug line 887). Agent acknowledged: "already in context from earlier." | PASS |
+
 ### Findings
-- Soft nudge (additionalContext) works — agent sees it and proactively acts on it
+- Soft nudge (additionalContext) works for ALL three hook types: Read, Edit, Search
+- Agent sees soft nudges and makes informed decisions (recall, skip, or acknowledge)
+- Read soft: agent proactively recalled (didn't ignore)
+- Edit soft: agent acknowledged, decided already loaded
+- Search soft: agent acknowledged, decided already in context
 - First test failed because agent reused cached file content (same session, didn't call Read tool)
-- After session restart, Read hook fired correctly with soft nudge
-- **Soft IS effective** — agent recalled based on nudge, not just rules file (confirmed via debug log timeline)
+- **Soft IS effective across all hooks** — confirmed via debug log for each
 
 ## Dynamic Stop Hook (implemented mid-validation)
 
