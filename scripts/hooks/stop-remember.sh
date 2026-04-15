@@ -70,14 +70,8 @@ if [ "$SHOULD_BLOCK" = "true" ]; then
     decision: "block",
     reason: .
   }'
-else
-  # Soft: agent sees the reminder as context but doesn't have to respond.
-  # suppressOutput hides from user view — agent still sees systemMessage.
-  echo "$PROMPT" | jq -Rs '{
-    decision: "approve",
-    suppressOutput: true,
-    systemMessage: .
-  }'
 fi
+# Non-block turns: silent. Agent has proactive saving rule in rules file —
+# no Stop hook output needed. Block turns provide explicit checkpoints.
 
 exit 0
