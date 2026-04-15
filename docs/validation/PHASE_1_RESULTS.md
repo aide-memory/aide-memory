@@ -147,7 +147,9 @@ First-time UX is clean — aide-memory is invisible until memories exist.
 | Soft format | `decision: "approve"` + `systemMessage` (top-level fields, valid for all hooks) |
 | Data basis | 1 aide_remember per 9 prompts, 51% signal-to-noise with always-block |
 | Research | Anthropic: avg 4 prompts/session. ProAIDE: mid-task interruptions 62% dismissed. |
-| Bugs found/fixed | hookSpecificOutput invalid for Stop (same as PreCompact). Correction flag persisted forever on false positives. |
+| Bugs found/fixed | hookSpecificOutput invalid for Stop (same as PreCompact). Correction flag persisted forever on false positives. suppressOutput doesn't work for Stop. |
+| Non-block turns | Silent (hook runs, counts, checks flags, but outputs nothing). Agent awareness from rules file proactive saving instruction. |
+| Tested live | Block at turn 14 ✅ (correct schedule). Soft visible at turn 15 ✅ (before suppressOutput). Silent after fix. |
 
 ### Design Decisions
 17. **Stop hook always blocks** — intentional (block until reflect pattern). UX concern logged as P1.18.
