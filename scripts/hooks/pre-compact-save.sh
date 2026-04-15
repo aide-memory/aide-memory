@@ -21,9 +21,7 @@ PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 SID="${SESSION_ID:-default}"
 
 # Clear ALL session tracking — agent is about to lose context
-rm -f "$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt" 2>/dev/null
-rm -f "$PROJECT_ROOT/.aide/cache/searched-queries-${SID}.txt" 2>/dev/null
-rm -f "$PROJECT_ROOT/.aide/cache/correction-pending-${SID}.txt" 2>/dev/null
-rm -f "$PROJECT_ROOT/.aide/cache/compact-pending-${SID}.txt" 2>/dev/null
+source "$SCRIPT_DIR/clear-tracking.sh"
+clear_session_tracking "$PROJECT_ROOT/.aide/cache" "$SID"
 
 exit 0

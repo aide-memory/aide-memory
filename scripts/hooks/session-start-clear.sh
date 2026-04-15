@@ -27,11 +27,8 @@ if [ -d "$CACHE_DIR" ]; then
   if [ "$SOURCE" = "clear" ] || [ "$SOURCE" = "compact" ]; then
     # Clear/compact: THIS session's agent loses context — clear only THIS session's tracking.
     # Other concurrent sessions keep their tracking intact.
-    # For compact: PreCompact also clears in Phase 2, but this is belt-and-suspenders.
-    rm -f "$CACHE_DIR/recalled-paths-${SID}.txt" 2>/dev/null
-    rm -f "$CACHE_DIR/searched-queries-${SID}.txt" 2>/dev/null
-    rm -f "$CACHE_DIR/correction-pending-${SID}.txt" 2>/dev/null
-    rm -f "$CACHE_DIR/compact-pending-${SID}.txt" 2>/dev/null
+    source "$SCRIPT_DIR/clear-tracking.sh"
+    clear_session_tracking "$CACHE_DIR" "$SID"
   fi
   # start/resume: don't clean anything (fresh or continuing).
 fi
