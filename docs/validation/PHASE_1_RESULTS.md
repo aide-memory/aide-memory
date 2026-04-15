@@ -138,6 +138,17 @@ Prompt: "Read src/index.ts and explain it"
 
 First-time UX is clean — aide-memory is invisible until memories exist.
 
+## Dynamic Stop Hook (implemented mid-validation)
+
+| Change | Detail |
+|--------|--------|
+| Dynamic interval | Block every 3 turns (first 9), every 5 after. Soft on non-block turns. |
+| Correction flag clears after one chance | No infinite nagging on false positives |
+| Soft format | `decision: "approve"` + `systemMessage` (top-level fields, valid for all hooks) |
+| Data basis | 1 aide_remember per 9 prompts, 51% signal-to-noise with always-block |
+| Research | Anthropic: avg 4 prompts/session. ProAIDE: mid-task interruptions 62% dismissed. |
+| Bugs found/fixed | hookSpecificOutput invalid for Stop (same as PreCompact). Correction flag persisted forever on false positives. |
+
 ### Design Decisions
 17. **Stop hook always blocks** — intentional (block until reflect pattern). UX concern logged as P1.18.
 18. **Minimum scope depth = 2** — src/** too broad for blocking, src/api/** specific enough. Configurable later.
