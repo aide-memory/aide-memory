@@ -1050,6 +1050,19 @@ _Tests that the agent can demonstrate awareness of injected preferences._
 | N2 | Ask: "What coding conventions should I follow in this project?" | Agent references injected preferences (explain first, <30 lines, no TODOs, etc.) | agent_aware |
 | N3 | At least 2 specific conventions mentioned | Agent shows awareness, not generic advice | specificity |
 
+**Session O: Dynamic Stop Hook Interval**
+_Verifies soft/block schedule and correction override._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| O1 | Turns 1-2: simple prompts | Stop → **soft** (no block) | soft_early |
+| O2 | Turn 3: prompt | Stop → **block** (first save point) | block_at_3 |
+| O3 | Turns 4-5: prompts | Stop → **soft** | soft_between |
+| O4 | Turn 6: prompt | Stop → **block** | block_at_6 |
+| O5 | Turn 10+: count turns | Stop → **block every 5** (not every 3) | interval_switch |
+| O6 | Any turn with correction-pending flag | Stop → **block** regardless of interval | correction_override |
+| O7 | After /clear: counter resets, next block at turn 3 again | Stop schedule restarts | counter_reset |
+
 **--- USER SCENARIOS (U1-U3): Does the system actually help? ---**
 
 Anti-false-positive design: conventions must be (a) COUNTER to LLM defaults and (b) NOT discoverable from existing code.
