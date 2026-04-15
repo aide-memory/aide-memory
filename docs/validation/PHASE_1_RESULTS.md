@@ -138,6 +138,20 @@ Prompt: "Read src/index.ts and explain it"
 
 First-time UX is clean — aide-memory is invisible until memories exist.
 
+## Session F: Softening (<10 memories)
+
+Prompt: "Read src/index.ts and explain it" (5 memories seeded, below threshold)
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| F2 | Read file with scoped mems (<10 total) | Soft (not block) | Hook output soft nudge (verified via direct test). User saw NO visible output — Claude Code may collapse additionalContext when not blocking. Agent didn't proactively call aide_recall. | PARTIAL |
+
+### Findings
+- Hook correctly outputs soft (additionalContext) for <10 memories — verified via bash test
+- `src/**` scoped memories have scoped_count=0 (depth 1, below MIN_SCOPE_DEPTH=2) — softening works as intended
+- Agent did NOT proactively recall from soft nudge — just read the file and explained it
+- Unclear if agent saw the soft context or if Claude Code suppressed it visually
+
 ## Dynamic Stop Hook (implemented mid-validation)
 
 | Change | Detail |
