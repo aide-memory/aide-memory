@@ -1262,6 +1262,24 @@ File feature request:
   - **Conclusion**: no combination of exit code + JSON output gives the agent a tool-calling turn during compaction. This is an architectural constraint — hooks are synchronous control, agent loop is async.
 - **Cursor compaction behavior**: Cursor may handle compaction differently — investigate what context survives compaction in Cursor, whether Cursor has equivalent hooks, and whether the post-compact save prompt works there. Cursor's compacted summaries may retain less/more context than Claude Code's, affecting whether aide_remember captures useful info post-compact
 
+**P1.19: Phase 1 Follow-ups**
+
+1. **PreCompact Feature Request** — File on github.com/anthropics/claude-code/issues. Title: "Allow PreCompact hooks to trigger an agentic turn before compaction proceeds." Include all implementation attempts documented in this spec (exit 0, exit 2, systemMessage, hookSpecificOutput — all failed). Reference GitHub issue #32062.
+
+2. **Progressive Context Warnings** — Part of PreCompact mitigation. File feature request for `ContextThreshold` hook event (fires at 70%, 80%, 90% context usage). Don't implement with transcript file size estimation (too inaccurate). Would enable progressive "save your context" warnings before auto-compaction.
+
+3. **Search Tools — Explore Soft Blocking** — Currently only Grep/Glob hooked. Bash commands (grep, find, rg) bypass hooks. Accepted gap — Claude Code doesn't expose matchers for Bash. Glob does NOT respect .ignore (Claude Code issue #20609). Explore: can soft nudging be extended to other search patterns? Agent subagent searches?
+
+**P1.20: Distribution Strategy + Binary** (explore prior to publishing new version / demoing)
+- Current npm ships readable JS + bash — all source accessible
+- Compile all hook logic into aide-memory binary via `bun compile`
+- Bash hooks become 2-line thin wrappers: `cat | aide-memory hook pre-read`
+- All logic private: blocking decisions, scope depth, dynamic intervals, correction detection, config reading, pro gating, tracking management
+- Same TypeScript codebase, different build target — solves code protection AND settings enforcement
+- Pro features: server-side logic is only way to truly prevent bypass (local flags = speed bump, server = enforcement)
+- Distribution options: homebrew tap, curl installer, npm wrapping binary
+- Explore BEFORE publishing next version — affects how we ship
+
 **P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation
 - Same 5 scenarios, same runbook, run in Cursor after Claude Code validation passes
 
