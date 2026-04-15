@@ -97,6 +97,35 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 15. **track-search.sh** — new PostToolUse hook for aide_search tracking.
 16. **Search hook always soft** — no longer blocks grep. Agent decides whether to call aide_search.
 
+## Session D: Compact + Re-recall
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| D2 | /compact | PreCompact cleanup + compaction | Hook format initially wrong (hookSpecificOutput invalid for PreCompact). Fixed to top-level decision/reason. Compaction succeeded. | PASS (after fix) |
+| D2b | Post-compact SessionStart | Agent sees save prompt | Agent confirmed seeing instruction, reviewed context, said "nothing new" (memory 36 already saved) | PASS |
+| D4 | Re-read after compact | Block (tracking cleared) | Not tested separately — agent read rules file on compact (auto-behavior) | PARTIAL |
+
+### PreCompact Findings
+- PreCompact cannot give agent an agentic turn — confirmed Claude Code limitation
+- hookSpecificOutput format invalid for PreCompact — must use top-level decision/reason/systemMessage
+- v2.1.105 added PreCompact support but only for blocking (cancel), not agentic turns
+- Save strategy: Stop hook (every turn) + proactive saving rule + user guidance
+
+## Session E: Cross-Session Persistence (NEW session)
+
+Prompt: "What do you know about this project's API conventions?"
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| E1 | Start new session | SessionStart injects prefs/guidelines | Agent listed 7 conventions from injection — "Based on the session preferences/guidelines provided" | PASS |
+| E2 | Correction from Session C persists | Memory 36 (structured logging) in new session | Agent included "All endpoints must include request logging via structured logger from src/lib/logger.ts" | PASS |
+| E3 | Agent aware without file reads | No aide_recall needed | Agent answered from injected context alone, didn't read any files | PASS |
+
+### Remember→Recall Loop: VALIDATED
+- Session C: user corrected → aide_remember stored memory 36 (structured logging, src/api/**)
+- Session E: new session → SessionStart injected memory 36 → agent referenced it
+- **Core product promise confirmed: correct once, remembered forever**
+
 ### Design Decisions
 17. **Stop hook always blocks** — intentional (block until reflect pattern). UX concern logged as P1.18.
 18. **Minimum scope depth = 2** — src/** too broad for blocking, src/api/** specific enough. Configurable later.
