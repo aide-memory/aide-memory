@@ -1280,6 +1280,8 @@ File feature request:
 - Distribution options: homebrew tap, curl installer, npm wrapping binary
 - Explore BEFORE publishing next version — affects how we ship
 
+4. **Resume-with-summary detection** — Claude Code doesn't distinguish `source: "resume"` between full resume and resume-with-summary. Currently we clear tracking on ALL resumes (safe default). Investigate: can we detect summary-resume to avoid unnecessary re-blocking on full resume? Check if transcript_path size or session metadata indicates summarization. File feature request for `source: "resume_summary"` distinction.
+
 **P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation
 - Same 5 scenarios, same runbook, run in Cursor after Claude Code validation passes
 

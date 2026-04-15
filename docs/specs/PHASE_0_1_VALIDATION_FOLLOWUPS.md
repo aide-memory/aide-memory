@@ -91,6 +91,12 @@ Extend `autoUpdateIfNeeded()` in init.ts: scan defaults.json for `public: true` 
 
 Every hook reads settings via `source read-config.sh` + `get_setting "key"` instead of hardcoded values.
 
+### 9. Clear Tracking on Resume (all resumes)
+
+**Change:** SessionStart clears tracking on `source: "resume"` in addition to `"clear"` and `"compact"`. Can't distinguish full resume from resume-with-summary — safe to clear all (extra re-blocking on full resume is minor, missing re-blocking on summary resume is a real gap).
+
+**File:** session-start-clear.sh — add `"resume"` to the clear condition.
+
 ---
 
 ## FAST FOLLOWS (after this implementation, before continuing validation)
