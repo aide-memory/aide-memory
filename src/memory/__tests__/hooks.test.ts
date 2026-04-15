@@ -470,3 +470,58 @@ describe('recall-for-path.js', () => {
     }
   });
 });
+
+// ─── clear-tracking.sh (shared cleanup function) ────────────────────────────
+
+describe('clear-tracking.sh (shared cleanup)', () => {
+  const cacheDir = path.join(os.tmpdir(), `aide-clear-test-${Date.now()}`);
+  const sid = 'test-clear-session';
+
+  beforeEach(() => {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(path.join(cacheDir, `recalled-paths-${sid}.txt`), 'file|test');
+    fs.writeFileSync(path.join(cacheDir, `searched-queries-${sid}.txt`), 'query');
+    fs.writeFileSync(path.join(cacheDir, `correction-pending-${sid}.txt`), 'pending');
+    fs.writeFileSync(path.join(cacheDir, `compact-pending-${sid}.txt`), 'pending');
+  });
+
+  afterEach(() => {
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  });
+
+  it('clears all 4 tracking files for the given session', () => {
+    execSync(`source "${path.join(HOOKS_DIR, 'clear-tracking.sh')}" && clear_session_tracking "${cacheDir}" "${sid}"`, {
+      shell: '/bin/bash',
+      encoding: 'utf-8',
+    });
+
+    expect(fs.existsSync(path.join(cacheDir, `recalled-paths-${sid}.txt`))).toBe(false);
+    expect(fs.existsSync(path.join(cacheDir, `searched-queries-${sid}.txt`))).toBe(false);
+    expect(fs.existsSync(path.join(cacheDir, `correction-pending-${sid}.txt`))).toBe(false);
+    expect(fs.existsSync(path.join(cacheDir, `compact-pending-${sid}.txt`))).toBe(false);
+  });
+
+  it('does not affect other sessions', () => {
+    fs.writeFileSync(path.join(cacheDir, 'recalled-paths-other.txt'), 'other');
+
+    execSync(`source "${path.join(HOOKS_DIR, 'clear-tracking.sh')}" && clear_session_tracking "${cacheDir}" "${sid}"`, {
+      shell: '/bin/bash',
+      encoding: 'utf-8',
+    });
+
+    expect(fs.existsSync(path.join(cacheDir, 'recalled-paths-other.txt'))).toBe(true);
+    expect(fs.readFileSync(path.join(cacheDir, 'recalled-paths-other.txt'), 'utf-8')).toBe('other');
+  });
+
+  it('does not error when no tracking files exist', () => {
+    // Remove all files first
+    for (const f of fs.readdirSync(cacheDir)) fs.unlinkSync(path.join(cacheDir, f));
+
+    expect(() => {
+      execSync(`source "${path.join(HOOKS_DIR, 'clear-tracking.sh')}" && clear_session_tracking "${cacheDir}" "${sid}"`, {
+        shell: '/bin/bash',
+        encoding: 'utf-8',
+      });
+    }).not.toThrow();
+  });
+});
