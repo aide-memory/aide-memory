@@ -1382,7 +1382,8 @@ Configurable settings (identified during validation):
 | `injection.maxTokens` | `300` | Approximate token cap for SessionStart injection |
 | `memories.hideFromGrep` | `true` | Hide .aide/memories/ from grep via .ignore |
 | `memories.softening.threshold` | `10` | Below this total memory count, all hooks are soft |
-| `hooks.stop.mode` | `"always"` | When Stop blocks: "always" (every turn), "correction-only" (only when flag), or "off" |
+| `hooks.stop.mode` | `"always"` | When Stop blocks: "always" (every turn), "interval" (every N turns, soft between), "correction-only" (only when flag), or "off" |
+| `hooks.stop.interval` | `5` | When mode="interval": block every Nth turn, soft/silent between. Reduces noise while still prompting periodically. |
 | `hooks.directoryTrigger.threshold` | `1` | Number of sibling files read before directory recall triggers (0=off) |
 | `recall.layerOrder` | `["area_context","technical","preferences","guidelines"]` | Priority order for recall ranking |
 | `recall.searchMode` | `"auto"` | Default aide_search mode: "auto", "keyword", or "semantic" |
