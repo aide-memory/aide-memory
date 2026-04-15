@@ -144,13 +144,14 @@ Prompt: "Read src/index.ts and explain it" (5 memories seeded, below threshold)
 
 | Step | Action | Expected | Actual | Pass? |
 |------|--------|----------|--------|-------|
-| F2 | Read file with scoped mems (<10 total) | Soft (not block) | Hook output soft nudge (verified via direct test). User saw NO visible output — Claude Code may collapse additionalContext when not blocking. Agent didn't proactively call aide_recall. | PARTIAL |
+| F2 | Read file with scoped mems (<10 total) | Soft (not block) | Soft nudge delivered (debug log line 242: additionalContext). Agent proactively called aide_recall from the nudge. | PASS |
+| F2b | Agent acts on soft | aide_recall called | Debug log: ToolSearch → aide_recall at line 259, 307. Agent chose to recall — not forced. | PASS |
 
 ### Findings
-- Hook correctly outputs soft (additionalContext) for <10 memories — verified via bash test
-- `src/**` scoped memories have scoped_count=0 (depth 1, below MIN_SCOPE_DEPTH=2) — softening works as intended
-- Agent did NOT proactively recall from soft nudge — just read the file and explained it
-- Unclear if agent saw the soft context or if Claude Code suppressed it visually
+- Soft nudge (additionalContext) works — agent sees it and proactively acts on it
+- First test failed because agent reused cached file content (same session, didn't call Read tool)
+- After session restart, Read hook fired correctly with soft nudge
+- **Soft IS effective** — agent recalled based on nudge, not just rules file (confirmed via debug log timeline)
 
 ## Dynamic Stop Hook (implemented mid-validation)
 
