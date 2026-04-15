@@ -78,7 +78,7 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 ## Changes Made During Validation
 
 ### Bugs Fixed
-1. **PreCompact two-phase blocking** — exit 0 → exit 2 for Phase 1. Previously never actually blocked compaction.
+1. **PreCompact two-phase blocking** — exit 0 → exit 2 for Phase 1. Previously never actually blocked compaction. (Later refactored: two-phase removed, PreCompact is now cleanup-only exit 0, no output)
 2. **SessionStart cleanup** — only clear THIS session on clear/compact. Don't touch concurrent sessions.
 3. **Search hook tracked on block** — agent could bypass by retrying grep. Fixed: tracking only via PostToolUse:aide_search.
 4. **Directory path trailing slash stripped** — path.relative() broke isDirectoryQuery detection.
@@ -101,15 +101,15 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 
 | Step | Action | Expected | Actual | Pass? |
 |------|--------|----------|--------|-------|
-| D2 | /compact | PreCompact cleanup + compaction | Hook format initially wrong (hookSpecificOutput invalid for PreCompact). Fixed to top-level decision/reason. Compaction succeeded. | PASS (after fix) |
-| D2b | Post-compact SessionStart | Agent sees save prompt | Agent confirmed seeing instruction, reviewed context, said "nothing new" (memory 36 already saved) | PASS |
+| D2 | /compact | PreCompact cleanup + compaction | Hook format initially wrong (hookSpecificOutput invalid for PreCompact). Fixed to top-level decision/reason. Compaction succeeded. (Subsequently simplified: PreCompact now cleanup-only with no output) | PASS (after fix) |
+| D2b | Post-compact SessionStart | Agent sees save prompt | Agent confirmed seeing instruction, reviewed context, said "nothing new" (memory 36 already saved) (Post-compact save prompt subsequently removed — SessionStart now only injects preferences/guidelines) | PASS |
 | D4 | Re-read after compact | Block (tracking cleared) | Not tested separately — agent read rules file on compact (auto-behavior) | PARTIAL |
 
 ### PreCompact Findings
 - PreCompact cannot give agent an agentic turn — confirmed Claude Code limitation
 - hookSpecificOutput format invalid for PreCompact — must use top-level decision/reason/systemMessage
 - v2.1.105 added PreCompact support but only for blocking (cancel), not agentic turns
-- Save strategy: Stop hook (every turn) + proactive saving rule + user guidance
+- Save strategy: Stop hook (dynamic interval) + proactive saving rule + user guidance
 
 ## Session E: Cross-Session Persistence (NEW session)
 
@@ -167,12 +167,12 @@ Prompt: "Read src/index.ts and explain it" (5 memories seeded, below threshold)
 | Soft format | `decision: "approve"` + `systemMessage` (top-level fields, valid for all hooks) |
 | Data basis | 1 aide_remember per 9 prompts, 51% signal-to-noise with always-block |
 | Research | Anthropic: avg 4 prompts/session. ProAIDE: mid-task interruptions 62% dismissed. |
-| Bugs found/fixed | hookSpecificOutput invalid for Stop (same as PreCompact). Correction flag persisted forever on false positives. suppressOutput doesn't work for Stop. |
+| Bugs found/fixed | hookSpecificOutput invalid for Stop — confirmed architectural constraint, not a bug. Correction flag persisted forever on false positives. suppressOutput doesn't work for Stop. |
 | Non-block turns | Silent (hook runs, counts, checks flags, but outputs nothing). Agent awareness from rules file proactive saving instruction. |
 | Tested live | Block at turn 14 ✅ (correct schedule). Soft visible at turn 15 ✅ (before suppressOutput). Silent after fix. |
 
 ### Design Decisions
-17. **Stop hook always blocks** — intentional (block until reflect pattern). UX concern logged as P1.18.
+17. **Stop hook uses dynamic interval (every 3 for first 9, every 5 after). Silent on non-block turns.** UX concern logged as P1.18.
 18. **Minimum scope depth = 2** — src/** too broad for blocking, src/api/** specific enough. Configurable later.
 19. **Session cleanup rules** — start/resume: don't touch. clear/compact: clear this session only.
 20. **Scope depth replaces parent-only check** — first iteration used parent-directory match (N=1). Replaced with minimum depth (≥2 segments) which is more general and directly answers "is this scope specific enough?"
@@ -185,7 +185,7 @@ Prompt: "Read src/index.ts and explain it" (5 memories seeded, below threshold)
 1. **Search hook blocking → soft** — agent had memories from prior recall, blocking forced redundant aide_search calls
 2. **`.ignore` file added** — grep was returning raw memory JSON, bypassing structured access
 3. **Claude Code UI labels** — soft hooks may show as "returned blocking error" in collapsed/expanded view. Debug log is source of truth. Added to P1.18.
-4. **Stop hook fires every turn** — confirmed intentional, but "error" label is confusing. P1.18.
+4. **Stop hook was every-turn, changed to dynamic interval** — confirmed intentional, but "error" label is confusing. P1.18.
 5. **Agent proactively recalled directory** — directory trigger (A4) didn't fire because agent recalled src/api/ on first call
 6. **Broad scope blocking was major friction** — src/** caused useless blocks on src/lib/logger.ts returning only generic preferences. Fixed with depth-based rule (MIN_SCOPE_DEPTH=2).
 7. **Stale validation docs consolidated** — INTEGRATION_TESTING.md and RUN_VALIDATION.md deleted (-2446 lines). Gaps extracted into Sessions J-N.

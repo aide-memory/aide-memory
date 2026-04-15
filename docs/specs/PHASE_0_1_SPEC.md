@@ -159,7 +159,7 @@ WHAT'S ALREADY DONE (do NOT redo):
 - Marketing content: 5 pieces in docs/marketing/ + publishing guide ✅
 - Analytics: local SQLite + PostHog HTTP integration + recall-log CLI ✅
 - Plugin research: documented in docs/specs/PLUGIN_STATUS.md ✅
-- Hook & Recall Refinement: 9 hooks implemented, session-scoped tracking, scoped-only blocking, round-robin ranking, scope-first recall, search modes (auto/keyword/semantic), two-phase correction flow, SessionStart auto-injection, priority field, embedding fix ✅
+- Hook & Recall Refinement: 9 hooks implemented, session-scoped tracking, scoped-only blocking, round-robin ranking, scope-first recall, search modes (auto/keyword/semantic), correction detection flow, SessionStart auto-injection, priority field, embedding fix ✅
 - All hook smoke tests (28 automated + 14 live scenarios) passing ✅
 - Recall quality verified across 22 aide_recall combinations ✅
 
@@ -186,8 +186,8 @@ Run 16 validation scenarios. Use Desktop Commander to open Terminal + Claude Cod
    - Read → block → recall → re-read soft (no double block)
    - Dir trigger fires on 2nd file, not 1st or 3rd
    - Edit shares tracking with Read (no redundant block)
-   - Search blocks only on scoped matches, silent on zero
-   - Correction flag lifecycle: created → stop enforces → cleared by aide_remember
+   - Search is always soft, silent on zero
+   - Correction flag lifecycle: created → stop enforces → cleared after Stop presents once
 8. Write results to /Users/meky/code/aide-v0/docs/validation/PHASE_1_RESULTS.md using the tables below
 9. If any scenario FAILS: document what failed, whether it's quantitative (wrong hook behavior) or qualitative (wrong memories returned), and continue
 
@@ -203,12 +203,12 @@ RESULTS TABLE 1 — Per-Step Results (fill during each session):
 | A | A6 | Edit | block | | |
 | A | A7 | Edit | soft | | |
 | A | A8 | Read | soft (proj-wide only) | | |
-| B | B1 | Search | block | | |
+| B | B1 | Search | soft | | |
 | B | B5 | Search | soft | | |
 | C | C1 | UserPromptSubmit | soft+flag | | |
 | C | C2 | PostToolUse | passthrough+clear | | |
 | C | C4 | Stop | block | | |
-| D | D2 | PreCompact+SessionStart | cleanup + post-compact prompt | | |
+| D | D2 | PreCompact+SessionStart | cleanup + inject preferences/guidelines | | |
 | D | D5 | Read | block (re-recall) | | |
 | E | E1 | SessionStart | inject | | |
 | F | F2 | Read | soft (<10 mems) | | |
@@ -232,7 +232,7 @@ RESULTS TABLE 3 — Remember Quality (fill for each aide_remember call):
 |---------|------|---------|---------------|-------|---------------|-------|---------------|------------------------|-----------|----------------------|-------|
 | C | C2 | Correction | | | Y/N | | Y/N | Y/N | Y/N | E2 | |
 | C | C4 | Stop prompt | | | Y/N | | Y/N | Y/N | Y/N | E3 | |
-| D | D3 | Post-compact SessionStart | | | Y/N | | Y/N | Y/N | Y/N (post-compact) | E5 | |
+| D | D3 | SessionStart injection (save prompt removed) | | | Y/N | | Y/N | Y/N | Y/N (post-compact) | E5 | |
 
 RESULTS TABLE 4 — Aggregate Metrics:
 
@@ -272,10 +272,9 @@ RESULTS TABLE 4 — Aggregate Metrics:
 | SessionStart injection token estimate | ~tokens |
 | False blocks (blocked when shouldn't) | |
 | Missed blocks (soft when should block) | |
-| PreCompact Phase 1 blocked (exit 2) | Y/N |
-| PreCompact Phase 2 allowed (exit 0) | Y/N |
+| PreCompact cleanup (tracking cleared) | Y/N |
 | Correction flag created on detect | Y/N |
-| Correction flag cleared after aide_remember | Y/N |
+| Correction flag cleared after Stop presents once | Y/N |
 | Tracking file format correct (file\|, dir\|, ids\|) | Y/N |
 | Session isolation (no cross-contamination) | Y/N |
 | **User Scenarios** | |
@@ -482,7 +481,7 @@ This plan covers all design decisions from the April 9-10 session: new hooks, ra
 
 #### 2. DESIGN PRINCIPLES
 
-1. **Block only when scoped memories exist** — block on Read/Edit/Search only when file-specific or directory-scoped memories match the path. Project-wide-only matches get soft nudge, not block. This prevents friction on files with no targeted context.
+1. **Block only when scoped memories exist** — block on Read/Edit only when file-specific or directory-scoped memories match the path. Project-wide-only matches get soft nudge, not block. This prevents friction on files with no targeted context.
 2. **Soft for new projects** — if total memory count < 10, all hooks use soft nudges. Not enough context stored yet to justify blocking.
 3. **Soft when action is ambiguous** — UserPromptSubmit corrections can't block (rejects user's message). Edit nudges are soft if Read already recalled.
 4. **No enforcement when not applicable** — zero memories for path → no nudge at all. Already recalled in this session → soft only. No stale cache triggering false blocks.
@@ -496,8 +495,8 @@ This plan covers all design decisions from the April 9-10 session: new hooks, ra
 | 1 | pre-read-recall.sh | PreToolUse(Read) | Block/Soft | Shows layer counts + topics. Blocks first read per path per session. Soft after aide_recall called. |
 | 2 | track-recall.sh | PreToolUse(aide_recall) | Pass | Writes recalled paths to `recalled-paths-{session_id}.txt`. Resolves relative→absolute paths. |
 | 3 | detect-correction.sh | UserPromptSubmit | Soft | Detects corrections/decisions/preferences via regex. Nudges aide_remember. |
-| 4 | stop-remember.sh | Stop | Block | "Anything non-obvious worth persisting?" Blocks once per turn (stop_hook_active guard). |
-| 5 | pre-compact-save.sh | PreCompact | Block | "Save before context lost." Clears session's recalled-paths file. |
+| 4 | stop-remember.sh | Stop | Dynamic (block every 3/5, silent between) | "Anything non-obvious worth persisting?" Dynamic interval (block every 3 for first 9 turns, every 5 after). |
+| 5 | pre-compact-save.sh | PreCompact | Cleanup | Clears all session tracking (exit 0). |
 | 6 | session-start-clear.sh | SessionStart | Silent | Cleans up stale tracking files from other sessions. |
 
 **Known bugs in current system:**
@@ -512,11 +511,11 @@ This plan covers all design decisions from the April 9-10 session: new hooks, ra
 | 1 | pre-read-recall.sh | PreToolUse | Read | Block/Soft | File + directory recall with preview |
 | 2 | track-recall.sh | PreToolUse | aide_recall | Pass | Track recalled paths + memory IDs |
 | 3 | pre-edit-recall.sh | PreToolUse | Edit, Write | Block/Soft | Recall before code changes (shares Read tracking) |
-| 4 | pre-search-nudge.sh | PreToolUse | Grep, Glob | Block/Soft | aide_search preview with match count |
+| 4 | pre-search-nudge.sh | PreToolUse | Grep, Glob | Soft | aide_search preview with match count |
 | 5 | detect-correction.sh | UserPromptSubmit | — | Soft + flag | Detect correction, write pending flag |
 | 6 | track-remember.sh | PostToolUse | aide_remember | Pass | Clear correction-pending flag |
-| 7 | stop-remember.sh | Stop | — | Block | Persist check + correction enforcement |
-| 8 | pre-compact-save.sh | PreCompact | — | Block | Save context + clear ALL session tracking |
+| 7 | stop-remember.sh | Stop | — | Dynamic | Persist check + correction enforcement |
+| 8 | pre-compact-save.sh | PreCompact | — | Cleanup | Save context + clear ALL session tracking |
 | 9 | session-start-clear.sh | SessionStart | — | Silent + inject | Clean stale files + auto-inject preferences/guidelines |
 
 #### 5. HOOK DETAILS
@@ -578,7 +577,7 @@ Call aide_recall({paths: ['{path}'], layers: ['preferences', 'guidelines', 'tech
 
 Fires before Grep and Glob. Runs keyword search preview inline (~80ms, imperceptible — benchmarked).
 
-- Matches > 0 → **block**: "N aide memories match '{query}'. Call aide_search({keyword: '{query}'})."
+- Matches > 0 → **soft (additionalContext)**: "N aide memories match '{query}'. Call aide_search({keyword: '{query}'})."
 - Matches = 0 → **no nudge at all**
 - Query already searched in this session → **soft nudge**
 
@@ -626,7 +625,8 @@ Stop hook wording maps directly to the four memory layers:
 
 **5.8 Pre-Compact Save (enhanced)**
 
-Two-phase blocking to force aide_remember before compaction. Phase 1: blocks compaction (exit 2), prompts agent to save via aide_remember. Phase 2: flag exists from Phase 1, allows compaction (exit 0), clears ALL session tracking:
+Cleanup-only. Clears all session tracking (exit 0, no output). Cannot force agent tool calls — Claude Code limitation.
+Clears:
 - `recalled-paths-{session_id}.txt`
 - `searched-queries-{session_id}.txt`
 - `correction-pending-{session_id}.txt`
@@ -706,7 +706,7 @@ Lifecycle:
 - SessionStart → cleans up files from OTHER sessions
 - PreCompact → clears ALL files for THIS session (context about to be lost)
 - Track hooks → write entries on tool calls
-- Read/Edit/Search hooks → check entries for block vs soft
+- Read/Edit hooks → check entries for block vs soft
 
 #### 10. EDGE CASES & MITIGATIONS
 
@@ -784,11 +784,11 @@ This nudges the agent to consider both persistence targets without overfitting t
 | Read hook directory trigger | Track 2 files in same dir → block for directory recall |
 | Edit hook blocks if not recalled | Edit file with memories, no prior recall → block |
 | Edit hook soft if already recalled | Recall first, then edit → additionalContext |
-| Search hook blocks on matches | Grep with matching memories → block |
+| Search hook soft on matches | Grep with matching memories → soft |
 | Search hook silent on no matches | Grep with 0 matching memories → no output |
 | Search hook soft after searched | Search same query twice → soft second time |
 | Correction detection | Send correction pattern → additionalContext with flag file |
-| Correction flag cleared | Call aide_remember → flag file deleted |
+| Correction flag cleared | Stop presents once → flag file deleted |
 | Stop checks correction flag | Flag exists → block includes "correction not stored" |
 | Stop normal without flag | No flag → block with standard persist prompt |
 | PreCompact clears all tracking | Trigger compact → all session tracking files removed |
@@ -867,7 +867,7 @@ _Same test project as Session A, fresh session (tracking cleared). Exhaustively 
 | A2.15 | Edit `tests/setup.ts` | Edit → **silent** (no hook output) | | silent_zero_mems_edit |
 | A2.16 | Grep "setup" (no scoped mems match the keyword) | Search → **silent** (no hook output) | | silent_zero_mems_search |
 | | **--- Search Blocking ---** | | | |
-| A2.17 | Grep "auth" (scoped mems match, never searched in session) | Search → **block** | | search_block |
+| A2.17 | Grep "auth" (scoped mems match, never searched in session) | Search → **soft** | | search_soft |
 | A2.18 | Agent calls aide_search keyword:"auth" | | Results returned | search_recall |
 | A2.19 | Grep "auth" again | Search → **soft** (already searched) | | search_soft_after_recall |
 | | **--- Cross-Check: File vs Directory Tracking ---** | | | |
@@ -885,7 +885,7 @@ _Same project. Tests search hooks, 3 search modes, embedding lifecycle._
 
 | Step | Action | Hook Expected | Recall/Remember Check | Metric |
 |------|--------|---------------|----------------------|--------|
-| B1 | Grep "auth" (scoped mems match) | Search → **block** | | hook_behavior |
+| B1 | Grep "auth" (scoped mems match) | Search → **soft** | | hook_behavior |
 | B2 | Agent calls aide_search keyword:"auth" mode:"keyword" | | Substring matches only | search_mode |
 | B3 | aide_search keyword:"authentication flow" mode:"semantic" | | Embedding similarity matches | search_mode |
 | B4 | aide_search keyword:"auth" mode:"auto" | | Keyword first, semantic fallback if <3 | search_mode |
@@ -902,8 +902,8 @@ _Same project. Tests correction detection, flag lifecycle, remember quality, sto
 | C1 | User types correction: "No, use epoch timestamps not ISO" | UserPromptSubmit → **soft** (NEVER block) | Flag file `correction-pending-{sid}.txt` created | correction_detect |
 | C2 | Agent calls aide_remember for correction | PostToolUse(aide_remember) → passthrough | Flag file **cleared** (deleted). Memory stored with: layer=guidelines (not "technical"), scope=src/api/** (not project-wide), content=specific (not generic) | remember_quality, flag_lifecycle |
 | C3 | Verify via aide_memories | | Memory exists with correct layer, scope, content | remember_persisted |
-| C4 | User types another correction but agent DOESN'T call aide_remember | Stop → **block** with "correction not stored" warning | Flag file exists at stop time | stop_enforces_correction |
-| C5 | Agent calls aide_remember (prompted by stop) | | Correction stored, flag cleared | stop_remember |
+| C4 | User types another correction but agent DOESN'T call aide_remember | Stop → **block** with "correction not stored" warning | Flag file exists at stop time. Flag clears after Stop presents once. | stop_enforces_correction |
+| C5 | Agent calls aide_remember (prompted by stop) | | Correction stored. Flag was already cleared after C4 presentation. | stop_remember |
 | C6 | Continue working (no correction), then end session | Stop → **block** (standard prompt, no correction warning) | Agent calls aide_remember. Stored memory has appropriate layer + scope | remember_from_stop |
 | C7 | Verify via aide_memories | | All memories from C2, C5, C6 exist | remember_count |
 
@@ -914,8 +914,8 @@ _Note: PreCompact is cleanup-only (exit 0). Cannot force agent tool calls — Cl
 | Step | Action | Hook Expected | Recall/Remember Check | Metric |
 |------|--------|---------------|----------------------|--------|
 | D1 | Read file, recall, work normally | Read → block → soft | | baseline |
-| D2 | Run /compact | PreCompact clears tracking (exit 0). Compaction proceeds. SessionStart(source:compact) fires post-compact. | Agent sees: "Context was just compacted. Review summary... Call aide_remember for anything important." | post_compact_prompt |
-| D3 | Agent calls aide_remember (prompted by post-compact SessionStart) | | Memory stored with correct layer/scope from compacted summary | remember_from_compact |
+| D2 | Run /compact | PreCompact clears tracking (exit 0). Compaction proceeds. SessionStart(source:compact) fires post-compact. | SessionStart injects preferences/guidelines (save prompt removed — cannot force agent tool calls). | post_compact_inject |
+| D3 | Agent calls aide_remember (if agent chooses to based on injected context) | | Memory stored with correct layer/scope if agent acts | remember_from_compact |
 | D4 | Read same file as D1 | Read → **block** again (tracking was cleared) | | post_compact_rerecall |
 | D5 | Verify D3 memory persists post-compaction | aide_memories | Memory from D3 still exists | remember_survives_compact |
 | D6 | Recall file, re-read (soft), then run /clear | SessionStart(source:clear) fires | All tracking for current session cleared | clear_resets_tracking |
@@ -1188,7 +1188,7 @@ REMAINING (source of truth — all pending items with concrete next steps):
 **P1.18: Hook UX/UI Readability (fast follow after validation)**
 - **Inconsistent labels across sessions**: In some sessions, soft hooks show correctly as "additional context." In others (observed in /tmp/aide-val test session), soft hooks show as "returned blocking error" even though the tool proceeded. Root cause unknown — may be related to collapsed tool call sequences (block → recall → retry) where the block label persists. Needs further investigation.
 - **Known limitation**: Claude Code may display "blocking error" for hook output that didn't actually block. The debug log is the source of truth — `permissionDecision: deny` = blocked, `additionalContext` = soft.
-- **Stop hook always shows "error"**: Stop hook intentionally blocks every turn to prompt aide_remember. Claude Code displays this as "Stop hook blocking error" which sounds like something broke. Consider: can the Stop hook use a different output format that Claude Code labels less alarmingly?
+- **Stop hook always shows "error"**: Stop hook uses dynamic interval to prompt aide_remember. Claude Code displays this as "Stop hook blocking error" which sounds like something broke. Consider: can the Stop hook use a different output format that Claude Code labels less alarmingly?
 - **Soft nudge on already-recalled files**: In normal mode shows as "additional context" (correct label). Could make silent (exit 0, no output) to reduce noise — the agent already has recalled context in conversation.
 - Investigate: can we improve Stop hook JSON format so Claude Code doesn't say "error"?
 - File Claude Code issue at github.com/anthropics/claude-code/issues if Stop hook labeling can be improved
@@ -1201,19 +1201,19 @@ REMAINING (source of truth — all pending items with concrete next steps):
   - Scope depth: **IMPLEMENTED** — minimum depth 2 (src/** too broad, src/api/** specific enough)
   - .ignore file: **IMPLEMENTED** — hides memories from grep by default
   - Correction detection: **TODO** — patterns too broad, false positives. Tighten regex.
-  - Stop hook soft format: **TODO** — verify hookSpecificOutput works for Stop events (same format was invalid for PreCompact). If not, non-block turns are truly silent (acceptable but differs from "always aware" intent).
+  - Stop hook soft format: **RESOLVED** — verify hookSpecificOutput works for Stop events (same format was invalid for PreCompact). If not, non-block turns are truly silent (acceptable but differs from "always aware" intent).
   - All other settings: confirm with more project types and session data
 - **Cover other search tools**: Currently only Grep/Glob have search hooks. Agent can bypass via Bash (`grep`, `find`, `rg`), Agent tool (subagent searches), or other tools. Investigate: can we hook Bash commands that match search patterns? Or is this an accepted gap?
 - **Reduce blocks where soft is sufficient**: Validation proved soft nudges are effective — agent proactively acts on them (Session F: agent called aide_recall from soft nudge without being forced). Audit all block→soft candidates: Read (first read could be soft if agent reliably recalls), Edit (same), Search (already soft). Fewer blocks = less friction, better UX, and the agent still does the right thing.
 - **Correction detection false positives**: detect-correction.sh regex patterns are too broad — "no, don't", "we should", "I want you to" match normal conversation. Creates stale correction-pending flags that make Stop hook say "correction not stored" on every turn. Tighten patterns or add negative filters.
 - **Audit hook usage patterns**: Are blocking hooks, flag files, two-phase patterns, and multi-hook coordination (blocker + tracker) the correct/intended way to use Claude Code hooks? Or are there simpler/better patterns? Research Claude Code hook best practices, check community examples, file questions with Anthropic if needed
-- **Progressive context warnings**: File feature request with Claude Code for a `ContextThreshold` hook event (fires at 70%, 80%, 90% context usage). Would enable progressive "save your context" warnings before auto-compaction triggers. For now, Stop hook on every turn is the closest approximation.
+- **Progressive context warnings**: File feature request with Claude Code for a `ContextThreshold` hook event (fires at 70%, 80%, 90% context usage). Would enable progressive "save your context" warnings before auto-compaction triggers. For now, Stop hook with dynamic interval is the closest approximation.
 
 **Known Limitation — Context Saving Before Compaction:**
 PreCompact hooks CANNOT give the agent an agentic turn to call aide_remember. This is a confirmed Claude Code architectural limitation (agent loop is async to compaction timer, hooks are synchronous control). See GitHub issue #32062.
 
 Document in external docs (README, landing page):
-- **How aide-memory handles compaction**: The Stop hook prompts the agent to save key context after every turn throughout the session. By the time compaction happens, important decisions are already stored. The agent is also instructed (via rules file) to proactively save as conversations grow.
+- **How aide-memory handles compaction**: The Stop hook prompts the agent to save key context at regular intervals throughout the session. By the time compaction happens, important decisions are already stored. The agent is also instructed (via rules file) to proactively save as conversations grow.
 - **User tip**: Before running `/compact`, ask Claude: "Save any key decisions from this session via aide_remember." The agent has full context at that point and can make targeted saves.
 - **What happens after compaction**: Session preferences and guidelines are automatically re-injected. Previously recalled files require re-recall (hooks will prompt this).
 - **Feature request**: We're tracking Claude Code issue #32062 (auto-save before compaction) for a platform-level solution.
@@ -1396,7 +1396,7 @@ Configurable settings (identified during validation):
 | `hooks.read` | `"block"` | Read hook: "block", "soft", or "off" |
 | `hooks.edit` | `"block"` | Edit/Write hook: "block", "soft", or "off" |
 | `hooks.search` | `"soft"` | Grep/Glob hook: "block", "soft", or "off" |
-| `hooks.stop` | `"block"` | Stop hook: "block", "soft", or "off" |
+| `hooks.stop` | `"dynamic"` | Stop hook: "dynamic", "block", "soft", or "off" |
 | `hooks.precompact` | `"cleanup"` | PreCompact hook: "cleanup" (clear tracking, allow compact), "prompt" (block first time — user prompts agent to save, /compact again to proceed), or "off" |
 | `hooks.correction` | `"soft"` | UserPromptSubmit correction detection: "soft" or "off" |
 | `hooks.sessionStart` | `"inject"` | SessionStart: "inject", or "off" |
@@ -1407,7 +1407,7 @@ Configurable settings (identified during validation):
 | `injection.maxTokens` | `300` | Approximate token cap for SessionStart injection |
 | `memories.hideFromGrep` | `true` | Hide .aide/memories/ from grep via .ignore |
 | `memories.softening.threshold` | `10` | Below this total memory count, all hooks are soft |
-| `hooks.stop.mode` | `"always"` | When Stop blocks: "always" (every turn), "interval" (every N turns, soft between), "correction-only" (only when flag), or "off" |
+| `hooks.stop.mode` | `"dynamic"` | When Stop blocks: "dynamic" (every 3 for first 9 turns, every 5 after), "always" (every turn), "interval" (every N turns, soft between), "correction-only" (only when flag), or "off" |
 | `hooks.stop.interval` | `"dynamic"` | Dynamic: block every 3 turns for first 9 turns, then every 5 turns after. Soft nudge on non-block turns (agent always aware). Correction-pending flag always blocks regardless. Based on data: avg Claude Code session = ~4 human prompts (Anthropic internal), mid-task interruptions 62% dismissed (ProAIDE study). |
 | `hooks.directoryTrigger.threshold` | `1` | Number of sibling files read before directory recall triggers (0=off) |
 | `recall.layerOrder` | `["area_context","technical","preferences","guidelines"]` | Priority order for recall ranking |
@@ -1832,12 +1832,11 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
   - Output via `additionalContext` (hidden from terminal)
   - **Never reads or dumps stored memories** — only prompts to store new ones
   - Phase 2+ exploration: expand to more generic capture, smarter filtering, potentially all user prompts with model-based relevance scoring
-- [ ] **PreCompact hook (NEW) — EXTRACT BEFORE LOSS:**
+- [ ] **PreCompact hook (NEW) — CLEANUP ONLY:**
   - Fires before both manual /compact and auto-compact (Claude Code provides this hook with `session_id`, `transcript_path`, `trigger` type)
-  - Prompts agent: "Context is about to be compacted. Extract any key decisions, plans, or constraints worth persisting via aide_remember before they are lost."
-  - Output via `additionalContext` (hidden from terminal)
+  - Cleanup-only: clears all session tracking (exit 0, no output). Cannot force agent tool calls — Claude Code limitation.
   - This is a high-value hook — 350+ GitHub comments document context loss pain from compaction
-  - **Two-phase blocking** — Phase 1: blocks compaction (exit 2), agent saves via aide_remember. Phase 2: allows compaction (exit 0), clears session tracking. Uses compact-pending-{session_id}.txt flag to distinguish phases.
+  - Context saving is handled by the Stop hook (dynamic interval) throughout the session, so important decisions are already stored by the time compaction happens.
   - Note: Cursor equivalent hook name may differ — verify during Cursor integration testing
 - [ ] recall-for-path.js updated to work with new storage architecture (reads SQLite cache, not old DB path)
 - [ ] Dedup logic: within a single interaction, if PreToolUse already triggered and Stop also fires, the agent should not store the same memory twice. Implemented via session-scoped dedup check (hash of what + scope stored in temp file, checked before each store)
