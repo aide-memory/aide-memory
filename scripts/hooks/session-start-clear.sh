@@ -6,8 +6,8 @@
 #   - start/resume: DON'T touch anything. Other sessions might be concurrent.
 #     No reliable way to know if another session ended or crashed.
 #   - clear/compact: Clear THIS session's tracking (agent loses context, must re-recall).
-#     Don't touch other sessions. For compact, PreCompact also clears in Phase 2
-#     but this is belt-and-suspenders for reliability.
+#     Don't touch other sessions. PreCompact also clears on compact
+#     (belt-and-suspenders for reliability).
 #
 # Orphaned files from crashed sessions are harmless (tiny txt files).
 # Users can clean manually: rm .aide/cache/*.txt
@@ -36,10 +36,8 @@ if [ -d "$CACHE_DIR" ]; then
   # start/resume: don't clean anything (fresh or continuing).
 fi
 
-# Inject preferences + guidelines as session context
+# Inject preferences + guidelines as session context (all sources)
 INJECTED=$(node "$SCRIPT_DIR/session-inject.js" "$PROJECT_ROOT" 2>/dev/null)
-
-# Inject preferences + guidelines (all sources — start, resume, clear, compact)
 if [ -n "$INJECTED" ]; then
   echo "$INJECTED"
 fi
