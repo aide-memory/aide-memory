@@ -126,6 +126,18 @@ Prompt: "What do you know about this project's API conventions?"
 - Session E: new session → SessionStart injected memory 36 → agent referenced it
 - **Core product promise confirmed: correct once, remembered forever**
 
+## Session F0: Empty Project — Zero Memories
+
+Prompt: "Read src/index.ts and explain it"
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| F0.1 | aide-memory init | Creates .aide/, hooks, MCP, .ignore | All created correctly | PASS |
+| F0.3 | Read file | Silent (no hook output) | Silent — read proceeded with no blocking or nudge | PASS |
+| F0.7 | Stop hook | Fires (standard prompt) | Fired, agent said "Nothing worth persisting" | PASS |
+
+First-time UX is clean — aide-memory is invisible until memories exist.
+
 ### Design Decisions
 17. **Stop hook always blocks** — intentional (block until reflect pattern). UX concern logged as P1.18.
 18. **Minimum scope depth = 2** — src/** too broad for blocking, src/api/** specific enough. Configurable later.
