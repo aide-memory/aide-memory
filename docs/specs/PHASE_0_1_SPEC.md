@@ -1389,7 +1389,7 @@ Configurable settings (identified during validation):
 | `memories.hideFromGrep` | `true` | Hide .aide/memories/ from grep via .ignore |
 | `memories.softening.threshold` | `10` | Below this total memory count, all hooks are soft |
 | `hooks.stop.mode` | `"always"` | When Stop blocks: "always" (every turn), "interval" (every N turns, soft between), "correction-only" (only when flag), or "off" |
-| `hooks.stop.interval` | `3` | When mode="interval": block every Nth turn, soft between (agent always sees reminder). Default 3 works for short (3-5 prompt) and long sessions. Correction-pending flag always blocks regardless of interval. |
+| `hooks.stop.interval` | `"dynamic"` | Dynamic: block every 3 turns for first 9 turns, then every 5 turns after. Soft nudge on non-block turns (agent always aware). Correction-pending flag always blocks regardless. Based on data: avg Claude Code session = ~4 human prompts (Anthropic internal), mid-task interruptions 62% dismissed (ProAIDE study). |
 | `hooks.directoryTrigger.threshold` | `1` | Number of sibling files read before directory recall triggers (0=off) |
 | `recall.layerOrder` | `["area_context","technical","preferences","guidelines"]` | Priority order for recall ranking |
 | `recall.searchMode` | `"auto"` | Default aide_search mode: "auto", "keyword", or "semantic" |
