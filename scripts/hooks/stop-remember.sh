@@ -66,14 +66,8 @@ if [ "$SHOULD_BLOCK" = "true" ]; then
     decision: "block",
     reason: .
   }'
-else
-  # Soft nudge — agent sees it but doesn't have to respond
-  echo "$PROMPT" | jq -Rs '{
-    hookSpecificOutput: {
-      hookEventName: "Stop",
-      additionalContext: .
-    }
-  }'
 fi
+# Non-block turns: exit silently. The agent doesn't need a nudge every turn —
+# the proactive saving rule in the rules template handles ongoing awareness.
 
 exit 0

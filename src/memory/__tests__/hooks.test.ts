@@ -163,12 +163,11 @@ describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
     if (fs.existsSync(countFile)) fs.unlinkSync(countFile);
   });
 
-  it('turn 1: soft nudge (not block)', () => {
+  it('turn 1: silent (not block)', () => {
     const result = runHook('stop-remember.sh', { session_id: sid });
     expect(result.exitCode).toBe(0);
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.hookSpecificOutput).toBeDefined();
-    expect(parsed.hookSpecificOutput.additionalContext).toContain('aide_remember');
+    // Non-block turns are silent — no output
+    expect(result.stdout).toBe('');
   });
 
   it('turn 3: blocks (first block point)', () => {
@@ -182,12 +181,11 @@ describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
     expect(parsed.reason).toContain('aide_remember');
   });
 
-  it('turn 4: soft again after block', () => {
+  it('turn 4: silent again after block', () => {
     for (let i = 0; i < 3; i++) runHook('stop-remember.sh', { session_id: sid });
-    // Turn 4 should be soft
+    // Turn 4 should be silent
     const result = runHook('stop-remember.sh', { session_id: sid });
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.hookSpecificOutput).toBeDefined();
+    expect(result.stdout).toBe('');
   });
 
   it('turn 6: blocks (second block point)', () => {
@@ -232,7 +230,7 @@ describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
   it('exits 0 with empty input', () => {
     const result = runHook('stop-remember.sh', {});
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).not.toBe('');
+    // May or may not have output depending on turn count
   });
 
   afterEach(() => {
