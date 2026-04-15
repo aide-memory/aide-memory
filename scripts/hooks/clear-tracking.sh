@@ -10,4 +10,5 @@ clear_session_tracking() {
   rm -f "$cache_dir/searched-queries-${sid}.txt" 2>/dev/null
   rm -f "$cache_dir/correction-pending-${sid}.txt" 2>/dev/null
   rm -f "$cache_dir/compact-pending-${sid}.txt" 2>/dev/null
+  rm -f "$cache_dir/stop-count-${sid}.txt" 2>/dev/null
 }

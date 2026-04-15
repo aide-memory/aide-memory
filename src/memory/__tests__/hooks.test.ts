@@ -153,60 +153,91 @@ describe('PreToolUse hook (pre-read-recall.sh)', () => {
 
 // ─── Stop (stop-remember.sh) ───────────────────────────────────────────────
 
-describe('Stop hook (stop-remember.sh)', () => {
-  it('blocks first stop with reflection prompt', () => {
-    const result = runHook('stop-remember.sh', {});
-    expect(result.exitCode).toBe(0);
+describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
+  const sid = 'test-stop-dynamic';
+  const cacheDir = path.join(REPO_ROOT, '.aide', 'cache');
 
+  beforeEach(() => {
+    // Clean stop counter for this session
+    const countFile = path.join(cacheDir, `stop-count-${sid}.txt`);
+    if (fs.existsSync(countFile)) fs.unlinkSync(countFile);
+  });
+
+  it('turn 1: soft nudge (not block)', () => {
+    const result = runHook('stop-remember.sh', { session_id: sid });
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.hookSpecificOutput).toBeDefined();
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('aide_remember');
+  });
+
+  it('turn 3: blocks (first block point)', () => {
+    // Simulate turns 1-2
+    runHook('stop-remember.sh', { session_id: sid });
+    runHook('stop-remember.sh', { session_id: sid });
+    // Turn 3 should block
+    const result = runHook('stop-remember.sh', { session_id: sid });
     const parsed = JSON.parse(result.stdout);
     expect(parsed.decision).toBe('block');
     expect(parsed.reason).toContain('aide_remember');
-    // Wording changed: now uses natural language "decisions, technical constraints,
-    // preferences, or guidelines" instead of listing layer names individually
-    expect(parsed.reason).toContain('decisions');
-    expect(parsed.reason).toContain('technical');
-    expect(parsed.reason).toContain('preferences');
-    expect(parsed.reason).toContain('guidelines');
+  });
+
+  it('turn 4: soft again after block', () => {
+    for (let i = 0; i < 3; i++) runHook('stop-remember.sh', { session_id: sid });
+    // Turn 4 should be soft
+    const result = runHook('stop-remember.sh', { session_id: sid });
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.hookSpecificOutput).toBeDefined();
+  });
+
+  it('turn 6: blocks (second block point)', () => {
+    for (let i = 0; i < 5; i++) runHook('stop-remember.sh', { session_id: sid });
+    // Turn 6 should block
+    const result = runHook('stop-remember.sh', { session_id: sid });
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.decision).toBe('block');
+  });
+
+  it('after turn 9: switches to every-5 interval', () => {
+    // Run through 9 turns
+    for (let i = 0; i < 9; i++) runHook('stop-remember.sh', { session_id: sid });
+    // Turns 10-13 should be soft, turn 14 should block (9 + 5 = 14)
+    for (let i = 0; i < 4; i++) runHook('stop-remember.sh', { session_id: sid });
+    const result = runHook('stop-remember.sh', { session_id: sid }); // turn 14
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.decision).toBe('block');
   });
 
   it('allows second stop when stop_hook_active is true', () => {
-    const result = runHook('stop-remember.sh', { stop_hook_active: true });
+    const result = runHook('stop-remember.sh', { stop_hook_active: true, session_id: sid });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
   });
 
-  it('blocks stop when stop_hook_active is false', () => {
-    const result = runHook('stop-remember.sh', { stop_hook_active: false });
-    expect(result.exitCode).toBe(0);
+  it('always blocks when correction-pending flag exists', () => {
+    // Create correction flag
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(path.join(cacheDir, `correction-pending-${sid}.txt`), 'correction');
 
+    // Turn 1 with flag — should block even though interval says soft
+    const result = runHook('stop-remember.sh', { session_id: sid });
     const parsed = JSON.parse(result.stdout);
     expect(parsed.decision).toBe('block');
+    expect(parsed.reason).toContain('correction');
+
+    // Clean up
+    fs.unlinkSync(path.join(cacheDir, `correction-pending-${sid}.txt`));
   });
 
-  it('mentions persisting and aide_remember in the prompt', () => {
+  it('exits 0 with empty input', () => {
     const result = runHook('stop-remember.sh', {});
     expect(result.exitCode).toBe(0);
-
-    const parsed = JSON.parse(result.stdout);
-    // The stop hook now focuses on directing the agent to persist knowledge
-    // via aide_remember rather than mentioning "source: hook" tagging
-    expect(parsed.reason).toContain('persisting');
-    expect(parsed.reason).toContain('aide_remember');
+    expect(result.stdout).not.toBe('');
   });
 
-  it('exits 0 even with malformed input', () => {
-    // Force empty stdin
-    try {
-      const stdout = execSync(
-        `echo '{}' | bash "${path.join(HOOKS_DIR, 'stop-remember.sh')}"`,
-        { encoding: 'utf-8', timeout: 5000 }
-      );
-      // Should still output block decision (stop_hook_active defaults to false)
-      expect(JSON.parse(stdout.trim()).decision).toBe('block');
-    } catch (err: any) {
-      // Even if it fails, exit code should be 0
-      expect(err.status).toBe(0);
-    }
+  afterEach(() => {
+    const countFile = path.join(cacheDir, `stop-count-${sid}.txt`);
+    if (fs.existsSync(countFile)) fs.unlinkSync(countFile);
   });
 });
 
