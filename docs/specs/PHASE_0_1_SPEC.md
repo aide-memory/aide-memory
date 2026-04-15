@@ -1195,17 +1195,47 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - Goal: Stop hook should not look like an error, soft nudges on re-reads could be silent
 - **Action**: After validation sessions, do a dedicated UX exploration session — collect all hook output samples (block, soft, silent, stop, precompact) from both test and dev sessions, compare labels/rendering, identify patterns, and determine what can be fixed vs what's a Claude Code platform limitation
 - **Config mapping to Cursor**: All settings (memories.hideFromGrep, telemetry, hook intensity) should map to Cursor's equivalent config system. Audit all .aide/config.json keys and ensure they work across both Claude Code and Cursor environments
-- **Optimize defaults from validation data**: Ship with optimal defaults NOW — configurability comes later (Phase 2/pro). Status of defaults optimization:
-  - Stop hook interval: **IMPLEMENTED** — dynamic (every 3 for first 9 turns, every 5 after). Based on Anthropic data (avg 4 prompts/session) + ProAIDE research (mid-task interruptions 62% dismissed) + this session's data (1 aide_remember per 9 prompts, 51% signal-to-noise ratio). Correction-pending always blocks.
-  - Search hook: **IMPLEMENTED** — always soft (validated: agent correctly skips aide_search when memories already recalled)
-  - Scope depth: **IMPLEMENTED** — minimum depth 2 (src/** too broad, src/api/** specific enough)
-  - .ignore file: **IMPLEMENTED** — hides memories from grep by default
-  - Correction detection: **TODO** — patterns too broad, false positives. Tighten regex.
-  - Stop hook soft format: **RESOLVED** — verify hookSpecificOutput works for Stop events (same format was invalid for PreCompact). If not, non-block turns are truly silent (acceptable but differs from "always aware" intent).
-  - All other settings: confirm with more project types and session data
-- **Cover other search tools**: Currently only Grep/Glob have search hooks. Agent can bypass via Bash (`grep`, `find`, `rg`), Agent tool (subagent searches), or other tools. Investigate: can we hook Bash commands that match search patterns? Or is this an accepted gap?
-- **Reduce blocks where soft is sufficient**: Validation proved soft nudges are effective — agent proactively acts on them (Session F: agent called aide_recall from soft nudge without being forced). Audit all block→soft candidates: Read (first read could be soft if agent reliably recalls), Edit (same), Search (already soft). Fewer blocks = less friction, better UX, and the agent still does the right thing.
-- **Correction detection false positives**: detect-correction.sh regex patterns are too broad — "no, don't", "we should", "I want you to" match normal conversation. Creates stale correction-pending flags that make Stop hook say "correction not stored" on every turn. Tighten patterns or add negative filters.
+- **Optimize defaults from validation data**: Ship with optimal defaults NOW — all settings stored in private config (.aide/config.json), NOT exposed to users. Public config for Phase 2/pro.
+
+  **IMPLEMENTED:**
+  - Stop hook interval: dynamic 3→5 (every 3 for first 9 turns, every 5 after). Silent on non-block turns.
+  - Search hook: always soft. Agent decides whether to call aide_search.
+  - Scope depth: MIN_SCOPE_DEPTH=2 (src/** too broad, src/api/** specific enough).
+  - .ignore file: hides .aide/memories/ from grep by default.
+  - Correction flag: clears after Stop presents once (no infinite nagging).
+  - hookSpecificOutput: RESOLVED — only valid for PreToolUse/UserPromptSubmit/PostToolUse. Stop/PreCompact use top-level fields or silent.
+
+  **TO IMPLEMENT (aligned, ready):**
+  - Read/Edit block-once-then-soft: block first encounter per file, soft on retry. Default `hooks.read.maxBlocks: 1`. Prevents infinite blocking.
+  - Directory trigger block-once-then-soft: same as Read/Edit. Default `hooks.directoryTrigger.maxBlocks: 1`.
+  - Stop 3→5→10: extend dynamic to three phases. Phase 1 (1-9): every 3. Phase 2 (10-29): every 5. Phase 3 (30+): every 10. Long sessions get progressively quieter.
+  - Correction detection tuning: add negative filters ("no I mean", "I don't think"), require 5+ words, match at message start only. Default `hooks.correction.minWords: 5`.
+
+  **ACCEPTED GAPS:**
+  - Other search tools (Bash grep/find, Agent subagents): can only hook Grep/Glob. Claude Code doesn't expose matchers for Bash commands. Accepted gap.
+  - PreCompact can't force agent saves: platform limitation. Save strategy = Stop hook + proactive rules + user guidance.
+
+  **Private config defaults (all in .aide/config.json, not user-facing):**
+
+  | Key | Default | Description |
+  |-----|---------|-------------|
+  | `hooks.read.maxBlocks` | `1` | Block once per file, then soft |
+  | `hooks.edit.maxBlocks` | `1` | Same |
+  | `hooks.directoryTrigger.maxBlocks` | `1` | Block once per directory |
+  | `hooks.stop.phases` | `[3, 5, 10]` | Dynamic interval phases |
+  | `hooks.stop.phaseBreaks` | `[9, 29]` | Turn counts where phases switch |
+  | `hooks.search.mode` | `"soft"` | Always soft |
+  | `hooks.correction.enabled` | `true` | Detection active |
+  | `hooks.correction.minWords` | `5` | Min words to trigger |
+  | `hooks.precompact.mode` | `"cleanup"` | Cleanup only |
+  | `recall.minScopeDepth` | `2` | Min scope depth for blocking |
+  | `recall.limit` | `20` | Max memories per recall |
+  | `recall.roundRobinMinLimit` | `5` | Min limit for round-robin |
+  | `injection.maxPreferences` | `15` | SessionStart injection cap |
+  | `memories.hideFromGrep` | `true` | .ignore for grep |
+  | `memories.softening.threshold` | `10` | Below this = all soft |
+
+  **Balance principle:** Block for first encounters and periodic checkpoints. Soft for discovery and repeat access. Silent for routine turns. Rules file for ongoing awareness.
 - **Audit hook usage patterns**: Are blocking hooks, flag files, two-phase patterns, and multi-hook coordination (blocker + tracker) the correct/intended way to use Claude Code hooks? Or are there simpler/better patterns? Research Claude Code hook best practices, check community examples, file questions with Anthropic if needed
 - **Progressive context warnings**: File feature request with Claude Code for a `ContextThreshold` hook event (fires at 70%, 80%, 90% context usage). Would enable progressive "save your context" warnings before auto-compaction triggers. For now, Stop hook with dynamic interval is the closest approximation.
 
