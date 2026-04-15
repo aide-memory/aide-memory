@@ -214,10 +214,11 @@ describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
     expect(result.stdout).toBe('');
   });
 
-  it('always blocks when correction-pending flag exists', () => {
+  it('always blocks when correction-pending flag exists, then clears flag', () => {
     // Create correction flag
     fs.mkdirSync(cacheDir, { recursive: true });
-    fs.writeFileSync(path.join(cacheDir, `correction-pending-${sid}.txt`), 'correction');
+    const flagPath = path.join(cacheDir, `correction-pending-${sid}.txt`);
+    fs.writeFileSync(flagPath, 'correction');
 
     // Turn 1 with flag — should block even though interval says soft
     const result = runHook('stop-remember.sh', { session_id: sid });
@@ -225,8 +226,8 @@ describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
     expect(parsed.decision).toBe('block');
     expect(parsed.reason).toContain('correction');
 
-    // Clean up
-    fs.unlinkSync(path.join(cacheDir, `correction-pending-${sid}.txt`));
+    // Flag should be cleared — agent got one chance, no infinite nagging
+    expect(fs.existsSync(flagPath)).toBe(false);
   });
 
   it('exits 0 with empty input', () => {

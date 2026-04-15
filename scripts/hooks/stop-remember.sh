@@ -36,6 +36,10 @@ echo "$STOP_COUNT" > "$COUNT_FILE"
 FLAG_FILE="$CACHE_DIR/correction-pending-${SID}.txt"
 
 if [ -f "$FLAG_FILE" ]; then
+  # Clear flag after presenting — agent gets one chance to store.
+  # If it doesn't call aide_remember, the correction was a false positive.
+  # No infinite nagging.
+  rm -f "$FLAG_FILE"
   cat <<'HOOK_OUTPUT'
 {
   "decision": "block",
