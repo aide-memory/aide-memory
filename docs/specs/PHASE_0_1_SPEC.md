@@ -1252,6 +1252,14 @@ File feature request:
 - **Title**: "Allow PreCompact hooks to trigger an agentic turn before compaction proceeds"
 - **Description**: PreCompact hooks can block or approve compaction but cannot give the agent a tool-calling turn. For memory systems (aide-memory), the agent needs to call MCP tools (aide_remember) before context is lost. Requested: PreCompact returns a flag that pauses compaction, gives the agent one agentic turn to make tool calls, then proceeds with compaction.
 - **Reference**: Related to #32062 (auto-save session state before compaction)
+- **What we tried and learned**:
+  - exit 0 with {"decision":"block"}: compaction proceeds immediately, agent never gets a turn
+  - exit 2 with {"decision":"block"}: Claude Code shows hard error "Compaction blocked by PreCompact hook", no agentic turn, requires double /compact
+  - exit 0 with {"decision":"approve","systemMessage":"save now"}: compaction proceeds, systemMessage shown to user but unclear if agent sees it
+  - hookSpecificOutput with hookEventName:"PreCompact": validation error — hookSpecificOutput only valid for PreToolUse/UserPromptSubmit/PostToolUse
+  - suppressOutput: doesn't suppress for Stop/PreCompact events
+  - v2.1.105 "Added PreCompact hook support": only added blocking capability (cancel compaction), not agentic turns
+  - **Conclusion**: no combination of exit code + JSON output gives the agent a tool-calling turn during compaction. This is an architectural constraint — hooks are synchronous control, agent loop is async.
 - **Cursor compaction behavior**: Cursor may handle compaction differently — investigate what context survives compaction in Cursor, whether Cursor has equivalent hooks, and whether the post-compact save prompt works there. Cursor's compacted summaries may retain less/more context than Claude Code's, affecting whether aide_remember captures useful info post-compact
 
 **P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation
