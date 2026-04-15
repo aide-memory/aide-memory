@@ -99,14 +99,17 @@ Every hook reads settings via `source read-config.sh` + `get_setting "key"` inst
 - Add `offset` and `exclude_ids` parameters to aide_recall MCP tool
 - Agent can query: top 5, then 5-10, then 10-15
 - Or pass `exclude_ids: [1,2,3,4,5]` to get only new results
-- Search (aide_search) deduplicates within its own results ONLY — independent from recall tracking
+- Enables the "get remaining memories" flow after directory recall
 
-### Binary Distribution
+### Distribution Strategy + Binary
+- Current npm ships readable JS + bash — all source accessible
 - Compile all hook logic into aide-memory binary via `bun compile`
 - Bash hooks become 2-line thin wrappers: `cat | aide-memory hook pre-read`
 - All logic private: blocking decisions, scope depth, dynamic intervals, correction detection, config reading, pro gating, tracking management
 - Same TypeScript codebase, different build target
 - Solves both code protection AND settings enforcement
+- Pro features: server-side logic only way to prevent bypass (local flags = speed bump, server = enforcement)
+- Distribution: homebrew tap, curl installer, or npm wrapping binary
 
 ### PreCompact Feature Request
 - File on github.com/anthropics/claude-code/issues
@@ -118,48 +121,30 @@ Every hook reads settings via `source read-config.sh` + `get_setting "key"` inst
 - Would fire at 70%, 80%, 90% context usage
 - Don't implement with transcript file size estimation (too inaccurate, false alarms worse than no alarms)
 
-### Correction Detection Research
-- Test wide range of real correction patterns across coding conversations
-- Verify false positive rate reduction without losing real corrections
-- Periodic Stop block is the safety net for missed corrections
-
 ### init --scan Validation
 - Verify `aide-memory init --scan` works with the new memory system
 - Add validation scenario for importing initial memories from code analysis
 - If tree-sitter analysis doesn't work for all languages, fix or make more basic
 
 ### Search Tools Coverage
-- Currently only Grep/Glob hooked. Bash commands (grep, find, rg) bypass hooks.
-- Accepted gap — Claude Code doesn't expose matchers for Bash commands
-- Glob does NOT respect .ignore (Claude Code issue #20609)
-
-### Block → Soft Reduction
-- Validation proved soft nudges are effective (~90% compliance)
-- Audit all block→soft candidates after defaults ship
-- Consider: should Read/Edit first-encounter be soft instead of block?
+- Currently only Grep/Glob hooked. Bash commands (grep, find, rg) bypass hooks. Accepted gap.
+- Glob does NOT respect .ignore (Claude Code issue #20609). Accepted — Glob hook handles it.
 
 ### UX Exploration Session
 - Collect all hook output samples (block, soft, silent, stop, precompact)
 - Compare labels/rendering across sessions
 - Determine what can be fixed vs Claude Code platform limitation
-- Correction detection false positive patterns
 - Stop hook "error" label
 - hookSpecificOutput only valid for PreToolUse/UserPromptSubmit/PostToolUse
 - Cursor compaction behavior investigation
 - Config mapping to Cursor's equivalent system
 - Audit hook usage patterns (are blocking/flag patterns correct practice?)
 
-### Distribution Strategy
-- Current npm ships readable JS + bash
-- Binary compilation via `bun compile` for closed-source
-- Pro features: server-side logic only way to prevent bypass
-- Settings framework supports free/pro gating (local flag = speed bump, server validation = enforcement)
+## ALREADY DONE (from this session)
 
-### Dynamic Stop Interval Data
-- This session: 1 aide_remember per 9 prompts, 51% signal-to-noise with always-block
-- Anthropic data: avg 4 prompts/session (200K transcripts)
-- ProAIDE study: mid-task interruptions 62% dismissed
-- Collect more data from diverse projects to validate 3→5→10 schedule
+- **Dynamic stop interval data collected**: 1 aide_remember per 9 prompts, 51% signal-to-noise. Anthropic: avg 4 prompts/session. ProAIDE: mid-task interruptions 62% dismissed.
+- **Search dedup independence from recall**: already how it works — aide_search runs independently, doesn't check recalled-paths.
+- **Correction detection research**: included in implementation item #5 (not deferred).
 
 ---
 
