@@ -1,0 +1,21 @@
+{
+  "uuid": "091343d1-3c42-467e-bd47-2643d07223e8",
+  "layer": "technical",
+  "what": "Auto-update on MCP server start now covers ALL components: hooks (.claude/settings.json), MCP config (.mcp.json), rules files (if exist), directory structure (.aide/memories/*), .gitignore entries, and git post-checkout hook. Matches --force coverage exactly. Both merge, neither resets user config. Config (.aide/config.json) is not touched by either — future --reset flag for factory defaults if needed. Only difference: auto-update skips rules if they don't exist (un-init'd projects), --force always writes them.",
+  "why": "User wanted auto-update to cover all components, not just hooks. Directory structure and .gitignore were missing — new version could add a new memory layer directory and users wouldn't get it without re-running init.",
+  "scope": "src/memory/init.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "auto-update",
+    "init",
+    "versioning"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T05:49:38.793Z",
+  "updated_at": "2026-04-14T06:04:41.759Z"
+}

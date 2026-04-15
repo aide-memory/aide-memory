@@ -1,0 +1,22 @@
+{
+  "uuid": "891f8616-b9f6-48fb-b592-ed413e4e8fc4",
+  "layer": "area_context",
+  "what": "Decision: exclude .aide/memories/ from grep by default via .ignore file (ripgrep respects .ignore). Keeps memories in git (shared) but forces structured access via aide_recall/aide_search. Prevents grep from bypassing ranking, scoping, dedup, and recalled_count tracking. Configurable: users can opt in to include memories in search. Default = exclude.",
+  "why": "Validation showed grep returning raw memory JSON mixed with code results. Agent saw memory content without going through recall flow, bypassing all structured access.",
+  "scope": "src/memory/init.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "grep",
+    "ignore",
+    "memories",
+    "init"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T21:59:07.753Z",
+  "updated_at": "2026-04-14T21:59:07.753Z"
+}

@@ -1,0 +1,22 @@
+{
+  "uuid": "62e67885-7c88-4487-8466-14454c87d7b1",
+  "layer": "technical",
+  "what": "Directory recall prefix match bug: current code (pre-read-recall.sh line 102) treats directory recall as \"everything under this dir is recalled\" — wrong. Directory recall only returns directory-scoped memories, may miss file-specific ones. Fix: remove prefix match from file-level blocking check. Only exact file|path matches exempt files from blocking. dir|path only exempts the directory TRIGGER (don't re-prompt for broader context), NOT individual file blocks. Each file always blocks until individually recalled.",
+  "why": "User corrected: I dismissed this as minor but it's a real design flaw. If src/api/ is recalled, ALL files under src/api/ skip blocking — missing file-specific memories. Original intent: each file always blocks for its own recall.",
+  "scope": "scripts/hooks/pre-read-recall.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "blocking",
+    "directory-recall",
+    "bug"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-15T22:09:24.405Z",
+  "updated_at": "2026-04-15T22:09:24.405Z"
+}

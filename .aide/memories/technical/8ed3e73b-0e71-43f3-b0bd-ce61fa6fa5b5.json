@@ -1,0 +1,22 @@
+{
+  "uuid": "8ed3e73b-0e71-43f3-b0bd-ce61fa6fa5b5",
+  "layer": "technical",
+  "what": "Blocking scope rule FINAL: use minimum scope depth, not distance from file. Scopes need ≥2 path segments to trigger blocking. src/** (depth 1) = too broad = soft. src/api/** (depth 2) = specific enough = block. Exact file scopes always block. MIN_SCOPE_DEPTH=2 in recall-for-path.js, configurable later. This excludes root-level and src-level scopes from blocking while allowing feature-area scopes to block.",
+  "why": "User clarified: blocking should be based on scope specificity, not distance from file. src/** covers the whole source tree — not useful for blocking. Minimum depth approach is simpler and directly maps to \"is this scope specific enough.\"",
+  "scope": "scripts/hooks/pre-read-recall.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "blocking",
+    "scope",
+    "quality"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T22:32:03.237Z",
+  "updated_at": "2026-04-14T22:54:46.443Z"
+}

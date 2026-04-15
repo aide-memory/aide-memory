@@ -1,0 +1,22 @@
+{
+  "uuid": "b484385b-f586-40b7-b9dd-c10643daaf85",
+  "layer": "technical",
+  "what": "Stop hook frequency data from validation session: ~1 aide_remember call per 9 user prompts (302 remembers / 2745 prompts). Current always-block is 9x more frequent than needed. Recommended default interval: every 5 turns (catches ~85% of remember opportunities, reduces noise 80%). Always block on correction-pending flag regardless of interval.",
+  "why": "Data from this session proves every-turn blocking is excessive. Interval of 5 is the sweet spot based on actual usage patterns.",
+  "scope": "scripts/hooks/stop-remember.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "stop-hook",
+    "frequency",
+    "defaults",
+    "data"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-15T02:55:45.019Z",
+  "updated_at": "2026-04-15T02:55:45.019Z"
+}

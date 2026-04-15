@@ -1,0 +1,22 @@
+{
+  "uuid": "b62d14fd-68a5-4950-bfa5-d3f190da4268",
+  "layer": "technical",
+  "what": "Claude Code UI labels ALL hook output as \"returned blocking error\" regardless of whether the hook actually blocked (deny) or just provided soft context (additionalContext). The actual block vs soft behavior is determined by exit code and JSON structure — deny = blocked, additionalContext = soft. Debug log shows the truth. This is a Claude Code UI labeling issue, not an aide-memory bug.",
+  "why": "Discovered during validation — second read after recall showed \"returned blocking error\" in UI but debug log confirmed it was additionalContext (soft). Could confuse users inspecting hook behavior.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "claude-code",
+    "hooks",
+    "ui",
+    "validation"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T06:43:48.527Z",
+  "updated_at": "2026-04-14T06:43:48.527Z"
+}

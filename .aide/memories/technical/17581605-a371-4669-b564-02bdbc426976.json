@@ -1,0 +1,22 @@
+{
+  "uuid": "17581605-a371-4669-b564-02bdbc426976",
+  "layer": "technical",
+  "what": "Claude Code v2.1.105 added PreCompact hook support. The hookSpecificOutput format is NOT valid for PreCompact — only for PreToolUse/UserPromptSubmit/PostToolUse. PreCompact must use top-level fields: decision (\"approve\"|\"block\"), reason (string), systemMessage (string). Testing if decision:\"block\" + exit 2 now gives the agent an agentic turn to call aide_remember before compaction.",
+  "why": "Hook output validation failed during Session D testing — hookSpecificOutput with hookEventName:\"PreCompact\" rejected. Schema shows PreCompact uses different fields. New v2.1.105 release may fix the blocking limitation.",
+  "scope": "scripts/hooks/pre-compact-save.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "precompact",
+    "hooks",
+    "format",
+    "v2.1.105"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T23:54:32.261Z",
+  "updated_at": "2026-04-14T23:54:32.261Z"
+}

@@ -1,0 +1,22 @@
+{
+  "uuid": "74f4230f-5d58-4c11-9dad-6af0c4b8fad3",
+  "layer": "area_context",
+  "what": "File blocking after directory recall: block-once then soft-with-remaining-count. After first recall, future reads show \"N more scoped memories not yet recalled\" as soft nudge — agent knows what's outstanding and decides. Nothing silently lost. Also: anything running locally can be extracted — only server-side code is truly private. Pro features requiring code privacy must run server-side (API model).",
+  "why": "User pushed back on block-once being sufficient — what if critical memories are missed? Soft-with-remaining-count keeps agent informed. Code privacy discussion confirmed server-side is only real option.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "blocking",
+    "recall",
+    "privacy",
+    "strategy"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-15T22:30:57.480Z",
+  "updated_at": "2026-04-15T22:30:57.480Z"
+}

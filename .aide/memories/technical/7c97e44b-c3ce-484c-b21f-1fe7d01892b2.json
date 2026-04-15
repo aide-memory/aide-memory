@@ -1,0 +1,22 @@
+{
+  "uuid": "7c97e44b-c3ce-484c-b21f-1fe7d01892b2",
+  "layer": "technical",
+  "what": "Init creates .ignore file with .aide/memories/ entry to hide memory JSON files from grep (ripgrep). Default: hidden (memories.hideFromGrep = true). User can toggle: aide-memory config memories.hideFromGrep false. Prevents grep from bypassing structured aide_recall/aide_search access. .ignore is respected by ripgrep but does not affect git — memories stay committed.",
+  "why": "Validation showed grep returning raw memory JSON mixed with code results, bypassing ranking, scoping, dedup, and recalled_count tracking.",
+  "scope": "src/memory/init.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "ignore",
+    "grep",
+    "memories",
+    "config"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T22:07:32.347Z",
+  "updated_at": "2026-04-14T22:07:32.347Z"
+}

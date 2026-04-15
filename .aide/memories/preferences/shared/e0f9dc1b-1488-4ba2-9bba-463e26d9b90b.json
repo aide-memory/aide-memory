@@ -1,0 +1,21 @@
+{
+  "uuid": "e0f9dc1b-1488-4ba2-9bba-463e26d9b90b",
+  "layer": "preferences",
+  "what": "When consolidating or auditing docs, ALWAYS cross-reference ALL related files — not just the primary file being edited. The V1-V22 consolidation into Sessions A-G was correct within the spec, but missed 6 additional scenarios from separate validation docs (INTEGRATION_TESTING.md, RUN_VALIDATION.md) that had never been merged into the spec. Check adjacent docs before claiming completeness.",
+  "why": "User caught that I claimed everything was captured during consolidation but gaps were found when finally cross-referencing the stale docs. Process gap: consolidating within one file without checking related files.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "process",
+    "audit",
+    "consolidation"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T22:25:57.569Z",
+  "updated_at": "2026-04-14T22:25:57.569Z"
+}

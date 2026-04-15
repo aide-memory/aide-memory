@@ -1,0 +1,22 @@
+{
+  "uuid": "07ba00bf-98cb-42a8-9f90-412a1de203d4",
+  "layer": "area_context",
+  "what": "Settings framework: three-layer config (defaults.json private → .aide/config.json public overrides → pro gate). Each setting has {value, public, pro} metadata. public:false = users can't override. To promote: flip public to true. To make pro-only: set pro:true. Shared read-config.sh function reads defaults, checks if public, checks user override, checks pro flag. All 16 settings start as public:false. Implement as part of current batch alongside hook defaults optimization.",
+  "why": "User wants settings framework that makes it easy to promote individual settings from private to public to pro-gated. Needed before implementing the 16 configurable defaults.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "settings",
+    "framework",
+    "pro"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-15T22:41:05.448Z",
+  "updated_at": "2026-04-15T22:41:05.448Z"
+}

@@ -1,0 +1,22 @@
+{
+  "uuid": "409d4543-c0f3-4648-ae22-fdf1ec645983",
+  "layer": "technical",
+  "what": "PreCompact advisory message should be STRONG and focused on saving NOW — don't mention post-compact backup, create urgency. Message: \"IMPORTANT: Context is about to be compacted and detail will be lost. Save key decisions via aide_remember RIGHT NOW while you have full context.\" Also: Claude Code debug log shows autocompact token usage (tokens=X threshold=Y) on every turn — could be parsed by Stop hook to detect when context is getting full and warn user to save. Fragile approach (debug log parsing) — better to file feature request for token usage in hook input JSON.",
+  "why": "User wants strong pre-compact guidance, not passive mentions of backup. Also identified that autocompact threshold data exists in debug logs — potential for progressive warnings.",
+  "scope": "scripts/hooks/pre-compact-save.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "precompact",
+    "warnings",
+    "tokens",
+    "ux"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T23:22:03.815Z",
+  "updated_at": "2026-04-14T23:22:03.815Z"
+}

@@ -1,0 +1,22 @@
+{
+  "uuid": "795aae6d-d26b-4726-9e6b-035c1499429d",
+  "layer": "area_context",
+  "what": "Hook auto-update implemented (not deferred): On MCP server start, autoUpdateIfNeeded() checks _aideMemoryVersion in .claude/settings.json. If missing or older than current package version, auto-merges hooks, MCP config, and rules files — preserving user's other settings. No manual init --force needed for upgrades. --force also now merges instead of overwriting. Version stamp written to settings.json after update.",
+  "why": "User wanted auto-update now, not Phase 2. Implemented in server.ts startServer() calling init.ts autoUpdateIfNeeded().",
+  "scope": "src/memory/init.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "auto-update",
+    "init",
+    "versioning"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T05:25:44.269Z",
+  "updated_at": "2026-04-14T05:36:29.380Z"
+}

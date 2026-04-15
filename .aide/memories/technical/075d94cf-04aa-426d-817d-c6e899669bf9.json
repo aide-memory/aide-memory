@@ -1,0 +1,22 @@
+{
+  "uuid": "075d94cf-04aa-426d-817d-c6e899669bf9",
+  "layer": "technical",
+  "what": "Search hook changed from blocking to always-soft. Agent may already have matching memories from path-based aide_recall, so blocking forces redundant aide_search calls. Soft nudge lets agent decide whether to call aide_search based on what's already in context. Validated: agent correctly skipped aide_search when memories were already recalled.",
+  "why": "Validation showed agent being forced to make redundant aide_search calls for memories it already had from aide_recall. Soft approach respects agent judgment.",
+  "scope": "scripts/hooks/pre-search-nudge.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "search",
+    "soft",
+    "ux"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-14T21:58:59.554Z",
+  "updated_at": "2026-04-14T21:58:59.554Z"
+}

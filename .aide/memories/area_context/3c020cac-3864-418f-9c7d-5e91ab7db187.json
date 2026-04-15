@@ -1,0 +1,22 @@
+{
+  "uuid": "3c020cac-3864-418f-9c7d-5e91ab7db187",
+  "layer": "area_context",
+  "what": "Binary distribution plan: compile all hook logic into aide-memory binary via bun compile. Bash hooks become 2-line thin wrappers (cat | aide-memory hook pre-read). All logic private: blocking decisions, scope depth, dynamic intervals, correction detection, config reading, pro gating, tracking management. Visible: only hook names and that they call the binary. Implementation: after current defaults optimization, migrate hook logic from bash to TypeScript, compile to binary. Same codebase, different build target.",
+  "why": "User wants closed-source distribution. Hooks are the weak point — always readable bash. Moving logic to binary solves visibility for both code protection and settings enforcement.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary",
+    "distribution",
+    "hooks",
+    "architecture"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-15T22:49:58.367Z",
+  "updated_at": "2026-04-15T22:49:58.367Z"
+}

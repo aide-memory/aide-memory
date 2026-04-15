@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/session-start-clear.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/session-start-clear.sh",
             "timeout": 10
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/pre-compact-save.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-compact-save.sh",
             "timeout": 30
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/stop-remember.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/stop-remember.sh",
             "timeout": 30
           }
         ]
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/detect-correction.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/detect-correction.sh",
             "timeout": 5
           }
         ]
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/pre-read-recall.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-read-recall.sh",
             "timeout": 10
           }
         ]
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/pre-edit-recall.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-edit-recall.sh",
             "timeout": 10
           }
         ]
@@ -70,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/pre-edit-recall.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-edit-recall.sh",
             "timeout": 10
           }
         ]
@@ -80,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/pre-search-nudge.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-search-nudge.sh",
             "timeout": 10
           }
         ]
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/pre-search-nudge.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-search-nudge.sh",
             "timeout": 10
           }
         ]
@@ -100,7 +100,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/track-recall.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-recall.sh",
             "timeout": 5
           }
         ]
@@ -112,7 +112,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/track-recall-post.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-recall-post.sh",
             "timeout": 5
           }
         ]
@@ -122,7 +122,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/track-remember.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-remember.sh",
             "timeout": 5
           }
         ]
@@ -132,11 +132,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/track-search.sh",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-search.sh",
             "timeout": 5
           }
         ]
       }
     ]
-  }
+  },
+  "_aideMemoryVersion": "0.2.0"
 }
