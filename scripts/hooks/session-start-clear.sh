@@ -39,20 +39,9 @@ fi
 # Inject preferences + guidelines as session context
 INJECTED=$(node "$SCRIPT_DIR/session-inject.js" "$PROJECT_ROOT" 2>/dev/null)
 
-# Post-compact: prompt agent to save key context from the compacted summary.
-# After compaction, the agent has a fresh agentic turn with plenty of token room.
-# The compacted summary retains key decisions — agent can extract and aide_remember them.
-if [ "$SOURCE" = "compact" ]; then
-  COMPACT_PROMPT="Context was just compacted. Review the summary above for any key decisions, technical constraints, preferences, or guidelines that should persist. Call aide_remember for anything important — this is your last chance before that context fades. If nothing worth storing, continue."
-  if [ -n "$INJECTED" ]; then
-    echo "${INJECTED}"$'\n\n'"${COMPACT_PROMPT}"
-  else
-    echo "$COMPACT_PROMPT"
-  fi
-else
-  if [ -n "$INJECTED" ]; then
-    echo "$INJECTED"
-  fi
+# Inject preferences + guidelines (all sources — start, resume, clear, compact)
+if [ -n "$INJECTED" ]; then
+  echo "$INJECTED"
 fi
 
 exit 0

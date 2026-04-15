@@ -1182,7 +1182,20 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - **Config mapping to Cursor**: All settings (memories.hideFromGrep, telemetry, hook intensity) should map to Cursor's equivalent config system. Audit all .aide/config.json keys and ensure they work across both Claude Code and Cursor environments
 - **Audit hook usage patterns**: Are blocking hooks, flag files, two-phase patterns, and multi-hook coordination (blocker + tracker) the correct/intended way to use Claude Code hooks? Or are there simpler/better patterns? Research Claude Code hook best practices, check community examples, file questions with Anthropic if needed
 - **Progressive context warnings**: File feature request with Claude Code for a `ContextThreshold` hook event (fires at 70%, 80%, 90% context usage). Would enable progressive "save your context" warnings before auto-compaction triggers. For now, Stop hook on every turn is the closest approximation.
-- **Pre-compact user guide**: Add to README/public docs: "Before running /compact, ask Claude to save important context. Or let the post-compact prompt handle it automatically." (Rules template now tells the agent to save proactively — user prompt is a backup.)
+
+**Known Limitation — Context Saving Before Compaction:**
+PreCompact hooks CANNOT give the agent an agentic turn to call aide_remember. This is a confirmed Claude Code architectural limitation (agent loop is async to compaction timer, hooks are synchronous control). See GitHub issue #32062.
+
+Document in external docs (README, landing page):
+- **How aide-memory handles compaction**: The Stop hook prompts the agent to save key context after every turn throughout the session. By the time compaction happens, important decisions are already stored. The agent is also instructed (via rules file) to proactively save as conversations grow.
+- **User tip**: Before running `/compact`, ask Claude: "Save any key decisions from this session via aide_remember." The agent has full context at that point and can make targeted saves.
+- **What happens after compaction**: Session preferences and guidelines are automatically re-injected. Previously recalled files require re-recall (hooks will prompt this).
+- **Feature request**: We're tracking Claude Code issue #32062 (auto-save before compaction) for a platform-level solution.
+
+File feature request:
+- **Title**: "Allow PreCompact hooks to trigger an agentic turn before compaction proceeds"
+- **Description**: PreCompact hooks can block or approve compaction but cannot give the agent a tool-calling turn. For memory systems (aide-memory), the agent needs to call MCP tools (aide_remember) before context is lost. Requested: PreCompact returns a flag that pauses compaction, gives the agent one agentic turn to make tool calls, then proceeds with compaction.
+- **Reference**: Related to #32062 (auto-save session state before compaction)
 - **Cursor compaction behavior**: Cursor may handle compaction differently — investigate what context survives compaction in Cursor, whether Cursor has equivalent hooks, and whether the post-compact save prompt works there. Cursor's compacted summaries may retain less/more context than Claude Code's, affecting whether aide_remember captures useful info post-compact
 
 **P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation

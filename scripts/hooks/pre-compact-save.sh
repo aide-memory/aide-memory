@@ -2,14 +2,16 @@
 # PreCompact hook — cleanup only. Clears session tracking before compaction.
 # Fires before both manual /compact and auto-compact.
 #
-# This is a high-value touchpoint — context loss from compaction is a major
-# pain point (350+ GitHub comments document this). However, PreCompact hooks
-# CANNOT force agent tool calls (neither exit 0 nor exit 2 gives the agent
-# an agentic turn during compaction). So we rely on the Stop hook for save
-# prompts and use PreCompact purely for cleanup.
+# LIMITATION: PreCompact hooks cannot give the agent an agentic turn to make
+# tool calls (confirmed — Claude Code architectural constraint). Neither exit 0
+# nor exit 2 allows aide_remember calls before compaction.
 #
-# The Stop hook fires on every agent turn and already prompts aide_remember.
-# By the time compaction triggers, Stop has already prompted saving.
+# Save strategy relies on:
+# - Stop hook: fires every turn, prompts aide_remember with full context
+# - Proactive saving rule: agent saves throughout session per rules template
+# - User guidance: "ask Claude to save before /compact" (in docs)
+#
+# PreCompact just clears session tracking so hooks re-block after compaction.
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
@@ -23,16 +25,5 @@ rm -f "$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt" 2>/dev/null
 rm -f "$PROJECT_ROOT/.aide/cache/searched-queries-${SID}.txt" 2>/dev/null
 rm -f "$PROJECT_ROOT/.aide/cache/correction-pending-${SID}.txt" 2>/dev/null
 rm -f "$PROJECT_ROOT/.aide/cache/compact-pending-${SID}.txt" 2>/dev/null
-
-# Advisory: compaction proceeds (exit 0), but inject a system message
-# reminding the agent to save. Post-compact SessionStart is the backup.
-# Blocking (exit 2) doesn't give the agent an agentic turn — confirmed.
-cat <<'HOOK_OUTPUT'
-{
-  "decision": "approve",
-  "reason": "Compaction proceeding. Session tracking cleared.",
-  "systemMessage": "IMPORTANT: Context was just compacted. Review the summary for any key decisions, technical constraints, preferences, or guidelines worth persisting. Call aide_remember for anything important — after compaction you only have a summary. Save what matters."
-}
-HOOK_OUTPUT
 
 exit 0
