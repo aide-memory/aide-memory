@@ -106,7 +106,7 @@ if [ -f "$RECALLED_FILE" ]; then
         break
       fi
     elif [[ "$recalled_entry" == dir\|* ]]; then
-      # dir| entries: skip — handled by directory trigger logic below
+      # dir| entries: skip for file-level check — handled by directory trigger below
       continue
     else
       # Legacy format (no prefix): exact match only
@@ -116,6 +116,32 @@ if [ -f "$RECALLED_FILE" ]; then
       fi
     fi
   done < "$RECALLED_FILE"
+
+  # ID-based check: if this file's scoped memory IDs are ALL already in the
+  # ids| tracking line (from a previous directory or file recall), the agent
+  # already has the context — no need to block again.
+  if [ "$ALREADY_RECALLED" = "false" ] && [ "$SCOPED_COUNT" -gt 0 ] 2>/dev/null; then
+    SCOPED_IDS=$(echo "$RESULT" | jq -r '.scoped_ids // [] | map(tostring) | .[]' 2>/dev/null)
+    if [ -n "$SCOPED_IDS" ]; then
+      # Get all recalled IDs from tracking
+      RECALLED_IDS=""
+      if [ -f "$RECALLED_FILE" ]; then
+        RECALLED_IDS=$(grep "^ids|" "$RECALLED_FILE" | tail -1 | sed 's/^ids|//')
+      fi
+      if [ -n "$RECALLED_IDS" ]; then
+        ALL_COVERED=true
+        for sid in $SCOPED_IDS; do
+          if ! echo ",$RECALLED_IDS," | grep -q ",$sid,"; then
+            ALL_COVERED=false
+            break
+          fi
+        done
+        if [ "$ALL_COVERED" = "true" ]; then
+          ALREADY_RECALLED=true
+        fi
+      fi
+    fi
+  fi
 fi
 
 # Directory trigger: only if current file is NOT already recalled

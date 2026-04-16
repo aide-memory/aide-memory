@@ -34,9 +34,15 @@ try {
   // Convert absolute path to relative for scope matching
   // Scopes are stored as relative (e.g. "src/memory/**") but Claude Code
   // passes absolute paths (e.g. "/Users/.../src/memory/store.ts")
+  // Resolve symlinks first — macOS /tmp → /private/tmp causes mismatches
+  let resolvedProject = projectRoot;
+  let resolvedFile = filePath;
+  try { resolvedProject = fs.realpathSync(projectRoot); } catch {}
+  try { resolvedFile = fs.realpathSync(filePath); } catch {}
+
   let relativePath = filePath;
-  if (path.isAbsolute(filePath) && filePath.startsWith(projectRoot)) {
-    relativePath = path.relative(projectRoot, filePath);
+  if (path.isAbsolute(resolvedFile) && resolvedFile.startsWith(resolvedProject)) {
+    relativePath = path.relative(resolvedProject, resolvedFile);
   }
 
   // Open store using projectRoot (constructor accepts string project path)
@@ -81,6 +87,7 @@ try {
   let dir_count = 0;
   let project_count = 0;
   let scoped_count = 0; // only specific-enough scopes — used for blocking
+  const scoped_ids = []; // IDs of scoped memories — used for ID-based recall check
   for (const m of matching) {
     const s = m.scope;
     if (!s || s === 'project') {
@@ -91,10 +98,12 @@ try {
       const depth = scopeBase ? scopeBase.split('/').length : 0;
       if (depth >= MIN_SCOPE_DEPTH) {
         scoped_count++;
+        scoped_ids.push(m.id);
       }
     } else {
       file_count++;
       scoped_count++; // exact file scope — always specific enough
+      scoped_ids.push(m.id);
     }
   }
 
@@ -204,6 +213,7 @@ try {
   const result = {
     count: matching.length,
     scoped_count,
+    scoped_ids,
     project_count,
     total_memories,
     layers,
