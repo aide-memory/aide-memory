@@ -47,53 +47,21 @@ if [ -f "$RECALLED_FILE" ]; then
       continue  # skip ID tracking lines
     fi
 
-    # file| entries: exact match only
-    if [[ "$recalled_entry" == file\|* ]]; then
-      if [ "$recalled_path" = "$FILE_PATH" ]; then
-        ALREADY_RECALLED=true
-        break
-      fi
-    elif [[ "$recalled_entry" == dir\|* ]]; then
-      # dir| entries: skip — handled by directory trigger logic (read hook only)
-      continue
-    else
-      # Legacy format (no prefix): exact match only
-      if [ "$recalled_path" = "$FILE_PATH" ]; then
-        ALREADY_RECALLED=true
-        break
-      fi
+    # Exact file match
+    if [ "$recalled_path" = "$FILE_PATH" ]; then
+      ALREADY_RECALLED=true
+      break
+    fi
+    # Directory prefix match — dir recall covers all files under it
+    if [[ "$recalled_entry" == dir\|* ]] && [[ "$FILE_PATH" == "$recalled_path"* ]]; then
+      ALREADY_RECALLED=true
+      break
     fi
   done < "$RECALLED_FILE"
 fi
 
-# Not yet recalled by file — check if memories exist for this path
-# (need RESULT for ID-based check below)
+# Not yet recalled — check if memories exist for this path
 RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
-
-# ID-based check: if this file's scoped memory IDs are ALL already in the
-# ids| tracking line (from a previous directory or file recall), the agent
-# already has the context — no need to block again.
-if [ "$ALREADY_RECALLED" = "false" ] && [ -n "$RESULT" ] && [ "$RESULT" != "0" ]; then
-  SCOPED_COUNT_CHECK=$(echo "$RESULT" | jq -r '.scoped_count // 0' 2>/dev/null)
-  if [ "$SCOPED_COUNT_CHECK" -gt 0 ] 2>/dev/null; then
-    SCOPED_IDS=$(echo "$RESULT" | jq -r '.scoped_ids // [] | map(tostring) | .[]' 2>/dev/null)
-    if [ -n "$SCOPED_IDS" ] && [ -f "$RECALLED_FILE" ]; then
-      RECALLED_IDS=$(grep "^ids|" "$RECALLED_FILE" | tail -1 | sed 's/^ids|//')
-      if [ -n "$RECALLED_IDS" ]; then
-        ALL_COVERED=true
-        for sid in $SCOPED_IDS; do
-          if ! echo ",$RECALLED_IDS," | grep -q ",$sid,"; then
-            ALL_COVERED=false
-            break
-          fi
-        done
-        if [ "$ALL_COVERED" = "true" ]; then
-          ALREADY_RECALLED=true
-        fi
-      fi
-    fi
-  fi
-fi
 
 if [ "$ALREADY_RECALLED" = "true" ]; then
   # Already recalled — soft nudge only (non-blocking)
