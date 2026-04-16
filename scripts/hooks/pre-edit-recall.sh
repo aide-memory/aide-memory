@@ -32,6 +32,7 @@ RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt"
 # Check if path (or a parent directory) was already recalled in this session
 # Handles both file|path and dir|path entry formats
 ALREADY_RECALLED=false
+DIR_MATCH=false
 if [ -f "$RECALLED_FILE" ]; then
   # Compute parent directory for dir| prefix matching
   ABS_PARENT=$(dirname "$FILE_PATH")
@@ -52,16 +53,45 @@ if [ -f "$RECALLED_FILE" ]; then
       ALREADY_RECALLED=true
       break
     fi
-    # Directory prefix match — dir recall covers all files under it
+    # Directory prefix match — file is under a recalled directory
     if [[ "$recalled_entry" == dir\|* ]] && [[ "$FILE_PATH" == "$recalled_path"* ]]; then
-      ALREADY_RECALLED=true
+      DIR_MATCH=true
       break
     fi
   done < "$RECALLED_FILE"
+
+  # If dir match found, check IDs for precise coverage
+  if [ "$DIR_MATCH" = "true" ]; then
+    RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
+    IDS_LINE=$(grep '^ids|' "$RECALLED_FILE" 2>/dev/null | tail -1)
+    if [ -n "$IDS_LINE" ] && [ -n "$RESULT" ]; then
+      RECALLED_IDS="${IDS_LINE#ids|}"
+      FILE_SCOPED_IDS=$(echo "$RESULT" | jq -r '.scoped_ids // [] | map(tostring) | .[]' 2>/dev/null)
+      if [ -n "$FILE_SCOPED_IDS" ]; then
+        ALL_COVERED=true
+        for sid in $FILE_SCOPED_IDS; do
+          if ! echo ",$RECALLED_IDS," | grep -qF ",$sid,"; then
+            ALL_COVERED=false
+            break
+          fi
+        done
+        if [ "$ALL_COVERED" = "true" ]; then
+          ALREADY_RECALLED=true
+        fi
+      else
+        ALREADY_RECALLED=true
+      fi
+    else
+      # No ids| tracking yet — trust directory prefix match
+      ALREADY_RECALLED=true
+    fi
+  fi
 fi
 
-# Not yet recalled — check if memories exist for this path
-RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
+# Check if memories exist for this path (if not already fetched)
+if [ -z "$RESULT" ]; then
+  RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
+fi
 
 if [ "$ALREADY_RECALLED" = "true" ]; then
   # Already recalled — soft nudge only (non-blocking)

@@ -105,11 +105,38 @@ if [ -f "$RECALLED_FILE" ]; then
       ALREADY_RECALLED=true
       break
     fi
-    # Directory prefix match — dir recall covers all files under it
-    # aide_recall for a directory returns all matching memories including file-specific ones
+    # Directory prefix match — file is under a recalled directory
     if [[ "$recalled_entry" == dir\|* ]] && [[ "$FILE_PATH" == "$recalled_path"* ]]; then
-      ALREADY_RECALLED=true
-      break
+      # Check if ids| tracking exists — if so, use precise ID check
+      # If not, fall back to assuming directory recall covers the file
+      IDS_LINE=$(grep '^ids|' "$RECALLED_FILE" 2>/dev/null | tail -1)
+      if [ -n "$IDS_LINE" ]; then
+        # IDs available — check if THIS file's scoped memories are all covered
+        RECALLED_IDS="${IDS_LINE#ids|}"
+        FILE_SCOPED_IDS=$(echo "$RESULT" | jq -r '.scoped_ids // [] | map(tostring) | .[]' 2>/dev/null)
+        if [ -n "$FILE_SCOPED_IDS" ]; then
+          ALL_COVERED=true
+          for sid in $FILE_SCOPED_IDS; do
+            if ! echo ",$RECALLED_IDS," | grep -qF ",$sid,"; then
+              ALL_COVERED=false
+              break
+            fi
+          done
+          if [ "$ALL_COVERED" = "true" ]; then
+            ALREADY_RECALLED=true
+            break
+          fi
+          # Not all covered — don't set ALREADY_RECALLED, will block or soft
+        else
+          # No scoped IDs for this file — directory recall is enough
+          ALREADY_RECALLED=true
+          break
+        fi
+      else
+        # No ids| tracking yet — trust directory prefix match
+        ALREADY_RECALLED=true
+        break
+      fi
     fi
   done < "$RECALLED_FILE"
 

@@ -3,13 +3,15 @@
 # Fires AFTER mcp__aide-memory__aide_recall returns results.
 # Extracts memory IDs from the response and stores them in the
 # session-scoped tracking file for deduplication.
+
 #
 # ID tracking format: ids|{id1},{id2},{id3},...
 
 INPUT=$(cat)
+
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
-# tool_response contains the text output from aide_recall
-RESPONSE=$(echo "$INPUT" | jq -r '.tool_response.content // .tool_response // empty' 2>/dev/null)
+# tool_response is an array of {type, text} objects
+RESPONSE=$(echo "$INPUT" | jq -r '.tool_response[]?.text // .tool_response // empty' 2>/dev/null)
 
 if [ -z "$RESPONSE" ]; then
   exit 0
