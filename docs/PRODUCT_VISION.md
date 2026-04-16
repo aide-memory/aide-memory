@@ -1,7 +1,7 @@
 # Product Vision — AIDE Memory: Persistent Memory & Team Context for AI Coding Agents
 
 > Product thesis: Individual memory as infrastructure, team context as the product.
-> Created: Mar 10, 2026. Refactored: Mar 31, 2026. Rewritten: Apr 2, 2026 (naming finalized, capabilities expanded to 17, storage architecture redesigned, CLI/agent UX model clarified, install experience defined, monorepo support added).
+> Created: Mar 10, 2026. Refactored: Mar 31, 2026. Rewritten: Apr 2, 2026 (naming finalized, capabilities expanded to 17, storage architecture redesigned, CLI/agent UX model clarified, install experience defined, monorepo support added). Updated: Apr 13, 2026 (hook system updated to 10 hooks with ID-based blocking, dynamic stop interval, settings framework, validation findings from Sessions A-F).
 > Source: DIRECTION_MARCH31.md session findings, DIRECTION_CHAT.txt conversations, Apr 2 strategic session, MVP_IMPLEMENTATION.md, HOOKS_IMPLEMENTATION.md, PROTOTYPE.md, RESEARCH.md.
 
 ---
@@ -210,7 +210,7 @@ Biomimetic 4-network memory architecture modeled on how human brains actually wo
 | Team sharing                 | None                 | None                  | Yes (rule packs) | Yes (PR-based)            | None         | None              | None              | Yes (Spaces) | **Yes (proactive, path-scoped)**    |
 | Proactive cross-dev nudge    | None                 | None                  | Not documented   | None                      | None         | None              | None              | None         | **PreToolUse hook, path-scoped**    |
 | Cross-dev reasoning          | None                 | None                  | Not documented   | None                      | None         | None              | None              | None         | **Human-readable, browsable**       |
-| Hooks                        | 5 hooks              | None                  | 11 hooks         | N/A                       | None         | None              | None              | None         | **9 hooks (launch)**                |
+| Hooks                        | 5 hooks              | None                  | 11 hooks         | N/A                       | None         | None              | None              | None         | **10 hooks (launch)**               |
 | Governance                   | None                 | None                  | Rule packs       | Continuous Learning Rules | None         | None              | PR gates (narrow) | None         | **Correction graduation (Phase 3)** |
 | Auto-capture                 | Yes (AI compression) | None (voluntary only) | Yes              | Yes (PR-based)            | Medium       | High (biomimetic) | Unknown           | Unknown      | **Yes (hooks, dual-mode)**          |
 | Config generation            | None                 | None                  | None             | None                      | None         | None              | None              | None         | **From learned memories**           |
@@ -289,25 +289,29 @@ These 7 capabilities are baseline expectations. Without them we do not get evalu
 
 **Problem it solves:** Agents never voluntarily save context. Tested: 0/10 prompts resulted in voluntary aide_remember calls when the tool was simply available.
 
-9 hooks ship on by default -- no developer action required to start accumulating useful memories:
+10 hooks ship on by default -- no developer action required to start accumulating useful memories:
 
-- **SessionStart** -- fires at session start. Auto-injects preferences and guidelines with `priority: 'always'` (~300 tokens) so the agent has your style context from the first prompt. Clears the session's recalled-paths tracking file for a clean slate.
-- **PreToolUse (Read)** -- fires before the agent reads a file. Lightweight nudge: "8 memories exist for this path." Agent decides whether to pull them. Triggers directory-level recall when 2+ files from the same parent directory have been read.
-- **PreToolUse (Edit/Write)** -- fires before the agent edits or writes a file. Same nudge mechanism as Read.
-- **PreToolUse (Grep/Glob)** -- fires before the agent searches files. Nudges with memory counts for the search path.
-- **UserPromptSubmit** -- detects correction patterns ("no, don't use that pattern", "instead use..."). Flags the correction for the Stop hook to enforce.
-- **PostToolUse (aide_recall)** -- fires after aide_recall to track recalled paths and clear any pending correction flag.
-- **PostToolUse (aide_remember)** -- fires after aide_remember to confirm storage and trigger embedding generation.
-- **PreCompact** -- fires before context compaction. Extracts decisions and context before they are lost. Clears the session's recalled-paths file to allow re-recall after compaction.
-- **Stop** -- fires on task completion. Enforces pending corrections detected by UserPromptSubmit (two-phase correction flow) and prompts the agent to remember session discoveries.
+- **SessionStart** -- fires at session start. Auto-injects preferences + guidelines + `priority: 'always'` memories (~300 tokens) so the agent has style context from the first prompt. Writes injected memory IDs to session tracking file. Clears tracking on resume/compact/clear for a clean slate.
+- **PreToolUse (Read)** -- fires before the agent reads a file. ID-based blocking: checks scoped memory IDs against the session's tracked IDs. BLOCK if unseen IDs exist for a new file (forces recall before proceeding). SOFT if the path has been encountered but has unrecalled IDs. SILENT if all scoped IDs are already covered or no scoped memories exist. Includes layer counts and topic summaries in nudge output.
+- **PreToolUse (Edit/Write)** -- fires before the agent edits or writes a file. Same ID-based blocking logic as Read.
+- **PreToolUse (Grep/Glob)** -- fires before the agent searches files. Always soft nudge, never blocks. Agent decides whether to call `aide_search`.
+- **UserPromptSubmit** -- soft-only correction detection with negative filters (ignores questions, acknowledgments, short responses) and 3-word minimum. Flags the correction for the Stop hook to enforce.
+- **Stop** -- dynamic interval: blocks every 3 turns for the first 9 turns, every 5 for turns 10-29, every 10 after turn 30. SILENT between block intervals. Correction flag from UserPromptSubmit always overrides the interval (forces immediate block). Prompts agent to remember session discoveries.
+- **PreCompact** -- cleanup-only. Clears the session's recalled-paths tracking file so paths can be re-recalled after compaction. Cannot force agent tool calls (Claude Code architectural limitation -- PreCompact output is not reliably consumed by the agent).
+- **PreToolUse (aide_recall)** -- passthrough tracking. Records that a recall is in progress.
+- **PostToolUse (aide_recall)** -- passthrough tracking. Parses returned memory IDs from MCP response and writes them to session tracking. Supports `ids` parameter for gap-filling specific memories.
+- **PostToolUse (aide_remember)** -- passthrough tracking. Confirms storage.
+- **PostToolUse (aide_search)** -- passthrough tracking.
 
 All hooks are shell scripts in `scripts/hooks/`, tool-agnostic, with separate configs per tool. Session-scoped tracking via `session_id` ensures concurrent sessions don't interfere. Auto-capture is ON by default. Developers who find the nudge noisy can disable individual hooks via `aide config nudge off`.
 
-**Blocking behavior:** Hooks use scoped-only blocking -- they only block the agent (requiring recall before proceeding) when file or directory-scoped memories exist. If only project-wide memories match, the hook returns a soft nudge instead. New projects with fewer than 10 total memories always get soft nudges to avoid friction during early adoption.
+**ID-based blocking:** Hooks track which memory IDs the agent has already seen (via session tracking file). When the agent touches a file, the hook checks whether scoped memory IDs for that path are already in the tracking file. If unseen IDs exist and the path is new, the hook BLOCKs (forces recall). If the path was encountered but has gaps, the hook returns a SOFT nudge. If all IDs are covered, the hook is SILENT. This prevents redundant blocking while ensuring new context is always surfaced. Scope depth minimum (MIN_SCOPE_DEPTH=2) prevents overly broad scopes from triggering blocks.
+
+**Focused scope matching:** Recall matches immediate parent and one level above only -- no grandparent scopes. This keeps recalled context tightly relevant to the file being touched.
+
+**Round-robin layer diversity:** Within the recall limit (minimum limit=5 for swapping), memories are distributed across layers using round-robin selection to prevent any single layer from dominating results.
 
 **Hidden nudging:** The memory management prompts ("anything worth remembering?") are injected via `additionalContext` -- invisible in the terminal. The developer sees only the agent's actual response, not the memory management happening behind the scenes. The agent's decision to store or skip is silent.
-
-**Dedup across hooks:** Within a single interaction, multiple hooks may fire (PreToolUse, then Stop). Before storing, a check prevents the same memory from being stored twice in one interaction.
 
 **Model auto-assigns metadata:** When storing a memory, the model assigns layer, tags (from a configurable preset list), and shared/private classification based on content analysis. The developer never manually categorizes unless overriding.
 
@@ -565,7 +569,7 @@ This is not a chat log or an activity feed. It is structured reasoning organized
 
 Corrections recalled N times, or corrected independently by multiple developers, get proposed as rules and promoted to config files. A frequency-based pipeline from observed behavior to enforced standard.
 
-- Correction detected via two-phase flow: UserPromptSubmit detects and flags the correction, Stop enforces storage at task completion, PostToolUse(aide_recall) clears the flag after context is recalled. Stored with `source:hook` tag
+- Correction detected via two-phase flow: UserPromptSubmit detects and flags the correction (soft-only, with negative filters + 3-word minimum), Stop hook enforces storage (correction flag overrides the dynamic interval, forcing an immediate block). Stored with `source:hook` tag
 - System tracks `recalled_count` and unique contributor count per correction
 - When a threshold is crossed (e.g., recalled 5+ times, or corrected by 3+ developers): proposed as a candidate rule
 - Developer reviews and approves. Agent formats into the appropriate config file section.
@@ -672,7 +676,7 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 |---------------|---------------------|
 | claude-mem reliability issues (worker crashes, session integrity bugs, heavy ChromaDB stack) | Simpler architecture — SQLite only, no external processes, fewer failure modes |
 | claude-mem dumps ALL memories into system prompt (~2,000 tokens per session) | Nudge approach: ~20 tokens per file read, agent pulls only what's relevant |
-| engram relies on agents voluntarily saving (our testing: 0% voluntary usage) | 9 hooks ON by default — proven 0%→100% adoption |
+| engram relies on agents voluntarily saving (our testing: 0% voluntary usage) | 10 hooks ON by default — proven 0%→100% adoption |
 | Most tools bolt on path scoping after the fact | Path-scoped glob inheritance from day one, core architecture |
 
 **Capabilities in this phase:**
@@ -683,8 +687,8 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 | Area | What ships | Tier |
 |------|-----------|------|
 | **Install** | One-command install: `npx aide-memory init`. Writes rules files for ALL supported tools by default. Sets up hooks, creates `.aide/` directory structure, config defaults, downloads embedding model, configures `.gitignore`. | FREE |
-| **Capture** | 9 hooks on by default: SessionStart (preferences/guidelines auto-injection with `priority: 'always'`), PreToolUse on Read (nudge + directory recall trigger at 2+ files from same dir), PreToolUse on Edit/Write (nudge), PreToolUse on Grep/Glob (nudge), UserPromptSubmit (correction detection + flag), PostToolUse on aide_recall (track + clear correction flag), PostToolUse on aide_remember (confirm + embedding generation), PreCompact (extract-before-loss + clear recalled paths), Stop (two-phase correction enforcement + remember prompt). Session-scoped tracking via `session_id`. Scoped-only blocking (soft for project-wide-only, always soft for <10 total memories). Source tagging. Hidden nudging via `additionalContext`. Dedup across hooks. Contributor + `generated_by` (tool/model/author_type) stored from day one. | FREE |
-| **Recall** | Smart nudge approach — YOUR memories only. Path-scoped with glob matching and parent inheritance. Scope-first ranking (scoped above project-wide), round-robin layer representation, directory query inversion (broader scopes first for dir queries). Memory `priority` field (`always` = auto-injected at session start, `normal` = standard). | FREE (your mems) |
+| **Capture** | 10 hooks on by default: SessionStart (preferences/guidelines/priority:always auto-injection + ID tracking), PreToolUse on Read (ID-based blocking: BLOCK/SOFT/SILENT), PreToolUse on Edit/Write (same ID-based blocking), PreToolUse on Grep/Glob (always soft, never blocks), UserPromptSubmit (soft-only correction detection with negative filters + 3-word minimum), Stop (dynamic interval 3/5/10 with correction override), PreCompact (cleanup-only, clears tracking), PreToolUse on aide_recall (passthrough tracking), PostToolUse on aide_recall (ID parsing + tracking), PostToolUse on aide_remember (passthrough tracking), PostToolUse on aide_search (passthrough tracking). Session-scoped tracking via `session_id` with `ids\|` entries. Source tagging. Hidden nudging via `additionalContext`. Contributor + `generated_by` (tool/model/author_type) stored from day one. | FREE |
+| **Recall** | Smart nudge approach — YOUR memories only. Path-scoped with focused scope matching (immediate parent + one level above only, no grandparent scopes). Scope-first ranking (scoped above project-wide), round-robin layer diversity within limit (min limit=5 for swapping). `aide_recall` supports `ids` parameter for gap-filling specific memories. Memory `priority` field (`always` = auto-injected at session start, `normal` = standard). Scope depth minimum (MIN_SCOPE_DEPTH=2) for blocking decisions. | FREE (your mems) |
 | **Structure** | 4 memory layers with priority ordering. Tags from configurable preset list. Model auto-assigns. | FREE |
 | **CLI** | `aide recall`, `aide remember`, `aide update`, `aide forget`, `aide search`, `aide list`, `aide stats`, `aide config`, `aide sync import/export`. Full parity with MCP tools. Binary: `aide` (default), `aide-memory` (fallback). | FREE |
 | **Search** | FTS5 + sqlite-vec semantic search with mode parameter (auto/keyword/semantic). YOUR memories only on free. | FREE (your mems) |
@@ -700,12 +704,25 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 **What is already built:**
 
 - SQLite store with schema, WAL mode, synchronous API (20 tests)
-- Recall engine with path-scoped glob matching, layer ordering (18 tests)
-- MCP server with 7 tools: aide_recall, aide_remember, aide_update, aide_forget, aide_search, aide_memories, aide_import (9 tests)
-- 9 hooks: SessionStart (preferences/guidelines auto-injection with `priority: 'always'`), PreToolUse on Read (nudge + directory recall trigger at 2+ files from same dir), PreToolUse on Edit/Write (nudge), PreToolUse on Grep/Glob (nudge), UserPromptSubmit (correction detection + flag), PostToolUse on aide_recall (track + clear correction flag), PostToolUse on aide_remember (confirm + embedding generation), PreCompact (extract-before-loss + clear recalled paths), Stop (two-phase correction enforcement + remember prompt)
-- Scope-first recall ranking with round-robin layer representation, directory query inversion, scoped-only blocking, new-project softening (<10 memories)
+- Recall engine with path-scoped glob matching, focused scope matching (immediate parent + one level above, no grandparent), round-robin layer diversity (min limit=5), scope depth minimum (MIN_SCOPE_DEPTH=2) for blocking decisions (18 tests)
+- MCP server with 7 tools: aide_recall (with `ids` parameter for gap-filling), aide_remember, aide_update, aide_forget, aide_search, aide_memories, aide_import (9 tests)
+- 10 hooks fully implemented:
+  - SessionStart: injects preferences + guidelines + priority:always memories, writes injected IDs to tracking, clears tracking on resume/compact/clear
+  - Read hook: ID-based blocking (BLOCK if unseen IDs for new file, SOFT if encountered, SILENT if all covered or no scoped memories), layer counts + topic summaries in output
+  - Edit hook: same ID-based blocking logic as Read
+  - Search hook (Grep/Glob): always soft, never blocks
+  - UserPromptSubmit: soft-only correction detection with negative filters + 3-word minimum
+  - Stop hook: dynamic interval (3 for first 9 turns, 5 for 10-29, 10 after 30), correction flag always overrides interval
+  - PreCompact: cleanup-only (clears tracking), cannot force agent tool calls (Claude Code limitation)
+  - Track hooks: PreToolUse(aide_recall), PostToolUse(aide_recall) with ID parsing, PostToolUse(aide_remember), PostToolUse(aide_search) -- all passthrough tracking
+- Session-scoped tracking via `session_id` with `ids|` entries in tracking file
+- PostToolUse correctly parses and tracks returned memory IDs from MCP responses
+- SessionStart tracks injected memory IDs to prevent redundant blocking
 - Memory priority field (`always` for auto-injected, `normal` for standard)
 - Embedding auto-management: generated on add, regenerated on update, cleaned on remove
+- Settings framework: `defaults.json` with 18 settings (value/public/pro metadata), `read-config.sh` shared reader with three-layer resolution (hook default, defaults.json, user config). All settings private currently -- public config + pro gating deferred to Phase 2.
+- Auto-update on MCP server start (checks version, merges hooks/MCP/rules/dirs/.gitignore)
+- `.ignore` file hides memories from grep by default
 - 47 tests passing, zero type errors
 
 **What remains to ship:**
@@ -716,10 +733,10 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 - Cursor MCP config + hooks config
 - `.aide/memories/` file-per-memory architecture (migrate from single SQLite to JSON files + SQLite index)
 - Post-checkout git hook for auto-sync
-- `aide config` CLI for customization (nudge visibility, capture settings, tags, cleanup thresholds)
 - `aide stats` CLI command with analytics
 - Default-on telemetry (opt-out)
-- `aide init --scan` pre-train mode (codebase scan → initial memories)
+- `aide init --scan` pre-train mode (codebase scan -> initial memories)
+- Public config settings + pro gating (Phase 2)
 - Polish: error handling, graceful degradation, startup time
 - **Pre-ship validation:** Prove that recall actually improves agent output (same task, with vs without recalled memories, measurable quality difference)
 
@@ -1007,8 +1024,8 @@ The pricing is simple. Individual features are free. Team features cost money. E
 
 **What you get:**
 
-- Capture: 9 hooks on by default (SessionStart auto-injection, PreToolUse on Read/Edit/Write/Grep/Glob, UserPromptSubmit correction detection, PostToolUse on aide_recall/aide_remember, PreCompact extract, Stop two-phase enforcement). Scoped-only blocking, new-project softening (<10 memories).
-- Recall: scope-first ranking (scoped above project-wide), round-robin layer representation, directory query inversion, memory priority field (`always`/`normal`), YOUR memories only
+- Capture: 10 hooks on by default (SessionStart auto-injection + ID tracking, PreToolUse on Read/Edit with ID-based blocking, PreToolUse on Grep/Glob always soft, UserPromptSubmit soft-only correction detection, Stop dynamic interval 3/5/10 with correction override, PreCompact cleanup-only, plus 4 track hooks for aide_recall/aide_remember/aide_search). Session-scoped ID tracking prevents redundant blocking.
+- Recall: scope-first ranking (scoped above project-wide), round-robin layer diversity (min limit=5), focused scope matching (immediate parent + one level above only), `ids` parameter for gap-filling, memory priority field (`always`/`normal`), MIN_SCOPE_DEPTH=2, YOUR memories only
 - Search: FTS5 keyword + sqlite-vec semantic search with mode parameter (auto/keyword/semantic)
 - Structure: 4 memory layers with priority ordering, configurable tags
 - Storage: one file per memory, local SQLite index, git sync
@@ -1095,7 +1112,7 @@ The pricing is simple. Individual features are free. Team features cost money. E
 - **FTS5 + sqlite-vec in one database.** FTS5 for keyword search with BM25 ranking. sqlite-vec for semantic similarity via local embeddings. Both live in the same SQLite file. No external processes, no Python subprocess, no Chroma, no Qdrant.
 - **Native model for all reasoning.** We CANNOT tap into Claude Code or Cursor's model programmatically. MCP tools do DATA RETRIEVAL (SQLite queries). The agent the developer is already running does REASONING (formatting, drafting, deciding relevance). Rules files (written during init) are the interface -- they tell the model when and how to call MCP tools. For EACH tool we support, we write native rules files in that tool's format. Zero separate model. Zero extra API cost.
 - **Store is the brain. Files are projections.** SQLite is the structured, queryable source of truth. CLAUDE.md, .cursorrules, and `.aide/context/` files are readable projections generated on command from the store. One source, multiple outputs.
-- **9 hooks at launch.** SessionStart (auto-inject preferences/guidelines with `priority: 'always'`), PreToolUse on Read (nudge + directory recall trigger at 2+ files), PreToolUse on Edit/Write (nudge), PreToolUse on Grep/Glob (nudge), UserPromptSubmit (correction detection + flag), PostToolUse on aide_recall (track recalled paths + clear correction flag), PostToolUse on aide_remember (confirm + trigger embedding generation), PreCompact (extract decisions before compaction + clear recalled paths), Stop (enforce corrections via two-phase flow + prompt to remember). Session-scoped tracking via `session_id` for concurrent session isolation. Recall ranking uses scope-first ordering (scoped above project-wide) with round-robin across layers to prevent starvation. Scoped-only blocking: hooks block only when file/directory-scoped memories exist; project-wide-only matches get soft nudges. New projects (<10 total memories) always get soft nudges.
+- **10 hooks at launch.** SessionStart (auto-inject preferences + guidelines + priority:always, write injected IDs to tracking, clear tracking on resume/compact/clear), PreToolUse on Read (ID-based blocking: BLOCK/SOFT/SILENT based on unseen memory IDs), PreToolUse on Edit/Write (same ID-based blocking as Read), PreToolUse on Grep/Glob (always soft, never blocks), UserPromptSubmit (soft-only correction detection with negative filters + 3-word minimum), Stop (dynamic interval 3/5/10 with correction override), PreCompact (cleanup-only, clears tracking -- cannot force agent tool calls due to Claude Code limitation), plus 4 track hooks: PreToolUse(aide_recall), PostToolUse(aide_recall) with ID parsing, PostToolUse(aide_remember), PostToolUse(aide_search). Session-scoped tracking via `session_id` with `ids|` entries for concurrent session isolation. Recall uses focused scope matching (immediate parent + one level above, no grandparent) with round-robin layer diversity (min limit=5). Scope depth minimum (MIN_SCOPE_DEPTH=2) for blocking decisions.
 - **Command-triggered generation, not automatic background.** `aide generate-rules` and `aide generate-context` are explicit commands. The model assists with drafting content. Nothing runs without the developer asking for it.
 - **Hot path bypasses MCP.** Hooks query SQLite directly via a JS script. Zero protocol overhead for recall on the critical path. MCP is for cross-tool portability and explicit tool calls, not for the read-on-every-file-open loop.
 - **Proprietary freeware distribution.** Licensing decision pending (see Repo Strategy & Licensing), but the design assumes code protection is important. Pro/Enterprise features are always proprietary, never visible, never convert to open source.
@@ -1303,7 +1320,13 @@ Adding a new tool: copy the adapter template, configure hook event names and MCP
 
 ### Unified Configuration
 
-All settings live in `.aide/config.json`, managed via the `aide config` CLI:
+**Current implementation:** `defaults.json` defines 18 settings, each with `value`, `public`, and `pro` metadata fields. `read-config.sh` is a shared reader used by all hooks, implementing three-layer resolution: hook-internal default -> `defaults.json` -> user `config.json` override. All 18 settings are currently private (not exposed to users). Public config surface and pro gating are deferred to Phase 2.
+
+**Settings include:** hook enable/disable flags, recall limits, blocking thresholds, stop interval parameters, correction detection sensitivity, nudge verbosity, and auto-update behavior.
+
+**Auto-update:** On MCP server start, the system checks its version against the installed version and merges new/changed hooks, MCP config, rules files, directories, and `.gitignore` entries automatically.
+
+**Future CLI surface** (not yet built): `aide config` for user-facing customization:
 
 ```
 aide config cleanup.stale-days 30
@@ -1333,9 +1356,12 @@ The framework may evolve to offer orchestration for memory management automation
 | Search | FTS5 + sqlite-vec | Keyword and semantic in one DB, no external processes |
 | Reasoning | Native model only | Zero extra API cost, no Docker/cloud dependency |
 | Source of truth | Store is brain, files are projections | One structured source, multiple readable outputs |
-| Recall ranking | Scope-first + round-robin layers | Scoped memories most relevant; prevents layer starvation |
-| Blocking | Scoped-only, soft for project-wide | Avoids noise; new projects (<10 memories) always soft |
-| Capture | 9 hooks at launch | Proven adoption (0% voluntary to 100% hook-driven) |
+| Recall ranking | Scope-first + round-robin layer diversity | Scoped memories most relevant; round-robin (min limit=5) prevents layer starvation |
+| Scope matching | Focused: immediate parent + one level above | No grandparent scopes -- keeps recalled context tightly relevant |
+| Blocking | ID-based: BLOCK/SOFT/SILENT | Tracks seen IDs per session; MIN_SCOPE_DEPTH=2 prevents overly broad blocking |
+| Stop interval | Dynamic 3/5/10 | Every-turn was 51% noise (1 remember per 9 prompts); dynamic reduces overhead |
+| Capture | 10 hooks at launch | Proven adoption (0% voluntary to 100% hook-driven); soft nudges ~90% effective |
+| Settings | defaults.json + three-layer resolution | Hook default -> defaults.json -> user config; 18 settings with public/pro metadata |
 | Generation | Command-triggered | No background processes, developer controls when |
 | Hot path | Bypasses MCP | Direct SQLite query, zero protocol overhead |
 | Distribution | Proprietary freeware (pending) | Maximum code protection, free to use |
@@ -1389,11 +1415,21 @@ Each phase doc starts with "After this phase, a developer can..." and works top-
 - Session 2A (with AIDE Memory): Agent recalled context, used taught patterns. Cross-session persistence proven.
 - Session 2B (bare, no AIDE Memory): Agent had no recalled context. Used different patterns. Clear behavioral difference.
 
+**Hook Refinement Validation (Sessions A-F, Apr 2026):**
+
+- **Soft nudges ARE effective:** ~90% agent compliance rate validated in Session F. Agents follow soft suggestions reliably without requiring hard blocks.
+- **PreCompact cannot force agent saves:** Claude Code architectural limitation confirmed. PreCompact output is not reliably consumed by the agent. Demoted to cleanup-only (clears tracking).
+- **PostToolUse DOES work for MCP tools:** Initial belief that PostToolUse did not fire for MCP tools was wrong -- response parsing was the issue. Now correctly tracks returned memory IDs.
+- **Average Claude Code session is ~4 human prompts:** Based on Anthropic data across 200K transcripts. Informed the dynamic stop interval design (every-turn blocking is excessive for short sessions).
+- **Stop hook every-turn was 51% noise:** Only 1 remember per 9 prompts on average. Dynamic interval (3/5/10) reduces overhead while preserving correction enforcement.
+- **ID-based blocking prevents redundant recalls:** Session-scoped ID tracking ensures the agent is only blocked when genuinely unseen context exists for a path, not when it has already recalled everything relevant.
+
 **Key Findings:**
 
 - JSONL observability gap: PreToolUse `additionalContext` not recorded in session transcript files.
 - Subagent hook gap: PreToolUse hooks do not fire for Plan/Explore subagent tool calls.
 - Code quality comparison between AIDE Memory and bare agents is inconclusive -- methodology issues need proper re-testing.
+- Correction detection needs negative filters: without filtering questions, acknowledgments, and short responses (<3 words), UserPromptSubmit generates false positives.
 
 ### E2E Testing Strategy Per Phase
 

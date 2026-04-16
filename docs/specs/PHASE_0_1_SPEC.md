@@ -129,7 +129,10 @@ Included in master prompt below. You screen-record while Cowork executes demos.
 
 ---
 
-### MASTER COWORK PROMPT (Updated April 9, 2026)
+### MASTER COWORK PROMPT (Historical — April 9, 2026)
+
+<details>
+<summary>Historical: Cowork master prompt (no longer needed — tasks completed or deferred)</summary>
 
 **Paste this entire block into ONE Cowork session. Cowork will spin off sub-agents for each independent task.**
 
@@ -174,7 +177,7 @@ Run 16 validation scenarios. Use Desktop Commander to open Terminal + Claude Cod
 3. Also read the runbook: /Users/meky/code/aide-v0/docs/validation/PHASE_0_1_INTEGRATION_TESTING.md
 4. Run ALL 16 scenarios — spin off parallel agents for independent scenarios (V1-V5 can run in parallel, V6 needs separate session, V10 needs two sessions, etc.)
 5. For each scenario, observe and record BOTH:
-   QUANTITATIVE: Did the hook fire? Block or soft? Correct session tracking? Correct file format (file|/dir|)?
+   QUANTITATIVE: Did the hook fire? Block or soft? Correct session tracking? Correct file format (file|, ids|)?
    QUALITATIVE: Are returned memories relevant to the queried path? Scoped before project-wide? Correct layer ordering? Round-robin representation? Are topics in the nudge preview accurate?
 6. For each aide_recall call, verify:
    - Top results are SCOPED to the queried path (not generic project-wide)
@@ -275,7 +278,7 @@ RESULTS TABLE 4 — Aggregate Metrics:
 | PreCompact cleanup (tracking cleared) | Y/N |
 | Correction flag created on detect | Y/N |
 | Correction flag cleared after Stop presents once | Y/N |
-| Tracking file format correct (file\|, dir\|, ids\|) | Y/N |
+| Tracking file format correct (file\|, ids\|) | Y/N |
 | Session isolation (no cross-contamination) | Y/N |
 | **User Scenarios** | |
 | **U1: Team Decisions (un-discoverable from code)** | |
@@ -446,6 +449,8 @@ Do this after each task completes, not all at the end.
 
 ```
 
+</details>
+
 **Checklist after Cowork completes:**
 - [x] P0.1: Domain registration (COMPLETE — aide-memory.dev + .com registered, DNS/email configured)
 - [x] P0.2: Trademark search, EULA, T&C (COMPLETE)
@@ -488,16 +493,20 @@ This plan covers all design decisions from the April 9-10 session: new hooks, ra
 5. **Session-scoped tracking** — each session gets its own tracking file via `session_id` from hook stdin JSON. Concurrent sessions are fully isolated.
 6. **Minimum tokens, maximum relevance** — preview layer counts + topics, not full memory dumps. Round-robin ranking prevents layer starvation.
 
-#### 3. CURRENT HOOK SYSTEM (6 hooks, as-built)
+#### 3. CURRENT HOOK SYSTEM (10 hooks, as-built)
 
 | # | Script | Event | Strength | What it does |
 |---|--------|-------|----------|-------------|
-| 1 | pre-read-recall.sh | PreToolUse(Read) | Block/Soft | Shows layer counts + topics. Blocks first read per path per session. Soft after aide_recall called. |
+| 1 | pre-read-recall.sh | PreToolUse(Read) | Block/Soft/Silent | ID-based blocking. Checks scoped_ids against ids| tracking. BLOCK if unseen, SILENT if covered. |
 | 2 | track-recall.sh | PreToolUse(aide_recall) | Pass | Writes recalled paths to `recalled-paths-{session_id}.txt`. Resolves relative→absolute paths. |
-| 3 | detect-correction.sh | UserPromptSubmit | Soft | Detects corrections/decisions/preferences via regex. Nudges aide_remember. |
-| 4 | stop-remember.sh | Stop | Dynamic (block every 3/5, silent between) | "Anything non-obvious worth persisting?" Dynamic interval (block every 3 for first 9 turns, every 5 after). |
-| 5 | pre-compact-save.sh | PreCompact | Cleanup | Clears all session tracking (exit 0). |
-| 6 | session-start-clear.sh | SessionStart | Silent | Cleans up stale tracking files from other sessions. |
+| 3 | track-recall-post.sh | PostToolUse(aide_recall) | Pass | Extracts memory IDs from aide_recall response (array of {type,text}), writes ids| line to tracking. |
+| 4 | pre-edit-recall.sh | PreToolUse(Edit, Write) | Block/Soft/Silent | ID-based blocking. Shares same ids| tracking as Read hook. |
+| 5 | pre-search-nudge.sh | PreToolUse(Grep, Glob) | Soft/Silent | aide_search preview with match count. Always soft, never blocks. |
+| 6 | detect-correction.sh | UserPromptSubmit | Soft | Detects corrections/decisions/preferences via regex. Nudges aide_remember. Writes correction-pending flag. |
+| 7 | track-remember.sh | PostToolUse(aide_remember) | Pass | Clears correction-pending flag file. Silent. |
+| 8 | stop-remember.sh | Stop | Dynamic 3→5→10. Silent between blocks. | "Anything non-obvious worth persisting?" Dynamic interval (block every 3 for turns 1-9, every 5 for 10-29, every 10 for 30+). Correction-pending always blocks. |
+| 9 | pre-compact-save.sh | PreCompact | Cleanup | Clears all session tracking (exit 0). |
+| 10 | session-start-clear.sh | SessionStart | Inject | Injects prefs/guidelines. Writes injected IDs to tracking. Clears on resume/compact/clear. |
 
 **Known bugs in current system:**
 - Relative/absolute path mismatch in track-recall.sh (FIXED: resolves to absolute before writing)
@@ -520,58 +529,62 @@ This plan covers all design decisions from the April 9-10 session: new hooks, ra
 
 #### 5. HOOK DETAILS
 
-**5.1 Pre-Read Recall (enhanced)**
+**5.1 Pre-Read Recall (ID-based blocking)**
 
-Nudge format:
+The Read hook uses ID-based blocking. On file read, `recall-for-path.js` returns `scoped_ids` (the IDs of memories with scopes specific enough to justify blocking, per `recall.minScopeDepth`). The hook compares these against the `ids|` line in the session tracking file.
+
+Nudge format (path-based, when no IDs covered):
 ```
 N memories for {path} (X area_context, Y technical, Z preferences, W guidelines)
   — topics: topic1, topic2, ...
-Call aide_recall({paths: ['{path}']}) if results not already in this conversation.
+Call aide_recall({paths: ['{path}']}) to load context before proceeding.
+```
+
+Nudge format (ID-based, when some IDs covered but others missing):
+```
+N memories for {path} not yet recalled. Call aide_recall({ids: [missing_ids]}).
 ```
 
 Behavior:
-- First read of a path with memories → **block**
-- After aide_recall called for that path → **soft nudge**
-- Zero memories for path → **no nudge at all**
-- 2+ files read in same directory without directory recall → **block for directory recall**
-
-Directory trigger: hook counts files from the same parent directory in the tracking file. If >=2 and `dir|{parent}` not tracked, nudge says:
-```
-You're reading multiple files in {dir}. N directory-level memories exist.
-Call aide_recall({paths: ['{dir}']}) for broader context.
-```
+- New file + NONE of scoped IDs covered → **BLOCK** (path-based message)
+- New file + SOME scoped IDs covered → **BLOCK** (ID-based message with missing IDs only)
+- Encountered file + unrecalled IDs → **SOFT** (ID-based message)
+- All scoped IDs covered → **SILENT** (no output)
+- No scoped memories for path (project-wide only) → **SILENT**
+- Zero memories for path → **SILENT**
+- < 10 total memories (softening) → **SOFT** (never block)
 
 Topics: top 8 by frequency overall + 1-2 extras from any layer with zero representation in top 8. Topics come from the same memory pool that aide_recall would return (same ranking).
 
-**5.2 Track Recall (enhanced)**
+_Historical note: Directory trigger (blocking on 2nd file in same dir) was removed. Each file is now evaluated individually by its scoped ID coverage._
 
-PreToolUse fires before aide_recall. Writes to `recalled-paths-{session_id}.txt`:
+**5.2 Track Recall (PreToolUse + PostToolUse)**
+
+PreToolUse (`track-recall.sh`) fires before aide_recall. Writes to `recalled-paths-{session_id}.txt`:
 ```
 file|/absolute/path/to/file.ts
-dir|/absolute/path/to/directory/
 ```
 
-PostToolUse (NEW) fires after aide_recall returns. Parses response to extract memory IDs (`[id]` pattern), writes to tracking:
+PostToolUse (`track-recall-post.sh`) fires after aide_recall returns. Parses the response to extract memory IDs (`[id]` pattern). The MCP tool response is an array of `{type, text}` objects — the script handles this format via `jq '.tool_response[]?.text'`. Writes to tracking:
 ```
 ids|5,11,15,22,33
 ```
 
-Used for deduplication: subsequent aide_recall calls filter out already-returned IDs.
+IDs are merged (deduped) with any existing `ids|` line on each write. Used for: (a) deduplication of subsequent aide_recall calls, (b) Read/Edit hook blocking decisions — ALL scoped IDs covered = SILENT, SOME missing = BLOCK or SOFT.
 
-**5.3 Pre-Edit Recall (NEW)**
+**5.3 Pre-Edit Recall (ID-based, shares tracking with Read)**
 
-Fires before Edit and Write tool calls. Checks if the path was already recalled via Read hook (shares `recalled-paths-{session_id}.txt`).
+Fires before Edit and Write tool calls. Uses the same `ids|` tracking as the Read hook (`recalled-paths-{session_id}.txt`). The blocking logic is identical to Read: checks scoped_ids against the ids| line.
 
-- Path already recalled (via Read) → **soft nudge** with layer counts
-- Path NOT recalled → **block** with same nudge format as Read
-- Zero memories for path → **no nudge**
+- All scoped IDs covered (from Read or prior recall) → **SILENT**
+- New file + NONE of scoped IDs covered → **BLOCK** (path-based message)
+- New file + SOME scoped IDs covered → **BLOCK** (ID-based message with missing IDs)
+- Encountered file + unrecalled IDs → **SOFT** (ID-based message)
+- No scoped memories for path → **SILENT**
+- Zero memories for path → **SILENT**
+- < 10 total memories (softening) → **SOFT** (never block)
 
-Nudge suggests relevant layers for editing:
-```
-N memories for {path} (X technical, Y preferences, Z guidelines)
-  — topics: ...
-Call aide_recall({paths: ['{path}'], layers: ['preferences', 'guidelines', 'technical']}) before editing.
-```
+Because Edit shares the same tracking file as Read, a file recalled via the Read hook is already covered for Edit — no redundant blocking.
 
 **5.4 Pre-Search Nudge (NEW)**
 
@@ -633,13 +646,17 @@ Clears:
 
 **5.9 Session Start (enhanced)**
 
-Cleans up stale tracking files from other sessions.
+Cleanup rules by source:
+- `start`: Don't touch anything. Other sessions might be concurrent.
+- `clear` / `compact` / `resume`: Clear THIS session's tracking (agent loses context, must re-recall). Resume clears because resume-with-summary loses context like compact.
 
 Auto-injects preferences + guidelines as conversation context:
 - Top 15 most-recalled preferences (by recall frequency)
 - All guidelines (usually few — team rules)
 - Any memory with `priority: "always"` (user-marked)
+- Per-layer injection controlled by `injection.preferences`, `injection.guidelines`, `injection.technical`, `injection.area_context` settings
 - Capped at ~300 tokens total
+- Writes injected memory IDs to `ids|` line in `recalled-paths-{session_id}.txt` so Read/Edit hooks know those memories are already in context
 - Scope-specific preferences still surfaced via Read/Edit hooks
 
 #### 6. RECALL RANKING IMPROVEMENTS
@@ -656,11 +673,15 @@ New: return top 5 by normal ranking, THEN append 1-2 from any layer with zero re
 - Directory query (`src/auth/`) → broader scopes rank higher (directory context first, then file-specific)
 - Detection: query path ends with `/` = directory query
 
-**6.3 Deduplication across recalls**
+**6.3 Focused scope matching**
 
-Track returned memory IDs per session in `recalled-paths-{session_id}.txt` (ids| line). aide_recall filters out already-returned IDs. Zero duplicate tokens across file + directory recalls.
+Grandparent scopes are excluded from blocking decisions. `scopeMatchesPath` with `focused: true` only matches the immediate parent directory + one level above. Example: for `src/api/routes.ts`, focused matching covers `src/api/**` and `src/**` but NOT `**` (project-wide). This prevents overly broad scopes from triggering blocks on every file.
 
-Implementation: PostToolUse(aide_recall) hook parses response text for `[id]` patterns, appends to tracking file.
+**6.4 Deduplication across recalls**
+
+Track returned memory IDs per session in `recalled-paths-{session_id}.txt` (ids| line). aide_recall filters out already-returned IDs. Zero duplicate tokens across successive recalls.
+
+Implementation: PostToolUse(aide_recall) hook parses response text for `[id]` patterns, merges into the ids| line in the tracking file.
 
 #### 7. SEARCH IMPROVEMENTS
 
@@ -697,16 +718,29 @@ All tracking is in hooks (not MCP server) because `session_id` is available in h
 
 Files in `.aide/cache/`:
 ```
-recalled-paths-{session_id}.txt     — file|path, dir|path, ids|1,2,3 entries
+recalled-paths-{session_id}.txt     — file|path and ids|1,2,3 entries (no dir| entries — directory trigger removed)
+stop-count-{session_id}.txt         — integer stop hook counter for dynamic interval
 searched-queries-{session_id}.txt   — normalized query strings
 correction-pending-{session_id}.txt — flag file (exists = correction not stored)
 ```
 
+Tracking file format (`recalled-paths-{session_id}.txt`):
+```
+file|/absolute/path/to/file.ts
+ids|1,2,3,4,10,11,12
+```
+The `file|` entries record which files have been encountered. The `ids|` line is a single comma-separated list of all memory IDs that have been recalled or injected this session. IDs are merged (deduped) on each write.
+
+**ID-based blocking mechanism:** On file read/edit, `recall-for-path.js` returns `scoped_ids` (the IDs of memories scoped to the queried path). The hook reads the `ids|` line from the tracking file and compares:
+- ALL scoped_ids covered in ids| → **SILENT** (no output)
+- SOME scoped_ids missing from ids| → **BLOCK** or **SOFT** (depending on whether file was previously encountered)
+- NONE of scoped_ids covered → **BLOCK** (path-based message for first encounter)
+
 Lifecycle:
-- SessionStart → cleans up files from OTHER sessions
+- SessionStart → clears THIS session's tracking on resume/compact/clear (not on fresh start). Writes injected memory IDs to ids| line.
 - PreCompact → clears ALL files for THIS session (context about to be lost)
-- Track hooks → write entries on tool calls
-- Read/Edit hooks → check entries for block vs soft
+- Track hooks → write file| and ids| entries on tool calls
+- Read/Edit hooks → check ids| entries for block vs soft vs silent
 
 #### 10. EDGE CASES & MITIGATIONS
 
@@ -744,7 +778,7 @@ This nudges the agent to consider both persistence targets without overfitting t
 | 3 | aide_search mode parameter | src/memory/store.ts, server.ts | Step 2 |
 | 4 | Round-robin ranking + dir query inversion | src/memory/recall.ts | None |
 | 5 | recall-for-path.js: per-layer topics, dir/file split | scripts/hooks/recall-for-path.js | Step 4 |
-| 6 | Pre-read-recall.sh: directory trigger, enhanced nudge | scripts/hooks/pre-read-recall.sh | Step 5 |
+| 6 | Pre-read-recall.sh: ID-based blocking, enhanced nudge | scripts/hooks/pre-read-recall.sh | Step 5 |
 | 7 | Track-recall PostToolUse: ID extraction + dedup | scripts/hooks/track-recall.sh, settings.json | None |
 | 8 | Pre-edit-recall.sh (NEW) | scripts/hooks/pre-edit-recall.sh, settings.json | Step 6 |
 | 9 | Pre-search-nudge.sh (NEW) + search-preview.js | scripts/hooks/pre-search-nudge.sh, scripts/hooks/search-preview.js, settings.json | Step 3 |
@@ -778,10 +812,11 @@ This nudges the agent to consider both persistence targets without overfitting t
 
 | Test | What it verifies |
 |------|-----------------|
-| Read hook blocks on first read | Read file with memories → decision:"block" in output |
-| Read hook soft after recall | Track recall → re-read → additionalContext (not block) |
+| Read hook blocks on first read | Read file with unseen scoped IDs → block |
+| Read hook silent after recall | Read file with all scoped IDs covered → SILENT (no output) |
 | Read hook silent on no memories | Read file with 0 memories → no output |
-| Read hook directory trigger | Track 2 files in same dir → block for directory recall |
+| PostToolUse writes ids| correctly | After aide_recall, ids| line in tracking contains returned memory IDs |
+| Session-inject writes injected IDs | SessionStart injection writes injected memory IDs to ids| in tracking |
 | Edit hook blocks if not recalled | Edit file with memories, no prior recall → block |
 | Edit hook soft if already recalled | Recall first, then edit → additionalContext |
 | Search hook soft on matches | Grep with matching memories → soft |
@@ -1314,40 +1349,56 @@ REMAINING (source of truth — all pending items with concrete next steps):
 - **Optimize defaults from validation data**: Ship with optimal defaults NOW — all settings stored in private config (.aide/config.json), NOT exposed to users. Public config for Phase 2/pro.
 
   **IMPLEMENTED:**
-  - Stop hook interval: dynamic 3→5 (every 3 for first 9 turns, every 5 after). Silent on non-block turns.
+  - Stop hook interval: dynamic 3→5→10 (every 3 for turns 1-9, every 5 for 10-29, every 10 for 30+). Silent on non-block turns.
   - Search hook: always soft. Agent decides whether to call aide_search.
   - Scope depth: MIN_SCOPE_DEPTH=2 (src/** too broad, src/api/** specific enough).
   - .ignore file: hides .aide/memories/ from grep by default.
   - Correction flag: clears after Stop presents once (no infinite nagging).
   - hookSpecificOutput: RESOLVED — only valid for PreToolUse/UserPromptSubmit/PostToolUse. Stop/PreCompact use top-level fields or silent.
+  - ID-based blocking: Read/Edit hooks check scoped_ids against ids| tracking. Replaces block-once-then-soft pattern.
+  - Focused scope matching: scopeMatchesPath with focused:true excludes grandparent scopes. Only immediate parent + one level above.
+  - PostToolUse fix: track-recall-post.sh extracts IDs from aide_recall response (handles MCP {type,text} array format).
+  - SessionStart injects IDs: session-inject.js writes injected memory IDs to ids| in tracking file, preventing redundant blocking.
+  - Directory trigger removal: each file evaluated individually by scoped ID coverage. No dir| tracking.
+  - aide_recall ids param: supports `{ids: [6,7,8]}` for gap-filling specific missing memories.
+  - Settings framework: defaults.json with per-key value/public/pro metadata. read-config.sh sources settings.
+  - Injection per-layer: injection.preferences, injection.guidelines, injection.technical, injection.area_context settings control what gets injected at SessionStart.
+  - Resume clears tracking: SessionStart clears THIS session's tracking on resume/compact/clear (agent loses context, must re-recall).
+  - Correction detection tuning: negative filters, 3+ word minimum, match at message start only. Default `hooks.correction.minWords: 3` (in detect-correction.sh).
 
-  **TO IMPLEMENT (aligned, ready):**
-  - Read/Edit block-once-then-soft: block first encounter per file, soft on retry. Default `hooks.read.maxBlocks: 1`. Prevents infinite blocking.
-  - Directory trigger block-once-then-soft: same as Read/Edit. Default `hooks.directoryTrigger.maxBlocks: 1`.
-  - Stop 3→5→10: extend dynamic to three phases. Phase 1 (1-9): every 3. Phase 2 (10-29): every 5. Phase 3 (30+): every 10. Long sessions get progressively quieter.
-  - Correction detection tuning: add negative filters ("no I mean", "I don't think"), require 5+ words, match at message start only. Default `hooks.correction.minWords: 5`.
+  **REPLACED (historical — superseded by ID-based blocking):**
+  - ~~Read/Edit block-once-then-soft~~ → REPLACED by ID-based coverage checking. Block/soft/silent now determined by scoped_ids vs ids| tracking.
+  - ~~Directory trigger block-once-then-soft~~ → REPLACED. Directory trigger removed entirely. Files evaluated individually.
+  - ~~Stop 3→5 only~~ → DONE. Extended to 3→5→10 three-phase schedule.
+  - ~~Correction detection tuning (minWords: 5)~~ → DONE. Implemented with minWords: 3 (not 5 — 5 was too restrictive).
+
+  **RESOLVED:**
+  - Block→soft reduction: the original problem of "how to reduce blocking after first encounter" was resolved by ID-based blocking. Instead of counting blocks per file (maxBlocks), the hook checks which scoped memory IDs are already in tracking. Once all IDs are covered, the hook goes SILENT (not even soft). No more block counting needed.
 
   **ACCEPTED GAPS:**
   - Other search tools (Bash grep/find, Agent subagents): can only hook Grep/Glob. Claude Code doesn't expose matchers for Bash commands. Accepted gap.
   - PreCompact can't force agent saves: platform limitation. Save strategy = Stop hook + proactive rules + user guidance.
 
-  **Private config defaults (all in .aide/config.json, not user-facing):**
+  **Private config defaults (all in defaults.json, not user-facing):**
 
-  | Key | Default | Description |
+  | Key (defaults.json) | Default | Description |
   |-----|---------|-------------|
-  | `hooks.read.maxBlocks` | `1` | Block once per file, then soft |
-  | `hooks.edit.maxBlocks` | `1` | Same |
-  | `hooks.directoryTrigger.maxBlocks` | `1` | Block once per directory |
-  | `hooks.stop.phases` | `[3, 5, 10]` | Dynamic interval phases |
-  | `hooks.stop.phaseBreaks` | `[9, 29]` | Turn counts where phases switch |
+  | `hooks.read.maxBlocks` | `1` | _Vestigial_ — superseded by ID-based blocking. Kept for backward compat. |
+  | `hooks.edit.maxBlocks` | `1` | _Vestigial_ — superseded by ID-based blocking. Kept for backward compat. |
+  | `hooks.directoryTrigger.maxBlocks` | `1` | _Vestigial_ — directory trigger removed. Kept for backward compat. |
+  | `hooks.stop.schedule` | `[{"until":9,"every":3},{"until":29,"every":5},{"every":10}]` | Dynamic 3→5→10 interval schedule (key is `schedule`, not `phases`/`phaseBreaks`) |
   | `hooks.search.mode` | `"soft"` | Always soft |
   | `hooks.correction.enabled` | `true` | Detection active |
-  | `hooks.correction.minWords` | `5` | Min words to trigger |
   | `hooks.precompact.mode` | `"cleanup"` | Cleanup only |
   | `recall.minScopeDepth` | `2` | Min scope depth for blocking |
   | `recall.limit` | `20` | Max memories per recall |
-  | `recall.roundRobinMinLimit` | `5` | Min limit for round-robin |
-  | `injection.maxPreferences` | `15` | SessionStart injection cap |
+  | `recall.ensureLayerDiversity` | `true` | Enable round-robin layer diversity in recall results |
+  | `recall.layerDiversityMinLimit` | `5` | Min limit before round-robin kicks in |
+  | `injection.preferences` | `15` | Max preferences injected at SessionStart |
+  | `injection.technical` | `false` | Whether to inject technical memories at SessionStart |
+  | `injection.area_context` | `false` | Whether to inject area_context memories at SessionStart |
+  | `injection.guidelines` | `"all"` | Inject all guidelines at SessionStart |
+  | `injection.priorityAlwaysOverride` | `true` | priority:"always" memories always injected regardless of layer caps |
   | `memories.hideFromGrep` | `true` | .ignore for grep |
   | `memories.softening.threshold` | `10` | Below this = all soft |
 
@@ -1386,6 +1437,8 @@ File feature request:
 
 3. **Search Tools — Explore Soft Blocking** — Currently only Grep/Glob hooked. Bash commands (grep, find, rg) bypass hooks. Accepted gap — Claude Code doesn't expose matchers for Bash. Glob does NOT respect .ignore (Claude Code issue #20609). Explore: can soft nudging be extended to other search patterns? Agent subagent searches?
 
+4. **`aide-memory init --scan` validation** — Verify that `init --scan` correctly detects project type, stack, frameworks, and generates structural memories. Test with diverse project types (Node.js, Python, Go, monorepo). Ensure generated memories have appropriate scopes (not all project-wide). Validate that scan-generated memories surface correctly via Read hooks.
+
 **P1.20: Distribution Strategy + Binary** (explore prior to publishing new version / demoing)
 - Current npm ships readable JS + bash — all source accessible
 - Compile all hook logic into aide-memory binary via `bun compile`
@@ -1396,7 +1449,7 @@ File feature request:
 - Distribution options: homebrew tap, curl installer, npm wrapping binary
 - Explore BEFORE publishing next version — affects how we ship
 
-4. **Resume-with-summary detection** — Claude Code doesn't distinguish `source: "resume"` between full resume and resume-with-summary. Currently we clear tracking on ALL resumes (safe default). Investigate: can we detect summary-resume to avoid unnecessary re-blocking on full resume? Check if transcript_path size or session metadata indicates summarization. File feature request for `source: "resume_summary"` distinction.
+5. **Resume-with-summary detection** — Claude Code doesn't distinguish `source: "resume"` between full resume and resume-with-summary. Currently we clear tracking on ALL resumes (safe default). Investigate: can we detect summary-resume to avoid unnecessary re-blocking on full resume? Check if transcript_path size or session metadata indicates summarization. File feature request for `source: "resume_summary"` distinction.
 
 **P1.9: Cursor validation** — DEFERRED, awaiting Cursor reactivation
 - Same 5 scenarios, same runbook, run in Cursor after Claude Code validation passes
@@ -1576,14 +1629,19 @@ Configurable settings (identified during validation):
 | `hooks.sessionStart` | `"inject"` | SessionStart: "inject", or "off" |
 | `recall.limit` | `20` | Max memories returned per aide_recall |
 | `recall.minScopeDepth` | `2` | Minimum scope path depth to trigger blocking (1=src/**, 2=src/api/**) |
-| `recall.roundRobinMinLimit` | `5` | Minimum limit before round-robin kicks in |
-| `injection.maxPreferences` | `15` | Max preferences injected at SessionStart |
+| `recall.layerDiversityMinLimit` | `5` | Minimum limit before round-robin layer diversity kicks in (key is `layerDiversityMinLimit` in defaults.json, not `roundRobinMinLimit`) |
+| `injection.preferences` | `15` | Max preferences injected at SessionStart (key is `injection.preferences` in defaults.json, not `injection.maxPreferences`) |
 | `injection.maxTokens` | `300` | Approximate token cap for SessionStart injection |
 | `memories.hideFromGrep` | `true` | Hide .aide/memories/ from grep via .ignore |
 | `memories.softening.threshold` | `10` | Below this total memory count, all hooks are soft |
-| `hooks.stop.mode` | `"dynamic"` | When Stop blocks: "dynamic" (every 3 for first 9 turns, every 5 after), "always" (every turn), "interval" (every N turns, soft between), "correction-only" (only when flag), or "off" |
-| `hooks.stop.interval` | `"dynamic"` | Dynamic: block every 3 turns for first 9 turns, then every 5 turns after. Soft nudge on non-block turns (agent always aware). Correction-pending flag always blocks regardless. Based on data: avg Claude Code session = ~4 human prompts (Anthropic internal), mid-task interruptions 62% dismissed (ProAIDE study). |
-| `hooks.directoryTrigger.threshold` | `1` | Number of sibling files read before directory recall triggers (0=off) |
+| `hooks.stop.mode` | `"dynamic"` | When Stop blocks: "dynamic" (3→5→10 schedule), "always" (every turn), "interval" (every N turns, soft between), "correction-only" (only when flag), or "off" |
+| `hooks.stop.schedule` | `[{"until":9,"every":3},{"until":29,"every":5},{"every":10}]` | Dynamic 3→5→10: block every 3 turns for turns 1-9, every 5 for 10-29, every 10 for 30+. Correction-pending flag always blocks regardless. Based on data: avg Claude Code session = ~4 human prompts (Anthropic internal), mid-task interruptions 62% dismissed (ProAIDE study). |
+| ~~`hooks.directoryTrigger.threshold`~~ | ~~`1`~~ | _Deprecated/removed._ Directory trigger was replaced by ID-based blocking. Each file is evaluated individually by scoped ID coverage. Setting kept in defaults.json for backward compat only. |
+| `injection.preferences` | `15` | Max preferences injected at SessionStart |
+| `injection.guidelines` | `"all"` | Inject all guidelines at SessionStart |
+| `injection.technical` | `false` | Whether to inject technical memories at SessionStart |
+| `injection.area_context` | `false` | Whether to inject area_context memories at SessionStart |
+| `injection.priorityAlwaysOverride` | `true` | priority:"always" memories always injected regardless of layer caps |
 | `recall.layerOrder` | `["area_context","technical","preferences","guidelines"]` | Priority order for recall ranking |
 | `recall.searchMode` | `"auto"` | Default aide_search mode: "auto", "keyword", or "semantic" |
 | `autoUpdate.enabled` | `true` | Auto-update hooks/config on MCP server start when version changes |
@@ -1596,7 +1654,7 @@ All settings should also map to Cursor's equivalent config system (see P1.18).
 Settings that vary by project nature:
 - **Monorepo/large codebase**: higher minScopeDepth (3-4), higher recall.limit (30+), more aggressive blocking
 - **Small project/solo dev**: lower softening threshold (5), Stop on correction-only, search off
-- **Team project**: injection.maxPreferences higher (25+), contributor-aware injection (item 7)
+- **Team project**: injection.preferences higher (25+), contributor-aware injection (item 7)
 - **Security-sensitive**: all hooks blocking, no grep visibility, strict correction enforcement
 
 **6. Automatic memory cleanup (Phase 2 pro feature):**
