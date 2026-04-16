@@ -155,14 +155,26 @@ try {
   const allInjectedIds = [
     ...deduped.preferences, ...deduped.technical, ...deduped.area_context,
     ...deduped.guidelines, ...deduped.always
-  ].map(m => m.id).join(',');
-  if (allInjectedIds) {
+  ].map(m => m.id);
+  if (allInjectedIds.length > 0) {
     const cacheDir = path.join(projectRoot, '.aide', 'cache');
     fs.mkdirSync(cacheDir, { recursive: true });
-    fs.appendFileSync(
-      path.join(cacheDir, `recalled-paths-${sessionId}.txt`),
-      `ids|${allInjectedIds}\n`
-    );
+    const trackingPath = path.join(cacheDir, `recalled-paths-${sessionId}.txt`);
+    // Merge with existing ids| line (don't create duplicates)
+    let existingIds = [];
+    if (fs.existsSync(trackingPath)) {
+      const content = fs.readFileSync(trackingPath, 'utf8');
+      const idsLine = content.split('\n').filter(l => l.startsWith('ids|')).pop();
+      if (idsLine) {
+        existingIds = idsLine.replace('ids|', '').split(',').filter(Boolean);
+      }
+      // Remove old ids| lines
+      const filtered = content.split('\n').filter(l => !l.startsWith('ids|')).join('\n');
+      fs.writeFileSync(trackingPath, filtered.endsWith('\n') ? filtered : filtered + '\n');
+    }
+    // Merge and deduplicate
+    const merged = [...new Set([...existingIds, ...allInjectedIds.map(String)])].join(',');
+    fs.appendFileSync(trackingPath, `ids|${merged}\n`);
   }
 
   process.stdout.write(output);

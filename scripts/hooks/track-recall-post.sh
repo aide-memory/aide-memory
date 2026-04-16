@@ -38,7 +38,7 @@ fi
 EXISTING_IDS=""
 if [ -f "$RECALLED_FILE" ]; then
   # Find the ids| line and extract current IDs
-  IDS_LINE=$(grep '^ids|' "$RECALLED_FILE" 2>/dev/null | head -1)
+  IDS_LINE=$(grep "^ids|" "$RECALLED_FILE" 2>/dev/null | tail -1)
   if [ -n "$IDS_LINE" ]; then
     EXISTING_IDS="${IDS_LINE#ids|}"
   fi

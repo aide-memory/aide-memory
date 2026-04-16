@@ -2,8 +2,8 @@
 # PreToolUse hook — ID-based blocking for file edits.
 # Same logic as pre-read-recall.sh but for Edit/Write tools.
 #
-# BLOCK: new file + unrecalled IDs
-# SOFT: encountered file + unrecalled IDs, or SOME IDs covered
+# BLOCK: new file + unrecalled IDs (NONE or SOME covered)
+# SOFT: encountered file + unrecalled IDs
 # SILENT: all scoped IDs covered OR no scoped memories
 
 INPUT=$(cat)
