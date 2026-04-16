@@ -192,3 +192,68 @@ Prompt: "Read src/index.ts and explain it" (5 memories seeded, below threshold)
 8. **Preview message misleading** — "2 from src/lib/" implied lib-specific memories but they were src/** broad scopes. Preview should show actual scope. Follow-up fix.
 9. **Agent bypassed search hook** — used Read instead of Grep for "search the codebase" prompt. Search hook only fires on Grep/Glob tools, not agent's choice to read files directly.
 10. **Correction quality excellent** — memory id 36 stored with correct layer (guidelines), scope (src/api/**), specific content, meaningful why field. Best result of validation.
+
+---
+
+## Implementation Changes (Built/Fixed During Validation -- April 13, 2026)
+
+This section documents everything built or fixed during the post-validation implementation session on `feature/phase-1`.
+
+### Hook Defaults Optimization (Original 9 Items)
+
+| # | Change | Commits |
+|---|--------|---------|
+| 1 | **Settings framework** -- `defaults.json` with `{value, public, pro}` metadata + `read-config.sh` shared config reader. All hooks now read settings via `get_setting()` instead of hardcoded values. | Part of batch commit |
+| 4 | **Stop hook 3->5->10** -- Three-phase dynamic interval. Phase 1 (turns 1-9): every 3. Phase 2 (10-29): every 5. Phase 3 (30+): every 10. Reads schedule from `hooks.stop.schedule` in defaults.json. | Part of batch commit |
+| 5 | **Correction detection tuning** -- Negation + directive required (not just negation). Negative filters added ("no I mean", "I don't think", etc.). 3-word minimum. Match at message start only. | Part of batch commit |
+| 6 | **PreCompact cleanup** -- Removed old two-phase logic, systemMessage output, decision:approve output. Now cleanup-only: clears current session's recalled-paths file, exit 0, no output. | `6af5001` |
+| 7 | **Injection per-layer** -- session-inject.js reads per-layer config (preferences: 15, technical: false, area_context: false, guidelines: "all", priorityAlwaysOverride: true). | Part of batch commit |
+| 8 | **All hooks wired to config** -- Every hook sources read-config.sh and uses get_setting() for all configurable values. | Part of batch commit |
+| 9 | **Resume clears tracking** -- SessionStart clears tracking on "resume" in addition to "clear" and "compact". Session-scoped via session_id. | `6b0423a`, `6f95443` |
+
+### ID-Based Blocking System (Replaced Original Items 2 and 3)
+
+The block-once-then-soft approach (item 2) and directory prefix match fix (item 3) were both replaced by a fundamentally better design: **ID-based blocking**.
+
+**How it works:**
+- Each recalled memory ID is tracked in a session-scoped file (`recalled-ids-{session_id}`)
+- On file read: hook queries scoped memory IDs for the path, compares against tracked IDs
+- All IDs tracked -> SILENT (no block, no output)
+- Some IDs missing -> BLOCK with message: "N memories not yet recalled. Call aide_recall({ids: [...]})"
+- No scoped memories -> SILENT (nothing to recall)
+- After compact/clear/resume -> tracking reset, re-blocks on next read
+
+**Why this is better than block-once-then-soft:**
+- Block-once was file-granular -- after one block per file, agent never re-blocks even if new memories are added
+- ID-based is memory-granular -- tracks exactly which memories the agent has seen
+- Sibling files in same directory share scoped memories -- reading one file and recalling covers siblings too
+- No arbitrary block count, no "remaining count" soft messages -- just "have you seen these? yes/no"
+
+### Additional Improvements (New Items 10-15)
+
+| # | Change | Detail |
+|---|--------|--------|
+| 10 | **ID-based blocking** | Core system described above. Replaced items 2 + 3. |
+| 11 | **Focused scope matching** | Grandparent scopes (e.g., `src/**` when reading `src/api/routes.ts`) no longer trigger blocking. Only direct parent or exact scope matches trigger. Prevents broad memories from causing unnecessary blocks on deeply nested files. |
+| 12 | **aide_recall `ids` param** | Added `ids` parameter to aide_recall MCP tool. Agent can request exact memories by ID when the hook blocks with specific IDs. Returned memories are tracked as recalled. |
+| 13 | **PostToolUse response parsing fix** | `tool_response` is an array, not a string. The jq path was wrong, causing response parsing to silently fail. One-line fix that unblocked PostToolUse tracking of aide_recall/aide_search results. |
+| 14 | **Session-inject writes injected IDs** | session-inject.js writes IDs of injected memories into the recalled-IDs tracking file. Memories from SessionStart injection are pre-tracked, preventing redundant blocks. |
+| 15 | **Directory trigger removed** | Directory trigger (block on first file read in new directory) removed entirely. ID-based blocking makes it unnecessary. No more `dir\|path` tracking entries. |
+
+### Key Commits (feature/phase-1)
+
+| Hash | Description |
+|------|-------------|
+| `6af5001` | fix: PreCompact clears current session's recalled-paths file |
+| `6b0423a` | feat: session-scoped recall tracking via session_id + PreToolUse hooks |
+| `6f95443` | feat: session-scoped recall tracking via SessionStart hook |
+| `4686f7b` | feat: improved Read hook with layer counts, topics, and session-scoped blocking |
+| `e23592c` | feat: upgrade UserPromptSubmit and PreCompact hooks to blocking |
+
+### Bugs Found and Fixed This Session
+
+1. **PostToolUse jq path wrong** -- `tool_response` is an array, was being read as a string. Caused silent failure of all PostToolUse response tracking (aide_recall IDs, aide_search results).
+2. **PreCompact didn't clear session tracking** -- After /compact, recalled-paths file for the current session wasn't cleared. Agent wouldn't re-block on files it had recalled before compaction.
+3. **Grandparent scopes triggered blocking** -- Reading `src/api/routes.ts` would trigger on memories scoped to `src/**`, causing blocks with broad/generic memories. Fixed with focused scope matching (direct parent only).
+4. **Session-inject didn't track injected IDs** -- Memories injected at SessionStart weren't written to the tracking file, causing immediate re-blocks on files whose memories were already injected.
+5. **Directory trigger redundant with ID-based blocking** -- After implementing ID-based blocking, the directory trigger was redundant and sometimes conflicted. Removed entirely.

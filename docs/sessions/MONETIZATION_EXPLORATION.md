@@ -10,23 +10,23 @@ I need your help thinking through monetization and product direction for a devel
 
 ## What I've Built
 
-AIDE Memory — a persistent memory layer for AI coding agents (Claude Code, Cursor, etc.). The core engine:
+AIDE Memory — a persistent memory layer for AI coding agents. For the full current state, read these files in the repo:
 
-- SQLite-backed memory store with path-scoped recall (glob inheritance)
-- MCP server (5 tools: aide_recall, aide_remember, aide_update, aide_forget, aide_search)
-- 3 hooks that drive agent adoption from 0% to 100% (PreToolUse nudge, Stop prompt, UserPromptSubmit correction detection)
-- One-file-per-memory architecture (JSON files in .aide/memories/<layer>/)
-- 4 structured memory layers (preferences, technical, area_context, guidelines)
-- 47 tests passing, working prototype
-- Tree-sitter codebase scanning from original architecture (deprioritized but code exists)
+- `docs/PRODUCT_VISION.md` — full product vision, competitive landscape, capabilities, phases, pricing, architecture
+- `docs/specs/PHASE_0_1_SPEC.md` — technical implementation spec for Phase 0+1
+- `docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md` — validation results, what worked, what didn't, follow-up items
 
-## Key Decision Made: Binary Distribution
+Read those to understand what's been built, what's been validated, and current architecture decisions. Don't rely on summaries — the docs are the source of truth.
 
-We've decided to compile with Bun (same as Claude Code itself — their CLI is a 200MB Mach-O binary compiled with Bun). This means:
+## Potential Direction: Binary Distribution (Under Evaluation)
+
+One option being explored is compiling with Bun (same approach as Claude Code itself — verified their CLI is a 200MB Mach-O binary compiled with Bun). This would mean:
 - Source code not readable by users (proprietary freeware)
 - Can gate pro features in compiled binary (users can't just override)
 - Distribution via curl install script + Homebrew, not npm
 - One binary, zero dependencies
+
+This is NOT decided — it ties directly into the overall monetization and direction strategy. The distribution approach depends on what the actual paid product turns out to be.
 
 ## The Market Reality
 
@@ -80,11 +80,12 @@ Also want to factor in how pricing is done now, the landscape, people releasing 
 
 4. Be brutally honest. Don't tell me to "just ship and see." I need a business model before I invest more time.
 
-## Additional Context Files
+## Required Reading (in order)
 
-If you want the full picture, I can paste:
-- `docs/PRODUCT_VISION.md` — full product vision (1,650+ lines)
-- `docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md` — technical spec and validation results
-- `docs/sessions/HANDOFF_APRIL2.md` — key architectural decisions
+These are in the repo. Read them to understand the full picture before answering:
 
-Or I can answer specific questions about any of these.
+1. `docs/PRODUCT_VISION.md` — full product vision, competitive landscape, 17 capabilities, phases, pricing, architecture, free/pro gating
+2. `docs/specs/PHASE_0_1_SPEC.md` — technical implementation spec
+3. `docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md` — what's been validated, what worked, follow-ups
+
+Read these first, then answer the questions above. If you can't access the files directly, ask me to paste the relevant sections.

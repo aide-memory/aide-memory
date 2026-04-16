@@ -1,0 +1,17 @@
+{
+  "uuid": "fcfe6e67-2ed0-45c1-8612-c065815bd3bf",
+  "layer": "technical",
+  "what": "Correction: Bun compile is NOT a decided decision. It is a POTENTIAL approach to hide source code that is still under evaluation. The decision to use binary distribution ties into the overall monetization/direction strategy which is still being explored. Do not present binary/Bun compile as decided in any docs or handoffs.",
+  "why": "User corrected that I was presenting Bun compile as a finalized decision when it's still a potential option tied to the larger strategic direction question.",
+  "scope": "docs/**",
+  "context_label": "bun compile not decided",
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T19:46:02.312Z",
+  "updated_at": "2026-04-16T19:46:02.312Z"
+}
