@@ -28,21 +28,13 @@ One option being explored is compiling with Bun (same approach as Claude Code it
 
 This is NOT decided — it ties directly into the overall monetization and direction strategy. The distribution approach depends on what the actual paid product turns out to be.
 
-## The Market Reality
+## The Market Context
 
-- AI agent memory space is SATURATED: claude-mem (46K stars), MemPalace (22K stars in 48 hrs), engram (2.2K), Mem0 (52K, $24M funded), SuperMemory (21K, $2.6M funded), 30+ others
-- Everything is free/MIT — nobody has found a monetization path for memory tools
-- Claude Code is building native persistent memory (Auto Dream, feature flags for enhanced memory in leaked source)
-- Platform risk is critical — one Anthropic update could make all memory plugins redundant
-- The tools with the MOST features (memories.sh: 8-tool config gen, path scoping) have the FEWEST users (20 stars). The simplest tools (claude-mem) have the most stars. Features ≠ adoption.
+The AI agent memory space is crowded and evolving fast. For the latest competitive landscape, competitor details, and verified user sentiment data, see the Competitive Landscape section in `docs/PRODUCT_VISION.md`. Don't take any competitive claims at face value — verify independently and assess the current state, as this space changes weekly.
 
-## Our Verified Competitive Advantages
+## Pro Features
 
-From testing and verified competitor analysis:
-- claude-mem has 72% summary failure rate (confirmed, issue #1546), CLAUDE.md pollution (#1 complaint), process leaks, can't cleanly uninstall, HIGH security risk
-- engram's #1 user complaint: agents don't voluntarily use it (confirmed, issues #87, #124, #133, #137). Our hooks solve this exact problem.
-- Our nudge approach costs ~20 tokens per file read vs claude-mem dumping ~2,000 tokens into system prompt
-- Nobody has proactive cross-developer team context sharing (path-scoped, triggered on file access)
+See the free/pro split in `docs/PRODUCT_VISION.md` (capabilities section has FREE/PRO tags on every feature). Evaluate whether the planned pro features are enough to monetize, or if there's a bigger area to pivot into where this memory engine is the foundation for something more.
 
 ## What I'm Struggling With
 

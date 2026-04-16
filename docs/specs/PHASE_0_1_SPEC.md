@@ -799,7 +799,7 @@ This nudges the agent to consider both persistence targets without overfitting t
 
 **12.3 Verification Sessions (end-to-end in Claude Code)**
 
-Consolidated into 7 functional sessions + 3 user scenarios. Each session tracks recall AND remember metrics.
+Consolidated into 9 functional sessions (A-I) + 3 user scenarios (U1-U3). Each session tracks recall AND remember metrics.
 Sessions are ordered so that memories stored in earlier sessions are verified as recalled in later sessions (the remember→recall loop).
 
 **Setup for ALL sessions:**
@@ -807,132 +807,149 @@ Sessions are ordered so that memories stored in earlier sessions are verified as
 - After each session, grep debug log for `aide_recall` and `aide_remember` responses to verify content
 - Record tool call count and token usage per session for efficiency comparison
 
-**--- FUNCTIONAL SESSIONS (A-G): Does the system work correctly? ---**
+**Block/Soft State Matrix (ID-based) — governs all Read and Edit hooks:**
 
-**Session A: Hook + Recall Flow**
-_One session, same test project with seeded memories. Tests read/edit/dir hooks, recall quality, tracking, dedup._
+| State | Read | Edit | Search | Reference |
+|-------|------|------|--------|-----------|
+| New file + NONE of scoped IDs covered | **BLOCK** (path-based message) | **BLOCK** (path-based message) | N/A | Session A: A1, A8 |
+| New file + SOME scoped IDs covered | **BLOCK** (ID-based message, missing only) | **BLOCK** (ID-based message) | N/A | Session H: H2 |
+| Encountered file + unrecalled IDs | **soft** (ID-based message) | **soft** (ID-based message) | N/A | Session A: A3 (after encounter) |
+| All scoped IDs covered | **silent** | **silent** | N/A | Session A: A3, A4, A7 |
+| No scoped memories (project-wide only) | **silent** | **silent** | N/A | Session A: A6 |
+| No memories at all for path | **silent** | **silent** | **silent** | Session A: A6 |
+| < 10 total memories (softening) | **soft** (never block) | **soft** (never block) | **soft** | Session F |
+| Any search query with matching memories | N/A | N/A | **soft** (always) | Session B |
+| Any search query with no matches | N/A | N/A | **silent** | Session B: B3 |
 
-| Step | Action | Hook Expected | Recall/Remember Check | Metric |
-|------|--------|---------------|----------------------|--------|
-| A1 | Read `src/api/routes.ts` (has scoped mems) | Read → **block** | | hook_behavior |
-| A2 | Agent calls aide_recall for src/api/routes.ts | Track → passthrough | Scoped mems ranked FIRST, round-robin all 4 layers | recall_quality, scoped_count, layer_coverage |
-| A3 | Re-read same file | Read → **soft** | | tracking_works |
-| A4 | Read `src/api/middleware.ts` (2nd file same dir) | Read → **block** (dir trigger) | | dir_trigger |
-| A5 | Agent calls aide_recall for src/api/ (directory) | Track → passthrough | area_context ranked first (dir query), IDs from A2 excluded (dedup) | ranking_order, dedup_count |
-| A6 | Edit `src/api/routes.ts` without reading first | Edit → **block** | | edit_enforcement |
-| A7 | Agent calls aide_recall, then edit proceeds | Edit → **soft** | | tracking_works |
-| A8 | Read `src/db/connection.ts` (only project-wide mems) | Read → **soft** (not block) | | scoped_only_blocking |
-| A9 | Read `README.md` (no memories at all) | Read → **silent** (no hook output) | | silent_on_empty |
-| A10 | Inspect tracking file | | file\|path, dir\|path, ids\|1,2,3 format correct. Paths are absolute. | tracking_format, path_resolution |
-| A11 | User types normal message (not a correction) | UserPromptSubmit → **does NOT block** (soft or silent) | User input accepted normally | userprompt_never_blocks |
-| A12 | Read a file that doesn't exist (e.g. src/api/nonexistent.ts) | Read → **silent** (no hook output, no error) | | silent_nonexistent_file |
+**--- FUNCTIONAL SESSIONS (A-I): Does the system work correctly? ---**
 
-**Session A2: Blocking Permutations**
-_Same test project as Session A, fresh session (tracking cleared). Exhaustively tests every combination of block/soft/silent for reads, edits, and directory triggers. Covers the state matrix below._
+**Session A: ID-Based Recall Flow**
+_One session, same test project with seeded memories. Tests ID-based blocking, recall tracking via PostToolUse, dedup, and silent paths._
 
-**Block/Soft State Matrix — every row maps to a specific step:**
+**Prerequisite:** Seed project with scoped memories for `src/api/routes.ts` (IDs 1-4), `src/api/handler.ts` (IDs 2,3 — overlap with routes.ts), `src/auth/middleware.ts` (IDs 10-12), and project-wide memories only (no scoped) for `src/db/connection.ts`. Ensure `README.md` has zero scoped memories.
 
-| State | Read | Edit | Search | Step(s) |
-|-------|------|------|--------|---------|
-| Never recalled | **BLOCK** | **BLOCK** | **BLOCK** (if scoped matches) | A2.1, A2.5, A2.9 |
-| File recalled | soft | soft | N/A | A2.3, A2.6 |
-| Directory recalled | soft (all files under dir) | soft (all files under dir) | N/A | A2.4, A2.7, A2.8 |
-| Only project-wide mems | soft | soft | N/A | A2.10, A2.11 |
-| < 10 total mems | soft | soft | soft | (covered by Session F) |
-| 0 mems for path | silent | silent | silent | A2.12, A2.13 |
-| 0 mems total | silent | silent | silent | (covered by Session F0) |
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| A1 | Read `src/api/routes.ts` (first file, no IDs in tracking) | **BLOCK** — path-based message: "4 memories for src/api/routes.ts. Call aide_recall({paths: ['src/api/routes.ts']})" | block_new_file |
+| A2 | Agent calls aide_recall for src/api/routes.ts | PostToolUse extracts IDs [1,2,3,4] from response, writes `ids\|1,2,3,4` to `recalled-paths-{sid}.txt`. Also writes `file\|src/api/routes.ts`. | id_tracking_write |
+| A3 | Re-read `src/api/routes.ts` | **SILENT** — all scoped IDs (1,2,3,4) covered in tracking | silent_all_covered |
+| A4 | Read `src/api/handler.ts` (scoped IDs 2,3 — both already covered from A2) | **SILENT** — IDs 2,3 already in tracking from A2 recall | silent_ids_already_covered |
+| A5 | Read `src/auth/middleware.ts` (different dir, IDs 10-12 not in tracking) | **BLOCK** — path-based message: "3 memories for src/auth/middleware.ts. Call aide_recall({paths: ['src/auth/middleware.ts']})" | block_different_scope |
+| A6 | Read `README.md` (no scoped memories) | **SILENT** — no scoped memories for this path, hook exits early | silent_no_scoped |
+| A7 | Edit `src/api/routes.ts` (IDs 1-4 all covered from A2) | **SILENT** — edit hook checks same ID tracking, all covered | silent_edit_covered |
+| A8 | Edit `src/auth/types.ts` (has scoped IDs 13-14, never recalled) | **BLOCK** — path-based message: "2 memories for src/auth/types.ts. Call aide_recall({paths: ['src/auth/types.ts']}) before editing." | block_edit_new_file |
+| A9 | Read a file that doesn't exist (e.g. src/api/nonexistent.ts) | **SILENT** — hook checks `[ ! -f "$FILE_PATH" ]`, exits early | silent_nonexistent |
+| A10 | Read `.aide/memories/technical/some-file.json` (direct memory file read) | **SOFT** — special case: additionalContext with "memory_file_direct_read" warning | memory_file_guard |
+| A11 | Inspect tracking file `recalled-paths-{sid}.txt` | Contains `ids\|1,2,3,4` (merged, deduped). Contains `file\|` entries. No `dir\|` entries (directory trigger removed). | tracking_format |
 
-**Prerequisite:** Seed project with scoped memories for `src/auth/middleware.ts`, `src/auth/types.ts`, `src/auth/` (directory), `src/components/Button.tsx`, and project-wide memories only (no scoped) for `src/utils/helpers.ts`. Ensure `src/auth/` has at least 3 files. Ensure `tests/setup.ts` and `lib/constants.ts` have zero memories.
-
-| Step | Action | Hook Expected | Recall/Remember Check | Metric |
-|------|--------|---------------|----------------------|--------|
-| | **--- Directory Trigger Isolation ---** | | | |
-| A2.1 | Read `src/auth/middleware.ts` (1st file in src/auth/, never recalled) | Read → **block** | | hook_behavior, file_block |
-| A2.2 | Agent calls aide_recall for `src/auth/middleware.ts` (file only) | Track → passthrough | Tracking file shows `file\|src/auth/middleware.ts`. Directory `src/auth/` is NOT tracked yet. | tracking_format, file_only_recall |
-| A2.3 | Re-read `src/auth/middleware.ts` | Read → **soft** (file recalled) | | file_recall_soft |
-| A2.4 | Read `src/auth/types.ts` (2nd file in src/auth/, directory NOT recalled) | Read → **block** (directory trigger: 2nd file in same dir) | | dir_trigger_block |
-| A2.5 | Agent calls aide_recall for `src/auth/` (directory) | Track → passthrough | Tracking file shows `dir\|src/auth/`. Memories from A2.2 excluded (dedup). | dir_recall, dedup_count |
-| A2.6 | Re-read `src/auth/types.ts` | Read → **soft** (directory recalled covers all files under dir) | | dir_recall_covers_files |
-| A2.7 | Read `src/auth/index.ts` (3rd file, never individually read) | Read → **soft** (directory already recalled) | | dir_recall_covers_new_files |
-| A2.8 | Edit `src/auth/index.ts` (never individually recalled, but dir recalled) | Edit → **soft** (directory recall covers edits too) | | dir_recall_covers_edits |
-| | **--- Edit Blocking Without Prior Read ---** | | | |
-| A2.9 | Edit `src/components/Button.tsx` (never read or recalled in session) | Edit → **block** | | edit_block_no_prior_read |
-| A2.10 | Agent calls aide_recall for `src/components/Button.tsx` | Track → passthrough | Scoped memories returned | edit_recall |
-| A2.11 | Re-attempt edit `src/components/Button.tsx` | Edit → **soft** (file recalled) | | edit_soft_after_recall |
-| | **--- Project-Wide Only (no scoped mems for path) ---** | | | |
-| A2.12 | Read `src/utils/helpers.ts` (has only project-wide mems, no scoped) | Read → **soft** (not block — scoped-only blocking) | | scoped_only_blocking |
-| A2.13 | Edit `src/utils/helpers.ts` | Edit → **soft** (same rationale) | | scoped_only_blocking_edit |
-| | **--- Zero Memories for Path ---** | | | |
-| A2.14 | Read `tests/setup.ts` (zero memories of any kind for this path) | Read → **silent** (no hook output) | | silent_zero_mems_read |
-| A2.15 | Edit `tests/setup.ts` | Edit → **silent** (no hook output) | | silent_zero_mems_edit |
-| A2.16 | Grep "setup" (no scoped mems match the keyword) | Search → **silent** (no hook output) | | silent_zero_mems_search |
-| | **--- Search Blocking ---** | | | |
-| A2.17 | Grep "auth" (scoped mems match, never searched in session) | Search → **soft** | | search_soft |
-| A2.18 | Agent calls aide_search keyword:"auth" | | Results returned | search_recall |
-| A2.19 | Grep "auth" again | Search → **soft** (already searched) | | search_soft_after_recall |
-| | **--- Cross-Check: File vs Directory Tracking ---** | | | |
-| A2.20 | Inspect tracking file | | Verify ALL entries: `file\|src/auth/middleware.ts`, `dir\|src/auth/`, `file\|src/components/Button.tsx`, `file\|src/utils/helpers.ts`. No entry for `tests/setup.ts` (silent paths not tracked). No entry for `lib/constants.ts`. IDs deduped across file + dir recalls. | tracking_completeness, path_resolution |
-
-**Key behaviors validated by A2 that Session A does not cover:**
-1. **Directory trigger fires on 2nd file, not 1st** — A2.1 blocks as file, A2.4 blocks as directory trigger.
-2. **Directory recall covers ALL files under that dir** — A2.7 and A2.8 are soft even though those files were never individually recalled.
-3. **Edit blocks independently of read** — A2.9 blocks on an edit even though no read was attempted.
-4. **Silent paths leave no tracking footprint** — A2.20 confirms tests/setup.ts is absent from tracking.
-5. **Project-wide-only paths are soft, not block** — A2.12 and A2.13 confirm scoped-only blocking applies to edits too.
+**Key behaviors validated by Session A:**
+1. **ID-based, not path-based** — A4 is silent because IDs 2,3 were already covered by A2's recall of routes.ts (shared IDs across files).
+2. **No directory trigger** — A4 does NOT trigger a directory-level block. Each file is evaluated by its scoped IDs only.
+3. **Edit uses same tracking** — A7 is silent because the edit hook reads the same `ids|` line as the read hook.
+4. **Project-wide-only paths are silent** — A6 confirms scoped_count=0 exits early (not soft, not block).
 
 **Session B: Search Flow**
-_Same project. Tests search hooks, 3 search modes, embedding lifecycle._
+_Same project. Tests search hooks — always soft, never blocks._
 
-| Step | Action | Hook Expected | Recall/Remember Check | Metric |
-|------|--------|---------------|----------------------|--------|
-| B1 | Grep "auth" (scoped mems match) | Search → **soft** | | hook_behavior |
-| B2 | Agent calls aide_search keyword:"auth" mode:"keyword" | | Substring matches only | search_mode |
-| B3 | aide_search keyword:"authentication flow" mode:"semantic" | | Embedding similarity matches | search_mode |
-| B4 | aide_search keyword:"auth" mode:"auto" | | Keyword first, semantic fallback if <3 | search_mode |
-| B5 | Grep "auth" again | Search → **soft** | | tracking_works |
-| B6 | Grep "zzz_nonexistent" (no mems match) | Search → **silent** (no hook output) | | silent_on_no_matches |
-| B7 | aide_update a memory's content, aide_search for new content | | Embedding regenerated, semantic finds updated text | embedding_update |
-| B8 | aide_search for the OLD content text | | Old phrasing no longer matches (or ranks much lower) | negative_assertion |
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| B1 | Grep "auth" (scoped mems match the keyword) | **SOFT** — nudge: "N aide memories match 'auth' (...). Call aide_search({keyword: 'auth'}) if not already in context." Search hook is ALWAYS soft, never blocks. | search_always_soft |
+| B2 | Agent decides to call aide_search or not | Agent's choice — soft nudge is advisory. If agent calls aide_search, `searched-queries-{sid}.txt` updated. | agent_discretion |
+| B3 | Grep "zzz_nonexistent" (no memories match) | **SILENT** — search-preview.js returns count=0, hook exits early | silent_no_matches |
 
 **Session C: Correction + Remember + Stop**
 _Same project. Tests correction detection, flag lifecycle, remember quality, stop enforcement._
 
-| Step | Action | Hook Expected | Recall/Remember Check | Metric |
-|------|--------|---------------|----------------------|--------|
-| C1 | User types correction: "No, use epoch timestamps not ISO" | UserPromptSubmit → **soft** (NEVER block) | Flag file `correction-pending-{sid}.txt` created | correction_detect |
-| C2 | Agent calls aide_remember for correction | PostToolUse(aide_remember) → passthrough | Flag file **cleared** (deleted). Memory stored with: layer=guidelines (not "technical"), scope=src/api/** (not project-wide), content=specific (not generic) | remember_quality, flag_lifecycle |
-| C3 | Verify via aide_memories | | Memory exists with correct layer, scope, content | remember_persisted |
-| C4 | User types another correction but agent DOESN'T call aide_remember | Stop → **block** with "correction not stored" warning | Flag file exists at stop time. Flag clears after Stop presents once. | stop_enforces_correction |
-| C5 | Agent calls aide_remember (prompted by stop) | | Correction stored. Flag was already cleared after C4 presentation. | stop_remember |
-| C6 | Continue working (no correction), then end session | Stop → **block** (standard prompt, no correction warning) | Agent calls aide_remember. Stored memory has appropriate layer + scope | remember_from_stop |
-| C7 | Verify via aide_memories | | All memories from C2, C5, C6 exist | remember_count |
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| C1 | User types correction: "No, use epoch timestamps not ISO" | UserPromptSubmit → **SOFT** (NEVER blocks — blocking rejects the user's message). Flag file `correction-pending-{sid}.txt` created with content "correction". | correction_detect |
+| C2 | Agent calls aide_remember for correction | PostToolUse(aide_remember) → track-remember.sh fires, **deletes** flag file. Memory stored. | flag_cleared |
+| C3 | Verify via aide_memories | Memory exists with correct layer, scope, content | remember_persisted |
+| C4 | User types another correction but agent DOESN'T call aide_remember | Stop → **BLOCK** with "correction not stored" warning. Flag file cleared after Stop presents (one-shot, no infinite nagging). | stop_enforces_correction |
+| C5 | Agent calls aide_remember (prompted by stop block) | Correction stored. Flag was already cleared after C4's stop presentation. | stop_remember |
+| C6 | Continue working (no correction), dynamic interval hits block turn | Stop → **BLOCK** (standard save prompt, no correction warning) | stop_standard_block |
+| C7 | Verify via aide_memories | All memories from C2, C5 exist | remember_count |
 
-**Session D: Compact + Clear + Re-recall**
-_Same project. Tests post-compact save, /clear re-blocking, tracking lifecycle._
-_Note: PreCompact is cleanup-only (exit 0). Cannot force agent tool calls — Claude Code limitation. Save prompting happens via post-compact SessionStart injection._
+**Session D: Compact + Re-recall**
+_Same project. Tests PreCompact clearing, SessionStart re-injection, tracking lifecycle._
+_Note: PreCompact is cleanup-only (exit 0). Cannot force agent tool calls — Claude Code limitation._
 
-| Step | Action | Hook Expected | Recall/Remember Check | Metric |
-|------|--------|---------------|----------------------|--------|
-| D1 | Read file, recall, work normally | Read → block → soft | | baseline |
-| D2 | Run /compact | PreCompact clears tracking (exit 0). Compaction proceeds. SessionStart(source:compact) fires post-compact. | SessionStart injects preferences/guidelines (save prompt removed — cannot force agent tool calls). | post_compact_inject |
-| D3 | Agent calls aide_remember (if agent chooses to based on injected context) | | Memory stored with correct layer/scope if agent acts | remember_from_compact |
-| D4 | Read same file as D1 | Read → **block** again (tracking was cleared) | | post_compact_rerecall |
-| D5 | Verify D3 memory persists post-compaction | aide_memories | Memory from D3 still exists | remember_survives_compact |
-| D6 | Recall file, re-read (soft), then run /clear | SessionStart(source:clear) fires | All tracking for current session cleared | clear_resets_tracking |
-| D7 | Read same file again after /clear | Read → **block** (must re-recall) | | post_clear_rerecall |
-| D8 | Recall file again, re-read (soft). Close terminal, resume session. | SessionStart(source:resume) fires | Tracking files PRESERVED. Re-read is still **soft** (not re-blocked). | resume_preserves_tracking |
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| D1 | Read file, recall normally (block → recall → silent) | Normal flow establishes baseline | baseline |
+| D2 | Run /compact | PreCompact fires: clears `recalled-paths-{sid}.txt`, `stop-count-{sid}.txt`, `searched-queries-{sid}.txt`, `correction-pending-{sid}.txt`. Then SessionStart(source:compact) fires: re-injects prefs/guidelines AND writes injected IDs back to tracking. | compact_clears_then_reinjects |
+| D3 | Re-read same file as D1 | **BLOCK** — tracking was cleared by PreCompact, SessionStart only wrote injected IDs (prefs/guidelines), not the file's scoped IDs. Must re-recall. | post_compact_reblock |
+| D4 | Recall file again, re-read | **SILENT** — IDs re-covered | post_compact_rerecall |
 
-**Session E: Persistence + SessionStart** (MUST be new session on same project)
-_Verifies memories from Sessions C and D persisted. Tests remember→recall loop, stale cleanup._
+**Session E: Cross-Session Persistence**
+_MUST be new session on same project. Verifies memories from Sessions C and D persisted._
 
-| Step | Action | Hook Expected | Recall/Remember Check | Metric |
-|------|--------|---------------|----------------------|--------|
-| E1 | Start new session | SessionStart → inject | Top preferences + all guidelines injected as context (~300 tokens). C/D tracking files still exist (harmless, different session_id). | injection_tokens |
-| E2 | aide_recall for src/api/ | | Returns correction memory from C2 (epoch timestamps guideline) | **remember_then_recall** |
-| E3 | Verify C5 stop-enforced correction persists | aide_memories | Memory from C5 exists | cross_session_persist |
-| E4 | Verify C6 stop memory persists | aide_memories | Memory from C6 exists | cross_session_persist |
-| E5 | Verify D3 compact memory persists | aide_memories | Memory from D3 exists | cross_session_persist |
-| E6 | Read file with priority:"always" memory | | Memory appears in SessionStart injection AND in recall | priority_always |
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| E1 | Start new session | SessionStart fires (source:start): injects top 15 preferences + all guidelines. Writes injected memory IDs to tracking. C/D tracking files from old session_id are harmless (different SID). | injection_fires |
+| E2 | aide_recall for src/api/ | Returns correction memory from C2 (epoch timestamps guideline) | remember_then_recall |
+| E3 | Verify C5 stop-enforced correction persists | aide_memories shows memory from C5 | cross_session_persist |
+
+**Session F: New Project Softening (<10 mems)**
+_Separate project with <10 total memories but >0. Tests that blocking is suppressed._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| F1 | Init project, seed 5 memories (below `memories.softening.threshold` of 10) | Setup complete | setup |
+| F2 | Read file with scoped mems (IDs not in tracking) | **SOFT** (not block) — `FORCE_SOFT=true` because total_memories < threshold. Message still shows path-based recall nudge, but delivered as additionalContext. | softening_read |
+| F3 | Edit file with scoped mems (IDs not in tracking) | **SOFT** (not block) — same softening logic in pre-edit-recall.sh | softening_edit |
+| F4 | Agent acts on soft nudge, calls aide_recall | Normal recall, IDs written to tracking | softening_recall |
+| F5 | Re-read file from F2 | **SILENT** — all IDs now covered (softening doesn't change silent behavior) | softening_silent |
+
+**Session G: Stop Hook Dynamic Interval**
+_Tests the 3-phase dynamic schedule: every 3 (turns 1-9), every 5 (turns 10-29), every 10 (turns 30+)._
+_Schedule from defaults.json: `[{"until":9,"every":3},{"until":29,"every":5},{"every":10}]`_
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| G1 | Turns 1-2: simple prompts | Stop → **SILENT** (no output) — count 1,2 not divisible by 3 | silent_early |
+| G2 | Turn 3: prompt | Stop → **BLOCK** — offset=3, 3%3=0. First save checkpoint. | block_at_3 |
+| G3 | Turns 4-5: prompts | Stop → **SILENT** — offsets 4,5 not divisible by 3 | silent_between |
+| G4 | Turn 6: prompt | Stop → **BLOCK** — offset=6, 6%3=0 | block_at_6 |
+| G5 | Turn 9: prompt | Stop → **BLOCK** — offset=9, 9%3=0. Last phase-1 block. | block_at_9 |
+| G6 | Turns 10-13: prompts | Stop → **SILENT** — phase 2 starts, offsets 1-4, none divisible by 5 | silent_phase2_early |
+| G7 | Turn 14: prompt | Stop → **BLOCK** — offset=14-9=5, 5%5=0. First phase-2 block. | block_at_14 |
+| G8 | Turn 19: prompt | Stop → **BLOCK** — offset=19-9=10, 10%5=0. Second phase-2 block. | block_at_19 |
+| G9 | Any turn with correction-pending flag | Stop → **BLOCK** regardless of interval. Flag cleared after presentation (one-shot). | correction_override |
+| G10 | After /compact or /clear: counter resets (stop-count file cleared) | Next block at turn 3 again — schedule restarts from 0. | counter_reset |
+| G11 | Verify: user sees nothing on silent turns | No "Stop says:" or "Stop hook error:" output on non-block turns | ux_clean |
+
+**Session H: ID Gap-Filling**
+_Tests partial ID coverage — when aide_recall returns fewer IDs than scoped (e.g., limit hit), remaining IDs trigger soft nudge with specific ID list._
+
+**Prerequisite:** File `src/api/routes.ts` has 8 scoped memory IDs (1-8). aide_recall limit is set to 5.
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| H1 | Read `src/api/routes.ts` (first encounter, no IDs tracked) | **BLOCK** — path-based message: "8 memories for src/api/routes.ts. Call aide_recall({paths: ['src/api/routes.ts']})" | block_initial |
+| H2 | Agent calls aide_recall (limit=5 returns IDs 1-5 only) | PostToolUse writes `ids\|1,2,3,4,5` to tracking. File encountered (`file\|` entry written). | partial_id_tracking |
+| H3 | Re-read `src/api/routes.ts` | **SOFT** — encountered=true, but IDs 6,7,8 missing. ID-based message: "3 memories for src/api/routes.ts not yet recalled. Call aide_recall({ids: [6,7,8]})" | soft_missing_ids |
+| H4 | Agent calls aide_recall({ids: [6,7,8]}) | PostToolUse merges: `ids\|1,2,3,4,5,6,7,8`. All covered. | id_merge |
+| H5 | Re-read `src/api/routes.ts` | **SILENT** — all 8 IDs covered | silent_all_filled |
+
+**Key behavior validated by Session H:**
+- The hook distinguishes NONE-covered (path-based message) from SOME-covered (ID-based message with specific missing IDs), giving the agent a precise recall call to fill gaps.
+
+**Session I: SessionStart Injection + ID Tracking**
+_Tests that SessionStart writes injected memory IDs to tracking, preventing redundant blocking for files whose scoped memories were already injected._
+
+**Prerequisite:** Project has preferences (IDs 20-25), guidelines (IDs 30-35), and file-scoped memories for `src/config.ts` (IDs 30,31 — overlapping with guidelines).
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| I1 | Start new session | SessionStart injects prefs + guidelines. session-inject.js writes `ids\|20,21,22,23,24,25,30,31,32,33,34,35` to `recalled-paths-{sid}.txt`. | injection_writes_ids |
+| I2 | Read `src/config.ts` (scoped IDs 30,31 — both already in tracking from injection) | **SILENT** — IDs 30,31 covered by SessionStart injection | silent_injected_covered |
+| I3 | Read `src/api/routes.ts` (scoped IDs 1-4 — NOT in tracking from injection) | **BLOCK** — IDs 1-4 not injected, not covered | block_not_injected |
+
+**Key behavior validated by Session I:**
+- SessionStart doesn't just inject text — it writes injected memory IDs to the tracking file so the read/edit hooks know those memories are already in context. This prevents the "recalled but still blocking" problem.
+
+**--- UNCHANGED SESSIONS (from previous spec, still valid) ---**
 
 **Session F0: Empty Project — Zero Memories** (separate project, just initialized)
 _First-time user experience. Nothing should block, nudge, or error._
@@ -947,53 +964,6 @@ _First-time user experience. Nothing should block, nudge, or error._
 | F0.6 | User types normal prompt | UserPromptSubmit → **silent** | no_false_triggers |
 | F0.7 | End session | Stop → **block** (standard prompt) | Agent may or may not call aide_remember (both OK — nothing to store yet) | stop_still_fires |
 
-**Session F: New Project Softening** (separate project with <10 mems but >0)
-
-| Step | Action | Hook Expected | Metric |
-|------|--------|---------------|--------|
-| F1 | Init project, seed 5 memories (below threshold) | | setup |
-| F2 | Read file with scoped mems | Read → **soft** (not block) | softening_works |
-| F3 | Edit file with scoped mems | Edit → **soft** (not block) | softening_works |
-| F4 | Grep matching keyword | Search → **soft** (not block) | softening_works |
-
-**Session G: Concurrent Sessions** (two Claude Code sessions on same project)
-
-| Step | Action | Metric |
-|------|--------|--------|
-| G1 | Session X reads src/api/routes.ts, recalls | tracking file has session X's ID |
-| G2 | Session Y reads src/auth/middleware.ts, recalls | tracking file has session Y's ID |
-| G3 | Verify X's tracking doesn't contain Y's paths | session_isolation |
-| G4 | Verify Y's tracking doesn't contain X's paths | session_isolation |
-| G5 | Session X runs /clear → only X's tracking cleared, Y's intact | clear_isolation |
-| G6 | Session Y still gets soft (not block) on already-recalled files | y_unaffected |
-
-**Session H: Auto-Update on Server Start** (separate project, simulates version upgrade)
-_Verifies that MCP server start auto-updates hooks, MCP config, rules, directories, and .gitignore._
-
-| Step | Action | Expected | Metric |
-|------|--------|----------|--------|
-| H1 | Init project with aide-memory, verify _aideMemoryVersion in .claude/settings.json | Version stamp matches current package version | version_stamped |
-| H2 | Manually edit settings.json: set _aideMemoryVersion to "0.0.1", add "customSetting": true | File has old version + custom key | setup |
-| H3 | Manually delete a .aide/ subdirectory (e.g., .aide/memories/guidelines/) | Directory missing | setup |
-| H4 | Start MCP server (start new claude session or restart) | autoUpdateIfNeeded fires | trigger |
-| H5 | Check .claude/settings.json | _aideMemoryVersion updated, hooks updated, customSetting PRESERVED | auto_update_hooks |
-| H6 | Check .aide/memories/guidelines/ | Directory re-created | auto_update_dirs |
-| H7 | Check .mcp.json | aide-memory server config present | auto_update_mcp |
-| H8 | Check .gitignore | All required entries present | auto_update_gitignore |
-| H9 | Verify no user data was lost (memories, other settings) | Everything preserved | no_data_loss |
-
-**Session I: .ignore Hides Memories from Grep** (separate project or fresh init)
-
-| Step | Action | Expected | Metric |
-|------|--------|----------|--------|
-| I1 | `aide-memory init` on project | `.ignore` file created with `.aide/memories/` entry | ignore_created |
-| I2 | Store a memory with keyword "foobar" | Memory JSON saved to `.aide/memories/` | setup |
-| I3 | Grep for "foobar" | Returns NO results from `.aide/memories/` (only code files) | grep_excluded |
-| I4 | `aide-memory config memories.hideFromGrep false` | Config updated | config_toggle |
-| I5 | `aide-memory init --force` (re-runs updateIgnoreFile) | `.ignore` entry removed | ignore_updated |
-| I6 | Grep for "foobar" | NOW returns results from `.aide/memories/` JSON files | grep_included |
-| I7 | `aide-memory config memories.hideFromGrep true` + `aide-memory init --force` | `.ignore` entry restored | restore_default |
-
 **Session J: MCP Server Unavailable — Graceful Degradation**
 _Tests what happens when the MCP server is down. Hooks should not crash, pending memories should be saved._
 
@@ -1006,64 +976,78 @@ _Tests what happens when the MCP server is down. Hooks should not crash, pending
 | J5 | Restore `.mcp.json` from backup | MCP server available again | restore |
 | J6 | Verify pending memories can be imported | aide_recall works, pending memories processed | recovery |
 
-**Session K: Plan Persistence Across Sessions** (2 sessions)
-_Tests that organic plans (not pre-seeded) are stored and recalled in a new session._
-
-| Step | Action | Expected | Metric |
-|------|--------|----------|--------|
-| K1 | Session 1: "Plan a refactor of src/api/ to add input validation, error handling, and rate limiting. Don't implement yet." | Agent creates a multi-step plan | plan_created |
-| K2 | Agent should call aide_remember to store the plan (prompted by Stop hook) | Plan stored with scope=src/api/**, layer=area_context | plan_stored |
-| K3 | Verify via aide_memories | Plan memory exists with correct layer/scope | plan_persisted |
-| K4 | Session 2 (new session): "Continue the API refactor we planned" | Agent recalls the plan without being told what it was | plan_recalled |
-| K5 | Agent picks up at the right step (not starting over) | Shows awareness of prior plan | plan_continuity |
-
-**Session L: Multiple Corrections in One Session** (2 sessions)
-_Tests that 3+ corrections stored rapidly in one session are all recalled in the next._
-
-| Step | Action | Expected | Metric |
-|------|--------|----------|--------|
-| L1 | Session 1: Ask agent to write a utility module | Agent writes code | setup |
-| L2 | Correct #1: "Use arrow functions, not function declarations" | aide_remember called, stored | correction_1_stored |
-| L3 | Correct #2: "Always add JSDoc with @param and @returns" | aide_remember called, stored | correction_2_stored |
-| L4 | Correct #3: "Export as named exports, never default exports" | aide_remember called, stored | correction_3_stored |
-| L5 | Verify all 3 via aide_memories | 3 separate memories exist | all_3_persisted |
-| L6 | Session 2 (new session): "Write another utility module in src/utils/" | Agent should follow ALL 3 corrections without being told | all_3_recalled |
-| L7 | Check: arrow functions? JSDoc? Named exports? | All 3 conventions followed | conventions_followed (/3) |
-
-**Session M: Scope Exclusion Precision**
+**Session K: Scope Exclusion Precision**
 _Tests that memories scoped to OTHER directories do NOT leak into the current scope._
 
 | Step | Action | Expected | Metric |
 |------|--------|----------|--------|
-| M1 | aide_recall for src/components/Button.tsx | Returns ONLY memories scoped to src/components/** or project-wide | scoped_only |
-| M2 | Verify: NO auth memories (src/auth/**) in results | Auth memories excluded | no_leak_auth |
-| M3 | Verify: NO api memories (src/api/**) in results | API memories excluded | no_leak_api |
-| M4 | aide_recall for src/auth/middleware.ts | Returns ONLY auth-scoped + project-wide | scoped_only |
-| M5 | Verify: NO api or component memories in results | Other scopes excluded | no_cross_leak |
+| K1 | aide_recall for src/components/Button.tsx | Returns ONLY memories scoped to src/components/** or project-wide | scoped_only |
+| K2 | Verify: NO auth memories (src/auth/**) in results | Auth memories excluded | no_leak_auth |
+| K3 | Verify: NO api memories (src/api/**) in results | API memories excluded | no_leak_api |
+| K4 | aide_recall for src/auth/middleware.ts | Returns ONLY auth-scoped + project-wide | scoped_only |
+| K5 | Verify: NO api or component memories in results | Other scopes excluded | no_cross_leak |
 
-**Session N: SessionStart Injection Verification**
-_Tests that the agent can demonstrate awareness of injected preferences._
-
-| Step | Action | Expected | Metric |
-|------|--------|----------|--------|
-| N1 | Start new session on test project | SessionStart injects preferences + guidelines | injection_fires |
-| N2 | Ask: "What coding conventions should I follow in this project?" | Agent references injected preferences (explain first, <30 lines, no TODOs, etc.) | agent_aware |
-| N3 | At least 2 specific conventions mentioned | Agent shows awareness, not generic advice | specificity |
-
-**Session O: Dynamic Stop Hook Interval**
-_Verifies soft/block schedule and correction override._
+**Session L: Auto-Update on Server Start** (separate project, simulates version upgrade)
+_Verifies that MCP server start auto-updates hooks, MCP config, rules, directories, and .gitignore._
 
 | Step | Action | Expected | Metric |
 |------|--------|----------|--------|
-| O1 | Turns 1-2: simple prompts | Stop → **silent** (no output, no block) | silent_early |
-| O2 | Turn 3: prompt | Stop → **block** (first save point, visible) | block_at_3 |
-| O3 | Turns 4-5: prompts | Stop → **silent** | silent_between |
-| O4 | Turn 6: prompt | Stop → **block** | block_at_6 |
-| O5 | Turns 10-13: prompts | Stop → **silent** (interval switches to every 5) | interval_switch |
-| O6 | Turn 14: prompt | Stop → **block** (first long-interval block, 9+5=14) | block_at_14 |
-| O7 | Any turn with correction-pending flag | Stop → **block** regardless of interval, flag cleared after | correction_override |
-| O8 | After /clear: counter resets, next block at turn 3 again | Stop schedule restarts | counter_reset |
-| O9 | Verify: user sees nothing on silent turns | No "Stop says:" or "Stop hook error:" output | ux_clean |
+| L1 | Init project with aide-memory, verify _aideMemoryVersion in .claude/settings.json | Version stamp matches current package version | version_stamped |
+| L2 | Manually edit settings.json: set _aideMemoryVersion to "0.0.1", add "customSetting": true | File has old version + custom key | setup |
+| L3 | Manually delete a .aide/ subdirectory (e.g., .aide/memories/guidelines/) | Directory missing | setup |
+| L4 | Start MCP server (start new claude session or restart) | autoUpdateIfNeeded fires | trigger |
+| L5 | Check .claude/settings.json | _aideMemoryVersion updated, hooks updated, customSetting PRESERVED | auto_update_hooks |
+| L6 | Check .aide/memories/guidelines/ | Directory re-created | auto_update_dirs |
+| L7 | Check .mcp.json | aide-memory server config present | auto_update_mcp |
+| L8 | Check .gitignore | All required entries present | auto_update_gitignore |
+| L9 | Verify no user data was lost (memories, other settings) | Everything preserved | no_data_loss |
+
+**Session M: .ignore Hides Memories from Grep** (separate project or fresh init)
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| M1 | `aide-memory init` on project | `.ignore` file created with `.aide/memories/` entry | ignore_created |
+| M2 | Store a memory with keyword "foobar" | Memory JSON saved to `.aide/memories/` | setup |
+| M3 | Grep for "foobar" | Returns NO results from `.aide/memories/` (only code files) | grep_excluded |
+| M4 | `aide-memory config memories.hideFromGrep false` | Config updated | config_toggle |
+| M5 | `aide-memory init --force` (re-runs updateIgnoreFile) | `.ignore` entry removed | ignore_updated |
+| M6 | Grep for "foobar" | NOW returns results from `.aide/memories/` JSON files | grep_included |
+| M7 | `aide-memory config memories.hideFromGrep true` + `aide-memory init --force` | `.ignore` entry restored | restore_default |
+
+**Session N: Plan Persistence Across Sessions** (2 sessions)
+_Tests that organic plans (not pre-seeded) are stored and recalled in a new session._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| N1 | Session 1: "Plan a refactor of src/api/ to add input validation, error handling, and rate limiting. Don't implement yet." | Agent creates a multi-step plan | plan_created |
+| N2 | Agent should call aide_remember to store the plan (prompted by Stop hook) | Plan stored with scope=src/api/**, layer=area_context | plan_stored |
+| N3 | Verify via aide_memories | Plan memory exists with correct layer/scope | plan_persisted |
+| N4 | Session 2 (new session): "Continue the API refactor we planned" | Agent recalls the plan without being told what it was | plan_recalled |
+| N5 | Agent picks up at the right step (not starting over) | Shows awareness of prior plan | plan_continuity |
+
+**Session O: Multiple Corrections in One Session** (2 sessions)
+_Tests that 3+ corrections stored rapidly in one session are all recalled in the next._
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| O1 | Session 1: Ask agent to write a utility module | Agent writes code | setup |
+| O2 | Correct #1: "Use arrow functions, not function declarations" | aide_remember called, stored | correction_1_stored |
+| O3 | Correct #2: "Always add JSDoc with @param and @returns" | aide_remember called, stored | correction_2_stored |
+| O4 | Correct #3: "Export as named exports, never default exports" | aide_remember called, stored | correction_3_stored |
+| O5 | Verify all 3 via aide_memories | 3 separate memories exist | all_3_persisted |
+| O6 | Session 2 (new session): "Write another utility module in src/utils/" | Agent should follow ALL 3 corrections without being told | all_3_recalled |
+| O7 | Check: arrow functions? JSDoc? Named exports? | All 3 conventions followed | conventions_followed (/3) |
+
+**Session P: Concurrent Sessions** (two Claude Code sessions on same project)
+
+| Step | Action | Metric |
+|------|--------|--------|
+| P1 | Session X reads src/api/routes.ts, recalls | tracking file has session X's ID |
+| P2 | Session Y reads src/auth/middleware.ts, recalls | tracking file has session Y's ID |
+| P3 | Verify X's tracking doesn't contain Y's paths | session_isolation |
+| P4 | Verify Y's tracking doesn't contain X's paths | session_isolation |
+| P5 | Session X runs /clear → only X's tracking cleared, Y's intact | clear_isolation |
+| P6 | Session Y still gets silent (IDs covered) on already-recalled files | y_unaffected |
 
 **--- USER SCENARIOS (U1-U3): Does the system actually help? ---**
 
@@ -1140,12 +1124,143 @@ Seeded memories (preferences layer, project-wide):
 | Conventions/preferences followed | /4 | /4 | N/A | N/A | /3 | /3 |
 | First-attempt correct | Y/N | Y/N | Y/N | Y/N | Y/N | Y/N |
 
+### Historical Scenarios (pre-ID-based)
+
+_The following scenarios reference OLD behavior that no longer exists. They are preserved for reference only. The behaviors they tested have been replaced:_
+- _Directory trigger (REMOVED) — files are now evaluated individually by scoped ID coverage_
+- _Block-once-then-soft with block-count (REMOVED) — replaced by ID-based coverage checking_
+- _Prefix matching for `dir|` entries (REPLACED) — no more directory-level tracking_
+- _Always-block Stop hook (REMOVED) — now uses dynamic 3/5/10 interval schedule_
+- _Search hook blocking (REMOVED) — search is now always soft, never blocks_
+
+<details>
+<summary>Click to expand historical scenarios</summary>
+
+**Historical Session A: Hook + Recall Flow**
+_One session, same test project with seeded memories. Tests read/edit/dir hooks, recall quality, tracking, dedup._
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| A1 | Read `src/api/routes.ts` (has scoped mems) | Read → **block** | | hook_behavior |
+| A2 | Agent calls aide_recall for src/api/routes.ts | Track → passthrough | Scoped mems ranked FIRST, round-robin all 4 layers | recall_quality, scoped_count, layer_coverage |
+| A3 | Re-read same file | Read → **soft** | | tracking_works |
+| A4 | Read `src/api/middleware.ts` (2nd file same dir) | Read → **block** (dir trigger) | | dir_trigger |
+| A5 | Agent calls aide_recall for src/api/ (directory) | Track → passthrough | area_context ranked first (dir query), IDs from A2 excluded (dedup) | ranking_order, dedup_count |
+| A6 | Edit `src/api/routes.ts` without reading first | Edit → **block** | | edit_enforcement |
+| A7 | Agent calls aide_recall, then edit proceeds | Edit → **soft** | | tracking_works |
+| A8 | Read `src/db/connection.ts` (only project-wide mems) | Read → **soft** (not block) | | scoped_only_blocking |
+| A9 | Read `README.md` (no memories at all) | Read → **silent** (no hook output) | | silent_on_empty |
+| A10 | Inspect tracking file | | file\|path, dir\|path, ids\|1,2,3 format correct. Paths are absolute. | tracking_format, path_resolution |
+| A11 | User types normal message (not a correction) | UserPromptSubmit → **does NOT block** (soft or silent) | User input accepted normally | userprompt_never_blocks |
+| A12 | Read a file that doesn't exist (e.g. src/api/nonexistent.ts) | Read → **silent** (no hook output, no error) | | silent_nonexistent_file |
+
+**Historical Session A2: Blocking Permutations**
+_Same test project as Session A, fresh session (tracking cleared). Exhaustively tests every combination of block/soft/silent for reads, edits, and directory triggers._
+
+**Block/Soft State Matrix:**
+
+| State | Read | Edit | Search | Step(s) |
+|-------|------|------|--------|---------|
+| Never recalled | **BLOCK** | **BLOCK** | **BLOCK** (if scoped matches) | A2.1, A2.5, A2.9 |
+| File recalled | soft | soft | N/A | A2.3, A2.6 |
+| Directory recalled | soft (all files under dir) | soft (all files under dir) | N/A | A2.4, A2.7, A2.8 |
+| Only project-wide mems | soft | soft | N/A | A2.10, A2.11 |
+| < 10 total mems | soft | soft | soft | (covered by Session F) |
+| 0 mems for path | silent | silent | silent | A2.12, A2.13 |
+| 0 mems total | silent | silent | silent | (covered by Session F0) |
+
+**Prerequisite:** Seed project with scoped memories for `src/auth/middleware.ts`, `src/auth/types.ts`, `src/auth/` (directory), `src/components/Button.tsx`, and project-wide memories only (no scoped) for `src/utils/helpers.ts`. Ensure `src/auth/` has at least 3 files. Ensure `tests/setup.ts` and `lib/constants.ts` have zero memories.
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| | **--- Directory Trigger Isolation ---** | | | |
+| A2.1 | Read `src/auth/middleware.ts` (1st file in src/auth/, never recalled) | Read → **block** | | hook_behavior, file_block |
+| A2.2 | Agent calls aide_recall for `src/auth/middleware.ts` (file only) | Track → passthrough | Tracking file shows `file\|src/auth/middleware.ts`. Directory `src/auth/` is NOT tracked yet. | tracking_format, file_only_recall |
+| A2.3 | Re-read `src/auth/middleware.ts` | Read → **soft** (file recalled) | | file_recall_soft |
+| A2.4 | Read `src/auth/types.ts` (2nd file in src/auth/, directory NOT recalled) | Read → **block** (directory trigger: 2nd file in same dir) | | dir_trigger_block |
+| A2.5 | Agent calls aide_recall for `src/auth/` (directory) | Track → passthrough | Tracking file shows `dir\|src/auth/`. Memories from A2.2 excluded (dedup). | dir_recall, dedup_count |
+| A2.6 | Re-read `src/auth/types.ts` | Read → **soft** (directory recalled covers all files under dir) | | dir_recall_covers_files |
+| A2.7 | Read `src/auth/index.ts` (3rd file, never individually read) | Read → **soft** (directory already recalled) | | dir_recall_covers_new_files |
+| A2.8 | Edit `src/auth/index.ts` (never individually recalled, but dir recalled) | Edit → **soft** (directory recall covers edits too) | | dir_recall_covers_edits |
+| | **--- Edit Blocking Without Prior Read ---** | | | |
+| A2.9 | Edit `src/components/Button.tsx` (never read or recalled in session) | Edit → **block** | | edit_block_no_prior_read |
+| A2.10 | Agent calls aide_recall for `src/components/Button.tsx` | Track → passthrough | Scoped memories returned | edit_recall |
+| A2.11 | Re-attempt edit `src/components/Button.tsx` | Edit → **soft** (file recalled) | | edit_soft_after_recall |
+| | **--- Project-Wide Only (no scoped mems for path) ---** | | | |
+| A2.12 | Read `src/utils/helpers.ts` (has only project-wide mems, no scoped) | Read → **soft** (not block — scoped-only blocking) | | scoped_only_blocking |
+| A2.13 | Edit `src/utils/helpers.ts` | Edit → **soft** (same rationale) | | scoped_only_blocking_edit |
+| | **--- Zero Memories for Path ---** | | | |
+| A2.14 | Read `tests/setup.ts` (zero memories of any kind for this path) | Read → **silent** (no hook output) | | silent_zero_mems_read |
+| A2.15 | Edit `tests/setup.ts` | Edit → **silent** (no hook output) | | silent_zero_mems_edit |
+| A2.16 | Grep "setup" (no scoped mems match the keyword) | Search → **silent** (no hook output) | | silent_zero_mems_search |
+| | **--- Search Blocking ---** | | | |
+| A2.17 | Grep "auth" (scoped mems match, never searched in session) | Search → **soft** | | search_soft |
+| A2.18 | Agent calls aide_search keyword:"auth" | | Results returned | search_recall |
+| A2.19 | Grep "auth" again | Search → **soft** (already searched) | | search_soft_after_recall |
+| | **--- Cross-Check: File vs Directory Tracking ---** | | | |
+| A2.20 | Inspect tracking file | | Verify ALL entries: `file\|src/auth/middleware.ts`, `dir\|src/auth/`, `file\|src/components/Button.tsx`, `file\|src/utils/helpers.ts`. No entry for `tests/setup.ts` (silent paths not tracked). No entry for `lib/constants.ts`. IDs deduped across file + dir recalls. | tracking_completeness, path_resolution |
+
+**Historical Key behaviors validated by A2:**
+1. Directory trigger fires on 2nd file, not 1st.
+2. Directory recall covers ALL files under that dir.
+3. Edit blocks independently of read.
+4. Silent paths leave no tracking footprint.
+5. Project-wide-only paths are soft, not block.
+
+**Historical Session B: Search Flow**
+
+| Step | Action | Hook Expected | Recall/Remember Check | Metric |
+|------|--------|---------------|----------------------|--------|
+| B1 | Grep "auth" (scoped mems match) | Search → **soft** | | hook_behavior |
+| B2 | Agent calls aide_search keyword:"auth" mode:"keyword" | | Substring matches only | search_mode |
+| B3 | aide_search keyword:"authentication flow" mode:"semantic" | | Embedding similarity matches | search_mode |
+| B4 | aide_search keyword:"auth" mode:"auto" | | Keyword first, semantic fallback if <3 | search_mode |
+| B5 | Grep "auth" again | Search → **soft** | | tracking_works |
+| B6 | Grep "zzz_nonexistent" (no mems match) | Search → **silent** (no hook output) | | silent_on_no_matches |
+| B7 | aide_update a memory's content, aide_search for new content | | Embedding regenerated, semantic finds updated text | embedding_update |
+| B8 | aide_search for the OLD content text | | Old phrasing no longer matches (or ranks much lower) | negative_assertion |
+
+**Historical Session G: Concurrent Sessions**
+
+| Step | Action | Metric |
+|------|--------|--------|
+| G1 | Session X reads src/api/routes.ts, recalls | tracking file has session X's ID |
+| G2 | Session Y reads src/auth/middleware.ts, recalls | tracking file has session Y's ID |
+| G3 | Verify X's tracking doesn't contain Y's paths | session_isolation |
+| G4 | Verify Y's tracking doesn't contain X's paths | session_isolation |
+| G5 | Session X runs /clear → only X's tracking cleared, Y's intact | clear_isolation |
+| G6 | Session Y still gets soft (not block) on already-recalled files | y_unaffected |
+
+**Historical Session N: SessionStart Injection Verification**
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| N1 | Start new session on test project | SessionStart injects preferences + guidelines | injection_fires |
+| N2 | Ask: "What coding conventions should I follow in this project?" | Agent references injected preferences | agent_aware |
+| N3 | At least 2 specific conventions mentioned | Agent shows awareness, not generic advice | specificity |
+
+**Historical Session O: Dynamic Stop Hook Interval**
+
+| Step | Action | Expected | Metric |
+|------|--------|----------|--------|
+| O1 | Turns 1-2: simple prompts | Stop → **silent** (no output, no block) | silent_early |
+| O2 | Turn 3: prompt | Stop → **block** (first save point, visible) | block_at_3 |
+| O3 | Turns 4-5: prompts | Stop → **silent** | silent_between |
+| O4 | Turn 6: prompt | Stop → **block** | block_at_6 |
+| O5 | Turns 10-13: prompts | Stop → **silent** (interval switches to every 5) | interval_switch |
+| O6 | Turn 14: prompt | Stop → **block** (first long-interval block, 9+5=14) | block_at_14 |
+| O7 | Any turn with correction-pending flag | Stop → **block** regardless of interval, flag cleared after | correction_override |
+| O8 | After /clear: counter resets, next block at turn 3 again | Stop schedule restarts | counter_reset |
+| O9 | Verify: user sees nothing on silent turns | No "Stop says:" or "Stop hook error:" output | ux_clean |
+
+</details>
+
 **12.4 Bug Hunting Checklist**
 
 - [ ] Relative/absolute path mismatch (regression — was root cause of recall quality failure)
 - [ ] UserPromptSubmit never blocks (regression — broke all user input when set to blocking)
 - [ ] Track-recall.sh glob pattern doesn't match file paths as dirs (regression — `*/**` matched everything)
-- [ ] Scoped-only blocking: project-wide-only files get soft, not block
+- [ ] Scoped-only blocking: project-wide-only files (scoped_count=0) get silent, not soft or block
 - [ ] New project (<10 mems) gets soft everywhere, not block
 - [ ] Empty tracking file doesn't crash hooks
 - [ ] Malformed JSON in hook input handled gracefully
@@ -1158,7 +1273,8 @@ Seeded memories (preferences layer, project-wide):
 - [ ] MCP server restart required after code changes (document, don't fix — architectural)
 - [ ] Recall quality: scoped memories rank above project-wide for file queries
 - [ ] Recall quality: area_context ranks first for directory queries
-- [ ] Directory trigger fires on 2nd file (threshold >= 1 sibling, not >= 2)
+- [ ] ID-based coverage: file with all scoped IDs covered is silent, not soft or block
+- [ ] ID gap-filling: partial ID coverage triggers soft nudge with specific missing IDs
 
 #### 13. PHASE 2 PRO FEATURES (deferred, documented)
 
@@ -1175,9 +1291,9 @@ REMAINING (source of truth — all pending items with concrete next steps):
 
 ### A. Validation (CRITICAL — launch gate)
 
-**P1.17: 7 functional sessions (A-G) + 3 user scenarios (U1-U3) in Claude Code**
-- Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (needs update to match Sessions A-H)
-- Verification sessions A-H defined in Hook & Recall Refinement Plan section 12.3
+**P1.17: 9 functional sessions (A-I) + unchanged sessions (F0, J-P) + 3 user scenarios (U1-U3) in Claude Code**
+- Runbook: `docs/validation/PHASE_0_1_INTEGRATION_TESTING.md` (needs update to match Sessions A-P)
+- Verification sessions A-I (core ID-based), F0/J-P (unchanged), U1-U3 defined in section 12.3
 - Observability: `aide-memory recall-log` now logs both recalls AND memory store events (stored/updated/deleted) to `.aide/recall-log.jsonl`
 - Before each scenario: `aide-memory recall-log --clear`
 - After each scenario: `aide-memory recall-log` to see exactly what was recalled/stored
