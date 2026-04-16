@@ -6,45 +6,54 @@ Date: 2026-04-14
 
 ## Session A: Hook + Recall Flow
 
-| Step | Action | Expected | Actual | Pass? |
-|------|--------|----------|--------|-------|
-| A1 | Read src/api/routes.ts | Read block | Read blocked, 10 memories (0 file-specific, 7 from src/api/) | PASS |
-| A2 | aide_recall called | Scoped first, all layers | 10 returned: 7 scoped + 3 project-wide. 3 layers (technical, preferences, guidelines). Scoped ranked first. | PASS |
-| A3 | Re-read same file | Soft | Soft (additionalContext in debug log, line 375) | PASS |
-| A4 | Read 2nd file same dir (handler.ts) | Dir trigger block | Soft — agent proactively recalled directory in A2 (dir\|src/api/ in tracking). Dir trigger not needed. | PASS (by design) |
-| A6 | Edit src/utils/dates.ts (not recalled) | Edit block | Agent chose to Read first → Read blocked → recalled → edit proceeded. Edit hook never independently tested. | PARTIAL |
-| A7 | Edit on recalled file (routes.ts) | Soft | Soft — edit proceeded, agent followed 4 conventions (camelCase, epoch ms, <30 lines, explain first) | PASS |
+
+| Step | Action                                 | Expected                 | Actual                                                                                                      | Pass?            |
+| ---- | -------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------- |
+| A1   | Read src/api/routes.ts                 | Read block               | Read blocked, 10 memories (0 file-specific, 7 from src/api/)                                                | PASS             |
+| A2   | aide_recall called                     | Scoped first, all layers | 10 returned: 7 scoped + 3 project-wide. 3 layers (technical, preferences, guidelines). Scoped ranked first. | PASS             |
+| A3   | Re-read same file                      | Soft                     | Soft (additionalContext in debug log, line 375)                                                             | PASS             |
+| A4   | Read 2nd file same dir (handler.ts)    | Dir trigger block        | Soft — agent proactively recalled directory in A2 (dir|src/api/ in tracking). Dir trigger not needed.       | PASS (by design) |
+| A6   | Edit src/utils/dates.ts (not recalled) | Edit block               | Agent chose to Read first → Read blocked → recalled → edit proceeded. Edit hook never independently tested. | PARTIAL          |
+| A7   | Edit on recalled file (routes.ts)      | Soft                     | Soft — edit proceeded, agent followed 4 conventions (camelCase, epoch ms, <30 lines, explain first)         | PASS             |
+
 
 ### Recall Quality (A2)
 
-| Metric | Value |
-|--------|-------|
-| Total returned | 10 |
-| Scoped | 7 |
-| Project-wide | 3 |
-| Layers represented | 3/4 (no area_context seeded for this path) |
-| Scoped before project-wide | Yes |
-| Top result | technical: rate limiting (scoped src/api/**) |
+
+| Metric                                     | Value                                           |
+| ------------------------------------------ | ----------------------------------------------- |
+| Total returned                             | 10                                              |
+| Scoped                                     | 7                                               |
+| Project-wide                               | 3                                               |
+| Layers represented                         | 3/4 (no area_context seeded for this path)      |
+| Scoped before project-wide                 | Yes                                             |
+| Top result                                 | technical: rate limiting (scoped src/api/**)    |
 | Anti-false-positive conventions in results | 4/4 (epoch, soft delete, requestId, rate limit) |
+
 
 ### Agent Convention Compliance (A7 — getUsers rewrite)
 
-| Convention | Followed? |
-|-----------|----------|
-| camelCase keys | Yes |
-| Unix epoch ms timestamps | Yes |
-| Functions under 30 lines | Yes |
-| Explained approach before coding | Yes |
+
+| Convention                       | Followed? |
+| -------------------------------- | --------- |
+| camelCase keys                   | Yes       |
+| Unix epoch ms timestamps         | Yes       |
+| Functions under 30 lines         | Yes       |
+| Explained approach before coding | Yes       |
+
 
 ## Session B: Search Flow
 
-| Step | Action | Expected | Actual | Pass? |
-|------|--------|----------|--------|-------|
-| B1 | Search "authentication" | Search block | Agent didn't use Grep — read files directly. Read hook blocked for src/auth/ instead. | N/A (agent bypassed grep) |
-| B1b | Grep "token" (forced) | Search block | Search hook BLOCKED. Agent retried → blocked again (tracking fix working). Agent called aide_search on 3rd attempt. | PASS |
-| B5 | Grep "middleware" (after search hook changed to soft) | Search soft | Soft nudge — "(ctrl+o to expand)". Agent said "already in context from earlier recalls", proceeded without aide_search. | PASS |
+
+| Step | Action                                                | Expected     | Actual                                                                                                                  | Pass?                     |
+| ---- | ----------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| B1   | Search "authentication"                               | Search block | Agent didn't use Grep — read files directly. Read hook blocked for src/auth/ instead.                                   | N/A (agent bypassed grep) |
+| B1b  | Grep "token" (forced)                                 | Search block | Search hook BLOCKED. Agent retried → blocked again (tracking fix working). Agent called aide_search on 3rd attempt.     | PASS                      |
+| B5   | Grep "middleware" (after search hook changed to soft) | Search soft  | Soft nudge — "(ctrl+o to expand)". Agent said "already in context from earlier recalls", proceeded without aide_search. | PASS                      |
+
 
 ### Observations
+
 - Search hook changed from blocking to always-soft during validation — agent had memories from prior recall, blocking forced redundant aide_search calls
 - Grep returned .aide/memories/ JSON files mixed with code → led to .ignore implementation
 - Agent sometimes uses Read instead of Grep for search tasks — search hook doesn't fire in those cases
@@ -53,24 +62,29 @@ Date: 2026-04-14
 
 Prompt: "No, always add request logging with the structured logger from src/lib/logger.ts — you should have included it in the endpoint you wrote"
 
-| Step | Action | Expected | Actual | Pass? |
-|------|--------|----------|--------|-------|
-| C1 | User types correction | UserPromptSubmit soft + flag | Agent immediately acted on correction | PASS |
-| C2 | aide_remember called | Memory stored, flag cleared | Memory id 36 stored, no correction-pending flag | PASS |
-| C3 | Verify memory quality | Correct layer/scope/content | layer=guidelines, scope=src/api/**, content="All API endpoints must include request logging using structured logger" | PASS |
-| C4 | Stop hook | No double-store | Agent said "Already persisted the guideline (memory id 36)" | PASS |
+
+| Step | Action                | Expected                     | Actual                                                                                                               | Pass? |
+| ---- | --------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----- |
+| C1   | User types correction | UserPromptSubmit soft + flag | Agent immediately acted on correction                                                                                | PASS  |
+| C2   | aide_remember called  | Memory stored, flag cleared  | Memory id 36 stored, no correction-pending flag                                                                      | PASS  |
+| C3   | Verify memory quality | Correct layer/scope/content  | layer=guidelines, scope=src/api/**, content="All API endpoints must include request logging using structured logger" | PASS  |
+| C4   | Stop hook             | No double-store              | Agent said "Already persisted the guideline (memory id 36)"                                                          | PASS  |
+
 
 ### Remember Quality (C2-C3)
 
-| Field | Value | Correct? |
-|-------|-------|----------|
-| Layer | guidelines | Yes (not "technical" or "preferences") |
-| Scope | src/api/** | Yes (not project-wide) |
-| What | "All API endpoints must include request logging using the structured logger from src/lib/logger.ts" | Yes — specific, actionable |
-| Why | "User correction after getUsers endpoint was written without logging — structured logger is the project standard for request observability" | Yes — captures context |
-| Tags | ["api-contract"] | Reasonable |
+
+| Field | Value                                                                                                                                       | Correct?                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Layer | guidelines                                                                                                                                  | Yes (not "technical" or "preferences") |
+| Scope | src/api/**                                                                                                                                  | Yes (not project-wide)                 |
+| What  | "All API endpoints must include request logging using the structured logger from src/lib/logger.ts"                                         | Yes — specific, actionable             |
+| Why   | "User correction after getUsers endpoint was written without logging — structured logger is the project standard for request observability" | Yes — captures context                 |
+| Tags  | ["api-contract"]                                                                                                                            | Reasonable                             |
+
 
 ### Agent Behavior
+
 - Applied the fix immediately (added import + log.info to routes.ts)
 - Read src/lib/logger.ts first (hook blocked for src/lib/, recalled, then read)
 - Stop hook: correctly said nothing new to store
@@ -78,6 +92,7 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 ## Changes Made During Validation
 
 ### Bugs Fixed
+
 1. **PreCompact two-phase blocking** — exit 0 → exit 2 for Phase 1. Previously never actually blocked compaction. (Later refactored: two-phase removed, PreCompact is now cleanup-only exit 0, no output)
 2. **SessionStart cleanup** — only clear THIS session on clear/compact. Don't touch concurrent sessions.
 3. **Search hook tracked on block** — agent could bypass by retrying grep. Fixed: tracking only via PostToolUse:aide_search.
@@ -87,25 +102,29 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 7. **Broad scope blocking** — src/** (depth 1) triggered blocking for every file under src/. Fixed: minimum scope depth of 2 path segments required for blocking.
 
 ### Features Added
-8. **Auto-update on MCP server start** — checks _aideMemoryVersion, auto-merges hooks/MCP/rules/dirs/.gitignore/post-checkout. No manual init needed after upgrade.
-9. **--force merge** — preserves user settings instead of overwriting.
-10. **--reset flag** — resets config to factory defaults without deleting memories.
-11. **Round-robin hard cap** — limit is now a true cap. Swaps underrepresented layers into over-represented slots within the limit.
-12. **session-inject.js efficiency** — SQL-level priority filter instead of fetching all memories.
-13. **Scope trailing slash normalization** — src/memory/ treated like src/memory/** in scopeMatchesPath.
-14. **`.ignore` file** — hides .aide/memories/ from grep. Config: memories.hideFromGrep.
-15. **track-search.sh** — new PostToolUse hook for aide_search tracking.
-16. **Search hook always soft** — no longer blocks grep. Agent decides whether to call aide_search.
+
+1. **Auto-update on MCP server start** — checks _aideMemoryVersion, auto-merges hooks/MCP/rules/dirs/.gitignore/post-checkout. No manual init needed after upgrade.
+2. **--force merge** — preserves user settings instead of overwriting.
+3. **--reset flag** — resets config to factory defaults without deleting memories.
+4. **Round-robin hard cap** — limit is now a true cap. Swaps underrepresented layers into over-represented slots within the limit.
+5. **session-inject.js efficiency** — SQL-level priority filter instead of fetching all memories.
+6. **Scope trailing slash normalization** — src/memory/ treated like src/memory/** in scopeMatchesPath.
+7. `**.ignore` file** — hides .aide/memories/ from grep. Config: memories.hideFromGrep.
+8. **track-search.sh** — new PostToolUse hook for aide_search tracking.
+9. **Search hook always soft** — no longer blocks grep. Agent decides whether to call aide_search.
 
 ## Session D: Compact + Re-recall
 
-| Step | Action | Expected | Actual | Pass? |
-|------|--------|----------|--------|-------|
-| D2 | /compact | PreCompact cleanup + compaction | Hook format initially wrong (hookSpecificOutput invalid for PreCompact). Fixed to top-level decision/reason. Compaction succeeded. (Subsequently simplified: PreCompact now cleanup-only with no output) | PASS (after fix) |
-| D2b | Post-compact SessionStart | Agent sees save prompt | Agent confirmed seeing instruction, reviewed context, said "nothing new" (memory 36 already saved) (Post-compact save prompt subsequently removed — SessionStart now only injects preferences/guidelines) | PASS |
-| D4 | Re-read after compact | Block (tracking cleared) | Not tested separately — agent read rules file on compact (auto-behavior) | PARTIAL |
+
+| Step | Action                    | Expected                        | Actual                                                                                                                                                                                                    | Pass?            |
+| ---- | ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| D2   | /compact                  | PreCompact cleanup + compaction | Hook format initially wrong (hookSpecificOutput invalid for PreCompact). Fixed to top-level decision/reason. Compaction succeeded. (Subsequently simplified: PreCompact now cleanup-only with no output)  | PASS (after fix) |
+| D2b  | Post-compact SessionStart | Agent sees save prompt          | Agent confirmed seeing instruction, reviewed context, said "nothing new" (memory 36 already saved) (Post-compact save prompt subsequently removed — SessionStart now only injects preferences/guidelines) | PASS             |
+| D4   | Re-read after compact     | Block (tracking cleared)        | Not tested separately — agent read rules file on compact (auto-behavior)                                                                                                                                  | PARTIAL          |
+
 
 ### PreCompact Findings
+
 - PreCompact cannot give agent an agentic turn — confirmed Claude Code limitation
 - hookSpecificOutput format invalid for PreCompact — must use top-level decision/reason/systemMessage
 - v2.1.105 added PreCompact support but only for blocking (cancel), not agentic turns
@@ -115,13 +134,16 @@ Prompt: "No, always add request logging with the structured logger from src/lib/
 
 Prompt: "What do you know about this project's API conventions?"
 
-| Step | Action | Expected | Actual | Pass? |
-|------|--------|----------|--------|-------|
-| E1 | Start new session | SessionStart injects prefs/guidelines | Agent listed 7 conventions from injection — "Based on the session preferences/guidelines provided" | PASS |
-| E2 | Correction from Session C persists | Memory 36 (structured logging) in new session | Agent included "All endpoints must include request logging via structured logger from src/lib/logger.ts" | PASS |
-| E3 | Agent aware without file reads | No aide_recall needed | Agent answered from injected context alone, didn't read any files | PASS |
+
+| Step | Action                             | Expected                                      | Actual                                                                                                   | Pass? |
+| ---- | ---------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----- |
+| E1   | Start new session                  | SessionStart injects prefs/guidelines         | Agent listed 7 conventions from injection — "Based on the session preferences/guidelines provided"       | PASS  |
+| E2   | Correction from Session C persists | Memory 36 (structured logging) in new session | Agent included "All endpoints must include request logging via structured logger from src/lib/logger.ts" | PASS  |
+| E3   | Agent aware without file reads     | No aide_recall needed                         | Agent answered from injected context alone, didn't read any files                                        | PASS  |
+
 
 ### Remember→Recall Loop: VALIDATED
+
 - Session C: user corrected → aide_remember stored memory 36 (structured logging, src/api/**)
 - Session E: new session → SessionStart injected memory 36 → agent referenced it
 - **Core product promise confirmed: correct once, remembered forever**
@@ -130,11 +152,13 @@ Prompt: "What do you know about this project's API conventions?"
 
 Prompt: "Read src/index.ts and explain it"
 
-| Step | Action | Expected | Actual | Pass? |
-|------|--------|----------|--------|-------|
-| F0.1 | aide-memory init | Creates .aide/, hooks, MCP, .ignore | All created correctly | PASS |
-| F0.3 | Read file | Silent (no hook output) | Silent — read proceeded with no blocking or nudge | PASS |
-| F0.7 | Stop hook | Fires (standard prompt) | Fired, agent said "Nothing worth persisting" | PASS |
+
+| Step | Action           | Expected                            | Actual                                            | Pass? |
+| ---- | ---------------- | ----------------------------------- | ------------------------------------------------- | ----- |
+| F0.1 | aide-memory init | Creates .aide/, hooks, MCP, .ignore | All created correctly                             | PASS  |
+| F0.3 | Read file        | Silent (no hook output)             | Silent — read proceeded with no blocking or nudge | PASS  |
+| F0.7 | Stop hook        | Fires (standard prompt)             | Fired, agent said "Nothing worth persisting"      | PASS  |
+
 
 First-time UX is clean — aide-memory is invisible until memories exist.
 
@@ -142,14 +166,17 @@ First-time UX is clean — aide-memory is invisible until memories exist.
 
 Prompt: "Read src/index.ts and explain it" (5 memories seeded, below threshold)
 
-| Step | Action | Expected | Actual | Pass? |
-|------|--------|----------|--------|-------|
-| F2 | Read file with scoped mems (<10 total) | Soft (not block) | Soft nudge delivered (debug log line 242: additionalContext). Agent proactively called aide_recall from the nudge. | PASS |
-| F2b | Agent acts on soft | aide_recall called | Debug log: ToolSearch → aide_recall at line 259, 307. Agent chose to recall — not forced. | PASS |
+
+| Step | Action                                 | Expected           | Actual                                                                                                             | Pass? |
+| ---- | -------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ | ----- |
+| F2   | Read file with scoped mems (<10 total) | Soft (not block)   | Soft nudge delivered (debug log line 242: additionalContext). Agent proactively called aide_recall from the nudge. | PASS  |
+| F2b  | Agent acts on soft                     | aide_recall called | Debug log: ToolSearch → aide_recall at line 259, 307. Agent chose to recall — not forced.                          | PASS  |
+
 
 | F4 | Grep with matching keyword (<10 total) | Search → soft | Hook fired soft (debug line 887). Agent acknowledged: "already in context from earlier." | PASS |
 
 ### Findings
+
 - Soft nudge (additionalContext) works for ALL three hook types: Read, Edit, Search
 - Agent sees soft nudges and makes informed decisions (recall, skip, or acknowledge)
 - Read soft: agent proactively recalled (didn't ignore)
@@ -160,30 +187,33 @@ Prompt: "Read src/index.ts and explain it" (5 memories seeded, below threshold)
 
 ## Dynamic Stop Hook (implemented mid-validation)
 
-| Change | Detail |
-|--------|--------|
-| Dynamic interval | Block every 3 turns (first 9), every 5 after. Soft on non-block turns. |
-| Correction flag clears after one chance | No infinite nagging on false positives |
-| Soft format | `decision: "approve"` + `systemMessage` (top-level fields, valid for all hooks) |
-| Data basis | 1 aide_remember per 9 prompts, 51% signal-to-noise with always-block |
-| Research | Anthropic: avg 4 prompts/session. ProAIDE: mid-task interruptions 62% dismissed. |
-| Bugs found/fixed | hookSpecificOutput invalid for Stop — confirmed architectural constraint, not a bug. Correction flag persisted forever on false positives. suppressOutput doesn't work for Stop. |
-| Non-block turns | Silent (hook runs, counts, checks flags, but outputs nothing). Agent awareness from rules file proactive saving instruction. |
-| Tested live | Block at turn 14 ✅ (correct schedule). Soft visible at turn 15 ✅ (before suppressOutput). Silent after fix. |
+
+| Change                                  | Detail                                                                                                                                                                           |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dynamic interval                        | Block every 3 turns (first 9), every 5 after. Soft on non-block turns.                                                                                                           |
+| Correction flag clears after one chance | No infinite nagging on false positives                                                                                                                                           |
+| Soft format                             | `decision: "approve"` + `systemMessage` (top-level fields, valid for all hooks)                                                                                                  |
+| Data basis                              | 1 aide_remember per 9 prompts, 51% signal-to-noise with always-block                                                                                                             |
+| Research                                | Anthropic: avg 4 prompts/session. ProAIDE: mid-task interruptions 62% dismissed.                                                                                                 |
+| Bugs found/fixed                        | hookSpecificOutput invalid for Stop — confirmed architectural constraint, not a bug. Correction flag persisted forever on false positives. suppressOutput doesn't work for Stop. |
+| Non-block turns                         | Silent (hook runs, counts, checks flags, but outputs nothing). Agent awareness from rules file proactive saving instruction.                                                     |
+| Tested live                             | Block at turn 14 ✅ (correct schedule). Soft visible at turn 15 ✅ (before suppressOutput). Silent after fix.                                                                      |
+
 
 ### Design Decisions
-17. **Stop hook uses dynamic interval (every 3 for first 9, every 5 after). Silent on non-block turns.** UX concern logged as P1.18.
-18. **Minimum scope depth = 2** — src/** too broad for blocking, src/api/** specific enough. Configurable later.
-19. **Session cleanup rules** — start/resume: don't touch. clear/compact: clear this session only.
-20. **Scope depth replaces parent-only check** — first iteration used parent-directory match (N=1). Replaced with minimum depth (≥2 segments) which is more general and directly answers "is this scope specific enough?"
-21. **23 configurable settings identified** — hooks, recall, injection, search, auto-update, embeddings. Documented in Phase 2 item 5 with project-type presets (monorepo, small, team, security-sensitive).
-22. **Validation docs consolidated** — deleted 2 stale runbooks (-2446 lines), extracted 5 missing sessions (J-N) into spec.
-23. **P1.18 UX exploration scope expanded** — includes hook usage pattern audit (are blocking/flag-file patterns correct practice?), config-to-Cursor mapping, and all UI label issues.
+
+1. **Stop hook uses dynamic interval (every 3 for first 9, every 5 after). Silent on non-block turns.** UX concern logged as P1.18.
+2. **Minimum scope depth = 2** — src/** too broad for blocking, src/api/** specific enough. Configurable later.
+3. **Session cleanup rules** — start/resume: don't touch. clear/compact: clear this session only.
+4. **Scope depth replaces parent-only check** — first iteration used parent-directory match (N=1). Replaced with minimum depth (≥2 segments) which is more general and directly answers "is this scope specific enough?"
+5. **23 configurable settings identified** — hooks, recall, injection, search, auto-update, embeddings. Documented in Phase 2 item 5 with project-type presets (monorepo, small, team, security-sensitive).
+6. **Validation docs consolidated** — deleted 2 stale runbooks (-2446 lines), extracted 5 missing sessions (J-N) into spec.
+7. **P1.18 UX exploration scope expanded** — includes hook usage pattern audit (are blocking/flag-file patterns correct practice?), config-to-Cursor mapping, and all UI label issues.
 
 ## Pivots and Observations
 
 1. **Search hook blocking → soft** — agent had memories from prior recall, blocking forced redundant aide_search calls
-2. **`.ignore` file added** — grep was returning raw memory JSON, bypassing structured access
+2. `**.ignore` file added** — grep was returning raw memory JSON, bypassing structured access
 3. **Claude Code UI labels** — soft hooks may show as "returned blocking error" in collapsed/expanded view. Debug log is source of truth. Added to P1.18.
 4. **Stop hook was every-turn, changed to dynamic interval** — confirmed intentional, but "error" label is confusing. P1.18.
 5. **Agent proactively recalled directory** — directory trigger (A4) didn't fire because agent recalled src/api/ on first call
@@ -201,21 +231,24 @@ This section documents everything built or fixed during the post-validation impl
 
 ### Hook Defaults Optimization (Original 9 Items)
 
-| # | Change | Commits |
-|---|--------|---------|
-| 1 | **Settings framework** -- `defaults.json` with `{value, public, pro}` metadata + `read-config.sh` shared config reader. All hooks now read settings via `get_setting()` instead of hardcoded values. | Part of batch commit |
-| 4 | **Stop hook 3->5->10** -- Three-phase dynamic interval. Phase 1 (turns 1-9): every 3. Phase 2 (10-29): every 5. Phase 3 (30+): every 10. Reads schedule from `hooks.stop.schedule` in defaults.json. | Part of batch commit |
-| 5 | **Correction detection tuning** -- Negation + directive required (not just negation). Negative filters added ("no I mean", "I don't think", etc.). 3-word minimum. Match at message start only. | Part of batch commit |
-| 6 | **PreCompact cleanup** -- Removed old two-phase logic, systemMessage output, decision:approve output. Now cleanup-only: clears current session's recalled-paths file, exit 0, no output. | `6af5001` |
-| 7 | **Injection per-layer** -- session-inject.js reads per-layer config (preferences: 15, technical: false, area_context: false, guidelines: "all", priorityAlwaysOverride: true). | Part of batch commit |
-| 8 | **All hooks wired to config** -- Every hook sources read-config.sh and uses get_setting() for all configurable values. | Part of batch commit |
-| 9 | **Resume clears tracking** -- SessionStart clears tracking on "resume" in addition to "clear" and "compact". Session-scoped via session_id. | `6b0423a`, `6f95443` |
+
+| #   | Change                                                                                                                                                                                               | Commits              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| 1   | **Settings framework** -- `defaults.json` with `{value, public, pro}` metadata + `read-config.sh` shared config reader. All hooks now read settings via `get_setting()` instead of hardcoded values. | Part of batch commit |
+| 4   | **Stop hook 3->5->10** -- Three-phase dynamic interval. Phase 1 (turns 1-9): every 3. Phase 2 (10-29): every 5. Phase 3 (30+): every 10. Reads schedule from `hooks.stop.schedule` in defaults.json. | Part of batch commit |
+| 5   | **Correction detection tuning** -- Negation + directive required (not just negation). Negative filters added ("no I mean", "I don't think", etc.). 3-word minimum. Match at message start only.      | Part of batch commit |
+| 6   | **PreCompact cleanup** -- Removed old two-phase logic, systemMessage output, decision:approve output. Now cleanup-only: clears current session's recalled-paths file, exit 0, no output.             | `6af5001`            |
+| 7   | **Injection per-layer** -- session-inject.js reads per-layer config (preferences: 15, technical: false, area_context: false, guidelines: "all", priorityAlwaysOverride: true).                       | Part of batch commit |
+| 8   | **All hooks wired to config** -- Every hook sources read-config.sh and uses get_setting() for all configurable values.                                                                               | Part of batch commit |
+| 9   | **Resume clears tracking** -- SessionStart clears tracking on "resume" in addition to "clear" and "compact". Session-scoped via session_id.                                                          | `6b0423a`, `6f95443` |
+
 
 ### ID-Based Blocking System (Replaced Original Items 2 and 3)
 
 The block-once-then-soft approach (item 2) and directory prefix match fix (item 3) were both replaced by a fundamentally better design: **ID-based blocking**.
 
 **How it works:**
+
 - Each recalled memory ID is tracked in a session-scoped file (`recalled-ids-{session_id}`)
 - On file read: hook queries scoped memory IDs for the path, compares against tracked IDs
 - All IDs tracked -> SILENT (no block, no output)
@@ -224,6 +257,7 @@ The block-once-then-soft approach (item 2) and directory prefix match fix (item 
 - After compact/clear/resume -> tracking reset, re-blocks on next read
 
 **Why this is better than block-once-then-soft:**
+
 - Block-once was file-granular -- after one block per file, agent never re-blocks even if new memories are added
 - ID-based is memory-granular -- tracks exactly which memories the agent has seen
 - Sibling files in same directory share scoped memories -- reading one file and recalling covers siblings too
@@ -231,29 +265,34 @@ The block-once-then-soft approach (item 2) and directory prefix match fix (item 
 
 ### Additional Improvements (New Items 10-15)
 
-| # | Change | Detail |
-|---|--------|--------|
-| 10 | **ID-based blocking** | Core system described above. Replaced items 2 + 3. |
-| 11 | **Focused scope matching** | Grandparent scopes (e.g., `src/**` when reading `src/api/routes.ts`) no longer trigger blocking. Only direct parent or exact scope matches trigger. Prevents broad memories from causing unnecessary blocks on deeply nested files. |
-| 12 | **aide_recall `ids` param** | Added `ids` parameter to aide_recall MCP tool. Agent can request exact memories by ID when the hook blocks with specific IDs. Returned memories are tracked as recalled. |
-| 13 | **PostToolUse response parsing fix** | `tool_response` is an array, not a string. The jq path was wrong, causing response parsing to silently fail. One-line fix that unblocked PostToolUse tracking of aide_recall/aide_search results. |
-| 14 | **Session-inject writes injected IDs** | session-inject.js writes IDs of injected memories into the recalled-IDs tracking file. Memories from SessionStart injection are pre-tracked, preventing redundant blocks. |
-| 15 | **Directory trigger removed** | Directory trigger (block on first file read in new directory) removed entirely. ID-based blocking makes it unnecessary. No more `dir\|path` tracking entries. |
+
+| #   | Change                                 | Detail                                                                                                                                                                                                                              |
+| --- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10  | **ID-based blocking**                  | Core system described above. Replaced items 2 + 3.                                                                                                                                                                                  |
+| 11  | **Focused scope matching**             | Grandparent scopes (e.g., `src/`** when reading `src/api/routes.ts`) no longer trigger blocking. Only direct parent or exact scope matches trigger. Prevents broad memories from causing unnecessary blocks on deeply nested files. |
+| 12  | **aide_recall `ids` param**            | Added `ids` parameter to aide_recall MCP tool. Agent can request exact memories by ID when the hook blocks with specific IDs. Returned memories are tracked as recalled.                                                            |
+| 13  | **PostToolUse response parsing fix**   | `tool_response` is an array, not a string. The jq path was wrong, causing response parsing to silently fail. One-line fix that unblocked PostToolUse tracking of aide_recall/aide_search results.                                   |
+| 14  | **Session-inject writes injected IDs** | session-inject.js writes IDs of injected memories into the recalled-IDs tracking file. Memories from SessionStart injection are pre-tracked, preventing redundant blocks.                                                           |
+| 15  | **Directory trigger removed**          | Directory trigger (block on first file read in new directory) removed entirely. ID-based blocking makes it unnecessary. No more `dir|path` tracking entries.                                                                        |
+
 
 ### Key Commits (feature/phase-1)
 
-| Hash | Description |
-|------|-------------|
-| `6af5001` | fix: PreCompact clears current session's recalled-paths file |
-| `6b0423a` | feat: session-scoped recall tracking via session_id + PreToolUse hooks |
-| `6f95443` | feat: session-scoped recall tracking via SessionStart hook |
+
+| Hash      | Description                                                                     |
+| --------- | ------------------------------------------------------------------------------- |
+| `6af5001` | fix: PreCompact clears current session's recalled-paths file                    |
+| `6b0423a` | feat: session-scoped recall tracking via session_id + PreToolUse hooks          |
+| `6f95443` | feat: session-scoped recall tracking via SessionStart hook                      |
 | `4686f7b` | feat: improved Read hook with layer counts, topics, and session-scoped blocking |
-| `e23592c` | feat: upgrade UserPromptSubmit and PreCompact hooks to blocking |
+| `e23592c` | feat: upgrade UserPromptSubmit and PreCompact hooks to blocking                 |
+
 
 ### Bugs Found and Fixed This Session
 
 1. **PostToolUse jq path wrong** -- `tool_response` is an array, was being read as a string. Caused silent failure of all PostToolUse response tracking (aide_recall IDs, aide_search results).
 2. **PreCompact didn't clear session tracking** -- After /compact, recalled-paths file for the current session wasn't cleared. Agent wouldn't re-block on files it had recalled before compaction.
-3. **Grandparent scopes triggered blocking** -- Reading `src/api/routes.ts` would trigger on memories scoped to `src/**`, causing blocks with broad/generic memories. Fixed with focused scope matching (direct parent only).
+3. **Grandparent scopes triggered blocking** -- Reading `src/api/routes.ts` would trigger on memories scoped to `src/`**, causing blocks with broad/generic memories. Fixed with focused scope matching (direct parent only).
 4. **Session-inject didn't track injected IDs** -- Memories injected at SessionStart weren't written to the tracking file, causing immediate re-blocks on files whose memories were already injected.
 5. **Directory trigger redundant with ID-based blocking** -- After implementing ID-based blocking, the directory trigger was redundant and sometimes conflicted. Removed entirely.
+

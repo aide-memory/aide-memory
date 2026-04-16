@@ -1365,6 +1365,11 @@ REMAINING (source of truth — all pending items with concrete next steps):
   - Injection per-layer: injection.preferences, injection.guidelines, injection.technical, injection.area_context settings control what gets injected at SessionStart.
   - Resume clears tracking: SessionStart clears THIS session's tracking on resume/compact/clear (agent loses context, must re-recall).
   - Correction detection tuning: negative filters, 3+ word minimum, match at message start only. Default `hooks.correction.minWords: 3` (in detect-correction.sh).
+  - `--force` merge: `aide-memory init --force` updates all config to current version while PRESERVING user's other settings (hooks, MCP, rules, dirs, .gitignore, post-checkout). Never overwrites user data.
+  - `--reset` flag: `aide-memory init --reset` resets .aide/config.json to factory defaults then runs --force. Does NOT delete memories.
+  - macOS symlink fix: recall-for-path.js resolves /tmp → /private/tmp via fs.realpathSync before path.relative(). Without this, scoped_count was always 0 for projects in /tmp/ (common for testing).
+  - Scope trailing slash normalization: scopeMatchesPath strips trailing slash from scopes (src/memory/ treated like src/memory/**).
+  - Proactive saving rule: rules template (.claude/rules/aide-memory.md) instructs agent to save key decisions proactively as conversations grow, not wait for Stop hook or compaction.
 
   **REPLACED (historical — superseded by ID-based blocking):**
   - ~~Read/Edit block-once-then-soft~~ → REPLACED by ID-based coverage checking. Block/soft/silent now determined by scoped_ids vs ids| tracking.

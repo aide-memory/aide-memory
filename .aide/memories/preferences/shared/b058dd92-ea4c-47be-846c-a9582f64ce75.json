@@ -1,0 +1,17 @@
+{
+  "uuid": "b058dd92-ea4c-47be-846c-a9582f64ce75",
+  "layer": "preferences",
+  "what": "User has multiple product ideas beyond aide-memory to evaluate: (1) Interview software, (2) Learning how to use AI tools (product), (3) Learning in general in advent of AI (separate product), (4) Context switching tool across multiple jobs/school/side projects with different tools per context (j1: cursor/codelassian/rovo dev, j2: cursor, school: gemini, side projects: claude, personal: claude/gemini/chatgpt), (5) Developer analytics/tracking. Key requirement: need originality and actual defensibility in whatever is chosen. These should be compared as market opportunities alongside the aide-memory pivots. User wants to prioritize across all options.",
+  "why": "User is expanding the scope beyond aide-memory to evaluate ALL potential product ideas holistically. The monetization exploration should compare aide-memory directions against entirely different product ideas to find the best opportunity overall.",
+  "scope": "docs/**",
+  "context_label": "all product ideas for comparison",
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T20:32:34.298Z",
+  "updated_at": "2026-04-16T20:32:34.298Z"
+}

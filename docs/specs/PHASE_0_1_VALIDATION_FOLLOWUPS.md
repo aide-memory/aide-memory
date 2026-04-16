@@ -135,6 +135,17 @@ The directory trigger (block on first file read in a new directory) was removed 
 - Config mapping to Cursor's equivalent system
 - Audit hook usage patterns (are blocking/flag patterns correct practice?)
 
+### Context Usage Detection — Investigate for Pre-Compaction Saves
+- Claude Code's `/context` command shows exact token usage (e.g., 848k/1m = 85%)
+- Hooks don't receive token count in input JSON — but the DATA exists somewhere
+- Investigate: can the MCP server or hooks access context usage programmatically?
+- Investigate: does the transcript_path file size correlate with token usage?
+- Investigate: can we parse Claude Code's internal state for token counts?
+- Goal: detect when context is 70-80% full → trigger proactive save prompt (block Stop hook, or inject warning)
+- If programmatic access isn't possible: file Claude Code feature request for token_used/context_remaining in hook input JSON
+- Related: GitHub issue #46695 (context_threshold setting for auto-compact)
+- This is the best remaining approach for pre-compaction saves since PreCompact can't force agent tool calls
+
 **Moved to PHASE_0_1_SPEC.md:**
 - Distribution Strategy + Binary → Explore section (prior to publishing new version / demoing)
 - PreCompact Feature Request → Phase 1 follow-ups

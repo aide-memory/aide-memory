@@ -59,18 +59,31 @@ Also want to factor in how pricing is done now, the landscape, people releasing 
 
 ## What I Need From You
 
-1. Read the full product vision document I'll paste (or I can summarize key sections if too long)
-2. Understand what we've built and what's been decided architecturally
-3. Help me figure out:
+1. Read the required docs (product vision, phase 0-1 spec, validation follow-ups) to understand what's been built and what's been decided
+2. Help me figure out:
    - Is this memory engine a PRODUCT or a FOUNDATION for something bigger?
    - If foundation — what's the actual product on top that people would pay for?
    - What's the clever monetization angle that isn't just "$10/month subscription"?
    - Should we pivot to serve non-developers too? (regular Claude users, knowledge workers, content creators)
    - Is there a cloud play that doesn't require VC-scale infrastructure?
    - What would make someone NEED to pay vs just wanting to?
-   - Given binary distribution (Bun compile) — what pro features are genuinely gatable?
+   - If binary distribution — what pro features are genuinely gatable?
 
-4. Be brutally honest. Don't tell me to "just ship and see." I need a business model before I invest more time.
+3. Also consider these ENTIRELY SEPARATE product ideas I'm evaluating. Compare market opportunity across ALL of them (aide-memory pivots + these) and help me prioritize:
+
+   **a. Interview software** — not flushed out yet, but a product in the interview/hiring space
+
+   **b. Learning how to use AI tools** — teaching people how to effectively use AI coding tools, prompting, workflows. Could be a course, platform, or tool.
+
+   **c. Learning in general in the advent of AI** — separate from (b). How education/learning itself changes with AI. Probably a different product.
+
+   **d. Context switching across jobs/school/projects** — I personally use different tools across: job 1 (Cursor, Codelassian, Rovo Dev), job 2 (Cursor), school (Gemini), side projects (Claude), personal (Claude, Gemini, ChatGPT). The context switching between these worlds is painful. Could this be a product?
+
+   **e. Developer analytics/tracking** — track stuff about devs, their workflows, productivity, tool usage.
+
+4. For ALL ideas (aide-memory pivots + the above): evaluate originality and actual defensibility. I need something that isn't easily replicated.
+
+5. Be brutally honest. Don't tell me to "just ship and see." I need clarity on which opportunity is worth investing time in. Compare all options objectively.
 
 ## Required Reading (in order)
 
