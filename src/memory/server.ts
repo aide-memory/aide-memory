@@ -30,6 +30,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'Retrieve context for an area of the codebase before planning or making changes. Returns contributor preferences, technical knowledge, area decisions, and project guidelines. Call this when starting work in a codebase area, before proposing plans, or when you may have lost earlier context.',
     {
       paths: z.array(z.string()).optional().describe('File or directory paths you are working in. Returns memories scoped to these areas plus project-wide context.'),
+      ids: z.array(z.number()).optional().describe('Specific memory IDs to retrieve (for gap-filling). When provided, returns exactly these memories — no path matching.'),
       query: z.string().optional().describe('Optional text to boost relevant results (e.g. "skeleton loading" or "authentication flow").'),
       layers: z.array(z.enum(LAYER_VALUES)).optional().describe('Filter to specific layers: preferences, technical, area_context, guidelines.'),
       contributor: z.string().optional().describe('Filter to a specific contributor.'),
@@ -38,6 +39,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     async (params) => {
       const result = recall(store, {
         paths: params.paths,
+        ids: params.ids ? params.ids.map(toNumber) : undefined,
         query: params.query,
         layers: params.layers as MemoryLayer[] | undefined,
         contributor: params.contributor,

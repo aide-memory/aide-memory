@@ -56,7 +56,18 @@ function logRecallEvent(
  * - Exact directory prefix: 'src/components/' matches 'src/components/Button.tsx'
  * - Parent scope inheritance: 'src/**' matches work in 'src/components/dashboard/'
  */
-export function scopeMatchesPath(scope: string | null, filePath: string): boolean {
+/**
+ * Check if a memory scope matches a file/directory path.
+ * @param scope - Memory scope (e.g., "src/api/**", "src/api/routes.ts", null)
+ * @param filePath - Query path (e.g., "src/api/routes.ts" or "src/api/")
+ * @param options.focused - If true, exclude grandparent scopes. Only match:
+ *   - Exact file scope
+ *   - Immediate parent directory scope
+ *   - Child scopes (for directory queries)
+ *   - Project-wide (null scope)
+ *   Excludes ancestor scopes above the immediate parent (e.g., src/** for src/api/routes.ts)
+ */
+export function scopeMatchesPath(scope: string | null, filePath: string, options?: { focused?: boolean }): boolean {
   if (!scope || scope === 'project') return true;
 
   const normalizedScope = scope.replace(/\\/g, '/');
@@ -72,18 +83,42 @@ export function scopeMatchesPath(scope: string | null, filePath: string): boolea
   if (!scopeBase) return true; // scope was just '**' or '*'
 
   // Check if the path starts with the scope base directory
-  if (normalizedPath.startsWith(scopeBase + '/') || normalizedPath === scopeBase) {
-    return true;
-  }
+  const isDescendant = normalizedPath.startsWith(scopeBase + '/') || normalizedPath === scopeBase;
 
   // Check parent scope: if scope is 'src/components/dashboard/**',
   // and we're querying 'src/components/', the scope is WITHIN the query path
-  // (i.e., the query is a parent of the scope)
-  if (scopeBase.startsWith(normalizedPath.replace(/\/$/, '') + '/')) {
-    return true;
+  // (i.e., the query is a parent of the scope — for directory queries)
+  const isChildScope = scopeBase.startsWith(normalizedPath.replace(/\/$/, '') + '/');
+
+  if (!isDescendant && !isChildScope) return false;
+
+  // Focused mode: exclude grandparent scopes
+  if (options?.focused && isDescendant) {
+    // Get the query path's parent directory
+    const queryParent = normalizedPath.includes('/')
+      ? normalizedPath.replace(/\/$/, '').split('/').slice(0, -1).join('/')
+      : '';
+
+    // For directory queries (path ends with /), the "parent" is the path itself
+    const isDirectoryQuery = filePath.endsWith('/');
+    const effectiveParent = isDirectoryQuery
+      ? normalizedPath.replace(/\/$/, '')
+      : queryParent;
+
+    // Scope must be at effectiveParent level or deeper (not above it)
+    // scopeBase depth must be >= effectiveParent depth
+    const scopeDepth = scopeBase.split('/').length;
+    const parentDepth = effectiveParent ? effectiveParent.split('/').length : 0;
+
+    // Allow scope at parent level or one level above (covers feature area scopes)
+    // e.g., src/components/** (depth 2) is valid for src/components/dashboard/Widget.tsx (parent depth 3)
+    // but src/** (depth 1) is too broad for the same file
+    if (scopeDepth < parentDepth - 1) {
+      return false; // grandparent+ scope — exclude
+    }
   }
 
-  return false;
+  return true;
 }
 
 /**
@@ -151,10 +186,21 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
     return p;
   });
 
+  // If specific IDs requested, return those directly (gap-filling)
+  if (query.ids && query.ids.length > 0) {
+    const results = query.ids.map(id => store.get(id)).filter(Boolean) as import('./types').Memory[];
+    const ids = results.map(m => m.id);
+    if (ids.length > 0) {
+      store.recordRecall(ids);
+    }
+    logRecallEvent(logDir ?? null, query, results, []);
+    return { memories: results, matched_scopes: [] };
+  }
+
   if (normalizedPaths && normalizedPaths.length > 0) {
     candidates = candidates.filter(m => {
       for (const p of normalizedPaths) {
-        if (scopeMatchesPath(m.scope, p)) {
+        if (scopeMatchesPath(m.scope, p, { focused: true })) {
           if (m.scope) matchedScopes.add(m.scope);
           return true;
         }

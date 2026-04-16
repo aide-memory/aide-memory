@@ -1,0 +1,22 @@
+{
+  "uuid": "d66edfeb-2577-44fb-b3c6-b34af38fde5e",
+  "layer": "area_context",
+  "what": "Scoped recall should be FOCUSED: aide_recall for src/api/routes.ts should return memories scoped to the file + immediate parent directory (src/api/**) + project-wide. NOT grandparent scopes (src/**) — those are too broad and already handled by SessionStart injection. Currently scopeMatchesPath matches ALL ancestor scopes which is noisy and wastes limit slots. Need depth/distance filter on recall results, not just on blocking decisions. Also: directory trigger may still add value because directory recall returns child subdirectory memories that file recalls miss.",
+  "why": "User pointed out: the point of scoped recall is to get context for THAT scope, not every ancestor. Getting src/** memories when recalling src/api/routes.ts is noise.",
+  "scope": "src/memory/recall.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "recall",
+    "scope",
+    "depth",
+    "design"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T18:30:25.381Z",
+  "updated_at": "2026-04-16T18:30:25.381Z"
+}

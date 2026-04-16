@@ -1,0 +1,22 @@
+{
+  "uuid": "e0e7c55b-bf2f-44c3-a48d-656ebee22572",
+  "layer": "area_context",
+  "what": "Final blocking approach aligned: purely ID-coverage based. Block if unrecalled IDs + new file. Soft if unrecalled IDs + encountered before. Silent if all IDs covered or no memories. Directory trigger likely redundant with ID-based checking — individual file recalls already cover directory-scoped memories via scopeMatchesPath. PostToolUse DOES fire for MCP tools — fix was one jq path change (tool_response is array of {type,text}). Session-inject writes injected IDs to tracking at SessionStart so injected memories don't cause redundant blocking.",
+  "why": "Aligned on the correct blocking approach after extensive discussion. ID coverage is the single source of truth for blocking decisions.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "blocking",
+    "ids",
+    "recall",
+    "approach"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T17:57:01.225Z",
+  "updated_at": "2026-04-16T17:57:01.225Z"
+}

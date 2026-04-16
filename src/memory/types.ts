@@ -70,6 +70,7 @@ export interface CreateMemory {
 
 export interface RecallQuery {
   paths?: string[];
+  ids?: number[];
   query?: string;
   layers?: MemoryLayer[];
   contributor?: string;

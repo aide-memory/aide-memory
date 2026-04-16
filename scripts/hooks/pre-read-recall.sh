@@ -1,15 +1,11 @@
 #!/bin/bash
-# PreToolUse hook — nudge agent that memories exist for a file path.
-# Fires before Read tool. Calls recall-for-path.js to get layer counts,
-# dir/file split, topic keywords, and per-layer topics for the file being read.
+# PreToolUse hook — ID-based blocking for file reads.
+# Checks if the file's scoped memory IDs are already in the ids| tracking.
 #
-# Blocking if aide_recall has NOT been called for this path in this session.
-# Soft nudge if already recalled (tracked via session-scoped recalled-paths file).
-# Also triggers directory-level recall when >=2 files from same parent dir are read.
-
-# Max times a file can be blocked before switching to soft nudge
-# Read from config (defaults to 1)
-# MAX_BLOCKS read after SCRIPT_DIR is set and read-config.sh is sourced (below)
+# BLOCK: new file + unrecalled IDs → path-based recall message
+# BLOCK: new file + SOME IDs covered → ID-based recall message (missing only)
+# SOFT: encountered file + unrecalled IDs → ID-based recall message
+# SILENT: all scoped IDs covered OR no scoped memories
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
@@ -17,227 +13,140 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 PROJECT_ROOT="${CWD:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
-# No file path = nothing to recall
+# No file path = nothing to check
 if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-# Skip non-existent files — no useful recall for files that dont exist
+# Skip non-existent files
 if [ ! -f "$FILE_PATH" ] && [ ! -d "$FILE_PATH" ]; then
   exit 0
 fi
 
-# Detect reads of .aide/memories/ files — log analytics nudge
+# Skip direct reads of .aide/memories/ files
 if echo "$FILE_PATH" | grep -q '\.aide/memories/'; then
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"memory_file_direct_read: You are reading a raw memory file. Use aide_recall for structured context."}}' | jq .
   exit 0
 fi
 
-# Get memory info via direct store access
+# Get memory info for this file
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/read-config.sh"
-MAX_BLOCKS=$(get_setting "hooks.read.maxBlocks")
-MAX_BLOCKS=${MAX_BLOCKS:-1}
 RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
 
-# No result or zero count = nothing to recall
+# No result or zero count = no memories for this path → SILENT
 if [ -z "$RESULT" ] || [ "$RESULT" = "0" ]; then
   exit 0
 fi
 
-# Parse JSON result
 COUNT=$(echo "$RESULT" | jq -r '.count // 0' 2>/dev/null)
 if [ "$COUNT" = "0" ] || [ -z "$COUNT" ]; then
   exit 0
 fi
 
-# Parse dir/file split
-FILE_COUNT=$(echo "$RESULT" | jq -r '.file_count // 0' 2>/dev/null)
-DIR_COUNT=$(echo "$RESULT" | jq -r '.dir_count // 0' 2>/dev/null)
-SUGGESTED_PATH=$(echo "$RESULT" | jq -r '.suggested_path // empty' 2>/dev/null)
-
-# Build layer breakdown string
-LAYERS=$(echo "$RESULT" | jq -r '[.layers | to_entries[] | "\(.value) \(.key)"] | join(", ")' 2>/dev/null)
-
-# Build topics string
-TOPICS=$(echo "$RESULT" | jq -r '.topics | join(", ")' 2>/dev/null)
-
-# Parse scoped vs project-wide counts for block/soft decision
 SCOPED_COUNT=$(echo "$RESULT" | jq -r '.scoped_count // 0' 2>/dev/null)
-TOTAL_MEMORIES=$(echo "$RESULT" | jq -r '.total_memories // 0' 2>/dev/null)
 
-# Compute parent directory display name from suggested_path or file path
-PARENT_DIR=""
-if [ -n "$SUGGESTED_PATH" ] && [ "$SUGGESTED_PATH" != "null" ]; then
-  PARENT_DIR="$SUGGESTED_PATH"
-else
-  PARENT_DIR=$(dirname "$FILE_PATH")/
+# No scoped memories → SILENT (project-wide only, handled by SessionStart)
+if [ "$SCOPED_COUNT" = "0" ] || [ -z "$SCOPED_COUNT" ]; then
+  exit 0
 fi
 
-# Format the nudge message with dir/file split
-NUDGE="${COUNT} memories (${FILE_COUNT} file-specific, ${DIR_COUNT} from ${PARENT_DIR}) (${LAYERS})"
-if [ -n "$TOPICS" ] && [ "$TOPICS" != "null" ] && [ "$TOPICS" != "" ]; then
-  NUDGE="${NUDGE} — topics: ${TOPICS}"
+# Get this file's scoped IDs
+SCOPED_IDS=$(echo "$RESULT" | jq -r '.scoped_ids // [] | map(tostring) | .[]' 2>/dev/null)
+if [ -z "$SCOPED_IDS" ]; then
+  exit 0
 fi
-NUDGE="${NUDGE}. Call aide_recall if results not already in this conversation."
 
-# Check session-scoped tracking file
+# Session tracking
 SID="${SESSION_ID:-default}"
 RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt"
 
-# Check if path (or a parent directory) was already recalled in this session
-# Handles both file|path and dir|path entry formats
-ALREADY_RECALLED=false
+# Get recalled IDs from tracking
+RECALLED_IDS=""
 if [ -f "$RECALLED_FILE" ]; then
-  while IFS= read -r recalled_entry; do
-    # Extract path from entry (strip file| or dir| prefix if present)
-    recalled_path="${recalled_entry}"
-    if [[ "$recalled_entry" == file\|* ]]; then
-      recalled_path="${recalled_entry#file|}"
-    elif [[ "$recalled_entry" == dir\|* ]]; then
-      recalled_path="${recalled_entry#dir|}"
-    elif [[ "$recalled_entry" == ids\|* ]]; then
-      continue  # skip ID tracking lines
-    fi
-
-    # Exact file match
-    if [ "$recalled_path" = "$FILE_PATH" ]; then
-      ALREADY_RECALLED=true
-      break
-    fi
-    # Directory prefix match — file is under a recalled directory
-    if [[ "$recalled_entry" == dir\|* ]] && [[ "$FILE_PATH" == "$recalled_path"* ]]; then
-      # Check if ids| tracking exists — if so, use precise ID check
-      # If not, fall back to assuming directory recall covers the file
-      IDS_LINE=$(grep '^ids|' "$RECALLED_FILE" 2>/dev/null | tail -1)
-      if [ -n "$IDS_LINE" ]; then
-        # IDs available — check if THIS file's scoped memories are all covered
-        RECALLED_IDS="${IDS_LINE#ids|}"
-        FILE_SCOPED_IDS=$(echo "$RESULT" | jq -r '.scoped_ids // [] | map(tostring) | .[]' 2>/dev/null)
-        if [ -n "$FILE_SCOPED_IDS" ]; then
-          ALL_COVERED=true
-          for sid in $FILE_SCOPED_IDS; do
-            if ! echo ",$RECALLED_IDS," | grep -qF ",$sid,"; then
-              ALL_COVERED=false
-              break
-            fi
-          done
-          if [ "$ALL_COVERED" = "true" ]; then
-            ALREADY_RECALLED=true
-            break
-          fi
-          # Not all covered — don't set ALREADY_RECALLED, will block or soft
-        else
-          # No scoped IDs for this file — directory recall is enough
-          ALREADY_RECALLED=true
-          break
-        fi
-      else
-        # No ids| tracking yet — trust directory prefix match
-        ALREADY_RECALLED=true
-        break
-      fi
-    fi
-  done < "$RECALLED_FILE"
-
-fi
-
-# Directory trigger: only if current file is NOT already recalled
-if [ "$ALREADY_RECALLED" = "false" ]; then
-# If >=2 files from same parent dir have been read,
-# and dir|{parent} is NOT in tracking, suggest a directory-level recall
-if [ -f "$RECALLED_FILE" ] && [ -n "$PARENT_DIR" ]; then
-  # Get absolute parent dir for matching
-  ABS_PARENT=$(dirname "$FILE_PATH")
-  # Count distinct file|path entries from the same parent directory
-  SIBLING_COUNT=0
-  DIR_RECALLED=false
-  while IFS= read -r recalled_entry; do
-    if [[ "$recalled_entry" == dir\|"$ABS_PARENT"* ]]; then
-      DIR_RECALLED=true
-      break
-    fi
-    if [[ "$recalled_entry" == file\|"$ABS_PARENT/"* ]]; then
-      SIBLING_COUNT=$((SIBLING_COUNT + 1))
-    fi
-    # Also handle legacy format (no prefix) for backward compat
-    if [[ "$recalled_entry" != file\|* ]] && [[ "$recalled_entry" != dir\|* ]] && [[ "$recalled_entry" != ids\|* ]]; then
-      if [[ "$recalled_entry" == "$ABS_PARENT/"* ]]; then
-        SIBLING_COUNT=$((SIBLING_COUNT + 1))
-      fi
-    fi
-  done < "$RECALLED_FILE"
-
-  if [ "$DIR_RECALLED" = "false" ] && [ "$SIBLING_COUNT" -ge 1 ]; then
-    DIR_NUDGE="You're reading multiple files in ${PARENT_DIR}. Call aide_recall({paths: ['${PARENT_DIR}']}) for broader context."
-    echo "$DIR_NUDGE" | jq -Rs '{
-      decision: "block",
-      reason: .
-    }'
-    exit 0
+  IDS_LINE=$(grep '^ids|' "$RECALLED_FILE" 2>/dev/null | tail -1)
+  if [ -n "$IDS_LINE" ]; then
+    RECALLED_IDS="${IDS_LINE#ids|}"
   fi
 fi
+
+# Check ID coverage
+MISSING_IDS=""
+COVERED_COUNT=0
+TOTAL_SCOPED=0
+for sid in $SCOPED_IDS; do
+  TOTAL_SCOPED=$((TOTAL_SCOPED + 1))
+  if [ -n "$RECALLED_IDS" ] && echo ",$RECALLED_IDS," | grep -qF ",$sid,"; then
+    COVERED_COUNT=$((COVERED_COUNT + 1))
+  else
+    if [ -n "$MISSING_IDS" ]; then
+      MISSING_IDS="$MISSING_IDS,$sid"
+    else
+      MISSING_IDS="$sid"
+    fi
+  fi
+done
+
+# ALL covered → SILENT
+if [ "$COVERED_COUNT" -eq "$TOTAL_SCOPED" ]; then
+  exit 0
 fi
 
-if [ "$ALREADY_RECALLED" = "true" ]; then
-  # Already recalled in this session — soft nudge only
+# Check if file was encountered before (file| in tracking)
+ENCOUNTERED=false
+if [ -f "$RECALLED_FILE" ]; then
+  if grep -qF "file|${FILE_PATH}" "$RECALLED_FILE" 2>/dev/null; then
+    ENCOUNTERED=true
+  fi
+fi
+
+# Build nudge message with file path context
+MISSING_COUNT=$((TOTAL_SCOPED - COVERED_COUNT))
+SOFTENING_THRESHOLD=$(get_setting "memories.softening.threshold")
+SOFTENING_THRESHOLD=${SOFTENING_THRESHOLD:-10}
+TOTAL_MEMORIES=$(echo "$RESULT" | jq -r '.total_memories // 0' 2>/dev/null)
+
+# New project softening: < threshold total mems → always soft, never block
+FORCE_SOFT=false
+if [ "$TOTAL_MEMORIES" -lt "$SOFTENING_THRESHOLD" ] 2>/dev/null; then
+  FORCE_SOFT=true
+fi
+
+if [ "$COVERED_COUNT" -eq 0 ]; then
+  # NONE covered → path-based recall message
+  LAYERS=$(echo "$RESULT" | jq -r '[.layers | to_entries[] | "\(.value) \(.key)"] | join(", ")' 2>/dev/null)
+  TOPICS=$(echo "$RESULT" | jq -r '.topics | join(", ")' 2>/dev/null)
+  NUDGE="${SCOPED_COUNT} memories for ${FILE_PATH}. Call aide_recall({paths: ['${FILE_PATH}']})."
+  if [ -n "$TOPICS" ] && [ "$TOPICS" != "null" ] && [ "$TOPICS" != "" ]; then
+    NUDGE="${SCOPED_COUNT} memories for ${FILE_PATH} (${LAYERS}) — topics: ${TOPICS}. Call aide_recall({paths: ['${FILE_PATH}']})."
+  fi
+else
+  # SOME covered → ID-based recall message (missing only)
+  NUDGE="${MISSING_COUNT} memories for ${FILE_PATH} not yet recalled. Call aide_recall({ids: [${MISSING_IDS}]})."
+fi
+
+# Determine block vs soft
+if [ "$FORCE_SOFT" = "true" ]; then
+  # New project → soft
   echo "$NUDGE" | jq -Rs '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       additionalContext: .
     }
   }'
-  exit 0
-fi
-
-# Not yet recalled — decide block vs soft based on scoped memories + project size
-# Block only if: scoped memories exist (file/dir-specific) AND total memories >= threshold
-SOFTENING_THRESHOLD=$(get_setting "memories.softening.threshold")
-if [ "$SCOPED_COUNT" -gt 0 ] 2>/dev/null && [ "$TOTAL_MEMORIES" -ge "${SOFTENING_THRESHOLD:-10}" ] 2>/dev/null; then
-  # Check block count for this file — block-once-then-soft
-  BLOCK_COUNT=0
-  if [ -f "$RECALLED_FILE" ]; then
-    while IFS= read -r entry; do
-      if [[ "$entry" == "block-count|${FILE_PATH}|"* ]]; then
-        BLOCK_COUNT="${entry##*|}"
-        break
-      fi
-    done < "$RECALLED_FILE"
-  fi
-
-  if [ "$BLOCK_COUNT" -ge "$MAX_BLOCKS" ]; then
-    # Already blocked enough times — switch to soft with remaining count
-    SOFT_MSG="${SCOPED_COUNT} more scoped memories for this file haven't been recalled yet. Call aide_recall if needed."
-    echo "$SOFT_MSG" | jq -Rs '{
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        additionalContext: .
-      }
-    }'
-  else
-    # First block — write/increment block count entry
-    NEW_BLOCK_COUNT=$((BLOCK_COUNT + 1))
-    mkdir -p "$(dirname "$RECALLED_FILE")" 2>/dev/null
-    # Remove old block-count entry if exists, then write new one
-    if [ -f "$RECALLED_FILE" ]; then
-      grep -Fv "block-count|${FILE_PATH}|" "$RECALLED_FILE" > "${RECALLED_FILE}.tmp" 2>/dev/null
-      mv "${RECALLED_FILE}.tmp" "$RECALLED_FILE"
-    fi
-    echo "block-count|${FILE_PATH}|${NEW_BLOCK_COUNT}" >> "$RECALLED_FILE"
-
-    # Scoped memories + mature project → block
-    echo "$NUDGE" | jq -Rs '{
-      decision: "block",
-      reason: .
-    }'
-  fi
-else
-  # Project-wide only OR new project (<10 mems) → soft nudge
+elif [ "$ENCOUNTERED" = "true" ]; then
+  # Encountered + missing IDs → SOFT
   echo "$NUDGE" | jq -Rs '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       additionalContext: .
     }
+  }'
+else
+  # New + missing IDs → BLOCK
+  echo "$NUDGE" | jq -Rs '{
+    decision: "block",
+    reason: .
   }'
 fi
 

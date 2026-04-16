@@ -36,7 +36,7 @@ if [ -d "$CACHE_DIR" ]; then
 fi
 
 # Inject preferences + guidelines as session context (all sources)
-INJECTED=$(node "$SCRIPT_DIR/session-inject.js" "$PROJECT_ROOT" 2>/dev/null)
+INJECTED=$(node "$SCRIPT_DIR/session-inject.js" "$PROJECT_ROOT" "$SID" 2>/dev/null)
 if [ -n "$INJECTED" ]; then
   echo "$INJECTED"
 fi

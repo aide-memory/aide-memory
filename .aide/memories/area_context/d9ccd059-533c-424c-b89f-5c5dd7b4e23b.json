@@ -1,0 +1,22 @@
+{
+  "uuid": "d9ccd059-533c-424c-b89f-5c5dd7b4e23b",
+  "layer": "area_context",
+  "what": "Full recall/blocking flow aligned: (1) ID-based blocking — scoped_ids checked against ids| tracking. (2) Focused recall scope — no grandparent scopes, only immediate parent + same level + deeper. (3) No directory trigger — removed, directory context flows organically through file recalls. (4) SessionStart writes injected IDs to ids|. (5) aide_recall gains ids param for gap-filling. (6) Three states: BLOCK (new + missing IDs, path-based), SOFT (missing IDs, ID-based), SILENT (all covered). (7) Scope matching fixed: grandparent scopes excluded from recall results. (8) PostToolUse works — response parsing was wrong, fixed. (9) block-once-then-soft and block-count tracking removed — replaced by ID coverage. (10) Open question: new file with SOME IDs covered from sibling recall — BLOCK or SOFT?",
+  "why": "Complete flow debrief aligned with user. Replacing path-based blocking with ID-based. Major simplification of hook logic.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "blocking",
+    "recall",
+    "flow",
+    "aligned"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T19:11:08.748Z",
+  "updated_at": "2026-04-16T19:11:08.748Z"
+}

@@ -1,0 +1,21 @@
+{
+  "uuid": "eac119db-d7ff-43b8-9e99-1cf150728f08",
+  "layer": "preferences",
+  "what": "CRITICAL: When something doesn't work, DEBUG FIRST before abandoning the approach. Add logging, check the actual data, trace the execution. Don't assume a feature \"doesn't work\" — investigate WHY. In this session: assumed PostToolUse doesn't fire for MCP tools, went through 5 different approaches, removed working code, wasted hours. The actual fix was one jq path change (tool_response is an array, not a string). Two minutes of debug logging would have found it immediately. NEVER abandon an approach without first adding debug logging and checking the actual input/output.",
+  "why": "User called out pattern of abandoning approaches without debugging. Cost: hours of wasted work, 5 rewrites of the same code, broken functionality. Fix: debug logging first, always.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "process",
+    "debugging",
+    "critical"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T16:56:42.789Z",
+  "updated_at": "2026-04-16T16:56:42.789Z"
+}

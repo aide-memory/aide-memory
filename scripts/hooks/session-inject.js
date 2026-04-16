@@ -150,6 +150,21 @@ try {
     output = output.slice(0, MAX_CHARS) + '\n...truncated';
   }
 
+  // Write injected memory IDs to tracking so they don't cause redundant blocking
+  const sessionId = process.argv[3] || 'default';
+  const allInjectedIds = [
+    ...deduped.preferences, ...deduped.technical, ...deduped.area_context,
+    ...deduped.guidelines, ...deduped.always
+  ].map(m => m.id).join(',');
+  if (allInjectedIds) {
+    const cacheDir = path.join(projectRoot, '.aide', 'cache');
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.appendFileSync(
+      path.join(cacheDir, `recalled-paths-${sessionId}.txt`),
+      `ids|${allInjectedIds}\n`
+    );
+  }
+
   process.stdout.write(output);
 } catch (err) {
   // Silently exit — don't break the agent if DB doesn't exist or build is stale
