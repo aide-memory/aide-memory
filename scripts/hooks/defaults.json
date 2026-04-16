@@ -1,0 +1,20 @@
+{
+  "hooks.read.maxBlocks": { "value": 1, "public": false, "pro": false },
+  "hooks.edit.maxBlocks": { "value": 1, "public": false, "pro": false },
+  "hooks.directoryTrigger.maxBlocks": { "value": 1, "public": false, "pro": false },
+  "hooks.stop.schedule": { "value": [{"until":9,"every":3},{"until":29,"every":5},{"every":10}], "public": false, "pro": false },
+  "hooks.search.mode": { "value": "soft", "public": false, "pro": false },
+  "hooks.correction.enabled": { "value": true, "public": false, "pro": false },
+  "hooks.precompact.mode": { "value": "cleanup", "public": false, "pro": false },
+  "recall.minScopeDepth": { "value": 2, "public": false, "pro": false },
+  "recall.limit": { "value": 20, "public": false, "pro": false },
+  "recall.ensureLayerDiversity": { "value": true, "public": false, "pro": false },
+  "recall.layerDiversityMinLimit": { "value": 5, "public": false, "pro": false },
+  "injection.preferences": { "value": 15, "public": false, "pro": false },
+  "injection.technical": { "value": false, "public": false, "pro": false },
+  "injection.area_context": { "value": false, "public": false, "pro": false },
+  "injection.guidelines": { "value": "all", "public": false, "pro": false },
+  "injection.priorityAlwaysOverride": { "value": true, "public": false, "pro": false },
+  "memories.hideFromGrep": { "value": true, "public": false, "pro": false },
+  "memories.softening.threshold": { "value": 10, "public": false, "pro": false }
+}

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stop hook — dynamic interval: block every 3 turns for first 9, every 5 after.
+# Stop hook — dynamic interval: 3→5→10 (every 3 for turns 1-9, every 5 for 10-29, every 10 for 30+).
 # Soft nudge on non-block turns (agent always sees reminder).
 # Correction-pending flag always blocks regardless of interval.
 #
@@ -19,6 +19,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+source "$SCRIPT_DIR/read-config.sh"
 SID="${SESSION_ID:-default}"
 CACHE_DIR="$PROJECT_ROOT/.aide/cache"
 
@@ -49,18 +50,48 @@ HOOK_OUTPUT
   exit 0
 fi
 
-# Dynamic interval: block every 3 for first 9 turns, every 5 after
+# Dynamic interval from config schedule
+# Schedule format: [{"until":9,"every":3},{"until":29,"every":5},{"every":10}]
+SCHEDULE=$(get_setting_json "hooks.stop.schedule")
 SHOULD_BLOCK=false
-if [ "$STOP_COUNT" -le 9 ]; then
-  # First 9 turns: block every 3
-  if [ $((STOP_COUNT % 3)) -eq 0 ]; then
+
+# Parse schedule phases from JSON array
+PHASE_COUNT=$(echo "$SCHEDULE" | jq 'length' 2>/dev/null)
+if [ -z "$PHASE_COUNT" ] || [ "$PHASE_COUNT" = "0" ]; then
+  # Fallback: block every 5 if schedule is missing
+  if [ $((STOP_COUNT % 5)) -eq 0 ]; then
     SHOULD_BLOCK=true
   fi
 else
-  # After 9 turns: block every 5
-  if [ $(( (STOP_COUNT - 9) % 5 )) -eq 0 ]; then
-    SHOULD_BLOCK=true
-  fi
+  PREV_UNTIL=0
+  MATCHED=false
+  for i in $(seq 0 $((PHASE_COUNT - 1))); do
+    PHASE_UNTIL=$(echo "$SCHEDULE" | jq -r ".[$i].until // 0" 2>/dev/null)
+    PHASE_EVERY=$(echo "$SCHEDULE" | jq -r ".[$i].every // 5" 2>/dev/null)
+
+    if [ "$PHASE_UNTIL" = "0" ] || [ "$PHASE_UNTIL" = "null" ]; then
+      # Last phase (no until) — applies to all remaining turns
+      if [ "$MATCHED" = "false" ]; then
+        OFFSET=$((STOP_COUNT - PREV_UNTIL))
+        if [ $((OFFSET % PHASE_EVERY)) -eq 0 ]; then
+          SHOULD_BLOCK=true
+        fi
+        MATCHED=true
+      fi
+    elif [ "$STOP_COUNT" -le "$PHASE_UNTIL" ] && [ "$MATCHED" = "false" ]; then
+      # This phase applies
+      OFFSET=$((STOP_COUNT - PREV_UNTIL))
+      if [ $((OFFSET % PHASE_EVERY)) -eq 0 ]; then
+        SHOULD_BLOCK=true
+      fi
+      MATCHED=true
+    fi
+
+    # Track previous until for offset calculation
+    if [ "$PHASE_UNTIL" != "0" ] && [ "$PHASE_UNTIL" != "null" ]; then
+      PREV_UNTIL=$PHASE_UNTIL
+    fi
+  done
 fi
 
 PROMPT="Any decisions, technical constraints, preferences, or guidelines worth persisting? Store in the right place — aide_remember for cross-session context, relevant project docs for plans and decisions. If nothing, stop."

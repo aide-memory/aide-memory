@@ -22,10 +22,29 @@ if [ -z "$USER_MESSAGE" ]; then
   exit 0
 fi
 
+# Minimum word count — single/two-word messages aren't corrections
+WORD_COUNT=$(echo "$USER_MESSAGE" | wc -w | tr -d ' ')
+if [ "$WORD_COUNT" -lt 3 ]; then
+  exit 0
+fi
+
+# Skip known false positive phrases (conversational, not corrective)
+if echo "$USER_MESSAGE" | grep -qiE "^(no (I mean|but|actually I|I think|not sure)|I don.t (think|know|get|understand)|what I mean)"; then
+  exit 0
+fi
+
 # Setup for flag file
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+source "$SCRIPT_DIR/read-config.sh"
+
+# Check if correction detection is enabled
+CORRECTION_ENABLED=$(get_setting "hooks.correction.enabled")
+if [ "$CORRECTION_ENABLED" = "false" ]; then
+  exit 0
+fi
+
 CACHE_DIR="$PROJECT_ROOT/.aide/cache"
 SID="${SESSION_ID:-default}"
 FLAG_FILE="$CACHE_DIR/correction-pending-${SID}.txt"

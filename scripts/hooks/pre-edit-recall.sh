@@ -6,6 +6,11 @@
 # Blocking if aide_recall has NOT been called for this path in this session.
 # Soft nudge if already recalled (tracked via session-scoped recalled-paths file).
 
+# Max times a file can be blocked before switching to soft nudge
+# Read from config (defaults to 1)
+MAX_BLOCKS=$(get_setting "hooks.edit.maxBlocks")
+MAX_BLOCKS=${MAX_BLOCKS:-1}
+
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
@@ -19,6 +24,7 @@ fi
 
 # Set up paths
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/read-config.sh"
 SID="${SESSION_ID:-default}"
 RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt"
 
@@ -40,15 +46,21 @@ if [ -f "$RECALLED_FILE" ]; then
       continue  # skip ID tracking lines
     fi
 
-    # Exact file match
-    if [ "$recalled_path" = "$FILE_PATH" ]; then
-      ALREADY_RECALLED=true
-      break
-    fi
-    # Directory prefix match (recalled src/auth/ covers src/auth/middleware.ts)
-    if [[ "$FILE_PATH" == "$recalled_path"* ]]; then
-      ALREADY_RECALLED=true
-      break
+    # file| entries: exact match only
+    if [[ "$recalled_entry" == file\|* ]]; then
+      if [ "$recalled_path" = "$FILE_PATH" ]; then
+        ALREADY_RECALLED=true
+        break
+      fi
+    elif [[ "$recalled_entry" == dir\|* ]]; then
+      # dir| entries: skip — handled by directory trigger logic (read hook only)
+      continue
+    else
+      # Legacy format (no prefix): exact match only
+      if [ "$recalled_path" = "$FILE_PATH" ]; then
+        ALREADY_RECALLED=true
+        break
+      fi
     fi
   done < "$RECALLED_FILE"
 fi
@@ -89,12 +101,45 @@ NUDGE="${NUDGE}. Call aide_recall({paths: ['${FILE_PATH}']}) before editing."
 SCOPED_COUNT=$(echo "$RESULT" | jq -r '.scoped_count // 0' 2>/dev/null)
 TOTAL_MEMORIES=$(echo "$RESULT" | jq -r '.total_memories // 0' 2>/dev/null)
 
-# Block only if: scoped memories exist AND total memories >= 10
-if [ "$SCOPED_COUNT" -gt 0 ] 2>/dev/null && [ "$TOTAL_MEMORIES" -ge 10 ] 2>/dev/null; then
-  echo "$NUDGE" | jq -Rs '{
-    decision: "block",
-    reason: .
-  }'
+# Block only if: scoped memories exist AND total memories >= threshold
+SOFTENING_THRESHOLD=$(get_setting "memories.softening.threshold")
+if [ "$SCOPED_COUNT" -gt 0 ] 2>/dev/null && [ "$TOTAL_MEMORIES" -ge "${SOFTENING_THRESHOLD:-10}" ] 2>/dev/null; then
+  # Check block count for this file — block-once-then-soft
+  BLOCK_COUNT=0
+  if [ -f "$RECALLED_FILE" ]; then
+    while IFS= read -r entry; do
+      if [[ "$entry" == "block-count|${FILE_PATH}|"* ]]; then
+        BLOCK_COUNT="${entry##*|}"
+        break
+      fi
+    done < "$RECALLED_FILE"
+  fi
+
+  if [ "$BLOCK_COUNT" -ge "$MAX_BLOCKS" ]; then
+    # Already blocked enough times — switch to soft with remaining count
+    SOFT_MSG="${SCOPED_COUNT} more scoped memories for this file haven't been recalled yet. Call aide_recall if needed."
+    echo "$SOFT_MSG" | jq -Rs '{
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        additionalContext: .
+      }
+    }'
+  else
+    # First block — write/increment block count entry
+    NEW_BLOCK_COUNT=$((BLOCK_COUNT + 1))
+    mkdir -p "$(dirname "$RECALLED_FILE")" 2>/dev/null
+    # Remove old block-count entry if exists, then write new one
+    if [ -f "$RECALLED_FILE" ]; then
+      grep -Fv "block-count|${FILE_PATH}|" "$RECALLED_FILE" > "${RECALLED_FILE}.tmp" 2>/dev/null
+      mv "${RECALLED_FILE}.tmp" "$RECALLED_FILE"
+    fi
+    echo "block-count|${FILE_PATH}|${NEW_BLOCK_COUNT}" >> "$RECALLED_FILE"
+
+    echo "$NUDGE" | jq -Rs '{
+      decision: "block",
+      reason: .
+    }'
+  fi
 else
   echo "$NUDGE" | jq -Rs '{
     hookSpecificOutput: {

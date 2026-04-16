@@ -1,0 +1,22 @@
+{
+  "uuid": "eeed1b82-73b9-4435-b5d3-38dde71dffaa",
+  "layer": "technical",
+  "what": "Resume-with-summary gap: Claude Code uses source:\"resume\" for BOTH full resume and resume-with-summary. Can't distinguish. Resume-with-summary loses context like compact but tracking isn't cleared. Fix: clear tracking on ALL resumes (safe default). Extra re-blocking on full resume is minor cost. Added as implementation item 9. Feature request for source:\"resume_summary\" distinction added to P1.19 item 4.",
+  "why": "User identified gap: resume-with-summary loses context but tracking persists, so hooks don't re-block and agent misses context.",
+  "scope": "scripts/hooks/session-start-clear.sh",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "resume",
+    "tracking",
+    "sessionstart",
+    "gap"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-15T23:50:36.823Z",
+  "updated_at": "2026-04-15T23:50:36.823Z"
+}

@@ -1,0 +1,17 @@
+{
+  "uuid": "baa590a1-950f-4939-bacd-458a5e45be13",
+  "layer": "technical",
+  "what": "Critical architectural tradeoff: you can have any 3 of {closed-source protection, local-first privacy, free distribution tier, hard revenue gating} but not all 4. Claude Code picked semi-open + server + free trial + API-key gating. Aide-memory currently wants closed + local + free + gated which is impossible. Must pick 3. Options: (A) Accept local-first reality — semi-open client, free is the distribution engine, compete on convenience/updates/support not hard locks. (B) Add a server for \"intelligent\" features (config gen, cleanup, team sync) — gives real gating but breaks local-first privacy. The \"valuable\" parts of aide-memory are algorithms which are easy to replicate once understood, so binary protection gives limited value without server-side logic.",
+  "why": "Fundamental architecture vs business model constraint. This is the blocker for finalizing the product strategy. Every successful dev tool SaaS (Claude Code, Cursor, Copilot, Vercel, Supabase) uses client-open + server-controlled pattern. Aide-memory's local-first stance creates an unresolvable tension with hard revenue gating.",
+  "scope": "docs/**",
+  "context_label": "four-way architecture tradeoff",
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-15T23:47:25.677Z",
+  "updated_at": "2026-04-15T23:47:25.677Z"
+}

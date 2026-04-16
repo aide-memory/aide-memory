@@ -22,6 +22,11 @@ fi
 
 # Get memory search results via direct store access
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/read-config.sh"
+
+# Check search mode — "soft" (default) or future "block" support
+SEARCH_MODE=$(get_setting "hooks.search.mode")
+
 RESULT=$(node "$SCRIPT_DIR/search-preview.js" "$QUERY" "$PROJECT_ROOT" 2>/dev/null)
 
 # No result or zero count = nothing to nudge about

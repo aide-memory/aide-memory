@@ -65,11 +65,18 @@ try {
   }
 
   // Classify memories: file-specific vs directory-scoped vs project-wide
-  // For blocking decisions, only count scopes with depth >= 2 path segments.
+  // For blocking decisions, only count scopes with depth >= minScopeDepth path segments.
   // Broad scopes like src/** (depth 1) are too generic to justify blocking —
   // they match every file in the project. Specific scopes like src/api/**
   // (depth 2) are worth blocking for.
-  const MIN_SCOPE_DEPTH = 2;
+  // Read minScopeDepth from defaults.json
+  let MIN_SCOPE_DEPTH = 2;
+  try {
+    const defaults = JSON.parse(fs.readFileSync(path.join(__dirname, 'defaults.json'), 'utf8'));
+    MIN_SCOPE_DEPTH = defaults['recall.minScopeDepth']?.value ?? 2;
+  } catch (e) {
+    // Fall back to hardcoded default
+  }
   let file_count = 0;
   let dir_count = 0;
   let project_count = 0;
