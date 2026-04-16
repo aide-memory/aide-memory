@@ -1,0 +1,22 @@
+{
+  "uuid": "34964cc5-6a31-46e6-92ba-62a3b28d9359",
+  "layer": "preferences",
+  "what": "CRITICAL PROCESS RULE: After spinning off implementation agents, ALWAYS review every agent's changes line-by-line against the plan BEFORE committing. Agents have limited context and can miss parts of the plan. I have more context than they do — the review is my responsibility. Never trust \"all tests pass\" as proof of completeness. Check each plan item was actually implemented, not just that nothing broke.",
+  "why": "User called out that I committed 3 agents' work without verifying the ID-based check was implemented. It wasn't — the agent only did half of item 3. Tests passing doesn't mean the plan was fully executed.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "process",
+    "review",
+    "agents",
+    "critical"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T03:39:21.725Z",
+  "updated_at": "2026-04-16T03:39:21.725Z"
+}

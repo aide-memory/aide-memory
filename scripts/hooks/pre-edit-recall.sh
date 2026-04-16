@@ -8,8 +8,7 @@
 
 # Max times a file can be blocked before switching to soft nudge
 # Read from config (defaults to 1)
-MAX_BLOCKS=$(get_setting "hooks.edit.maxBlocks")
-MAX_BLOCKS=${MAX_BLOCKS:-1}
+# MAX_BLOCKS read after SCRIPT_DIR is set and read-config.sh is sourced (below)
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
@@ -25,6 +24,8 @@ fi
 # Set up paths
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/read-config.sh"
+MAX_BLOCKS=$(get_setting "hooks.edit.maxBlocks")
+MAX_BLOCKS=${MAX_BLOCKS:-1}
 SID="${SESSION_ID:-default}"
 RECALLED_FILE="$PROJECT_ROOT/.aide/cache/recalled-paths-${SID}.txt"
 

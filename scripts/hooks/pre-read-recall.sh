@@ -9,8 +9,7 @@
 
 # Max times a file can be blocked before switching to soft nudge
 # Read from config (defaults to 1)
-MAX_BLOCKS=$(get_setting "hooks.read.maxBlocks")
-MAX_BLOCKS=${MAX_BLOCKS:-1}
+# MAX_BLOCKS read after SCRIPT_DIR is set and read-config.sh is sourced (below)
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
@@ -37,6 +36,8 @@ fi
 # Get memory info via direct store access
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/read-config.sh"
+MAX_BLOCKS=$(get_setting "hooks.read.maxBlocks")
+MAX_BLOCKS=${MAX_BLOCKS:-1}
 RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
 
 # No result or zero count = nothing to recall

@@ -1,0 +1,22 @@
+{
+  "uuid": "5d9b1970-bd59-4cec-b9ea-0e10277bdfc6",
+  "layer": "technical",
+  "what": "All 9 hook optimization items implemented in one batch: (1) Settings framework with defaults.json + read-config.sh, (2) Block-once-then-soft for Read/Edit, (3) Directory prefix match fix — only exact file|path exempts, dir| only for directory trigger, (4) Stop 3→5→10 three-phase from config, (5) Correction detection tuning with negative filters + 3-word min, (6) PreCompact verified clean, (7) Injection per-layer from config, (8) All hooks wired to read-config.sh, (9) Resume clears tracking. 3 bugs found in audit and fixed (grep -Fv, MAX_BLOCKS wired to config). 1198 tests pass.",
+  "why": "Major implementation batch completing the defaults optimization from validation findings.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "implementation",
+    "hooks",
+    "settings",
+    "defaults"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T00:07:08.974Z",
+  "updated_at": "2026-04-16T00:07:08.974Z"
+}

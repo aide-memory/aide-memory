@@ -1,0 +1,17 @@
+{
+  "uuid": "9b151ec2-7ca0-497b-9863-b80a8503be43",
+  "layer": "technical",
+  "what": "User thinking bigger: aide-memory as FOUNDATION for something larger, not the end product. Potential pivots: (1) memory for ALL AI workflows not just coding (regular Claude, Cowork, other tools), (2) cloud-hosted version for everyday people, (3) conversation context embeddings, (4) connect to non-coding tools. Binary distribution enables better pro gating since users can't override code. Key concern: everyone releasing free tools — need clever monetization beyond $10/user/month subscription. Need to figure out what the BIGGER product is that memory enables. The foundation should be protected (binary) so what's built on top isn't easily replicated.",
+  "why": "Major strategic pivot consideration. User sees aide-memory not as the product but as infrastructure for something bigger — possibly a cloud-hosted AI context layer that works across ALL tools (not just coding agents). This fundamentally changes the product vision if pursued.",
+  "scope": "docs/**",
+  "context_label": "pivot to broader platform consideration",
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-16T03:29:36.028Z",
+  "updated_at": "2026-04-16T03:29:36.028Z"
+}
