@@ -95,6 +95,38 @@ Also: any decisions, technical constraints, preferences, or guidelines worth per
 
 The "Also:" stitching was observed in multiple test turns. Flag-only and schedule-only each work independently.
 
+### Session E (Round 2): Cross-Session Persistence
+
+New fresh session (cold start): `5ce0bcde-8be4-4e1f-b04f-dca8d8d7b3b0`
+Prompt: "What do you know about this project's conventions?"
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| E1 | SessionStart hook fires | Inject preferences + guidelines | Debug log line confirmed at 23:16:01: Hook output included all 6 preferences and 5 guidelines (snake_case, epoch seconds, requestId, soft deletes, no auth log tokens) | **PASS** |
+| E2 | Agent answers from injection | Preferences/guidelines without tool calls | Agent listed ALL 6 preferences + 5 guidelines, matching injection exactly | **PASS** |
+| E3 | Agent supplements with aide_memories | Technical facts beyond injection | Agent called aide_memories (completed 9ms), listed 4 technical facts: JWT RS256, Bearer validation + brute-force lockout, AuthToken iat requirement, rate limit 30/min | **PASS** |
+
+### Corrections Validated (from prior test session)
+
+All 4 corrections from prior session survived to new session:
+
+| Correction | Prior tool call | Accessible in new session via |
+|------------|----------------|-------------------------------|
+| "Use snake_case for API responses" | aide_update (memory 70) | SessionStart injection (guidelines) |
+| "Use epoch seconds for timestamps" | aide_remember + aide_update | SessionStart injection (guidelines) |
+| "Rate limit is 30 req/min" | aide_update (memory 72) | aide_memories (technical) |
+| "Brute-force: 5 failures/15min → 30min lockout" | aide_remember (memory 84) | aide_memories (technical) |
+
+**Core product promise validated: "Correct once, remembered forever."**
+
+### Bug Fix During Session
+
+**Issue**: aide_forget was missing from PostToolUse correction-clearing matchers. User could say "no, delete that wrong memory" and agent's aide_forget response would leave flag set.
+
+**Fix**: Added `mcp__aide-memory__aide_forget` matcher to PostToolUse in init.ts generateHookConfig. Same track-remember.sh clears flag.
+
+**Write-clears-flag complete list**: aide_remember, aide_update, aide_forget. aide_import intentionally excluded (bulk seeding, not correction response).
+
 ---
 
 ## Session B (Round 1): Search Flow
