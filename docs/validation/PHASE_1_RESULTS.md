@@ -1,48 +1,103 @@
 # Phase 1 Validation Results
 
-Session ID: `bba8e4e2-3479-4d29-b007-7830baa85104`
-Debug log: `~/.claude/debug/bba8e4e2-3479-4d29-b007-7830baa85104.txt`
-Date: 2026-04-14
+## Round 2: ID-Based Blocking Validation (April 17, 2026)
 
-## Session A: Hook + Recall Flow
+Session ID: `1ca3aeee-1c60-4375-85f5-01f52f84128d`
+Debug log: `~/.claude/debug/1ca3aeee-1c60-4375-85f5-01f52f84128d.txt`
+Transcript: `~/.claude/projects/-private-tmp-aide-val/1ca3aeee-1c60-4375-85f5-01f52f84128d.jsonl`
+Test project: `/tmp/aide-val` (17 memories, IDs 67-84)
 
+### Session A: ID-Based Recall Flow
 
-| Step | Action                                 | Expected                 | Actual                                                                                                      | Pass?            |
-| ---- | -------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------- |
-| A1   | Read src/api/routes.ts                 | Read block               | Read blocked, 10 memories (0 file-specific, 7 from src/api/)                                                | PASS             |
-| A2   | aide_recall called                     | Scoped first, all layers | 10 returned: 7 scoped + 3 project-wide. 3 layers (technical, preferences, guidelines). Scoped ranked first. | PASS             |
-| A3   | Re-read same file                      | Soft                     | Soft (additionalContext in debug log, line 375)                                                             | PASS             |
-| A4   | Read 2nd file same dir (handler.ts)    | Dir trigger block        | Soft — agent proactively recalled directory in A2 (dir|src/api/ in tracking). Dir trigger not needed.       | PASS (by design) |
-| A6   | Edit src/utils/dates.ts (not recalled) | Edit block               | Agent chose to Read first → Read blocked → recalled → edit proceeded. Edit hook never independently tested. | PARTIAL          |
-| A7   | Edit on recalled file (routes.ts)      | Soft                     | Soft — edit proceeded, agent followed 4 conventions (camelCase, epoch ms, <30 lines, explain first)         | PASS             |
+| Step | Action | Expected | Actual | Debug Log | Pass? |
+|------|--------|----------|--------|-----------|-------|
+| A1 | Read src/api/routes.ts (first file, no IDs tracked) | **BLOCK** — path-based message | BLOCK: "5 memories for src/api/routes.ts". Hook denied Read tool. | Line 311: `decision: block`, permissionDecision: deny | **PASS** |
+| A2 | Agent calls aide_recall for routes.ts | PostToolUse tracks IDs, file| entry written | aide_recall completed in 10ms. Returned IDs 72,71,80,81,79,74,78,76 (scoped + project-wide). Tracking: `ids|70,71,72,74,76,77,78,79,80,81` + `file|routes.ts` | Line 349-350: Tool completed successfully | **PASS** |
+| A3 | Re-read src/api/routes.ts | **SILENT** — all scoped IDs covered | SILENT: "Unchanged since last read". No PreToolUse block in debug log. | No hook JSON output between 21:54:32-21:54:37 | **PASS** |
+| A4 | Read src/api/handler.ts (shared scope IDs) | **SILENT** — IDs 70,71,72,76,78 already covered from A2 | SILENT: "Read 1 file" with no block. Agent explained handler gaps vs conventions. | No PreToolUse block between 21:55:59-21:56:01 | **PASS** |
+| A5 | Read src/auth/middleware.ts (different dir) | **BLOCK** — IDs 67,68,69 not yet recalled | BLOCK: "3 memories for middleware.ts". Agent auto-recalled. | Line 624: `decision: block`, permissionDecision: deny | **PASS** |
+| A6 | Read README.md (no scoped memories) | **SILENT** — no scoped memories | SILENT: Read proceeded with no hook output. | No PreToolUse entries for README | **PASS** |
+| A7 | Edit src/api/routes.ts (all IDs covered) | **SILENT** — edit hook reads same tracking | SILENT: Edit went through, added `// validated` comment. | No PreToolUse:Edit block, only Stop hook at 22:08:12 | **PASS** |
+| A8-adj | Edit src/auth/types.ts (shared auth scope) | **SILENT** — IDs 67,68,69 covered from A5 | SILENT: Edit proceeded. Same as A4 pattern — sibling file shares scope IDs. | Hook ran silent (no JSON output) | **PASS** (adjusted) |
+| Scn1 | Re-read middleware.ts (encountered + 1 new ID 84 added) | **SOFT** — encountered=true, ID 84 missing | SOFT: `additionalContext`: "1 memories not yet recalled. Call aide_recall({ids: [84]})". Agent called aide_recall({ids: [84]}). | Line ~692: `hookSpecificOutput` with `additionalContext` (109 chars) | **PASS** |
+| Scn2 | Read jwt.ts (never encountered, ID 83 not tracked, IDs 67,69 tracked from sibling) | **BLOCK** — never encountered + missing ID | BLOCK: "1 memories for jwt.ts not yet recalled. Call aide_recall({ids: [83]})". Agent recalled and reported RS256 constraint. | 23:08:30: `decision: block`, reason lists `ids: [83]` | **PASS** |
 
+### Recall Quality
 
-### Recall Quality (A2)
+**A2 recall (routes.ts)** — verified from transcript line 13:
+| Metric | Value |
+|--------|-------|
+| Total returned | 10 (5 scoped + 5 project-wide) |
+| Scoped IDs | 72 (rate limiting), 71 (async/await), 78 (requestId), 76 (epoch timestamps), 70 (camelCase) |
+| Project-wide IDs | 80 (30-line limit), 81 (no TODOs), 79 (explain first), 74 (dayjs), 77 (soft deletes) |
+| Layers | 3/4 (technical, preferences, guidelines — no area_context seeded) |
+| Scoped before project-wide | Yes — technical scoped first, then preferences, then guidelines |
 
+**A5 recall (middleware.ts)** — verified from transcript line 46:
+| Metric | Value |
+|--------|-------|
+| Total returned | 8 (3 scoped + 5 project-wide) |
+| Scoped IDs | 68 (Bearer tokens), 67 (JWT RS256), 69 (no auth logging) |
+| Scoped before project-wide | Yes |
 
-| Metric                                     | Value                                           |
-| ------------------------------------------ | ----------------------------------------------- |
-| Total returned                             | 10                                              |
-| Scoped                                     | 7                                               |
-| Project-wide                               | 3                                               |
-| Layers represented                         | 3/4 (no area_context seeded for this path)      |
-| Scoped before project-wide                 | Yes                                             |
-| Top result                                 | technical: rate limiting (scoped src/api/**)    |
-| Anti-false-positive conventions in results | 4/4 (epoch, soft delete, requestId, rate limit) |
+### Key Behaviors Validated
 
+1. **ID-based, not path-based** — A4 silent because IDs 70,71,72,76,78 were already covered by A2's recall (shared src/api/** scope across files)
+2. **No directory trigger** — no `dir|` entries in tracking, each file evaluated by scoped IDs only
+3. **Edit uses same tracking** — A7 silent because edit hook reads same `ids|` line as read hook
+4. **Project-wide-only paths are silent** — A6 confirms scoped_count=0 exits early
+5. **SOFT for encountered + missing IDs** — Scn1 shows additionalContext with specific missing ID list
+6. **BLOCK for never-encountered + missing IDs** — Scn2 shows decision:block with ID-based message
+7. **aide_recall({ids: [N]}) gap-filling works** — both Scn1 and Scn2 used ID-specific recall successfully
 
-### Agent Convention Compliance (A7 — getUsers rewrite)
+### Tracking File State (end of Session A)
 
+```
+file|/private/tmp/aide-val/src/api/routes.ts
+file|/private/tmp/aide-val/src/auth/middleware.ts
+ids|67,68,69,70,71,72,74,76,77,78,79,80,81
+```
+(IDs 83, 84 added after gap-filling scenarios)
 
-| Convention                       | Followed? |
-| -------------------------------- | --------- |
-| camelCase keys                   | Yes       |
-| Unix epoch ms timestamps         | Yes       |
-| Functions under 30 lines         | Yes       |
-| Explained approach before coding | Yes       |
+### Session B (Round 2): Search Flow
 
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| B1 | `grep auth in the codebase` | **SOFT** with aide_search preview | SOFT — hookSpecificOutput with additionalContext (199 chars): "5 aide memories match 'auth' ...Call aide_search". Agent called aide_search({keyword: "auth"}) - completed in 6ms. Agent summarized both grep + stored context. | **PASS** |
+| B2 | `grep zzz_nonexistent in the codebase` | **SILENT** — no matching memories | SILENT. Hook exited early, Grep returned "Found 0 lines", no nudge. | **PASS** |
 
-## Session B: Search Flow
+### Session C (Round 2): Correction + Flag Lifecycle
+
+Test session: `c8ee5214-4d2d-4fd1-b985-077e21575f9f`
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| C1 | Correction: "No, use epoch seconds not milliseconds" | UserPromptSubmit SOFT + flag, agent stores, flag cleared | UserPromptSubmit fired SOFT (218 chars additionalContext). Agent called aide_remember (completed 14ms). PostToolUse:aide_remember fired track-remember.sh → flag cleared. Stop hook silent (turn 1, not scheduled). | **PASS** |
+| C2 | Correction: "No actually, use milliseconds not seconds" | aide_update should clear flag | Agent hesitated (conflict with SessionStart prefs), Stop fired BEFORE aide_update with "correction not stored". Then agent called aide_update → flag cleared. Demonstrates Stop's enforcement role. | **PASS** (behavior correct, agent timing just delayed) |
+| C3 | Correction: "No, the rate limit is 100 not 50" | aide_remember (agent doesn't know existing memory) | Agent called aide_remember (new memory) since it hadn't recalled memory 72 this session. Scope was left project-wide for user refinement. | **PASS** (create-new is correct when no existing recalled) |
+| C4 | Recall first, then correct existing: "No, update that camelCase one — we use snake_case" | aide_update should fire, flag cleared | Agent recalled src/api/, saw memory 70 (camelCase). Then on correction: **aide_update** called (updated memory 70 to snake_case). Stop fired with STANDARD prompt ("Any decisions..."), NOT correction warning. Flag was cleared by aide_update PostToolUse. | **PASS** |
+
+### Bug Fix During Session C
+
+**Issue**: PostToolUse hook for `aide_update` was missing — only `aide_remember` had the clearing hook. When agent called aide_update, flag stayed set and Stop kept complaining "correction not stored".
+
+**Fix**: Added `mcp__aide-memory__aide_update` matcher to PostToolUse in init.ts generateHookConfig. Same script (track-remember.sh) clears flag for both tools.
+
+**Verification**: autoUpdateIfNeeded picked up new hook config on next MCP server start (removed _aideMemoryVersion to trigger update). Confirmed via debug log: PostToolUse fires for aide_update, flag deleted, Stop shows standard prompt instead of correction warning.
+
+### Stop Hook Combined Message (verified)
+
+When correction flag exists AND it's a scheduled block turn (every 3 in phase 1), Stop combines both:
+```
+A correction from this turn wasn't stored. Call aide_remember for it.
+Also: any decisions, technical constraints, preferences, or guidelines worth persisting?...
+```
+
+The "Also:" stitching was observed in multiple test turns. Flag-only and schedule-only each work independently.
+
+---
+
+## Session B (Round 1): Search Flow
 
 
 | Step | Action                                                | Expected     | Actual                                                                                                                  | Pass?                     |

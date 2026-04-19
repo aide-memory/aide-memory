@@ -81,6 +81,7 @@ function generateHookConfig(packageRoot: string): object {
       PostToolUse: [
         { matcher: 'mcp__aide-memory__aide_recall', hooks: [{ type: 'command', command: h('track-recall-post.sh'), timeout: 5 }] },
         { matcher: 'mcp__aide-memory__aide_remember', hooks: [{ type: 'command', command: h('track-remember.sh'), timeout: 5 }] },
+        { matcher: 'mcp__aide-memory__aide_update', hooks: [{ type: 'command', command: h('track-remember.sh'), timeout: 5 }] },
         { matcher: 'mcp__aide-memory__aide_search', hooks: [{ type: 'command', command: h('track-search.sh'), timeout: 5 }] },
       ],
     },

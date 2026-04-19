@@ -128,6 +128,16 @@
         ]
       },
       {
+        "matcher": "mcp__aide-memory__aide_update",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-remember.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "mcp__aide-memory__aide_search",
         "hooks": [
           {
