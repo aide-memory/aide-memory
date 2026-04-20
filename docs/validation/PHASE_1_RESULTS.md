@@ -154,6 +154,22 @@ New CLI: `aide-memory cleanup` (`src/cli/commands/memory/cleanup.ts`)
 - Tested: deleted 3 orphaned tracking files with `--older-than 1h`
 - Follow-up: automatic TTL cleanup on SessionStart startup (Phase 1)
 
+### Session G (Round 2): Concurrent Sessions Isolation
+
+Two Claude Code sessions running simultaneously on the same project:
+- **Session A**: `0850e190-e6ed-4378-ad45-4fdfb8d584e0`
+- **Session B**: `a3702548-0d1b-4c60-a1ab-b5ddb70ca2d1`
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| G1 | Session A: Read src/api/routes.ts | A's tracking gets routes file + ID 92 | A file has `file|routes.ts` + ids including 92 | **PASS** |
+| G2 | Session B: Read src/api/handler.ts | B blocks independently on handler's ID 92 (not in B's tracking) | BLOCK: "1 memories for handler.ts not yet recalled. Call aide_recall({ids: [92]})" — even though A has 92 | **PASS** |
+| G3 | Session A's tracking file exists separately | Filename: `recalled-paths-0850e190...txt` | 241 bytes, file+ids entries | **PASS** |
+| G4 | Session B's tracking file exists separately | Filename: `recalled-paths-a3702548...txt` | 42 bytes, just injection ids | **PASS** |
+| G5 | Session B: Read src/auth/middleware.ts (A already has auth IDs tracked) | B still blocks — doesn't inherit A's state | BLOCK: "2 memories not yet recalled. Call aide_recall({ids: [88, 87]})" — same IDs A has tracked but B doesn't see them | **PASS** |
+
+**Critical validation**: IDs 87, 88, 92 were in Session A's tracking but NOT in Session B's. Session B correctly blocked for all of them, proving sessions read only their own `recalled-paths-{session_id}.txt` file. No cross-session leakage.
+
 ---
 
 ## Session B (Round 1): Search Flow
