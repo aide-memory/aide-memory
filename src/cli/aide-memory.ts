@@ -32,6 +32,7 @@ import { runStats } from './commands/memory/stats';
 import { runRecallLog } from './commands/memory/recall-log';
 import { runConfig } from './commands/memory/config';
 import { runSyncImport, runSyncExport } from './commands/memory/sync';
+import { runCleanup } from './commands/memory/cleanup';
 import { runMigrate } from './commands/memory/migrate';
 import { runInit } from './commands/memory/init';
 import { checkForUpdates, printUpdateNotice } from '../memory/updater';
@@ -170,6 +171,17 @@ export function createProgram(): Command {
     .description('Migrate from legacy memory.db format')
     .action(() => {
       runMigrate();
+    });
+
+  // aide-memory cleanup
+  program
+    .command('cleanup')
+    .description('Remove stale session tracking files from .aide/cache/')
+    .option('--older-than <duration>', 'TTL for cleanup (e.g. "7d", "24h", "30m")', '7d')
+    .option('--all', 'Remove all tracking files regardless of age')
+    .option('--dry-run', 'Show what would be deleted without actually deleting')
+    .action((opts: { olderThan?: string; all?: boolean; dryRun?: boolean }) => {
+      runCleanup(opts);
     });
 
   // aide-memory init

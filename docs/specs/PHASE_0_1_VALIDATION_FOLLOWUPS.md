@@ -250,3 +250,23 @@ All items implemented as of April 13, 2026. Actual order diverged from plan -- i
 15. **Directory trigger removed** DONE
 
 **Remaining:** Unit tests, smoke tests, bug audit, validation scenarios (IDB-1 through IDB-9 + remaining sessions G-U3)
+
+---
+
+## New Follow-up: Automatic Stale Tracking Cleanup
+
+**Problem:** Session tracking files (.aide/cache/recalled-paths-*.txt, searched-queries-*.txt, correction-pending-*.txt, recalled-ids-*.txt) accumulate from crashed or abnormally-exited sessions. Only current session's files are cleared by PreCompact/SessionStart.
+
+**Current state:** `aide-memory cleanup` command added (default 7d TTL, --older-than/--all/--dry-run flags). Manual only.
+
+**Phase 1 follow-up work:**
+- Add automatic TTL-based cleanup on SessionStart (source: "startup" only, NOT resume/compact) — safe because any file 7+ days old is definitely from a dead session
+- Add cleanup to post-checkout git hook (already runs on branch switch)
+- Consider adding to config: `cleanup.autoTtl = "7d"` to toggle auto-cleanup
+- Include correction-pending and recalled-ids patterns in the cleanup (already covered)
+- Add stop-count-*.txt pattern if it's tracked (need to verify)
+
+**Implementation notes:**
+- Cleanup command at `src/cli/commands/memory/cleanup.ts`
+- Uses 7d default, configurable via `--older-than`
+- Safe to remove active session file — session will re-block on next read and re-populate via aide_recall (no data loss)

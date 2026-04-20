@@ -451,3 +451,32 @@ aide-memory migrate
 ```
 
 **Status:** Not yet implemented. Placeholder for future migration from the old single-database format to the current file-per-memory architecture.
+
+## cleanup
+
+Remove stale session tracking files from `.aide/cache/`.
+
+Each Claude Code session creates small tracking files (`recalled-paths-{session_id}.txt`, `searched-queries-*`, `correction-pending-*`) to manage in-session state. These are normally cleared by PreCompact and SessionStart, but crashed or abnormally-exited sessions leave orphaned files. This command removes them.
+
+```
+aide-memory cleanup
+```
+
+By default removes files older than 7 days.
+
+**Options:**
+
+- `--older-than <duration>` — TTL threshold. Formats: `7d`, `24h`, `30m`, `60s`. Default: `7d`.
+- `--all` — Remove all tracking files regardless of age. Use with care: may affect concurrent sessions.
+- `--dry-run` — Show which files would be deleted without actually deleting.
+
+**Examples:**
+
+```bash
+aide-memory cleanup                      # Remove files older than 7 days (default)
+aide-memory cleanup --older-than 24h     # Remove files older than 24 hours
+aide-memory cleanup --dry-run            # Preview what would be deleted
+aide-memory cleanup --all                # Remove all tracking files
+```
+
+**Note:** Removing an active session's tracking file is not destructive — the session will simply re-block on the next read and re-populate tracking via aide_recall. No memory data is lost.
