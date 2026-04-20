@@ -127,6 +127,33 @@ All 4 corrections from prior session survived to new session:
 
 **Write-clears-flag complete list**: aide_remember, aide_update, aide_forget. aide_import intentionally excluded (bulk seeding, not correction response).
 
+### Session D (Round 2): Compact + Re-recall
+
+Fresh test session: `0850e190-e6ed-4378-ad45-4fdfb8d584e0`
+
+| Step | Action | Expected | Actual | Pass? |
+|------|--------|----------|--------|-------|
+| D1 | Read src/auth/middleware.ts (fresh session) | BLOCK with missing IDs | BLOCK: "2 memories not yet recalled. Call aide_recall({ids: [88, 87]})". Agent recalled, read succeeded. | **PASS** |
+| D2 | `/compact` manual trigger | PreCompact clears tracking + SessionStart:compact re-injects | Debug log confirms: 19:40:56 PreCompact completed, 19:41:30 SessionStart:compact success. Tracking went from `[87, 88 + 11 injection IDs]` → `[11 injection IDs only]`. | **PASS** |
+| D3 | Read src/auth/types.ts (post-compact, new file) | BLOCK (new file, scoped IDs not tracked) | Agent proactively called aide_recall FIRST (learning from compact), then Read went silent (all IDs pre-populated). | **PASS** (agent optimization) |
+
+### Post-Compact Flow Verified
+
+1. Pre-compact tracking: all 11 injection IDs + any file-specific IDs recalled during the session
+2. PreCompact hook clears current session's tracking (NOT other sessions' files)
+3. Context gets compacted (summary + reload of `.claude/rules/aide-memory.md` + middleware.ts)
+4. SessionStart fires with `source: "compact"` → re-injects 11 preference/guideline IDs
+5. New file reads re-block (IDs not tracked) → agent recalls to restore context
+
+### Cleanup Command Added
+
+New CLI: `aide-memory cleanup` (`src/cli/commands/memory/cleanup.ts`)
+- Removes stale session tracking files (`recalled-paths-*.txt`, `searched-queries-*.txt`, `correction-pending-*.txt`, `recalled-ids-*.txt`)
+- Default 7d TTL, `--older-than`/`--all`/`--dry-run` flags
+- Safe for active sessions — hook re-blocks and re-recalls on next read
+- Tested: deleted 3 orphaned tracking files with `--older-than 1h`
+- Follow-up: automatic TTL cleanup on SessionStart startup (Phase 1)
+
 ---
 
 ## Session B (Round 1): Search Flow
