@@ -265,17 +265,19 @@ describe('1. Storage Edge Cases', () => {
     const filePath = path.join(projectRoot, '.aide', 'memories', 'area_context', `${mem.uuid}.json`);
     const fileContent = readJsonFile(filePath);
 
-    // Exact expected keys (includes priority added in schema v3)
+    // Exact expected keys (priority added in schema v3, id added Apr 21 2026
+    // for stable numeric identifiers across cache rebuilds)
     const expectedKeys = [
-      'uuid', 'layer', 'what', 'why', 'scope', 'context_label',
+      'id', 'uuid', 'layer', 'what', 'why', 'scope', 'context_label',
       'contributor', 'tags', 'source', 'shared', 'priority', 'generated_by',
       'derived_from', 'created_at', 'updated_at',
     ].sort();
 
     expect(Object.keys(fileContent).sort()).toEqual(expectedKeys);
 
-    // Verify NO SQLite-only fields
-    expect(fileContent.id).toBeUndefined();
+    // id is persisted now (part of the canonical schema)
+    expect(fileContent.id).toBe(mem.id);
+    // recalled_count and last_recalled_at remain SQLite-only (runtime stats)
     expect(fileContent.recalled_count).toBeUndefined();
     expect(fileContent.last_recalled_at).toBeUndefined();
     expect(fileContent.status).toBeUndefined();

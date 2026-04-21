@@ -36,6 +36,12 @@ export interface Memory {
  * JSON file content — excludes SQLite-only cache fields (id, recalled_count, last_recalled_at).
  */
 export interface MemoryFile {
+  /**
+   * Stable numeric ID. Persisted in the JSON file so it survives cache
+   * rebuilds. Added Apr 21 2026 — files from older versions without this
+   * field still load; the store assigns an AUTOINCREMENT id on first sync.
+   */
+  id?: number;
   uuid: string;
   layer: MemoryLayer;
   what: string;

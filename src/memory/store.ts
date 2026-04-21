@@ -247,6 +247,10 @@ export class MemoryStore {
    */
   private toMemoryFile(mem: Memory): MemoryFile {
     return {
+      // Persist numeric ID so cache rebuilds preserve the stable identifier
+      // users and hook scripts reference. Without this, AUTOINCREMENT would
+      // reassign IDs by filesystem traversal order on every full rebuild.
+      id: mem.id,
       uuid: mem.uuid,
       layer: mem.layer,
       what: mem.what,
@@ -385,9 +389,31 @@ export class MemoryStore {
               data.created_at, data.updated_at,
               data.uuid
             );
-          } else {
-            // Insert new
+          } else if (typeof data.id === 'number') {
+            // Insert new WITH the persisted id from the JSON file so the
+            // identifier stays stable across rebuilds. Only the first-ever
+            // rebuild of an old-format file (no id) falls through to the
+            // AUTOINCREMENT branch below.
             this.db.prepare(`
+              INSERT INTO memories (id, uuid, layer, what, why, scope, context_label, contributor,
+                tags, source, shared, priority, generated_by, derived_from, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              data.id,
+              data.uuid, data.layer, data.what, data.why ?? null, data.scope ?? null,
+              data.context_label ?? null, data.contributor, JSON.stringify(data.tags ?? []),
+              data.source ?? 'conversation', data.shared ? 1 : 0,
+              data.priority ?? 'normal',
+              data.generated_by ? JSON.stringify(data.generated_by) : null,
+              data.derived_from ? JSON.stringify(data.derived_from) : null,
+              data.created_at, data.updated_at
+            );
+          } else {
+            // Legacy JSON file (no id field) — let AUTOINCREMENT assign one,
+            // then rewrite the JSON file so the id is persisted for future
+            // rebuilds. New inserts via add() always write id, so this path
+            // only runs once per legacy file.
+            const result = this.db.prepare(`
               INSERT INTO memories (uuid, layer, what, why, scope, context_label, contributor,
                 tags, source, shared, priority, generated_by, derived_from, created_at, updated_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -400,6 +426,13 @@ export class MemoryStore {
               data.derived_from ? JSON.stringify(data.derived_from) : null,
               data.created_at, data.updated_at
             );
+            // Persist the assigned id back to the JSON file so the next
+            // rebuild stays stable. Non-fatal if rewrite fails.
+            try {
+              const newId = Number(result.lastInsertRowid);
+              const updatedMem = this.get(newId);
+              if (updatedMem) this.writeMemoryFile(updatedMem);
+            } catch { /* non-fatal — next add/rewrite will persist */ }
           }
         } catch {
           // Skip malformed JSON files silently
