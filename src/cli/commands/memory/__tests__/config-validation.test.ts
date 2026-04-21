@@ -86,17 +86,15 @@ describe('validateConfigKey', () => {
 });
 
 describe('collectValidKeys', () => {
-  it('includes all 18 public defaults.json keys', () => {
+  it('includes all public defaults.json keys', () => {
     const keys = collectValidKeys();
     const expected = [
       'hooks.read.maxBlocks',
       'hooks.edit.maxBlocks',
-      'hooks.directoryTrigger.maxBlocks',
       'hooks.stop.schedule',
       'hooks.search.mode',
       'hooks.correction.enabled',
       'hooks.precompact.mode',
-      'recall.minScopeDepth',
       'recall.limit',
       'recall.ensureLayerDiversity',
       'recall.layerDiversityMinLimit',

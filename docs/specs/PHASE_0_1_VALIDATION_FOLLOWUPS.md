@@ -432,3 +432,29 @@ analysis that looks at code patterns (auth middleware, route conventions,
 SQLite config, etc.). Until then, users should use `aide_import`
 against existing CLAUDE.md / README / design docs — richer signal
 with less inference guesswork.
+
+---
+
+## New Follow-up: TTL Cleanup for Archived Pending-Memory Files
+
+**Problem:** `ingestPendingMemories()` archives the source file to `.aide/pending-memories.jsonl.imported-{timestamp}` on successful import rather than deleting it (preserves audit trail). Over time — if users hit MCP outages frequently — the project accumulates stale archive files.
+
+**Fix:** Extend `aide-memory cleanup` (or the SessionStart TTL sweep) to also remove `pending-memories.jsonl.imported-*` files older than the configured TTL (default 7 days per existing cleanup command). Match pattern:
+
+```
+.aide/pending-memories.jsonl.imported-*
+```
+
+Alongside the existing cleanup patterns (`recalled-paths-*.txt`, `searched-queries-*.txt`, `correction-pending-*.txt`, `recalled-ids-*.txt`).
+
+Low priority — archive files are tiny (one JSONL line each) and will only accumulate for users with repeated MCP outages.
+
+---
+
+## New Follow-up: `.ignore` Drift-Repair on MCP Startup — DONE (Apr 21, 2026)
+
+`autoUpdateIfNeeded()` now unconditionally calls `resyncDerivedArtifacts()` at the top of its body, before the version-stamp check. This catches the case where a user edits `.aide/config.json` directly (e.g. merges a teammate's `memories.hideFromGrep` change) without going through the `aide-memory config` CLI — the CLI write path live-syncs via `applySideEffects`, but direct edits would otherwise go undetected until the next `init --force`.
+
+Both paths now delegate to `resyncDerivedArtifacts(projectRoot)` in `src/memory/init.ts`, the single source of truth for "files whose content is derived from a config setting." Currently only `.ignore` (from `memories.hideFromGrep`) qualifies, but the pattern is extensible — future derived artifacts add a block in the same function.
+
+Verified: manually edited `.aide/config.json` to flip `memories.hideFromGrep=false`; `.ignore` stayed stale; spawning a new MCP server against the project removed `.ignore` on startup as expected.

@@ -649,15 +649,67 @@ export async function initProject(
 }
 
 /**
+ * Single source of truth for derived-artifact resync.
+ *
+ * Some settings produce files on disk whose content depends on the setting
+ * value — currently only `memories.hideFromGrep` → `.ignore`, but the pattern
+ * is extensible. This function is the ONE place that reads the current config
+ * and rewrites every such artifact. Called from:
+ *
+ *   1. `aide-memory config KEY VALUE` CLI writes (via applySideEffects) for
+ *      instant feedback.
+ *   2. `autoUpdateIfNeeded()` on MCP server startup for drift-repair (catches
+ *      direct edits to `.aide/config.json` that bypass the CLI).
+ *
+ * Returns a list of human-readable messages describing any files changed.
+ * Returns empty array if everything was already in sync.
+ */
+export function resyncDerivedArtifacts(projectRoot: string): string[] {
+  const changed: string[] = [];
+
+  // .ignore — driven by memories.hideFromGrep
+  try {
+    const hideFromGrep = readHideFromGrep(projectRoot);
+    const result = syncIgnoreFile(projectRoot, hideFromGrep);
+    if (result.changed && result.message) {
+      changed.push(result.message);
+    }
+  } catch {
+    // Non-fatal — a failed .ignore sync shouldn't affect other artifacts.
+  }
+
+  // Future derived artifacts go here. Each should be in its own try/catch
+  // so one failure doesn't cascade.
+
+  return changed;
+}
+
+/**
  * Auto-update hooks, MCP config, and rules files on MCP server start.
  * Checks _aideMemoryVersion in .claude/settings.json — if missing or older
  * than current package version, merges new config preserving user settings.
+ * Also unconditionally resyncs derived artifacts (like .ignore) so direct
+ * edits to .aide/config.json get picked up without requiring a version bump.
  * Called from startServer() so updates happen seamlessly without manual init.
  */
 export function autoUpdateIfNeeded(projectRoot: string, currentVersion: string): string[] {
   const updated: string[] = [];
 
   try {
+    // Derived-artifact resync: ALWAYS run, independent of version stamp.
+    // Settings read on-demand by hooks, but settings that produce files on
+    // disk (like .ignore from memories.hideFromGrep) need an explicit sync
+    // step. Run this every MCP startup so direct edits to .aide/config.json
+    // get picked up without requiring a version bump. The CLI write path
+    // also calls applySideEffects for instant feedback; this is the
+    // drift-repair safety net.
+    try {
+      const resyncResult = resyncDerivedArtifacts(projectRoot);
+      updated.push(...resyncResult);
+    } catch {
+      // Non-fatal — a failed resync shouldn't block MCP startup.
+    }
+
     const settingsPath = path.join(projectRoot, '.claude', 'settings.json');
 
     // Check version stamp
@@ -732,9 +784,8 @@ export function autoUpdateIfNeeded(projectRoot: string, currentVersion: string):
       }
     }
 
-    // Update .ignore file (hide memories from grep based on config)
-    const ignoreResult = updateIgnoreFile(projectRoot);
-    updated.push(...ignoreResult.created);
+    // Note: .ignore is resynced unconditionally at the top of this function
+    // via resyncDerivedArtifacts — no need to repeat here.
 
     // Update git post-checkout hook (merge, uses markers to replace aide section only)
     const hookResult = installPostCheckoutHook(projectRoot, true);

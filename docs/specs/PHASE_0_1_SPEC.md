@@ -1,8 +1,9 @@
 # Phase 0 + Phase 1 Technical Spec
 
 > Source of truth: `docs/PRODUCT_VISION.md` (1,653 lines, Apr 2, 2026).
-> Decided items NOT re-debated: storage architecture (one-file-per-memory), free/pro gating (layered soft gates), naming (AIDE Memory). See `docs/sessions/HANDOFF_APRIL2.md`.
-> Created: April 6, 2026. Updated: April 6, 2026 (feedback pass — added documentation, demos, update mechanism, sync commands, agent protocol; resolved all open questions; removed status field from schema; clarified hook behavior).
+> Decided items NOT re-debated: storage architecture (one-file-per-memory), naming (AIDE Memory).
+> **Phase 1 pro-gating update (Apr 21, 2026):** Phase 1 ships with every setting public and no paid tier. The `pro: false` flag in `defaults.json` is kept as a stable schema placeholder only — no gating logic enforces it. Any paid-tier features are deferred to Phase 2+ and will be re-evaluated then.
+> Created: April 6, 2026. Updated: Apr 21, 2026 (all settings ungated, `--scan` removed, `computeScopedForPath` introduced as single source of truth for focused-scope blocking, `resyncDerivedArtifacts` centralizes config → artifact drift-repair).
 >
 > **Living document.** This spec is updated as implementation progresses. Agents mark checkboxes in Section 3 as work completes and add implementation notes inline.
 
@@ -531,7 +532,7 @@ This plan covers all design decisions from the April 9-10 session: new hooks, ra
 
 **5.1 Pre-Read Recall (ID-based blocking)**
 
-The Read hook uses ID-based blocking. On file read, `recall-for-path.js` returns `scoped_ids` (the IDs of memories with scopes specific enough to justify blocking, per `recall.minScopeDepth`). The hook compares these against the `ids|` line in the session tracking file.
+The Read hook uses ID-based blocking. On file read, `recall-for-path.js` calls `computeScopedForPath()` in `src/memory/recall.ts` — the single source of truth for which memories count as scoped-for-blocking at a given path. Focused-mode rules (exact file + immediate parent + deeper, EXCLUDING grandparent and project-wide) are applied there, and `scoped_ids` + the layer breakdown + topics preview are all derived from the same filtered set so the integer count and the preview cannot disagree. The hook compares those IDs against the `ids|` line in the session tracking file.
 
 Nudge format (path-based, when no IDs covered):
 ```
@@ -1384,28 +1385,30 @@ REMAINING (source of truth — all pending items with concrete next steps):
   - Other search tools (Bash grep/find, Agent subagents): can only hook Grep/Glob. Claude Code doesn't expose matchers for Bash commands. Accepted gap.
   - PreCompact can't force agent saves: platform limitation. Save strategy = Stop hook + proactive rules + user guidance.
 
-  **Private config defaults (all in defaults.json, not user-facing):**
+  **Public config defaults (all in defaults.json, all user-settable via `aide-memory config`):**
+
+  _Phase 1 decision (Apr 21, 2026): every setting is `public: true` in the free tier. No pro gating — `pro: false` is kept as a stable schema placeholder only. Settings are seeded into `.aide/config.json` on init so users see every knob. Unknown keys are rejected by `aide-memory config` with a valid-key list._
 
   | Key (defaults.json) | Default | Description |
   |-----|---------|-------------|
-  | `hooks.read.maxBlocks` | `1` | _Vestigial_ — superseded by ID-based blocking. Kept for backward compat. |
-  | `hooks.edit.maxBlocks` | `1` | _Vestigial_ — superseded by ID-based blocking. Kept for backward compat. |
-  | `hooks.directoryTrigger.maxBlocks` | `1` | _Vestigial_ — directory trigger removed. Kept for backward compat. |
-  | `hooks.stop.schedule` | `[{"until":9,"every":3},{"until":29,"every":5},{"every":10}]` | Dynamic 3→5→10 interval schedule (key is `schedule`, not `phases`/`phaseBreaks`) |
-  | `hooks.search.mode` | `"soft"` | Always soft |
-  | `hooks.correction.enabled` | `true` | Detection active |
-  | `hooks.precompact.mode` | `"cleanup"` | Cleanup only |
-  | `recall.minScopeDepth` | `2` | Min scope depth for blocking |
-  | `recall.limit` | `20` | Max memories per recall |
-  | `recall.ensureLayerDiversity` | `true` | Enable round-robin layer diversity in recall results |
-  | `recall.layerDiversityMinLimit` | `5` | Min limit before round-robin kicks in |
-  | `injection.preferences` | `15` | Max preferences injected at SessionStart |
-  | `injection.technical` | `false` | Whether to inject technical memories at SessionStart |
-  | `injection.area_context` | `false` | Whether to inject area_context memories at SessionStart |
-  | `injection.guidelines` | `"all"` | Inject all guidelines at SessionStart |
-  | `injection.priorityAlwaysOverride` | `true` | priority:"always" memories always injected regardless of layer caps |
-  | `memories.hideFromGrep` | `true` | .ignore for grep |
-  | `memories.softening.threshold` | `10` | Below this = all soft |
+  | `hooks.read.maxBlocks` | `1` | Cap on how many times Read hook hard-blocks for the same path per session. `0` silences the hook entirely. |
+  | `hooks.edit.maxBlocks` | `1` | Same for Edit/Write. `0` silences. |
+  | `hooks.stop.schedule` | `[{"until":9,"every":3},{"until":29,"every":5},{"every":10}]` | Dynamic Stop-hook block schedule (3 → 5 → 10 by default). |
+  | `hooks.search.mode` | `"soft"` | Grep/Glob nudge mode: `"soft"` / `"block"` / `"off"`. |
+  | `hooks.correction.enabled` | `true` | Whether UserPromptSubmit detects corrections/decisions/preferences. `false` silences. |
+  | `hooks.precompact.mode` | `"cleanup"` | `"cleanup"` clears session tracking; `"off"` preserves it. |
+  | `recall.limit` | `20` | Default max memories per `aide_recall` call (MCP `query.limit` still wins). |
+  | `recall.ensureLayerDiversity` | `true` | Round-robin to guarantee all four layers appear in results. |
+  | `recall.layerDiversityMinLimit` | `5` | Minimum limit before layer-diversity swapping kicks in. |
+  | `injection.preferences` | `15` | Max preferences injected at SessionStart. |
+  | `injection.technical` | `false` | Whether technical memories are injected at SessionStart (otherwise surfaced via recall). |
+  | `injection.area_context` | `false` | Same for area_context. |
+  | `injection.guidelines` | `"all"` | `"all"` or integer N for top-N injected guidelines at SessionStart. |
+  | `injection.priorityAlwaysOverride` | `true` | `priority:"always"` memories bypass per-layer caps. |
+  | `memories.hideFromGrep` | `true` | Derived artifact: maintains `.ignore` with a managed `# BEGIN/END aide-memory-managed` block. Resync on every `aide-memory config` write AND on every MCP server startup via `resyncDerivedArtifacts()`. |
+  | `memories.softening.threshold` | `10` | Projects with fewer memories than this force every hook output to soft `additionalContext` (new-project softening). |
+
+  **Dead settings removed Apr 21, 2026:** `hooks.directoryTrigger.maxBlocks` (directory trigger was removed per the ID-based blocking redesign) and `recall.minScopeDepth` (superseded by hardcoded focused-mode in `computeScopedForPath`).
 
   **Balance principle:** Block for first encounters and periodic checkpoints. Soft for discovery and repeat access. Silent for routine turns. Rules file for ongoing awareness.
 - **Audit hook usage patterns**: Are blocking hooks, flag files, two-phase patterns, and multi-hook coordination (blocker + tracker) the correct/intended way to use Claude Code hooks? Or are there simpler/better patterns? Research Claude Code hook best practices, check community examples, file questions with Anthropic if needed
@@ -1621,46 +1624,15 @@ These expand reach and distribution after Phase 1 ships. Full details in `docs/P
 - Default: all hooks active, current blocking/soft rules (free tier)
 - Pro: fine-grained control over every aspect of hook behavior
 
-Configurable settings (identified during validation):
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `hooks.read` | `"block"` | Read hook: "block", "soft", or "off" |
-| `hooks.edit` | `"block"` | Edit/Write hook: "block", "soft", or "off" |
-| `hooks.search` | `"soft"` | Grep/Glob hook: "block", "soft", or "off" |
-| `hooks.stop` | `"dynamic"` | Stop hook: "dynamic", "block", "soft", or "off" |
-| `hooks.precompact` | `"cleanup"` | PreCompact hook: "cleanup" (clear tracking, allow compact), "prompt" (block first time — user prompts agent to save, /compact again to proceed), or "off" |
-| `hooks.correction` | `"soft"` | UserPromptSubmit correction detection: "soft" or "off" |
-| `hooks.sessionStart` | `"inject"` | SessionStart: "inject", or "off" |
-| `recall.limit` | `20` | Max memories returned per aide_recall |
-| `recall.minScopeDepth` | `2` | Minimum scope path depth to trigger blocking (1=src/**, 2=src/api/**) |
-| `recall.layerDiversityMinLimit` | `5` | Minimum limit before round-robin layer diversity kicks in (key is `layerDiversityMinLimit` in defaults.json, not `roundRobinMinLimit`) |
-| `injection.preferences` | `15` | Max preferences injected at SessionStart (key is `injection.preferences` in defaults.json, not `injection.maxPreferences`) |
-| `injection.maxTokens` | `300` | Approximate token cap for SessionStart injection |
-| `memories.hideFromGrep` | `true` | Hide .aide/memories/ from grep via .ignore |
-| `memories.softening.threshold` | `10` | Below this total memory count, all hooks are soft |
-| `hooks.stop.mode` | `"dynamic"` | When Stop blocks: "dynamic" (3→5→10 schedule), "always" (every turn), "interval" (every N turns, soft between), "correction-only" (only when flag), or "off" |
-| `hooks.stop.schedule` | `[{"until":9,"every":3},{"until":29,"every":5},{"every":10}]` | Dynamic 3→5→10: block every 3 turns for turns 1-9, every 5 for 10-29, every 10 for 30+. Correction-pending flag always blocks regardless. Based on data: avg Claude Code session = ~4 human prompts (Anthropic internal), mid-task interruptions 62% dismissed (ProAIDE study). |
-| ~~`hooks.directoryTrigger.threshold`~~ | ~~`1`~~ | _Deprecated/removed._ Directory trigger was replaced by ID-based blocking. Each file is evaluated individually by scoped ID coverage. Setting kept in defaults.json for backward compat only. |
-| `injection.preferences` | `15` | Max preferences injected at SessionStart |
-| `injection.guidelines` | `"all"` | Inject all guidelines at SessionStart |
-| `injection.technical` | `false` | Whether to inject technical memories at SessionStart |
-| `injection.area_context` | `false` | Whether to inject area_context memories at SessionStart |
-| `injection.priorityAlwaysOverride` | `true` | priority:"always" memories always injected regardless of layer caps |
-| `recall.layerOrder` | `["area_context","technical","preferences","guidelines"]` | Priority order for recall ranking |
-| `recall.searchMode` | `"auto"` | Default aide_search mode: "auto", "keyword", or "semantic" |
-| `autoUpdate.enabled` | `true` | Auto-update hooks/config on MCP server start when version changes |
-| `postCheckout.reindex` | `true` | Run reindex on git branch switch |
-| `embedding.model` | `"bge-small-en-v1.5"` | Embedding model for semantic search |
-| `embedding.enabled` | `true` | Enable/disable embedding generation (falls back to keyword search) |
+Configurable settings — all live in `scripts/hooks/defaults.json` with `public: true`, seeded into `.aide/config.json` at init, user-settable via `aide-memory config KEY VALUE`. The canonical list is in the **"Public config defaults"** table earlier in this spec. Settings not yet in `defaults.json` (e.g. `recall.layerOrder`, `recall.searchMode`, `autoUpdate.enabled`, `postCheckout.reindex`, `embedding.model`, `embedding.enabled`) are read from `.aide/config.json` directly or hardcoded elsewhere — they can be promoted to the defaults.json surface in later iterations if user demand surfaces.
 
 All settings should also map to Cursor's equivalent config system (see P1.18).
 
 Settings that vary by project nature:
-- **Monorepo/large codebase**: higher minScopeDepth (3-4), higher recall.limit (30+), more aggressive blocking
-- **Small project/solo dev**: lower softening threshold (5), Stop on correction-only, search off
-- **Team project**: injection.preferences higher (25+), contributor-aware injection (item 7)
-- **Security-sensitive**: all hooks blocking, no grep visibility, strict correction enforcement
+- **Monorepo/large codebase**: higher `recall.limit` (30+), more aggressive blocking via `hooks.*.maxBlocks`
+- **Small project/solo dev**: lower `memories.softening.threshold` (5), `hooks.stop.schedule` tuned longer, search off
+- **Team project**: `injection.preferences` higher (25+), contributor-aware injection (item 7)
+- **Security-sensitive**: all hooks blocking, no grep visibility (`memories.hideFromGrep=true`), strict correction enforcement
 
 **6. Automatic memory cleanup (Phase 2 pro feature):**
 - Detect and surface stale/conflicting/duplicate memories

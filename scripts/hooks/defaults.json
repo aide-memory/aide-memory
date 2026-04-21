@@ -1,12 +1,10 @@
 {
   "hooks.read.maxBlocks": { "value": 1, "public": true, "pro": false },
   "hooks.edit.maxBlocks": { "value": 1, "public": true, "pro": false },
-  "hooks.directoryTrigger.maxBlocks": { "value": 1, "public": true, "pro": false },
   "hooks.stop.schedule": { "value": [{"until":9,"every":3},{"until":29,"every":5},{"every":10}], "public": true, "pro": false },
   "hooks.search.mode": { "value": "soft", "public": true, "pro": false },
   "hooks.correction.enabled": { "value": true, "public": true, "pro": false },
   "hooks.precompact.mode": { "value": "cleanup", "public": true, "pro": false },
-  "recall.minScopeDepth": { "value": 2, "public": true, "pro": false },
   "recall.limit": { "value": 20, "public": true, "pro": false },
   "recall.ensureLayerDiversity": { "value": true, "public": true, "pro": false },
   "recall.layerDiversityMinLimit": { "value": 5, "public": true, "pro": false },

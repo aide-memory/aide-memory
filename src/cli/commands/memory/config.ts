@@ -23,7 +23,7 @@ import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs';
 import { requireProjectRoot, brand } from './utils';
-import { syncIgnoreFile } from '../../../memory/ignoreFile';
+import { resyncDerivedArtifacts } from '../../../memory/init';
 import { loadDefaults } from '../../../memory/settings';
 import { AideConfig } from '../../../memory/config';
 
@@ -204,18 +204,24 @@ export function runConfig(key: string, value?: string): void {
 }
 
 /**
- * Some config keys have side effects beyond writing to config.json.
- * Apply them here so a simple `aide-memory config <key> <value>` leaves
- * the project in a fully consistent state without requiring `init --force`.
+ * Some config keys have side effects beyond writing to config.json
+ * (files on disk whose contents depend on the setting — currently only
+ * `.ignore` is derived, via `memories.hideFromGrep`).
+ *
+ * Delegates to the single source of truth in `init.ts` so CLI writes
+ * and MCP-startup drift-repair follow the same code path. Only fires
+ * for keys that actually have derived artifacts — other settings are
+ * read on-demand by hooks and don't need an eager sync.
  */
-function applySideEffects(projectRoot: string, key: string, value: any): void {
-  if (key === 'memories.hideFromGrep') {
-    // Any truthy non-`false` value means "hide" — match the same default
-    // semantics used elsewhere (ignoreFile.readHideFromGrep).
-    const hide = value !== false;
-    const result = syncIgnoreFile(projectRoot, hide);
-    if (result.changed && result.message) {
-      console.log(brand(result.message));
-    }
+function applySideEffects(projectRoot: string, key: string, _value: any): void {
+  const KEYS_WITH_DERIVED_ARTIFACTS = new Set(['memories.hideFromGrep']);
+  if (!KEYS_WITH_DERIVED_ARTIFACTS.has(key)) return;
+
+  // `resyncDerivedArtifacts` reads the current config from disk and
+  // rewrites every derived file. We just wrote the new value above, so
+  // this picks up the change.
+  const changed = resyncDerivedArtifacts(projectRoot);
+  for (const msg of changed) {
+    console.log(brand(msg));
   }
 }

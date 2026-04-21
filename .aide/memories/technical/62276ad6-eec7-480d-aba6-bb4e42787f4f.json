@@ -1,0 +1,21 @@
+{
+  "uuid": "62276ad6-eec7-480d-aba6-bb4e42787f4f",
+  "layer": "technical",
+  "what": "Empirical production-users research (2026) for JS-compiled-to-binary tools: **Claude Code (Anthropic, Bun compile) is the only named big-name shipping example I could find**. yao-pkg has zero flagship adopters publicly. Deno compile has only small blog-post mentions, no flagship. Most famous \"closed-source Node CLIs\" actually use Rust/Go and ship the binary via npm wrapper: Sentry CLI (Rust), Snyk CLI (Go), Turbo (Rust/napi-rs), esbuild (Go), swc (Rust), Biome (Rust), Rspack (Rust), Rolldown (Rust), lightningcss (Rust). Cypress is Electron. Playwright downloads browsers (no protection). Prisma CLI has a Rust engine but is moving back to TS+WASM. Also: permissions model is DENO-specific — Deno needs --allow-read/--allow-run/--allow-write for every hook operation; Bun and yao-pkg both use Node-style runtimes with NO permissions sandbox, so hooks work unchanged. So the clean technical fit for aide-memory (no shim, no permissions rework) is yao-pkg; Bun needs a 90-min shim; Deno needs hook permissions rework. Choosing Bun anyway because Anthropic's Claude Code validates production scale and yao-pkg has a 2-maintainer team with no flagship user.",
+  "why": "User asked \"any one using yao-pkg, what big names actually compile npm to binary\" — triggered rigorous research per memory 149. Sharpens memories 140 and 150 with concrete empirical data: the flagship-user landscape is sparser than I'd implied. Also clarifies that the permissions concern is Deno-specific, not shared across \"all alternatives to Bun\" as I'd originally framed.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "production-users",
+    "ecosystem-validation"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T16:58:13.227Z",
+  "updated_at": "2026-04-21T16:58:13.227Z"
+}

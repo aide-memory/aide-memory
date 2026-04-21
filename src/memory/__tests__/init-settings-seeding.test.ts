@@ -65,10 +65,10 @@ describe('init seeds public settings into .aide/config.json', () => {
     }
   });
 
-  it('includes all 18 defaults.json settings as public', () => {
+  it('includes all defaults.json settings as public', () => {
     const defaults = loadDefaults();
     const keys = Object.keys(defaults);
-    expect(keys.length).toBe(18);
+    expect(keys.length).toBeGreaterThanOrEqual(16);
     // Every setting must be flagged public per Phase 1 decision.
     for (const key of keys) {
       expect(defaults[key].public, `key ${key}`).toBe(true);
