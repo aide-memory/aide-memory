@@ -1,6 +1,6 @@
 export { MemoryStore } from './store';
 export { Analytics } from './analytics';
-export { recall, scopeMatchesPath } from './recall';
+export { recall, scopeMatchesPath, computeScopedForPath } from './recall';
 export { createServer, startServer } from './server';
 export { ScopeResolver } from './scopes';
 export { AideConfig } from './config';

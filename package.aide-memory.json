@@ -8,26 +8,30 @@
     "aide-memory": "dist/cli/aide-memory.js"
   },
   "files": [
-    "dist/memory/*.js",
     "dist/cli/aide-memory.js",
-    "dist/cli/commands/memory/",
-    "scripts/hooks/",
-    "src/templates/rules/",
+    "dist/memory/index.js",
+    "scripts/hooks/defaults.json",
+    "scripts/hooks/*.sh",
+    "scripts/hooks/*.js",
+    "src/templates/rules",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build"
+    "build:dist": "npm run build:dist:cli && npm run build:dist:lib",
+    "build:dist:cli": "esbuild src/cli/aide-memory.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/cli/aide-memory.js",
+    "build:dist:lib": "esbuild src/memory/index.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/memory/index.js",
+    "prepublishOnly": "npm run build && npm run build:dist && ./scripts/verify-package.sh"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0",
-    "commander": "^12.0.0",
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "zod": "^4.3.6"
+    "better-sqlite3": "^11.0.0"
   },
   "optionalDependencies": {
     "@huggingface/transformers": "^3.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
   },
   "engines": {
     "node": ">=18.0.0"

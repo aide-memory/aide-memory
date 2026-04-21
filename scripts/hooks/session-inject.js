@@ -45,9 +45,9 @@ try {
     return all;
   }
 
-  // Load MemoryStore from the package's compiled dist
+  // Load MemoryStore from the package's compiled dist (bundled index)
   const distPath = path.join(packageRoot, 'dist', 'memory');
-  const { MemoryStore } = require(path.join(distPath, 'store'));
+  const { MemoryStore } = require(path.join(distPath, 'index'));
 
   // Open store using projectRoot (constructor accepts string project path)
   const store = new MemoryStore({ projectRoot });

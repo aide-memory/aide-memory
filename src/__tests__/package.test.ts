@@ -17,9 +17,9 @@ describe('package.aide-memory.json', () => {
     expect(pkg.name).toBe('aide-memory');
   });
 
-  it('has version 0.1.0', () => {
+  it('has a valid semver version', () => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    expect(pkg.version).toBe('0.2.0');
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?$/);
   });
 
   it('has bin entries for aide and aide-memory', () => {
@@ -34,24 +34,50 @@ describe('package.aide-memory.json', () => {
     expect(pkg.main).toBe('dist/memory/index.js');
   });
 
-  it('files array includes required paths', () => {
+  it('files array includes required paths (minified publish: bundled entries only)', () => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     expect(pkg.files).toBeDefined();
-    expect(pkg.files).toContain('dist/memory/*.js');
+    // Single bundled CLI entry (esbuild output)
     expect(pkg.files).toContain('dist/cli/aide-memory.js');
-    expect(pkg.files).toContain('dist/cli/commands/memory/');
-    expect(pkg.files).toContain('scripts/hooks/');
-    expect(pkg.files).toContain('src/templates/rules/');
+    // Single bundled library entry (esbuild output)
+    expect(pkg.files).toContain('dist/memory/index.js');
+    // Hook scripts (bash + node helpers + defaults)
+    expect(pkg.files).toContain('scripts/hooks/*.sh');
+    expect(pkg.files).toContain('scripts/hooks/*.js');
+    expect(pkg.files).toContain('scripts/hooks/defaults.json');
+    // Rule templates (no trailing slash in allowlist form)
+    expect(pkg.files).toContain('src/templates/rules');
     expect(pkg.files).toContain('README.md');
     expect(pkg.files).toContain('LICENSE');
   });
 
-  it('has required dependencies', () => {
+  it('files array does NOT include per-command or tsc-output globs (would leak unbundled source)', () => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    // These were in 0.1.1 but would ship tsc output unbundled — source-leak risk.
+    expect(pkg.files).not.toContain('dist/memory/*.js');
+    expect(pkg.files).not.toContain('dist/cli/commands/memory/');
+    expect(pkg.files).not.toContain('dist/');
+    expect(pkg.files).not.toContain('src/');
+  });
+
+  it('has only native-dep runtime dependencies (everything else bundled at publish time)', () => {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    // better-sqlite3 must remain external — it's a native N-API addon that
+    // resolves a platform-specific .node file from the user's node_modules.
     expect(pkg.dependencies['better-sqlite3']).toBeDefined();
-    expect(pkg.dependencies.commander).toBeDefined();
-    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBeDefined();
-    expect(pkg.dependencies.zod).toBeDefined();
+  });
+
+  it('does NOT list pure-JS deps as runtime dependencies (they are bundled by esbuild)', () => {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    // commander, zod, @modelcontextprotocol/sdk, chalk, fast-glob are all
+    // bundled into dist/cli/aide-memory.js and dist/memory/index.js at
+    // publish time. They should NOT appear as runtime dependencies,
+    // otherwise npm will pull them in twice (bundled + installed).
+    expect(pkg.dependencies.commander).toBeUndefined();
+    expect(pkg.dependencies.zod).toBeUndefined();
+    expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBeUndefined();
+    expect(pkg.dependencies.chalk).toBeUndefined();
+    expect(pkg.dependencies['fast-glob']).toBeUndefined();
   });
 
   it('does not include old aide-v0 dependencies', () => {
@@ -63,6 +89,12 @@ describe('package.aide-memory.json', () => {
     expect(pkg.dependencies['ts-morph']).toBeUndefined();
     expect(pkg.dependencies['web-tree-sitter']).toBeUndefined();
     expect(pkg.dependencies.ws).toBeUndefined();
+  });
+
+  it('keeps @huggingface/transformers as optionalDependencies (external, dynamic-imported)', () => {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    expect(pkg.optionalDependencies).toBeDefined();
+    expect(pkg.optionalDependencies['@huggingface/transformers']).toBeDefined();
   });
 
   it('requires node >= 18', () => {

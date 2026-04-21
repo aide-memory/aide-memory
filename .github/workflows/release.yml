@@ -26,14 +26,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build (tsc for test/lib compilation)
         run: npm run build
+
+      - name: Build minified dist (esbuild bundle)
+        run: npm run build:dist
 
       - name: Test
         run: npm test
 
       - name: Prepare package for npm
         run: cp package.aide-memory.json package.json
+
+      - name: Verify tarball contents (fail if source/maps leak)
+        run: ./scripts/verify-package.sh
 
       - name: Publish to npm
         run: npm publish --access public

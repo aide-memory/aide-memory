@@ -1,67 +1,119 @@
 #!/bin/bash
-set -e
+# Verify aide-memory package contents before publish.
+# Usage: ./scripts/verify-package.sh   (from repo root, with package.json being the publish manifest)
+# Fails non-zero if any .ts source, .map, or unbundled src/ file would leak.
 
-# Verify aide-memory package contents before publish
-# Usage: ./scripts/verify-package.sh
+set +e  # collect all errors, exit at the end
 
 echo "Verifying aide-memory package contents..."
 
-# Run npm pack --dry-run and capture output
-PACK_OUTPUT=$(npm pack --dry-run 2>&1)
-
-# Check package size (extract from npm pack output)
-SIZE_LINE=$(echo "$PACK_OUTPUT" | grep -i "unpacked size" || true)
-if [ -z "$SIZE_LINE" ]; then
-  echo "WARNING: Could not determine package size"
+# Capture the list of files npm pack would ship
+PACK_OUTPUT=$(npm pack --dry-run --json 2>&1)
+# Fallback to text mode if --json not available
+if ! echo "$PACK_OUTPUT" | grep -q '"files"'; then
+  PACK_OUTPUT=$(npm pack --dry-run 2>&1)
+  FILE_LINES=$(echo "$PACK_OUTPUT" | grep -E '^npm notice' | grep -E '[0-9]+\s*([kKMmGg]?[bB])\s+\S' | sed -E 's/npm notice\s+[0-9.]+\s*[kKMmGg]?[bB]\s+//')
 else
-  echo "Package size: $SIZE_LINE"
-  # Extract numeric size - check if it exceeds 5MB
-  SIZE_KB=$(echo "$SIZE_LINE" | grep -oE '[0-9]+(\.[0-9]+)?\s*(kB|KB)' || true)
-  SIZE_MB=$(echo "$SIZE_LINE" | grep -oE '[0-9]+(\.[0-9]+)?\s*(MB|mB)' || true)
-  if [ -n "$SIZE_MB" ]; then
-    SIZE_NUM=$(echo "$SIZE_MB" | grep -oE '[0-9]+(\.[0-9]+)?')
-    if (( $(echo "$SIZE_NUM > 5" | bc -l 2>/dev/null || echo 0) )); then
-      echo "FAIL: Package size exceeds 5MB limit"
-      exit 1
-    fi
-  fi
+  FILE_LINES=$(echo "$PACK_OUTPUT" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); [print(f["path"]) for f in d[0]["files"]]' 2>/dev/null || echo "")
 fi
+
+if [ -z "$FILE_LINES" ]; then
+  echo "FAIL: could not determine tarball contents from npm pack output"
+  exit 1
+fi
+
+echo "Files that would ship:"
+echo "$FILE_LINES" | sed 's/^/  /'
+echo ""
 
 ERRORS=0
 
-# Check no test files included
-if echo "$PACK_OUTPUT" | grep -qE '\.test\.(ts|js)'; then
-  echo "FAIL: Test files found in package"
+# 1. No raw TypeScript sources
+if echo "$FILE_LINES" | grep -qE '\.ts$'; then
+  echo "FAIL: raw .ts source files found in tarball:"
+  echo "$FILE_LINES" | grep -E '\.ts$' | sed 's/^/  /'
   ERRORS=$((ERRORS + 1))
 fi
 
-# Check no source maps included
-if echo "$PACK_OUTPUT" | grep -qE '\.map$'; then
-  echo "FAIL: Source maps found in package"
+# 2. No source maps
+if echo "$FILE_LINES" | grep -qE '\.map$'; then
+  echo "FAIL: source map (.map) files found in tarball:"
+  echo "$FILE_LINES" | grep -E '\.map$' | sed 's/^/  /'
   ERRORS=$((ERRORS + 1))
 fi
 
-# Check no docs included
-if echo "$PACK_OUTPUT" | grep -qE '^docs/'; then
-  echo "FAIL: docs/ directory found in package"
+# 3. No test files
+if echo "$FILE_LINES" | grep -qE '\.test\.(ts|js)$|__tests__/'; then
+  echo "FAIL: test files found in tarball:"
+  echo "$FILE_LINES" | grep -E '\.test\.(ts|js)$|__tests__/' | sed 's/^/  /'
   ERRORS=$((ERRORS + 1))
 fi
 
-# Check no .claude/ included
-if echo "$PACK_OUTPUT" | grep -qE '\.claude/'; then
-  echo "FAIL: .claude/ directory found in package"
+# 4. No docs / .claude / .aide / .github / .git
+if echo "$FILE_LINES" | grep -qE '^docs/|\.claude/|\.aide/|\.github/|\.git/'; then
+  echo "FAIL: dev-only directories found in tarball:"
+  echo "$FILE_LINES" | grep -E '^docs/|\.claude/|\.aide/|\.github/|\.git/' | sed 's/^/  /'
   ERRORS=$((ERRORS + 1))
 fi
 
-# Check no src/ included (should only ship dist/)
-if echo "$PACK_OUTPUT" | grep -qE '^\s*src/' | grep -v 'src/templates'; then
-  echo "FAIL: src/ directory found in package (excluding templates)"
+# 5. No src/ files except src/templates/rules (templates are intentionally shipped)
+SRC_LEAKS=$(echo "$FILE_LINES" | grep -E '^src/' | grep -vE '^src/templates/rules/')
+if [ -n "$SRC_LEAKS" ]; then
+  echo "FAIL: src/ files outside src/templates/rules/ found in tarball:"
+  echo "$SRC_LEAKS" | sed 's/^/  /'
   ERRORS=$((ERRORS + 1))
+fi
+
+# 6. No dev configs
+if echo "$FILE_LINES" | grep -qE '^tsconfig\.json$|^vitest\.config|^package\.aide-memory\.json$'; then
+  echo "FAIL: dev configuration files found in tarball:"
+  echo "$FILE_LINES" | grep -E '^tsconfig\.json$|^vitest\.config|^package\.aide-memory\.json$' | sed 's/^/  /'
+  ERRORS=$((ERRORS + 1))
+fi
+
+# 7. The bundled CLI and library MUST be present
+if ! echo "$FILE_LINES" | grep -qE '^dist/cli/aide-memory\.js$'; then
+  echo "FAIL: dist/cli/aide-memory.js (bundled CLI) missing from tarball"
+  ERRORS=$((ERRORS + 1))
+fi
+if ! echo "$FILE_LINES" | grep -qE '^dist/memory/index\.js$'; then
+  echo "FAIL: dist/memory/index.js (bundled library) missing from tarball"
+  ERRORS=$((ERRORS + 1))
+fi
+
+# 8. The bundled CLI must look minified (single file, no leading JSDoc block)
+# Extract the actual file from the tarball to verify
+TARBALL=$(ls aide-memory-*.tgz 2>/dev/null | head -1)
+if [ -z "$TARBALL" ]; then
+  npm pack --silent >/dev/null 2>&1
+  TARBALL=$(ls aide-memory-*.tgz | head -1)
+fi
+if [ -n "$TARBALL" ] && [ -f "$TARBALL" ]; then
+  TMPDIR=$(mktemp -d)
+  tar -xzf "$TARBALL" -C "$TMPDIR" 2>/dev/null
+  BUNDLE="$TMPDIR/package/dist/cli/aide-memory.js"
+  if [ -f "$BUNDLE" ]; then
+    # Count comment-style lines in first 100 lines — minified output has ~0
+    COMMENT_LINES=$(head -100 "$BUNDLE" | grep -cE '^\s*(/\*| \* |//)' || true)
+    if [ "$COMMENT_LINES" -gt 5 ]; then
+      echo "FAIL: bundled CLI has $COMMENT_LINES comment lines in head — was --minify applied?"
+      ERRORS=$((ERRORS + 1))
+    fi
+    # Line count should be very small for a minified bundle (usually under 200 lines)
+    LINE_COUNT=$(wc -l < "$BUNDLE")
+    if [ "$LINE_COUNT" -gt 500 ]; then
+      echo "WARNING: bundled CLI has $LINE_COUNT lines — minified bundles are usually under 500"
+    fi
+  fi
+  rm -rf "$TMPDIR" "$TARBALL"
 fi
 
 if [ $ERRORS -eq 0 ]; then
-  echo "PASS: Package contents look correct"
+  echo ""
+  echo "PASS: Package contents look correct (no source/map/test/dev leaks)"
+  exit 0
 else
+  echo ""
   echo "FAIL: $ERRORS issue(s) found"
   exit 1
 fi

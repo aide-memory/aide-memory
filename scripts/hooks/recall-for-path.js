@@ -46,8 +46,7 @@ try {
   // computeScopedForPath is the SINGLE source of truth for the focused-scope
   // filter used by ALL hook counts.
   const distPath = path.join(packageRoot, 'dist', 'memory');
-  const { MemoryStore } = require(path.join(distPath, 'store'));
-  const { computeScopedForPath } = require(path.join(distPath, 'recall'));
+  const { MemoryStore, computeScopedForPath } = require(path.join(distPath, 'index'));
 
   // Convert absolute path to relative for scope matching
   // Scopes are stored as relative (e.g. "src/memory/**") but Claude Code

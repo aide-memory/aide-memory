@@ -2,15 +2,20 @@ src/
 tests/
 *.test.ts
 *.test.js
+*.ts
 __tests__/
 **/run-comparison.js
 **/seed-project.js
 docs/
 .claude/
 .aide/
+.github/
+.git/
 tsconfig.json
 vitest.config.ts
 *.map
+**/*.map
+*.d.ts.map
 eval/
 web/
 PIVOT_PLAN.md
@@ -18,3 +23,5 @@ PRODUCT_CHANGES_SUMMARY.md
 package.aide-memory.json
 README.npm.md
 scripts/build.sh
+# Belt-and-suspenders: src/templates/rules IS shipped (via files allowlist) — the
+# *.ts exclusion above covers any leaked TS files even under allowlisted dirs.
