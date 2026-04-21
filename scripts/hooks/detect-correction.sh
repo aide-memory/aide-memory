@@ -29,7 +29,7 @@ if [ "$WORD_COUNT" -lt 3 ]; then
 fi
 
 # Skip known false positive phrases (conversational, not corrective)
-if echo "$USER_MESSAGE" | grep -qiE "^(no (I mean|but|actually I|I think|not sure)|I don.t (think|know|get|understand)|what I mean)"; then
+if echo "$USER_MESSAGE" | grep -qiE "^(no (I mean|but|actually I|I think|not sure)|I don'?t (think|know|get|understand)|what I mean)"; then
   exit 0
 fi
 
@@ -53,7 +53,7 @@ FLAG_FILE="$CACHE_DIR/correction-pending-${SID}.txt"
 FALLBACK="If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server."
 
 # Pattern 1: Corrections — user is fixing agent behavior
-if echo "$USER_MESSAGE" | grep -qiE "(no[, ]+(don.t|do not|use|instead|that.s wrong)|actually[, ]|wrong[, ]|not like that|use .+ instead|don.t use|stop using|I told you|I said)"; then
+if echo "$USER_MESSAGE" | grep -qiE "(no[, ]+(don'?t|do not|can'?t|won'?t|isn'?t|wasn'?t|weren'?t|shouldn'?t|didn'?t|couldn'?t|wouldn'?t|mustn'?t|haven'?t|hadn'?t|aren'?t|use|instead|that'?s wrong)|actually[, ]|wrong[, ]|not like that|use .+ instead|don'?t use|stop using|I told you|I said)"; then
   cat <<HOOK_OUTPUT
 {
   "hookSpecificOutput": {
@@ -68,7 +68,7 @@ HOOK_OUTPUT
 fi
 
 # Pattern 2: Decisions — user is making a choice or direction
-if echo "$USER_MESSAGE" | grep -qiE "(let.s (use|go with)|we should|go with|the approach is|decided to|decision is|we.re going|from now on)"; then
+if echo "$USER_MESSAGE" | grep -qiE "(let'?s (use|go with)|we should|go with|the approach is|decided to|decision is|we'?re going|from now on)"; then
   cat <<HOOK_OUTPUT
 {
   "hookSpecificOutput": {
@@ -83,7 +83,7 @@ HOOK_OUTPUT
 fi
 
 # Pattern 3: Preferences — user is expressing style or approach preferences
-if echo "$USER_MESSAGE" | grep -qiE "(I prefer|always use|never use|I like|my style is|I want you to|don.t ever|make sure to always|I always)"; then
+if echo "$USER_MESSAGE" | grep -qiE "(I prefer|always use|never use|I like|my style is|I want you to|don'?t ever|make sure to always|I always)"; then
   cat <<HOOK_OUTPUT
 {
   "hookSpecificOutput": {
