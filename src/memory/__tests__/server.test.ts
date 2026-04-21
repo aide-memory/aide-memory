@@ -171,6 +171,85 @@ describe('MCP Server', () => {
       expect(text).toContain('Deleted');
       expect(store.get(id)).toBeNull();
     });
+  });
+
+  describe('LLM-friendly schema coercions', () => {
+    // LLMs frequently send singletons instead of arrays and string-booleans.
+    // These tests lock in the lenient wrappers so future schema changes don't
+    // regress and break agent tool calls.
+    it('aide_recall accepts single-string paths instead of array', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'scoped to auth', layer: 'technical', scope: 'src/auth/**' },
+      });
+
+      const result = await client.callTool({
+        name: 'aide_recall',
+        arguments: { paths: 'src/auth/middleware.ts' as any }, // LLM-style single string
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('scoped to auth');
+    });
+
+    it('aide_recall accepts single-number id instead of array', async () => {
+      const stored = await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'id-array-lenient check', layer: 'technical' },
+      });
+      const match = ((stored.content as any[])[0].text as string).match(/id: (\d+)/);
+      const id = Number(match![1]);
+
+      const result = await client.callTool({
+        name: 'aide_recall',
+        arguments: { ids: id as any }, // LLM-style single number, not [number]
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('id-array-lenient check');
+    });
+
+    it('aide_remember accepts single-string tags instead of array', async () => {
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'tags as string', layer: 'technical', tags: 'architecture' as any },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Stored');
+      const latest = store.list()[0];
+      expect(latest.tags).toEqual(['architecture']);
+    });
+
+    it('aide_remember accepts string "false" for shared (LLMs often quote booleans)', async () => {
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          what: 'personal pref via string false',
+          layer: 'preferences',
+          shared: 'false' as any, // LLM-style stringified boolean
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Stored');
+      const latest = store.list({ layer: 'preferences' })[0];
+      expect(latest.shared).toBe(false);
+    });
+
+    it('aide_remember accepts string "true" for shared', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          what: 'shared pref via string true',
+          layer: 'preferences',
+          shared: 'true' as any,
+        },
+      });
+
+      const latest = store.list({ layer: 'preferences' })[0];
+      expect(latest.shared).toBe(true);
+    });
 
     it('deleted memory does not appear in recall', async () => {
       await client.callTool({

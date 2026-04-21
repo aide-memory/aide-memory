@@ -17,6 +17,33 @@ function toNumber(v: unknown): number {
   return typeof v === 'string' ? Number(v) : v as number;
 }
 
+/**
+ * Array schema that tolerates a single-item shortcut. LLMs frequently send
+ * `paths: "src/foo.ts"` when the schema says `paths: string[]`; this wrapper
+ * transforms that into `["src/foo.ts"]` before validation. Plain arrays pass
+ * through unchanged.
+ */
+function lenientArray<T extends z.ZodTypeAny>(item: T) {
+  return z.preprocess(
+    (v) => (v !== undefined && v !== null && !Array.isArray(v) ? [v] : v),
+    z.array(item)
+  );
+}
+
+/**
+ * Boolean schema that accepts "true"/"false"/"1"/"0" strings as well as real
+ * booleans. z.coerce.boolean() is too lenient (treats any non-empty string as
+ * true, including the literal "false"), so we normalise manually.
+ */
+const lenientBoolean = z.preprocess((v) => {
+  if (typeof v === 'string') {
+    const s = v.toLowerCase().trim();
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0' || s === '') return false;
+  }
+  return v;
+}, z.boolean());
+
 export function createServer(store: MemoryStore, options?: { logDir?: string | null }): McpServer {
   const logDir = options?.logDir ?? null;
   const server = new McpServer({
@@ -29,10 +56,10 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'aide_recall',
     'Retrieve context for an area of the codebase before planning or making changes. Returns contributor preferences, technical knowledge, area decisions, and project guidelines. Call this when starting work in a codebase area, before proposing plans, or when you may have lost earlier context.',
     {
-      paths: z.array(z.string()).optional().describe('File or directory paths you are working in. Returns memories scoped to these areas plus project-wide context.'),
-      ids: z.array(z.coerce.number()).optional().describe('Specific memory IDs to retrieve (for gap-filling). When provided, returns exactly these memories — no path matching.'),
+      paths: lenientArray(z.string()).optional().describe('File or directory paths you are working in. Returns memories scoped to these areas plus project-wide context.'),
+      ids: lenientArray(z.coerce.number()).optional().describe('Specific memory IDs to retrieve (for gap-filling). When provided, returns exactly these memories — no path matching.'),
       query: z.string().optional().describe('Optional text to boost relevant results (e.g. "skeleton loading" or "authentication flow").'),
-      layers: z.array(z.enum(LAYER_VALUES)).optional().describe('Filter to specific layers: preferences, technical, area_context, guidelines.'),
+      layers: lenientArray(z.enum(LAYER_VALUES)).optional().describe('Filter to specific layers: preferences, technical, area_context, guidelines.'),
       contributor: z.string().optional().describe('Filter to a specific contributor.'),
       limit: z.coerce.number().optional().describe('Max memories to return (default 20).'),
     },
@@ -86,9 +113,9 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       why: z.string().optional().describe('Context for why this is worth remembering.'),
       context_label: z.string().optional().describe('Feature grouping label (e.g. "dashboard skeleton loading", "Add App modal").'),
       contributor: z.string().optional().describe('Who this knowledge came from (for preferences layer).'),
-      tags: z.array(z.string()).optional().describe('Tags for categorization.'),
+      tags: lenientArray(z.string()).optional().describe('Tags for categorization.'),
       source: z.enum(SOURCE_VALUES).optional().describe('How this was captured. Default: conversation.'),
-      shared: z.boolean().optional().describe('Whether this memory is shared (true, default) or personal (false). Only affects preferences layer file placement.'),
+      shared: lenientBoolean.optional().describe('Whether this memory is shared (true, default) or personal (false). Only affects preferences layer file placement.'),
       priority: z.enum(['always', 'normal']).optional().describe('always = auto-injected at session start. normal = standard recall.'),
     },
     async (params) => {
