@@ -43,10 +43,11 @@ describe('package.aide-memory.json', () => {
     expect(pkg.files).toContain('dist/memory/index.js');
     // MCP server entry (spawned via .mcp.json); bundled separately
     expect(pkg.files).toContain('dist/memory/cli.js');
-    // Hook scripts (bash + node helpers + defaults)
+    // Hook shims — 4-line bash files that `exec` into the bundled CLI's
+    // `hook <name>` subcommand. Each hook's algorithmic logic lives inside
+    // the bundle, not in the shim. Node helpers (.js) and defaults.json
+    // are no longer shipped — their logic is inlined into the bundle.
     expect(pkg.files).toContain('scripts/hooks/*.sh');
-    expect(pkg.files).toContain('scripts/hooks/*.js');
-    expect(pkg.files).toContain('scripts/hooks/defaults.json');
     // Rule templates (no trailing slash in allowlist form)
     expect(pkg.files).toContain('src/templates/rules');
     expect(pkg.files).toContain('README.md');
@@ -60,6 +61,10 @@ describe('package.aide-memory.json', () => {
     expect(pkg.files).not.toContain('dist/cli/commands/memory/');
     expect(pkg.files).not.toContain('dist/');
     expect(pkg.files).not.toContain('src/');
+    // Node hook helpers and defaults.json must NOT ship — they were shipped
+    // pre-0.4.0 which leaked hook algorithm source readable on user disk.
+    expect(pkg.files).not.toContain('scripts/hooks/*.js');
+    expect(pkg.files).not.toContain('scripts/hooks/defaults.json');
   });
 
   it('has only native-dep runtime dependencies (everything else bundled at publish time)', () => {

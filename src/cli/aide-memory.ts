@@ -35,6 +35,7 @@ import { runSyncImport, runSyncExport } from './commands/memory/sync';
 import { runCleanup } from './commands/memory/cleanup';
 import { runMigrate } from './commands/memory/migrate';
 import { runInit } from './commands/memory/init';
+import { runHook } from './commands/memory/hook';
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkForUpdates, printUpdateNotice } from '../memory/updater';
@@ -200,6 +201,17 @@ export function createProgram(): Command {
     .option('--reset', 'Reset config to factory defaults (does not delete memories)')
     .action((options: { updateRules?: boolean; force?: boolean; reset?: boolean }) => {
       runInit(options);
+    });
+
+  // aide-memory hook <name> — internal entry point invoked by shell shims
+  // installed into .claude/settings.json. Reads hook-event JSON from stdin,
+  // dispatches to the named handler. Never throws — hooks must not break the
+  // agent. Users do not call this directly.
+  program
+    .command('hook <name>')
+    .description('Internal: dispatch a Claude Code hook (called by shell shims)')
+    .action((name: string) => {
+      runHook(name);
     });
 
   return program;

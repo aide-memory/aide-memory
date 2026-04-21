@@ -1,49 +1,91 @@
 # Changelog
 
-All notable changes to aide-memory are documented in this file.
+## 0.4.0 — 2026-04-21
 
-## 0.3.0 — 2026-04-21
+### aide-memory — the persistent memory layer for AI coding agents
 
-### Breaking changes
+aide-memory gives AI coding agents a persistent, path-scoped memory of everything you've taught them. Your agent remembers your stack, your preferences, your team's conventions, and the reasoning behind your past decisions — across every session, every branch, and every tool.
 
-- **Removed `aide-memory init --scan` flag.** The pre-train scan feature that generated initial memories from filesystem analysis is gone. Users who relied on `--scan` should seed initial memories manually via `aide-memory remember` (CLI) or the MCP `aide_remember` tool. The tree-sitter–based scan infrastructure has also been removed from the package.
+Memories live in your git repo, not in someone else's cloud. No telemetry, no cross-project leakage, no lock-in. Private by default.
 
-### New features
+This release is the first stable line shipped as a closed-source, source-protected binary. Earlier numbered versions (0.1.x, 0.2.x, 0.3.x) predated this architecture and are no longer supported.
 
-- **Pending-memories import on MCP server startup.** If the MCP server crashes or is interrupted while writing memories, pending entries are now replayed automatically when the server next starts. Closes a gap where a crashed session could leave memories unimported.
-- **Mid-session drift-repair for derived artifacts.** `aide-memory` detects when `.claude/rules/aide-memory.md`, `.mcp.json`, or `.claude/settings.json` hook entries have drifted from the canonical templates mid-session and re-syncs them automatically. Prevents "it worked at init, doesn't work now" class of bugs.
-- **Settings surface refactored — 18 public configuration keys.** Dead settings removed, remaining settings documented and exposed via `aide-memory config <key> [value]`. Keys include: `capture.enabled`, `capture.hooks.*`, `contributor`, `embeddings.backend`, `embeddings.model`, `hooks.correction.enabled`, `hooks.edit.maxBlocks`, `hooks.precompact.mode`, `hooks.read.maxBlocks`, `hooks.search.mode`, `hooks.stop.schedule`, `injection.area_context`, `injection.guidelines`, `injection.preferences`, `injection.priorityAlwaysOverride`, `injection.technical`, `memories.hideFromGrep`, `memories.softening.threshold`, `nudge.visible`, `recall.*`, `tags.presets`, `telemetry.enabled`, `updates.check`.
-- **Manual E2E validation guide.** Full scenario coverage (A-G + D/F/G/A7/gap-fill) documented for maintainers verifying releases end-to-end.
+### What's in the box
 
-### Fixes
+**Path-scoped recall across four layers.** Memories are attached to glob scopes (`src/api/**`, `docs/`, a specific file, or project-wide) and surface to your agent when it touches those paths. Four semantic layers keep recall organized:
 
-- **`detect-correction` hook now matches colloquial contractions.** Phrases like "don't", "can't", "won't", "isn't" were previously missed; they're now correctly flagged as potential corrections so the agent is prompted to store them.
-- **MCP schema leniency.** Numeric MCP parameters now use `z.coerce.number()` across all tools (was previously only `aide_recall`); optional fields accept explicit `null` in addition to `undefined`; string IDs are coerced for `aide_forget` / `aide_update`. Prevents LLM type-mismatch errors from blocking tool calls.
-- **Stop hook suppression when agent already stored in same turn.** The Stop-hook "did you store?" prompt no longer fires if the agent already called `aide_remember` or `aide_update` during the current turn. Reduces noise.
+- **preferences** — how you like to work (coding style, tool choices, personal habits)
+- **technical** — facts about your stack (library constraints, version requirements, known gotchas)
+- **area_context** — decisions for a code area (why the auth module works this way, the trade-offs made)
+- **guidelines** — team principles and rules
 
-### Internal — source protection (no user-facing change)
+Parent-scope inheritance (memories scoped to `src/components/**` also match `src/components/dashboard/Card.tsx`) and focused-scope filtering (grandparent scopes stay out of the way) make recall precise enough to not be noisy.
 
-- **Published package is now bundled + minified via esbuild.** Ships three bundled entry points:
-  - `dist/cli/aide-memory.js` (CLI, 118 KB)
-  - `dist/memory/index.js` (library, 703 KB)
-  - `dist/memory/cli.js` (MCP server stdio entry, 618 KB)
-  All three minified, all three with zero comments / type info / original identifiers. Source TypeScript, source maps, and per-module tsc output are NOT shipped.
-- **Fixed chronic missing-deps bug.** `chalk` and `fast-glob` were imported at runtime but missing from 0.1.1 / 0.2.0 `package.json` dependencies. Both now bundled into the minified output (no longer runtime deps). Only `better-sqlite3` (native) and optional `@huggingface/transformers` remain external.
-- **Hardened `scripts/verify-package.sh`** — the CI publish gate now fails if any `.ts`, `.map`, `src/` (non-template), or dev-monorepo-leak string (`aide-v0`, `aide-legacy`, `ts-morph`, `tree-sitter-typescript`, `web-tree-sitter`, `graph-based retrieval`, `marked-terminal`) appears in the tarball or in any shipped bundle.
-- **Tightened `.npmignore`** with `**/*.map`, `*.d.ts.map`, `*.ts`, `.github/`, `.git/` as belt-and-suspenders alongside the `package.json` `files` allowlist.
-- **CLI bundle no longer inlines `package.json`.** The `require('../../package.json')` pattern that was embedding dev-monorepo metadata into the minified output has been replaced with a runtime `fs.readFileSync` — no leak even when building from the dev worktree.
+**Full MCP server integration.** Once `aide-memory init` wires up `.mcp.json`, your agent gets seven tools:
+
+- `aide_recall` — retrieve memories for a set of paths
+- `aide_remember` — store a new memory (four layers supported)
+- `aide_update` — change an existing memory's `why`, `scope`, or `priority`
+- `aide_forget` — delete a memory
+- `aide_search` — keyword-match across all memories
+- `aide_memories` — list memories with filters
+- `aide_import` — bulk import memories from raw text (e.g., a README or decision doc)
+
+All tool schemas accept lenient inputs (`z.coerce.number()` for IDs, `null` in addition to `undefined` for optional fields) so LLMs don't get blocked by minor type mismatches.
+
+**Eleven hooks that nudge the agent at the right moments.** aide-memory installs hooks into `.claude/settings.json` that fire during a Claude Code session:
+
+- **Pre-read / pre-edit** — block or soft-nudge the agent to call `aide_recall` before touching a file with scoped memories
+- **Pre-search** — nudge the agent to call `aide_search` before a Grep/Glob when matching memories exist
+- **Pre-prompt (UserPromptSubmit)** — detect corrections, decisions, and preferences in what you type, and prompt the agent to store them via `aide_remember`
+- **Session-start injection** — surface preferences, guidelines, and priority-always memories as context at the start of every session
+- **Dynamic Stop-hook intervals** — remind the agent to save newly-learned things every 3rd, 5th, or 10th turn (configurable schedule) so nothing is lost between sessions
+- **Pre-compact cleanup** — clear session tracking before Claude Code compacts the context, so the next turn re-blocks cleanly
+- **Post-tool trackers** — mark ids/paths/queries as already-recalled so the same memory doesn't get nudged twice
+
+Hook logic is bundled into the distributed binary; only a thin bash shim is visible on disk. All hook behavior is configurable via `aide-memory config`.
+
+**CLI parity with the MCP surface.** Everything agents can do over MCP, you can do from the terminal:
+
+```
+aide-memory init                        # set up .aide/, .claude/rules/, .mcp.json, hooks
+aide-memory remember "<what>" --layer <layer> [--scope <glob>] [--contributor <name>]
+aide-memory recall <path>               # preview what the agent will see
+aide-memory list [--layer <layer>]
+aide-memory search <keyword>
+aide-memory update <id> [--why ...] [--scope ...] [--priority always|normal]
+aide-memory forget <id>
+aide-memory stats                       # counts by layer, most-recalled, source breakdown
+aide-memory config <key> [value]        # tune 18 public settings
+aide-memory sync export | sync import   # reconcile SQLite cache ↔ .aide/memories/*.json
+aide-memory cleanup                     # remove stale session tracking files
+```
+
+**Synchronous SQLite backend.** Memories are written to `.aide/memories/<layer>/<uuid>.json` and indexed in a local SQLite cache at `.aide/memory.db`. Commits track memory changes via git — the database is rebuildable from the JSON files at any time (`aide-memory sync import`), so losing the cache is never lossy.
+
+**Optional semantic recall.** The default recall is fast keyword + scope filtering. Install `@huggingface/transformers` to add BGE-small-en-v1.5 embeddings for semantic-similarity fallback when keyword matches come up short. Optional dependency — no effect on cold install size if you don't use it.
+
+**18 tunable settings.** `aide-memory config` lets you adjust nudge aggressiveness, injection limits per layer, embedding backend, stop-hook intervals, grep-hook mode, and more. Every setting is transparent — no hidden pro-vs-free gating in the current version.
+
+**Drift-repair.** If `.claude/rules/aide-memory.md`, `.mcp.json`, or `.claude/settings.json` hook entries drift from the canonical form mid-session (e.g., because someone edited them by hand), aide-memory re-syncs them automatically on the next hook fire. No restart required.
+
+**Multi-editor rules templates.** `aide-memory init` installs guidance-rule files for Claude Code, Cursor, Copilot, Codex, and Windsurf. Your agent sees the rule file appropriate to whatever tool is running.
 
 ### Distribution
 
-- **Installs via npm as normal.** `npm install -g aide-memory@0.3.0` fetches the bundled package; no binary download, no platform matrix, no postinstall network access.
-- **Zero compatibility shim needed for upgrades.** The `.aide/` database schema, `.claude/settings.json` hook entries, and MCP tool surface are unchanged from 0.2.x. Existing memories and hooks continue to work without re-init.
+- **Install:** `npm install -g aide-memory`
+- **Size:** 388 KB compressed, ~1.4 MB unpacked (three bundled JS entries for CLI / library / MCP server + 11 bash hook shims + rule templates + docs + license).
+- **Node version:** requires Node.js 18 or later. No Node runtime shipped — aide-memory runs on whatever Node you already have.
+- **Platforms:** any platform with Node.js + better-sqlite3 (native) — macOS arm64/x64, Linux x64/arm64, Windows x64 all supported.
+- **No telemetry or cloud dependency.** All data lives in your local `.aide/` directory, committed to your git repo.
 
 ### License
 
-- **LICENSE.md added.** aide-memory now ships under a proprietary free-to-use license — free for personal and commercial use, no redistribution, no reverse-engineering, no derivative works, no competing-product development. Future versions may include paid features; the current version remains free under its current terms.
+aide-memory is free to install and use — personal and commercial — under the terms in `LICENSE.md`. This version has no paid features. The license reserves the right to offer paid features in future versions; the terms that ship with any given version continue to apply to that version.
 
-### Upgrading from 0.1.x or 0.2.0
+Source code is NOT distributed. The package ships bundled and minified JavaScript with reverse-engineering prohibited by the license. Your `.aide/memories/` data, hook scripts invoked by your own projects, and anything you write using aide-memory remain fully yours.
 
-- Replace any `aide-memory init --scan` invocations with manual memory seeding via `aide-memory remember ...` or the MCP `aide_remember` tool.
-- Run `npm update -g aide-memory` to install 0.3.0. No data migration required — the `.aide/` directory format is unchanged.
-- Hooks configured in existing `.claude/settings.json` files continue to work unchanged. Optionally run `aide-memory init --force` to refresh rule templates and hook entries to the 0.3.0 canonical form.
+### Support
+
+- Issues: <https://github.com/aide-memory/aide-memory/issues>
+- Docs: <https://aide-memory.dev>
