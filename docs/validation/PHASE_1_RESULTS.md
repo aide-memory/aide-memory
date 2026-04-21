@@ -571,11 +571,105 @@ Implemented `ingestPendingMemories()` in `src/memory/init.ts` and wired into `st
 
 ### Remaining Scenarios
 
-- **K** — Plan persistence across sessions (organic, not pre-seeded)
-- **L** — Multiple corrections in one session, all recalled next
-- **M** — Scope exclusion precision (no cross-directory leakage)
-- **I** — `.ignore` grep exclusion
-- **init --scan** — importing generated memories from code analysis
-- **Settings framework** — change defaults, verify behavior actually shifts
-- **IDB-1 through IDB-9** — ID-based blocking scenarios (many incidentally covered by A–G/U1–U3)
+- **K** — Plan persistence across sessions (organic, not pre-seeded) — pending user session
+
+---
+
+## L, M, I, Settings, --scan, IDB (Apr 20, 2026 — autonomous mechanical tests)
+
+These were executed by invoking hook scripts directly with simulated stdin against a throwaway project at `/tmp/aide-l-test` and fresh scan projects at `/tmp/aide-scan-test` + `/tmp/aide-scan-expressapp`.
+
+### L: Multiple Corrections in One Session — PASS (with one minor detection gap)
+
+**Tested:** Fired `detect-correction.sh` twice with distinct correction prompts, simulated `aide_remember` PostToolUse between them, checked `stop-remember.sh` output with flag set vs cleared.
+
+**Verified:**
+- Correction #1 ("no, use spaces instead of tabs") → flag file written with "correction" content
+- PostToolUse `track-remember.sh` after simulated `aide_remember` → flag cleared
+- Correction #2 ("actually we prefer camelCase for variables") → flag re-written independently
+- Second `track-remember.sh` → flag cleared again
+- Stop hook with flag SET → returns "A correction from this turn wasn't stored" prefix
+- Stop hook with flag CLEARED → returns standard message (no prefix)
+
+**Gap:** regex `(don.t|do not|...)` requires apostrophe in "don't" — plain "dont" is not detected. Minor — users typing colloquially may miss the trigger. Worth one line tweak.
+
+### M: Scope Exclusion Precision — PASS (with cosmetic nudge-count discrepancy)
+
+**Tested:** Seeded 5 memories with different scopes (`src/auth/**`, `src/api/**`, `src/**`, `src/api/routes.ts` exact, project-wide). Invoked `pre-read-recall.sh` for paths in 4 different subtrees.
+
+**Verified:**
+- `src/api/routes.ts` → nudged for api/** + exact-file memories (correct focused match)
+- `src/auth/middleware.ts` → nudged for auth/** memory only (no api leakage)
+- `src/lib/other.ts` → silent (no direct-parent scopes)
+- `outside/unrelated.ts` → silent
+
+**Gap:** The nudge preview text `(3 guidelines, 1 technical)` counts ALL scoped memories including grandparent (`src/**`) and project-wide, even though the "N memories not yet recalled" integer correctly uses focused scopes. Cosmetic mismatch between the preview breakdown and the blocking count. Worth a small fix so the layer counts align.
+
+### I: `.ignore` Grep Exclusion — PASS (with config toggle gap)
+
+**Tested:** With `.aide/memories/` containing JSON memories referencing "JWT", ran `rg` with various flag combinations.
+
+**Verified:**
+- `rg "JWT"` → no results (dotfile skip primarily, `.ignore` secondarily)
+- `rg --hidden "JWT"` → no results (`.ignore` is the active exclusion now)
+- `rg --hidden --no-ignore "JWT"` → finds the memory files (both guards off)
+- `rg "JWT" .aide/memories/` (explicit path) → finds it (explicit path overrides)
+
+**Gap:** `aide-memory config memories.hideFromGrep false` writes the value to `.aide/config.json` but does NOT remove the `.ignore` entry — the `.ignore` file is written at init time and not re-synced on config change. Plus `memories.hideFromGrep` is `public: false` so the override is silently ignored anyway. See Settings framework section below.
+
+### Settings Framework — PARTIAL (real gap: no user-settable keys)
+
+**Tested:** Surveyed `scripts/hooks/defaults.json`, ran `aide-memory config KEY VALUE` for several settings, invoked the corresponding hooks to see if behavior shifted.
+
+**Verified:**
+- `get_setting()` in `read-config.sh` correctly reads from `defaults.json`
+- `get_setting()` correctly returns the default when a setting has `public: false`
+- Hooks that source `read-config.sh` (e.g., `pre-read-recall.sh` reading `memories.softening.threshold`) use the returned value correctly
+
+**Gap (real):** All 18 settings in `defaults.json` are currently `public: false, pro: false`. That means:
+- No user config override takes effect
+- `aide-memory config KEY VALUE` writes to `.aide/config.json` with no warning, silently no-oping
+- Documentation in `docs/user/cli-reference.md` shows `aide-memory config capture.enabled false` as if it works
+
+Two problems to fix:
+1. Promote the settings users most want to toggle (`hooks.correction.enabled`, `memories.hideFromGrep`, maybe `hooks.read.maxBlocks`) to `public: true`
+2. Have `aide-memory config` warn when the target key isn't public (or reject entirely)
+
+### init --scan — BASIC (works, output is surface-level)
+
+**Tested:** Ran `aide-memory init --scan` on two projects:
+1. `/tmp/aide-scan-test` — tiny 1-file TS project → generated 1 memory: *"Source code is in src/ directory"*
+2. `/tmp/aide-scan-expressapp` — realistic Express app with routes/middleware/db → generated 4 memories: project name, CommonJS modules, Express.js usage, src/ directory
+
+**Verified:** Command runs, writes memory JSON files, doesn't crash.
+
+**Gap:** Output is surface-level — inference from `package.json` deps and top-level directory structure, not from code content. Didn't produce memories about: auth middleware pattern, route patterns, SQLite WAL mode config. The viral-hook pitch ("one command, your agent knows your whole project") is not really fulfilled by current output. Also got module system wrong — called the TS project "CommonJS modules."
+
+**Recommendation:** Either (a) invest in deeper tree-sitter-backed analysis (look at actual code patterns), or (b) deprecate `--scan` in favor of `aide_import` against existing CLAUDE.md/README files (richer signal, less surface).
+
+### IDB-1 through IDB-8 — PASS (softening is why outputs look "soft" in small projects)
+
+**Tested:** Hook invocations across scoping permutations for `/tmp/aide-l-test` (5 memories total).
+
+**Verified:** All 8 tested cases produced expected behavior:
+- IDB-1 fresh read → nudge (soft because project has <10 memories — FORCE_SOFT triggers)
+- IDB-2 same read with IDs tracked → "1 memory not yet recalled" for uncovered IDs
+- IDB-3 sibling read, shared IDs covered → silent
+- IDB-4 sibling read, fresh tracking → nudge
+- IDB-6 file with no scoped memories → silent
+- IDB-8 after tracking clear (compact simulation) → nudge again
+
+**Gap/Clarification:** In projects with <10 total memories, the hook uses `FORCE_SOFT=true` via `memories.softening.threshold`. All blocks become soft `additionalContext` instead of hard `decision: "block"`. This matches the new-project-softening design. Verified in `scripts/hooks/pre-read-recall.sh` line 112.
+
+### Summary
+
+| Scenario | Outcome | Gap filed? |
+|---|---|---|
+| L | PASS | Minor regex tweak (don't without apostrophe) |
+| M | PASS | Nudge-preview layer counts include grandparent scopes |
+| I | PASS | Config toggle doesn't re-sync `.ignore` file |
+| Settings framework | PARTIAL | 0 of 18 settings are user-settable; CLI silently no-ops |
+| init --scan | BASIC | Low-signal output — consider deprecating or deepening |
+| IDB-1..8 | PASS | Softening behavior clarified (not a gap) |
+| K | Pending | Needs user session |
 

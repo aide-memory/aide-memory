@@ -345,3 +345,77 @@ On every MCP server startup:
 **Validated:** Session J end-to-end (see `docs/validation/PHASE_1_RESULTS.md` J1–J6).
 
 **Housekeeping follow-on:** extend `aide-memory cleanup` (or SessionStart TTL cleanup) to sweep old `*.imported-*` archive files after ~7 days. Not urgent — files are tiny, but the archive count will grow if users hit MCP outages frequently.
+
+---
+
+## New Follow-up: Settings Framework Has No User-Settable Keys
+
+**Problem:** All 18 settings in `scripts/hooks/defaults.json` are `public: false, pro: false`. That means:
+- `get_setting()` in `read-config.sh` returns the default regardless of what's in `.aide/config.json`
+- `aide-memory config KEY VALUE` writes to the user's config file silently with no effect
+- Docs in `docs/user/cli-reference.md` show `aide-memory config capture.enabled false` as if it works — misleading
+
+**Fix (two parts):**
+1. Promote the settings users most reasonably want to toggle to `public: true`:
+   - `hooks.correction.enabled` (users may want quieter sessions)
+   - `memories.hideFromGrep` (users may want memories visible to their grep/rg)
+   - `hooks.read.maxBlocks`, `hooks.edit.maxBlocks` (block frequency tuning)
+   - `memories.softening.threshold` (control new-project softening cutoff)
+   - `hooks.stop.schedule` (let power users customize the 3→5→10 pattern)
+2. Have `aide-memory config KEY VALUE` look up the key in `defaults.json`. If not public, either reject with a clear error (*"setting KEY is not user-configurable"*) or warn the user that the write is a no-op.
+
+Discovered during Apr 20, 2026 Settings validation. Documented in PHASE_1_RESULTS.md.
+
+---
+
+## New Follow-up: Correction Detection Misses "don't" Without Apostrophe
+
+**Problem:** `scripts/hooks/detect-correction.sh` Pattern 1 regex uses `don.t` (any single char between n and t). "don't" matches (apostrophe = the `.`), but colloquial "dont" without apostrophe (4 chars) does NOT match because the regex expects 5 chars.
+
+**Fix:** Change `don.t` to `don'?t` (optional apostrophe) in all three pattern groups in detect-correction.sh. Same for "that.s wrong" → "that'?s wrong".
+
+One-line tweak. Low priority but easy.
+
+---
+
+## New Follow-up: Nudge Preview Layer Counts Include Grandparent Scopes
+
+**Problem:** `pre-read-recall.sh` returns `X memories for {path}. (N guidelines, M technical) — topics: ...` where the layer counts include memories from grandparent scopes and project-wide, but the integer `X` ("N memories not yet recalled") only counts focused-scope memories per memory #96.
+
+**Example:** Reading `src/api/routes.ts` where memories exist scoped to `src/api/**` (direct parent), `src/**` (grandparent), and no-scope (project-wide):
+- Correct blocking count: 2 memories (api/** + exact-file)
+- Displayed layer breakdown: 4 memories (includes src/** + project-wide)
+
+Cosmetic mismatch; doesn't change behavior but is confusing.
+
+**Fix:** Align the layer-count aggregation with the focused-scope set (match the IDs actually being blocked).
+
+---
+
+## New Follow-up: `memories.hideFromGrep` Toggle Doesn't Sync `.ignore`
+
+**Problem:** `aide-memory config memories.hideFromGrep false` writes to `.aide/config.json` but does NOT update the `.ignore` file. The `.ignore` file is written once at init time. So toggling the setting has no effect on grep behavior.
+
+Compounded by the Settings Framework gap above: `memories.hideFromGrep` is `public: false`, so the override is ignored anyway.
+
+**Fix (once Settings gap is resolved):** On `aide-memory config memories.hideFromGrep VALUE`, also update the `.ignore` file:
+- `true` → ensure `.aide/memories/` is in `.ignore`
+- `false` → remove the entry (or write `!.aide/memories/` exception if user has a broader ignore pattern)
+
+---
+
+## New Follow-up: `init --scan` Output Is Surface-Level — Consider Deprecating or Deepening
+
+**Problem:** `aide-memory init --scan` produces basic memories from `package.json` and top-level directory inference only. Tested on two projects:
+- Tiny project (1 file): 1 memory ("Source code is in src/ directory")
+- Realistic Express app with routes/middleware/db: 4 memories (project name, Express usage, CommonJS modules [wrongly — it was TS], src/ directory)
+
+Doesn't surface route patterns, auth middleware design, SQLite WAL mode config, or anything the agent would actually benefit from.
+
+**Options:**
+
+**Option A — Deepen:** Invest in tree-sitter-backed code analysis that looks at actual usage patterns (not just package.json). Could produce: "Uses Bearer token auth via X-Auth-Token header (src/middleware/auth.ts)", "SQLite WAL mode enabled in src/db/client.ts", etc.
+
+**Option B — Deprecate:** Remove `--scan` entirely. Replace with stronger onboarding via `aide_import` against existing CLAUDE.md / README / docs — richer signal, less inference guesswork. The "viral hook" pitch shifts from "one command generates your context" to "aide-memory ingests your existing docs and makes them recall-able."
+
+**Recommend:** B for Phase 1 (simpler, less risky), A as a Phase 2 pro feature if users ask for it. Also fix the module-system inference bug (was called CommonJS for a TS project).

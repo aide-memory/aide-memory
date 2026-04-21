@@ -1,0 +1,23 @@
+{
+  "uuid": "f259d81b-16a5-4025-ad97-c2a5dd66590e",
+  "layer": "technical",
+  "what": "Bun compile (and Node SEA) provide MINIMAL source protection in 2026. Public tools lafkpages/bun-decompile and vibheksoni/unbuned extract readable JS from Bun binaries in seconds. Someone already reverse-engineered Anthropic's Claude Code Bun binary and published it. Node SEA is even weaker — blob is documented by Node.js itself, extractable via objcopy/strings. For the aide-memory binary migration goal of \"source hidden\" both of these are too weak. Meaningfully better pure-JS option: yao-pkg (active fork of deprecated vercel/pkg, v6.18 Apr 2026) compiles JS to V8 bytecode by default. Bytecode requires Ghidra + specialized decompiler plugin to reverse — raises cost from seconds to hours. yao-pkg also handles better-sqlite3 natively (no Bun-compile ABI / /$bunfs/ problem). For stronger protection: layer javascript-obfuscator before packaging, or commercial Jscrambler/JSDefender for polymorphic obfuscation + RASP. For REAL protection against determined reversal: move sensitive logic to Rust N-API addon — no TS→native transpiler exists in 2026. upstream better-sqlite3 will NOT support Bun (issue #16050 closed as wontfix, dup of #4290).",
+  "why": "Fundamentally revises the binary migration's protection calculus. Memory 136 listed alternatives but treated Bun as reasonable protection — agent research shows Bun is basically \"obfuscation, not hiding\". yao-pkg bytecode mode is strictly better AND skips the better-sqlite3 Bun-compile blocker entirely. Any future phase spawn weighing Bun vs alternatives should have this corrected framing.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "source-protection",
+    "bun-compile",
+    "yao-pkg",
+    "bytenode"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T02:27:21.140Z",
+  "updated_at": "2026-04-21T02:27:21.140Z"
+}
