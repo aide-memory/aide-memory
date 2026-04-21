@@ -35,11 +35,18 @@ import { runSyncImport, runSyncExport } from './commands/memory/sync';
 import { runCleanup } from './commands/memory/cleanup';
 import { runMigrate } from './commands/memory/migrate';
 import { runInit } from './commands/memory/init';
+import * as fs from 'fs';
+import * as path from 'path';
 import { checkForUpdates, printUpdateNotice } from '../memory/updater';
 import { AideConfig } from '../memory/config';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pkg = require('../../package.json');
+// Read package.json at runtime (NOT via require, which would inline the
+// dev-monorepo manifest into the bundle at build time, leaking "aide-v0",
+// legacy dep names, and the "aide-legacy" bin entry). At runtime this
+// reads the published aide-memory package.json sitting next to dist/.
+const pkg: { version: string; name?: string } = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')
+);
 
 export function createProgram(): Command {
   const program = new Command();

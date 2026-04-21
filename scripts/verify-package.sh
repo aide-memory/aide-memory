@@ -95,20 +95,35 @@ fi
 if [ -n "$TARBALL" ] && [ -f "$TARBALL" ]; then
   TMPDIR=$(mktemp -d)
   tar -xzf "$TARBALL" -C "$TMPDIR" 2>/dev/null
-  BUNDLE="$TMPDIR/package/dist/cli/aide-memory.js"
-  if [ -f "$BUNDLE" ]; then
-    # Count comment-style lines in first 100 lines — minified output has ~0
+  for BUNDLE in "$TMPDIR/package/dist/cli/aide-memory.js" "$TMPDIR/package/dist/memory/index.js" "$TMPDIR/package/dist/memory/cli.js"; do
+    if [ ! -f "$BUNDLE" ]; then continue; fi
+    BNAME=$(basename "$BUNDLE")
+
+    # 9a. Minification sanity: no long comment blocks in head
     COMMENT_LINES=$(head -100 "$BUNDLE" | grep -cE '^\s*(/\*| \* |//)' || true)
     if [ "$COMMENT_LINES" -gt 5 ]; then
-      echo "FAIL: bundled CLI has $COMMENT_LINES comment lines in head — was --minify applied?"
+      echo "FAIL: bundle $BNAME has $COMMENT_LINES comment lines in head — was --minify applied?"
       ERRORS=$((ERRORS + 1))
     fi
-    # Line count should be very small for a minified bundle (usually under 200 lines)
-    LINE_COUNT=$(wc -l < "$BUNDLE")
-    if [ "$LINE_COUNT" -gt 500 ]; then
-      echo "WARNING: bundled CLI has $LINE_COUNT lines — minified bundles are usually under 500"
+
+    # 9b. Embedded source-map sentinel — bundle must not reference a sourcemap
+    if grep -q 'sourceMappingURL' "$BUNDLE"; then
+      echo "FAIL: bundle $BNAME contains sourceMappingURL reference (strip --sourcemap)"
+      ERRORS=$((ERRORS + 1))
     fi
-  fi
+
+    # 9c. Legacy/dev-monorepo leak — these strings should NEVER appear in a
+    # published bundle. If they do, the bundle inlined the dev-monorepo
+    # package.json (e.g., via require('../../package.json')) instead of the
+    # clean aide-memory publish manifest. See src/cli/aide-memory.ts runtime
+    # read pattern.
+    for LEAK in "aide-v0" "aide-legacy" "graph-based retrieval" "ts-morph" "tree-sitter-typescript" "web-tree-sitter" "marked-terminal"; do
+      if grep -q "$LEAK" "$BUNDLE"; then
+        echo "FAIL: bundle $BNAME contains dev-monorepo leak: '$LEAK'"
+        ERRORS=$((ERRORS + 1))
+      fi
+    done
+  done
   rm -rf "$TMPDIR" "$TARBALL"
 fi
 
