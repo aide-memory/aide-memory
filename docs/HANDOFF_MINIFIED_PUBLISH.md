@@ -199,6 +199,71 @@ ls $(npm root -g)/aide-memory/dist/
 
 ---
 
+## Unpublishing / deprecating previous versions — source exposure concern
+
+**User intent:** remove access to old versions (0.1.1, 0.2.0) that ship unbundled TypeScript-derived source code. Both are currently installable and expose logic the user wants closed.
+
+**npm's unpublish policy (72-hour rule):**
+- Within 72 hours of publish: anyone can `npm unpublish` immediately.
+- After 72 hours: blocked by default. Removal requires contacting npm support with a reason.
+
+Both 0.1.1 (2026-04-08) and 0.2.0 (2026-04-11) are well past the 72-hour window as of 2026-04-21. Automatic unpublish will be refused. Two-step process:
+
+### Step 1 (immediate, automatic): deprecate
+
+Right after publishing 0.3.0, run:
+
+```bash
+npm deprecate aide-memory@0.1.1 "Superseded by 0.3.0. This version shipped raw JavaScript source and is no longer supported — please upgrade."
+npm deprecate aide-memory@0.2.0 "Superseded by 0.3.0. This version shipped raw JavaScript source and is no longer supported — please upgrade."
+```
+
+Effect:
+- Anyone running `npm install aide-memory@0.1.1` or `@0.2.0` gets a deprecation warning in their terminal.
+- Versions remain downloadable — deprecation is a soft signal, not a block.
+- This is the strongest control available without npm support.
+
+### Step 2 (request): unpublish via npm support
+
+File a support ticket at [https://www.npmjs.com/support](https://www.npmjs.com/support) requesting removal of specific versions. Use this framing:
+
+> Subject: Unpublish request — aide-memory@0.1.1 and @0.2.0 (source exposure)
+>
+> Hi npm support,
+>
+> I'm the maintainer of `aide-memory` (npm user: `<your-npm-username>`). I'd like to request removal of versions 0.1.1 (published 2026-04-08) and 0.2.0 (published 2026-04-11).
+>
+> Both versions were published before we finalized the source-protection design and contain unbundled, readable TypeScript-compiled JavaScript that we intended to ship only as a minified bundle starting with 0.3.0. The current versions expose implementation details we now consider closed source.
+>
+> I understand these are outside the 72-hour unpublish window. I have already deprecated both versions. I've verified no other npm packages depend on either version (see dependents count on the npm page). Version 0.3.0 supersedes both with identical functionality except for `--scan` removal, documented in the 0.3.0 changelog.
+>
+> Thank you for considering this request.
+
+**What typically happens:**
+- npm support reviews within a few business days.
+- For source-exposure concerns with no reverse dependencies, removal is usually granted.
+- If granted: the tarballs are removed from the registry. Anyone who has the package locally keeps it (npm unpublish doesn't reach into user machines), but new installs fail for those versions.
+- If declined: deprecation remains the only control. Users can still install but see warnings.
+
+### After unpublish succeeds
+
+Update README and landing page to reference 0.3.0+ only:
+- Remove any "install 0.1.1" or "v0.2.0 changelog" references
+- Note in a FAQ section that older versions have been removed
+- Update shields.io badges if they pin to old versions
+
+### Local-copy caveat
+
+Once unpublished, any machine that already has 0.1.1 or 0.2.0 in its `node_modules/` or `~/.npm-global/lib/node_modules/` will keep working — `npm unpublish` removes from the registry only. Source code is still on those machines. This is unavoidable; the only way to get it off is convincing users to upgrade. The deprecation warning nudges them.
+
+---
+
+## Future-release guide (create as permanent internal docs)
+
+The full publish playbook now lives at [`docs/RELEASING.md`](./RELEASING.md) — that's the canonical reference for every future release. This handoff doc is a one-off for the 0.3.0 transition; after that, use `docs/RELEASING.md`.
+
+---
+
 ## Open items from the design discussion (optional follow-ups)
 
 These are NOT blockers for 0.3.0 publish. Captured as future work:
@@ -206,4 +271,3 @@ These are NOT blockers for 0.3.0 publish. Captured as future work:
 - The `feature/binary` branch (Bun compile work) is abandoned. See memory 151. Can be deleted or kept as historical reference.
 - The `pre-binary-migration` git tag is on the old HEAD of feature/phase-1 before the --scan removal landed. Harmless to keep.
 - If source protection ever needs to be stronger than minified-npm (current approach), the upgrade path is Rust via napi-rs for sensitive modules. See memory 157.
-- The live 0.1.1 and live (stale) 0.2.0 will remain on npm. Optionally deprecate 0.2.0 with `npm deprecate aide-memory@0.2.0 "Superseded by 0.3.0 — contains pre-release bugs"` after 0.3.0 is live.
