@@ -479,7 +479,7 @@ The existing correction-flag path (`correction-pending-{session_id}.txt`) alread
 
 ---
 
-## New Follow-up: `aide_forget` / `aide_update` MCP Tools Should Coerce String IDs (like aide_recall does)
+## Done (Apr 21, 2026): All MCP tool numeric params now use `z.coerce.number()`
 
 **Problem observed in E validation (Apr 21 2026):** Agent organically detected a conflict between two memories (id=8 "epoch ms" and id=15 "epoch seconds"), called `aide_forget({id: "8"})` to remove the stale one. MCP returned:
 
@@ -498,4 +498,4 @@ Same class of bug that was fixed in `aide_recall` per memory #42 — LLMs common
 
 Grep pattern: `z.number()` in server.ts near tool definitions — any `id` param should be `z.coerce.number()`.
 
-Low-complexity fix (~3 lines). Immediately surfaces better agent behavior since the agent's natural instinct (stringify numeric args) is common with Claude.
+Fixed in `src/memory/server.ts` — every `z.number()` → `z.coerce.number()` across all 6 numeric params (aide_recall ids + limit, aide_update id, aide_forget id, aide_search limit, aide_memories limit). Regression test added in `src/memory/__tests__/server.test.ts` (aide_forget with string id). 654/654 tests pass.

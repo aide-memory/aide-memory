@@ -30,11 +30,11 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'Retrieve context for an area of the codebase before planning or making changes. Returns contributor preferences, technical knowledge, area decisions, and project guidelines. Call this when starting work in a codebase area, before proposing plans, or when you may have lost earlier context.',
     {
       paths: z.array(z.string()).optional().describe('File or directory paths you are working in. Returns memories scoped to these areas plus project-wide context.'),
-      ids: z.array(z.number()).optional().describe('Specific memory IDs to retrieve (for gap-filling). When provided, returns exactly these memories — no path matching.'),
+      ids: z.array(z.coerce.number()).optional().describe('Specific memory IDs to retrieve (for gap-filling). When provided, returns exactly these memories — no path matching.'),
       query: z.string().optional().describe('Optional text to boost relevant results (e.g. "skeleton loading" or "authentication flow").'),
       layers: z.array(z.enum(LAYER_VALUES)).optional().describe('Filter to specific layers: preferences, technical, area_context, guidelines.'),
       contributor: z.string().optional().describe('Filter to a specific contributor.'),
-      limit: z.number().optional().describe('Max memories to return (default 20).'),
+      limit: z.coerce.number().optional().describe('Max memories to return (default 20).'),
     },
     async (params) => {
       const result = recall(store, {
@@ -121,7 +121,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'aide_update',
     'Update an existing memory. Use when information has changed, scope needs adjusting, or context needs updating. You can only update your own memories.',
     {
-      id: z.number().describe('ID of the memory to update.'),
+      id: z.coerce.number().describe('ID of the memory to update.'),
       what: z.string().optional().describe('Updated knowledge text.'),
       why: z.string().optional().describe('Updated context.'),
       scope: z.string().optional().describe('Updated scope pattern.'),
@@ -172,7 +172,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'aide_forget',
     'Permanently delete a memory that is no longer relevant or was incorrect.',
     {
-      id: z.number().describe('The memory ID to delete.'),
+      id: z.coerce.number().describe('The memory ID to delete.'),
     },
     async (params) => {
       const id = toNumber(params.id);
@@ -200,7 +200,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       layer: z.enum(LAYER_VALUES).optional().describe('Filter by layer.'),
       scope: z.string().optional().describe('Filter by exact scope.'),
       contributor: z.string().optional().describe('Filter by contributor.'),
-      limit: z.number().optional().describe('Max results (default 50).'),
+      limit: z.coerce.number().optional().describe('Max results (default 50).'),
     },
     async (params) => {
       const memories = store.list({
@@ -278,7 +278,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     {
       keyword: z.string().describe('Text to search for in memory content (case-insensitive substring match on what and why fields).'),
       layer: z.enum(LAYER_VALUES).optional().describe('Filter to a specific layer.'),
-      limit: z.number().optional().describe('Max results (default 50).'),
+      limit: z.coerce.number().optional().describe('Max results (default 50).'),
       mode: z.enum(['auto', 'keyword', 'semantic']).optional().describe(
         "Search mode. 'auto' (default): keyword first, semantic fallback if <3 results. 'keyword': exact substring only. 'semantic': embedding similarity only."
       ),

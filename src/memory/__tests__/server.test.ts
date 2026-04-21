@@ -152,6 +152,26 @@ describe('MCP Server', () => {
       expect(text).toContain('not found');
     });
 
+    it('coerces string id to number (LLMs often stringify numeric args)', async () => {
+      // aide_forget, aide_update, aide_recall and aide_search all use
+      // z.coerce.number() so string IDs from LLMs pass validation. Regressions
+      // here cause MCP error -32602 and burn an agent turn on a failed call.
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'string-id coercion test', layer: 'technical' },
+      });
+      const id = store.list()[0].id;
+
+      const result = await client.callTool({
+        name: 'aide_forget',
+        arguments: { id: String(id) }, // string, not number
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Deleted');
+      expect(store.get(id)).toBeNull();
+    });
+
     it('deleted memory does not appear in recall', async () => {
       await client.callTool({
         name: 'aide_remember',
