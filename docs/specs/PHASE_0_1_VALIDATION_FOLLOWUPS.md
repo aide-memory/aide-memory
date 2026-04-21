@@ -458,3 +458,44 @@ Low priority — archive files are tiny (one JSONL line each) and will only accu
 Both paths now delegate to `resyncDerivedArtifacts(projectRoot)` in `src/memory/init.ts`, the single source of truth for "files whose content is derived from a config setting." Currently only `.ignore` (from `memories.hideFromGrep`) qualifies, but the pattern is extensible — future derived artifacts add a block in the same function.
 
 Verified: manually edited `.aide/config.json` to flip `memories.hideFromGrep=false`; `.ignore` stayed stale; spawning a new MCP server against the project removed `.ignore` on startup as expected.
+
+---
+
+## New Follow-up: Suppress Stop Hook Prompt When Agent Already Stored in Same Turn
+
+**Problem:** The Stop hook (`scripts/hooks/stop-remember.sh`) fires on its scheduled interval (every 3/5/10 turns per `hooks.stop.schedule`) with the standard prompt *"Any decisions, technical constraints, preferences, or guidelines worth persisting?"* — even when the agent **already called** `aide_remember` / `aide_update` / `aide_forget` earlier in the same turn.
+
+Observed in C (correction loop) validation on Apr 21 2026: user corrected epoch ms→s, agent proactively called `aide_remember` (id=15), Stop hook still fired the "anything worth persisting?" prompt at turn end. Agent had to reply *"nothing else to persist — already saved (id=15)"*. Wasted turn + UX friction.
+
+**Fix idea:** Track whether the agent called any of the memory-writing MCP tools (`aide_remember`, `aide_update`, `aide_forget`) during the current turn. If yes, skip the standard Stop prompt (or shorten it to a silent confirm). Two implementation paths:
+
+1. **Session-state tracking:** PostToolUse for those tools writes a per-turn flag (`.aide/cache/remembered-this-turn-{session_id}.txt`). Stop hook reads the flag, skips the prompt if set, clears the flag. Simpler but needs careful turn-boundary logic.
+
+2. **Transcript scan:** Stop hook reads the session's transcript (already available via hook input) and checks the last turn's tool_uses for memory writes. More expensive but no extra state file.
+
+The existing correction-flag path (`correction-pending-{session_id}.txt`) already does something similar for the *"A correction from this turn wasn't stored"* prefix. This extends the pattern to the standard-prompt case.
+
+**Priority:** Low — Stop hook fires infrequently (every 3-10 turns) and the agent can easily reply "nothing else to persist." But it's a papercut worth fixing for polish before launch.
+
+---
+
+## Done (Apr 21, 2026): All MCP tool numeric params now use `z.coerce.number()`
+
+**Problem observed in E validation (Apr 21 2026):** Agent organically detected a conflict between two memories (id=8 "epoch ms" and id=15 "epoch seconds"), called `aide_forget({id: "8"})` to remove the stale one. MCP returned:
+
+```
+MCP error -32602: Input validation error: Invalid arguments for tool aide_forget: [
+  { "expected": "number", "code": "invalid_type", "path": ["id"],
+    "message": "Invalid input: expected number, received string" }
+]
+```
+
+Agent recovered on second try with `id: 8` (number), but the first failure burned a turn.
+
+Same class of bug that was fixed in `aide_recall` per memory #42 — LLMs commonly send numeric parameters as strings, and the fix was `z.coerce.number()` in the zod schema.
+
+**Fix:** Update `aide_forget` and `aide_update` in `src/memory/server.ts` to use `z.coerce.number()` for their `id` parameter so string "8" → number 8 transparently.
+
+Grep pattern: `z.number()` in server.ts near tool definitions — any `id` param should be `z.coerce.number()`.
+
+Fixed in `src/memory/server.ts` — every `z.number()` → `z.coerce.number()` across all 6 numeric params (aide_recall ids + limit, aide_update id, aide_forget id, aide_search limit, aide_memories limit). Regression test added in `src/memory/__tests__/server.test.ts` (aide_forget with string id). 654/654 tests pass.

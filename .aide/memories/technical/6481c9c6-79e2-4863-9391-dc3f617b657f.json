@@ -1,0 +1,22 @@
+{
+  "uuid": "6481c9c6-79e2-4863-9391-dc3f617b657f",
+  "layer": "technical",
+  "what": "DEFINITIVE source-protection TLDR for aide-memory binary migration, sourced from Bun's own docs (https://bun.com/docs/bundler/bytecode): (1) Bun's `--bytecode` flag is a startup performance optimization, NOT a source protection mechanism — Bun's docs explicitly state \"It doesn't obscure source code\" and \"The .jsc file is useless without its corresponding .js file\" (the .js source ships alongside the .jsc cache). Any blog/TLDR claiming --bytecode provides obfuscation-grade protection is factually wrong. (2) The only flags that actually protect: `--minify` (mangles identifiers, strips whitespace/comments) and excluding source maps. (3) Minified npm (esbuild --minify, no source maps, `package.json` files allowlist, CI check grepping tarball for .ts/.map/sourceMappingURL/src/) and Bun compile --minify provide ESSENTIALLY EQUIVALENT source protection — both produce bundled+minified+transpiled JS extractable in ~1-3 minutes via `unbuned`/`bun-decompile`/cat. (4) Both prevent the Claude Code 2026-03-31 \"forkable public repo\" scenario equally well. Neither protects against a motivated reverse-engineer with LLM-assisted deobfuscation (humanify, webcrack, CASCADE reach 0.79 execution-correctness on minified JS at ~$0.01-0.50 per sample). (5) Only genuine step-up from either JS approach: rewrite sensitive logic in Rust via napi-rs, ship compiled .node binary via npm optionalDependencies (Sentry/esbuild/swc/Turbo/Biome/Rspack/Rolldown/lightningcss pattern). Raises RE cost to days-weeks. (6) For aide-memory: the real open threat is accidental source map / raw source shipping (memory 142) — not the binary format. Most of the binary migration's operational cost (~2-3 weeks + signing + AV handling + cross-platform matrix) buys only ~2 minutes of extra reverse-engineering friction over minified npm. Honest recommendation stays Bun + shim IF there are non-protection reasons to want a binary (zero-Node UX, binary \"real app\" feel). Otherwise minified npm ships the protection goal at ~1 day cost.",
+  "why": "User surfaced inconsistency in my framing + a pasted TLDR that incorrectly claimed --bytecode provides hours-days of reverse-engineering friction. Bun's own docs settle it: --bytecode is perf-only, doesn't obscure source. This is the definitive framing future spawns should use — sourced from the authoritative primary source, not third-party blog speculation.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "source-protection",
+    "threat-model",
+    "correction",
+    "forkability"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T19:12:32.573Z",
+  "updated_at": "2026-04-21T19:17:41.846Z"
+}

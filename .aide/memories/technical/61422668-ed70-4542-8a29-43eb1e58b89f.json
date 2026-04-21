@@ -1,0 +1,22 @@
+{
+  "uuid": "61422668-ed70-4542-8a29-43eb1e58b89f",
+  "layer": "technical",
+  "what": "Critical esbuild + closed-source bundling gotcha: `require('./package.json')` or `import pkg from './package.json'` gets INLINED at bundle time, embedding the ENTIRE manifest content in the minified output. If the bundled file is run against a dev-monorepo manifest (common pattern where build runs BEFORE manifest-swap-for-publish), all dev-only metadata leaks into the published bundle as readable strings — legacy dep names, legacy bin entries, internal package names, descriptions. Caught in aide-memory's CLI bundle during audit: `src/cli/aide-memory.ts` had `const pkg = require('../../package.json')` which inlined `aide-v0`, `aide-legacy`, `graph-based retrieval`, `ts-morph`, `web-tree-sitter`, etc. into `dist/cli/aide-memory.js`. Fix pattern for closed-source JS bundles: replace with runtime `JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'))`. At runtime, `__dirname` resolves to the installed package location, so this reads the CLEAN published manifest, not the dev one. server.ts and init.ts already used this pattern — CLI was the outlier. Defense in depth: scripts/verify-package.sh now greps all bundles for dev-monorepo-specific strings and fails publish if any appear. For any future closed-source CLI project: audit every `require(*.json)` / `import from *.json` in code that will be bundled — that's the #1 vector for accidental metadata leaks.",
+  "why": "Critical closed-source bundling pattern caught during full audit. Any future work on bundled releases (current or new closed-source tools from this repo) needs this discipline. The dev-manifest-leak is a trivially-made mistake with non-trivial consequences for source protection.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "bundling",
+    "esbuild",
+    "source-protection",
+    "package.json"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T21:19:39.085Z",
+  "updated_at": "2026-04-21T21:19:39.085Z"
+}

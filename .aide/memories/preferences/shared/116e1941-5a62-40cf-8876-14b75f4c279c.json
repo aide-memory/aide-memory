@@ -1,0 +1,19 @@
+{
+  "uuid": "116e1941-5a62-40cf-8876-14b75f4c279c",
+  "layer": "preferences",
+  "what": "User correction 2026-04-21 on class-of-issue fixes: when fixing a validation-type/schema/contract issue for ONE tool or entry point, audit the entire class for the same issue in the same pass. Don't fix just the one instance and ship — if aide_recall had z.number() → z.coerce.number() applied, every other MCP tool with a numeric param (aide_update id, aide_forget id, aide_search limit, aide_memories limit) should have gotten the same fix at the same time. Filing each one as a separate follow-up later when someone hits the bug is wasteful and burns user trust. Rule: when a fix is \"change pattern X everywhere it applies,\" grep for X and update all sites in one pass. Specifically for MCP tool schemas: check all `z.number()`, `z.string()`, etc. for whether coercion or validation should be consistent.",
+  "why": "User explicitly corrected: \"whoever fixed the issue for one of the tool calls didnt think to fix for the other tool calls?? like cmon\". Captures the principle so future fixes to schema/validation/contract-type issues audit all peers in the same pass. priority: always so it injects at SessionStart for every future session.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T21:41:58.997Z",
+  "updated_at": "2026-04-21T21:41:58.997Z"
+}

@@ -581,8 +581,12 @@ describe('MemoryStore (file-per-memory mode)', () => {
       expect(content.created_at).toBeTruthy();
       expect(content.updated_at).toBeTruthy();
 
-      // Should NOT have SQLite-only fields
-      expect(content.id).toBeUndefined();
+      // id IS persisted as of Apr 21 2026 so numeric identifiers stay stable
+      // across cache rebuilds. It's derived from SQLite AUTOINCREMENT on the
+      // first add() but written to the JSON file immediately after.
+      expect(content.id).toBe(mem.id);
+      // recalled_count and last_recalled_at stay SQLite-only (runtime stats,
+      // not canonical memory data).
       expect(content.recalled_count).toBeUndefined();
       expect(content.last_recalled_at).toBeUndefined();
     });
@@ -815,6 +819,97 @@ describe('MemoryStore (file-per-memory mode)', () => {
       const personalPath = path.join(projectRoot, '.aide', 'memories', 'preferences', 'personal', `${mem.uuid}.json`);
       expect(fs.existsSync(personalPath)).toBe(true);
       expect(fs.existsSync(sharedPath)).toBe(false);
+    });
+
+    it('numeric IDs stay stable across full cache rebuild (no reassignment by filesystem order)', () => {
+      // Insert 3 memories in a specific order with controllable UUID-sort-order
+      // to prove the id assigned by add() survives a cache rebuild even if the
+      // filesystem traversal order differs from insert order.
+      const m1 = store.add({ layer: 'technical', what: 'first insert (expect id=1)', scope: 'src/a/**' });
+      const m2 = store.add({ layer: 'guidelines', what: 'second insert (expect id=2)', scope: 'src/b/**' });
+      const m3 = store.add({ layer: 'preferences', what: 'third insert (expect id=3)' });
+
+      expect(m1.id).toBe(1);
+      expect(m2.id).toBe(2);
+      expect(m3.id).toBe(3);
+
+      store.close();
+
+      // Delete SQLite DB to force full rebuild from JSON files.
+      const dbPath = (store as any).dbPath;
+      for (const suffix of ['', '-wal', '-shm']) {
+        const p = dbPath + suffix;
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      }
+
+      // Reopen → rebuildCache runs against all 3 JSON files.
+      const store2 = new MemoryStore({ projectRoot });
+
+      // Look each one up by UUID and verify the numeric id is unchanged.
+      const m1Rebuilt = store2.getByUuid(m1.uuid);
+      const m2Rebuilt = store2.getByUuid(m2.uuid);
+      const m3Rebuilt = store2.getByUuid(m3.uuid);
+
+      expect(m1Rebuilt?.id).toBe(1);
+      expect(m2Rebuilt?.id).toBe(2);
+      expect(m3Rebuilt?.id).toBe(3);
+
+      // Also: JSON files on disk now carry the id field so future rebuilds
+      // keep the same mapping.
+      const filePath = (store2 as any).getMemoryFilePath(m1.uuid, m1.layer, m1.shared);
+      const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      expect(raw.id).toBe(1);
+
+      store2.close();
+      store = new MemoryStore({ projectRoot });
+    });
+
+    it('legacy JSON files without id get assigned one + backfilled on first rebuild', () => {
+      // Simulate an old-format file that pre-dates the id field: write JSON
+      // directly without calling store.add, then rebuild.
+      const uuid = crypto.randomUUID();
+      const legacyFile: Omit<MemoryFile, 'id'> = {
+        uuid,
+        layer: 'technical',
+        what: 'legacy memory without id field',
+        why: null,
+        scope: null,
+        context_label: null,
+        contributor: 'test',
+        tags: [],
+        source: 'conversation',
+        shared: true,
+        priority: 'normal',
+        generated_by: null,
+        derived_from: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const legacyPath = path.join(projectRoot, '.aide', 'memories', 'technical', `${uuid}.json`);
+      fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+      fs.writeFileSync(legacyPath, JSON.stringify(legacyFile, null, 2) + '\n');
+
+      store.close();
+
+      // Force rebuild by clearing dir hash.
+      const dbPath = (store as any).dbPath;
+      for (const suffix of ['', '-wal', '-shm']) {
+        const p = dbPath + suffix;
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      }
+
+      const store2 = new MemoryStore({ projectRoot });
+      const mem = store2.getByUuid(uuid);
+      expect(mem).not.toBeNull();
+      expect(typeof mem!.id).toBe('number');
+      expect(mem!.id).toBeGreaterThan(0);
+
+      // The legacy file should have been rewritten with the new id embedded.
+      const raw = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+      expect(raw.id).toBe(mem!.id);
+
+      store2.close();
+      store = new MemoryStore({ projectRoot });
     });
   });
 });

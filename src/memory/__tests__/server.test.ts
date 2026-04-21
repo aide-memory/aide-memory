@@ -152,6 +152,127 @@ describe('MCP Server', () => {
       expect(text).toContain('not found');
     });
 
+    it('coerces string id to number (LLMs often stringify numeric args)', async () => {
+      // aide_forget, aide_update, aide_recall and aide_search all use
+      // z.coerce.number() so string IDs from LLMs pass validation. Regressions
+      // here cause MCP error -32602 and burn an agent turn on a failed call.
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'string-id coercion test', layer: 'technical' },
+      });
+      const id = store.list()[0].id;
+
+      const result = await client.callTool({
+        name: 'aide_forget',
+        arguments: { id: String(id) }, // string, not number
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Deleted');
+      expect(store.get(id)).toBeNull();
+    });
+  });
+
+  describe('LLM-friendly schema coercions', () => {
+    // LLMs frequently send singletons instead of arrays and string-booleans.
+    // These tests lock in the lenient wrappers so future schema changes don't
+    // regress and break agent tool calls.
+    it('aide_recall accepts single-string paths instead of array', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'scoped to auth', layer: 'technical', scope: 'src/auth/**' },
+      });
+
+      const result = await client.callTool({
+        name: 'aide_recall',
+        arguments: { paths: 'src/auth/middleware.ts' as any }, // LLM-style single string
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('scoped to auth');
+    });
+
+    it('aide_recall accepts single-number id instead of array', async () => {
+      const stored = await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'id-array-lenient check', layer: 'technical' },
+      });
+      const match = ((stored.content as any[])[0].text as string).match(/id: (\d+)/);
+      const id = Number(match![1]);
+
+      const result = await client.callTool({
+        name: 'aide_recall',
+        arguments: { ids: id as any }, // LLM-style single number, not [number]
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('id-array-lenient check');
+    });
+
+    it('aide_remember accepts single-string tags instead of array', async () => {
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: { what: 'tags as string', layer: 'technical', tags: 'architecture' as any },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Stored');
+      const latest = store.list()[0];
+      expect(latest.tags).toEqual(['architecture']);
+    });
+
+    it('aide_remember accepts string "false" for shared (LLMs often quote booleans)', async () => {
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          what: 'personal pref via string false',
+          layer: 'preferences',
+          shared: 'false' as any, // LLM-style stringified boolean
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Stored');
+      const latest = store.list({ layer: 'preferences' })[0];
+      expect(latest.shared).toBe(false);
+    });
+
+    it('aide_remember accepts string "true" for shared', async () => {
+      await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          what: 'shared pref via string true',
+          layer: 'preferences',
+          shared: 'true' as any,
+        },
+      });
+
+      const latest = store.list({ layer: 'preferences' })[0];
+      expect(latest.shared).toBe(true);
+    });
+
+    it('accepts explicit null for optional fields (LLMs sometimes send null instead of omitting)', async () => {
+      // Plain .optional() rejects null with "expected string, received null".
+      // Every optional field uses .nullish().transform((v) => v ?? undefined)
+      // so null passes through as "not set" rather than erroring.
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          what: 'memory with explicit nulls',
+          layer: 'technical',
+          scope: null as any,
+          why: null as any,
+          context_label: null as any,
+          tags: null as any,
+          shared: null as any,
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Stored');
+      expect(text).toContain('project-wide'); // scope null → undefined → falls through to project-wide
+    });
+
     it('deleted memory does not appear in recall', async () => {
       await client.callTool({
         name: 'aide_remember',
