@@ -476,3 +476,26 @@ Observed in C (correction loop) validation on Apr 21 2026: user corrected epoch 
 The existing correction-flag path (`correction-pending-{session_id}.txt`) already does something similar for the *"A correction from this turn wasn't stored"* prefix. This extends the pattern to the standard-prompt case.
 
 **Priority:** Low — Stop hook fires infrequently (every 3-10 turns) and the agent can easily reply "nothing else to persist." But it's a papercut worth fixing for polish before launch.
+
+---
+
+## New Follow-up: `aide_forget` / `aide_update` MCP Tools Should Coerce String IDs (like aide_recall does)
+
+**Problem observed in E validation (Apr 21 2026):** Agent organically detected a conflict between two memories (id=8 "epoch ms" and id=15 "epoch seconds"), called `aide_forget({id: "8"})` to remove the stale one. MCP returned:
+
+```
+MCP error -32602: Input validation error: Invalid arguments for tool aide_forget: [
+  { "expected": "number", "code": "invalid_type", "path": ["id"],
+    "message": "Invalid input: expected number, received string" }
+]
+```
+
+Agent recovered on second try with `id: 8` (number), but the first failure burned a turn.
+
+Same class of bug that was fixed in `aide_recall` per memory #42 — LLMs commonly send numeric parameters as strings, and the fix was `z.coerce.number()` in the zod schema.
+
+**Fix:** Update `aide_forget` and `aide_update` in `src/memory/server.ts` to use `z.coerce.number()` for their `id` parameter so string "8" → number 8 transparently.
+
+Grep pattern: `z.number()` in server.ts near tool definitions — any `id` param should be `z.coerce.number()`.
+
+Low-complexity fix (~3 lines). Immediately surfaces better agent behavior since the agent's natural instinct (stringify numeric args) is common with Claude.
