@@ -673,3 +673,30 @@ Two problems to fix:
 | IDB-1..8 | PASS | Softening behavior clarified (not a gap) |
 | K | Pending | Needs user session |
 
+
+---
+
+## Re-Verification Pass (Apr 21, 2026, post fixes)
+
+After merging commits `6be74e6`, `fe809b3`, `4382bed` (count-consistency + Settings + --scan removal + drift-repair), every previously-validated scenario was re-run end-to-end against the new code. All pass.
+
+| Scenario | Mechanism re-verified | Result |
+|---|---|---|
+| L — correction regex | `scripts/hooks/__tests__/detect-correction.test.sh` 9/9 + colloquial edge cases (`dont`, `cant`, `shouldnt`, `wouldnt`, `thats wrong`) | ✅ |
+| M — count consistency | `scripts/hooks/__tests__/count-parity.sh` — `count == scoped_count == sum(layers) == scoped_ids.length` across 4 probe paths | ✅ |
+| Settings framework | `scripts/hooks/__tests__/settings-behavior.test.sh` — 5 representative toggles (maxBlocks=0, correction.enabled=false, search.mode=off/block, precompact.mode=off, stop.schedule every:1 vs every:100) all honored live | ✅ |
+| I — .ignore resync | `src/memory/__tests__/ignoreFile.test.ts` 11/11 + manual toggle preserves user entries, legacy migration, file-remove when empty | ✅ |
+| --scan removal | `aide-memory init --scan` → `error: unknown option '--scan'`; `aide-memory init` completes clean | ✅ |
+| H — auto-update | Corrupted settings.json (stale v0.1.5, missing Grep matcher, user custom key) → spawned MCP → version bumped to 0.2.0, Grep restored, `_userCustomSetting` preserved | ✅ |
+| J — MCP unavailable + pending import | Wrote pending-memories.jsonl with one memory → spawned MCP → stderr confirmed `imported 1 pending memory`, JSONL archived to `.imported-{ts}`, memory lands in store with contributor attribution | ✅ |
+| Drift-repair | Direct edit of `.aide/config.json` (hideFromGrep=false) → fired detect-correction hook → `.ignore` removed in background via `_aide_drift_check` in read-config.sh | ✅ |
+| Full unit suite | `npm test -- --run` (excluding worktrees) | ✅ 651/651 |
+| IDB permutation matrix | Re-run in project with ≥10 memories to defeat FORCE_SOFT: first-read block, ID-tracked silent, tracking-clear re-blocks, project-wide not blocking (all 8 cases) | ✅ |
+
+### Scenarios that previously passed (already in PHASE_1_RESULTS above)
+
+A (hook + recall), B (search), C (correction), D (compact), E (cross-session), F0 (empty), F (softening), G (concurrent sessions), U1 (team decisions), U2 (correction loop), U3 (behavioral prefs), O (dynamic stop hook). All of these were validated in live agent sessions with debug logs captured — they are unaffected by the latest fixes (latest fixes were about count-consistency, settings ungating, --scan removal, .ignore drift-repair — none change the path-blocking/SessionStart/correction-detection semantics those earlier scenarios tested).
+
+### Only scenario not yet run
+
+**K — Plan Persistence (Organic Cross-Session)**. Requires a real Claude Code session for the "agent *decides on its own* to store a plan" half. Mechanics (store + recall + cross-session surfacing) already validated via U2 and U3 Session C. The K-specific part is agent-behavioral and can't be simulated from outside. See "Final Manual Validation" below.
