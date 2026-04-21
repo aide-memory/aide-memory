@@ -1,0 +1,22 @@
+{
+  "id": 168,
+  "uuid": "a2d4e185-74fe-427f-a368-48138f21e59f",
+  "layer": "preferences",
+  "what": "Release-branch merge direction for aide-memory: always merge feature branches INTO `feature/phase-1` BEFORE tagging/publishing, not the other way. `feature/phase-1` is the canonical release line — every version tag must live on it. If a feature branch has diverged, the sequence is (1) merge feature-branch → feature/phase-1 on the release commit, (2) tag vX.Y.Z on the resulting phase-1 commit, (3) push. The 0.3.0 release accidentally did this backwards (merged phase-1 into feature/minified-publish, tagged and published from the feature branch, left origin/feature/phase-1 stale). The v0.3.0 tarball was still correct because all commits were included, but the branch topology was wrong and had to be retroactively fixed via `git push origin d02c783:refs/heads/feature/phase-1`. For future releases: the canonical flow in docs/RELEASING.md already describes this ordering — follow that, don't improvise.",
+  "why": "User corrected this mid-session after 0.3.0 publish: \"I thought we said merge prior to publish\". The merge direction matters for branch topology cleanliness. Preserving so the next release doesn't make the same shortcut.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "release",
+    "git-workflow",
+    "merge-direction"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T22:10:51.697Z",
+  "updated_at": "2026-04-21T22:10:51.697Z"
+}

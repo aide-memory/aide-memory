@@ -1,0 +1,22 @@
+{
+  "id": 167,
+  "uuid": "8dbfcf7c-dd20-4899-8812-8b174a65d5ea",
+  "layer": "preferences",
+  "what": "aide-memory source-protection scope INCLUDES hooks, not just the core engine. User intent from the outset was \"minimize ability for people to get source code\" — and hooks (both .sh bash files AND .js node helpers that call into the memory engine) are source code that ships with the package. In the 0.3.0 release I bundled only the three core entries (dist/cli/aide-memory.js, dist/memory/index.js, dist/memory/cli.js) and left scripts/hooks/*.sh + *.js unbundled and readable. That was an implementation shortcut I made without surfacing the tradeoff to the user. The correct standard for any future release is: hook logic must also be hidden via either (a) bundling each .js helper into dist/hooks/<name>.js AND migrating bash-script logic into JS so .sh files become thin shims, or (b) consolidating hook logic into `aide-memory hook <name>` CLI subcommands with .sh files reducing to single-line `exec aide-memory hook <name>`. Option (b) is the architecturally cleanest answer and matches the original binary-plan Phase 3 approach. Bash shims remain visible either way (bash has no compile) but they reduce to trivial glue. Apply this retroactively in a 0.3.1 or 0.4.0 release.",
+  "why": "User corrected me 2026-04-21 after 0.3.0 publish: hooks being visible in shipped tarball violated the source-protection goal. I should have caught this during the audit (memory 158) but treated \"minified bundles clean\" as sufficient. Locking in that hooks are in scope so future sessions / refactors don't make the same shortcut.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "source-protection",
+    "hooks",
+    "correction"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T22:09:23.668Z",
+  "updated_at": "2026-04-21T22:09:23.668Z"
+}

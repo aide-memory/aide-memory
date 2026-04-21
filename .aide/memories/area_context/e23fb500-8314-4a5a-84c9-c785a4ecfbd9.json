@@ -1,0 +1,23 @@
+{
+  "id": 166,
+  "uuid": "e23fb500-8314-4a5a-84c9-c785a4ecfbd9",
+  "layer": "area_context",
+  "what": "aide-memory LICENSE decision rationale (2026-04-21, after agent research) — if anyone later reconsiders the license choice, here is the evaluated-and-rejected alternatives so the analysis doesn't repeat: (1) PolyForm Shield 1.0.0: REJECTED — §1 grants distribution + modification rights we explicitly forbid; not SPDX-listed. (2) PolyForm Noncommercial: REJECTED — blocks commercial use, we want it permitted. (3) PolyForm Internal Use: REJECTED — \"internal business operations\" language forbids consultants running it for clients. (4) PolyForm Perimeter: REJECTED — grants modification + redistribution. (5) PolyForm Small Business: REJECTED — <100 employees + <$1M revenue cap + grants redistribution. (6) Business Source License 1.1 (BSL): REJECTED — mandatory auto-conversion to GPL-compatible OSS after 4 years, kills future pro-tier reservation. (7) Elastic License 2.0: REJECTED — weaker than we want, silently permits modification + redistribution. (8) FSL-1.1-MIT / FSL-1.1-Apache (Sentry, Liquibase): REJECTED — §3 IRREVOCABLY converts each version to MIT/Apache on 2-year anniversary; directly kills pro-tier reservation for old versions. (9) SSPL: REJECTED — AGPL-plus copyleft, opposite of proprietary. (10) CC BY-NC-ND: REJECTED — Creative Commons explicitly advises against CC for software; no patent grant, no UCC-conforming warranty disclaimer. (11) \"All Rights Reserved\" alone: REJECTED — grants user nothing, including implied run-rights under 17 U.S.C. §117. CHOSEN: custom EULA at LICENSE.md, SPDX field `\"license\": \"SEE LICENSE IN LICENSE.md\"`. Precedent: Claude Code and GitHub Copilot CLI use exact same pattern. Custom EULA has 17 clauses including the non-obvious ones: DMCA §1201(f) interop carve-out in reverse-engineering clause, per-version licensing in Future Versions clause, AAA arbitration + class-action waiver + jury-trial waiver seated Wake County NC, $100 liability cap (defensible for free tier, revisit before paid), AI/training-data exclusion (2025-26 standard addition). Governing law: North Carolina. Author: Ahmed Meky. Caveat: not attorney-reviewed; 1-hour IP-counsel review strongly advisable before paid tier or significant distribution scale.",
+  "why": "Full license-landscape evaluation was done for 0.3.0 with 11 off-the-shelf alternatives explicitly rejected with reasons. Without this memory, any future session reconsidering \"should we use FSL / BSL / PolyForm?\" has to redo the research from scratch. Preserving the rejection reasons locks in the decision.",
+  "scope": "LICENSE.md",
+  "context_label": "license decision",
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "license",
+    "legal",
+    "closed-source",
+    "eula"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T22:02:08.571Z",
+  "updated_at": "2026-04-21T22:02:08.571Z"
+}
