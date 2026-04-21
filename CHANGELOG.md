@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1 — 2026-04-21
+
+Patch release fixing two bugs caught in a post-publish audit of 0.4.0.
+
+### Fixes
+
+- **`aide-memory config <hook-key>` no longer fails with "Unknown config key".** 0.4.0 removed `scripts/hooks/defaults.json` from the published tarball (hook logic is bundled, so the source JSON was redundant) — but `src/memory/settings.ts` was still reading that file at runtime to validate config keys. The result: every hook-related setting key (`hooks.read.maxBlocks`, `hooks.stop.schedule`, `recall.limit`, `injection.preferences`, 14 others) reported as "Unknown config key" and returned the AideConfig defaults as the valid key list. Fixed by inlining the defaults JSON at bundle time via the same ES module JSON import pattern the hook handlers use.
+- **MCP `serverInfo.version` now reports the installed package version.** The `createServer()` call in `src/memory/server.ts` hardcoded `version: '0.2.0'`, a stale holdover that advertised the wrong product version in the MCP initialize handshake. Changed to read the version from the installed `package.json` at runtime. Functional impact was limited to MCP clients that surface the server-advertised version — npm still shows the correct installed version everywhere else.
+
+No other changes from 0.4.0. All features, CLI commands, hooks, and MCP tools remain identical.
+
+---
+
 ## 0.4.0 — 2026-04-21
 
 ### aide-memory — the persistent memory layer for AI coding agents

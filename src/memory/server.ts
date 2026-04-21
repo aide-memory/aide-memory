@@ -56,7 +56,18 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
   const logDir = options?.logDir ?? null;
   const server = new McpServer({
     name: 'aide-memory',
-    version: '0.2.0',
+    // Read from the installed package.json (NOT hardcoded — the prior
+    // '0.2.0' literal was a stale holdover that advertised the wrong
+    // product version during the MCP initialize handshake).
+    version: ((): string => {
+      try {
+        const pkgPath = path.join(__dirname, '..', '..', 'package.json');
+        const parsed = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        return (parsed && typeof parsed.version === 'string') ? parsed.version : '0.0.0';
+      } catch {
+        return '0.0.0';
+      }
+    })(),
   });
 
   // aide_recall — get context for an area

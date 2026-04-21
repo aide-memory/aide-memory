@@ -19,8 +19,11 @@
 
 import fs from 'fs';
 import path from 'path';
-
-const DEFAULTS_FILE = path.resolve(__dirname, '..', '..', 'scripts', 'hooks', 'defaults.json');
+// Inlined at bundle time by esbuild (resolveJsonModule=true). Previously
+// loadDefaults() read defaults.json from disk at runtime, but 0.4.x no longer
+// ships that file — hook logic is bundled, so shipping the source JSON would
+// be redundant. Inline is the runtime source of truth now.
+import defaultsJson from '../../scripts/hooks/defaults.json';
 
 export interface DefaultEntry {
   value: unknown;
@@ -28,23 +31,17 @@ export interface DefaultEntry {
   pro: boolean;
 }
 
-let _defaultsCache: Record<string, DefaultEntry> | null = null;
+let _defaultsCache: Record<string, DefaultEntry> =
+  defaultsJson as unknown as Record<string, DefaultEntry>;
 
 /** Returns the raw defaults. Exposed so tests and other callers can enumerate keys. */
 export function loadDefaults(): Record<string, DefaultEntry> {
-  if (_defaultsCache) return _defaultsCache;
-  try {
-    const raw = fs.readFileSync(DEFAULTS_FILE, 'utf8');
-    _defaultsCache = JSON.parse(raw);
-  } catch {
-    _defaultsCache = {};
-  }
-  return _defaultsCache!;
+  return _defaultsCache;
 }
 
 /** For tests: drop the in-memory defaults cache so the next read goes to disk. */
 export function _resetDefaultsCache(): void {
-  _defaultsCache = null;
+  _defaultsCache = defaultsJson as unknown as Record<string, DefaultEntry>;
 }
 
 function hasNestedPath(obj: unknown, parts: string[]): boolean {
