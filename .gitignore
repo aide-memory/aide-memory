@@ -9,3 +9,4 @@ dist/
 .aide/pending-memories.jsonl
 .aide/cache/
 .aide/memories/preferences/personal/
+aide-memory-*.tgz

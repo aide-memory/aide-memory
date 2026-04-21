@@ -226,18 +226,35 @@ Deprecation is a soft signal (users see a warning on install but can still insta
 
 ---
 
-## Step 9 — Request unpublish for versions with sensitive content (rare)
+## Step 9 — Unpublish versions with sensitive content (when needed)
 
-Only relevant for versions that leaked source, credentials, or broken security assumptions. Policy:
+Only relevant for versions that leaked source, credentials, or broken security assumptions. Current npm policy (per [docs.npmjs.com/policies/unpublish](https://docs.npmjs.com/policies/unpublish)):
 
-- Versions < 72h old: automatic `npm unpublish` works.
-- Versions > 72h old: contact [https://www.npmjs.com/support](https://www.npmjs.com/support) with:
-  - Your npm username (maintainer of the package)
-  - Specific versions to remove
-  - Reason (source exposure, credential leak, etc.)
-  - Confirmation no other npm packages depend on those versions (check the "Dependents" tab on npmjs.com)
+- **Versions < 72h old:** CLI `npm unpublish <pkg>@<version>` works directly, as long as no other npm packages depend on yours.
+- **Versions > 72h old:** CLI unpublish STILL works directly IF ALL THREE conditions:
+  1. No other npm packages depend on the version,
+  2. Fewer than 300 downloads over the last week,
+  3. Single owner/maintainer.
 
-Expect 2-5 business days for review. For the 0.1.1 and 0.2.0 versions (published 2026-04-08 and 2026-04-11), this step is the path to remove the raw source code they contain — see `docs/HANDOFF_MINIFIED_PUBLISH.md` for the specific ticket template.
+For aide-memory these three almost certainly hold (closed-source product, small audience, solo maintainer). **Try CLI unpublish first** — it should succeed without any support interaction:
+
+```bash
+# Eligibility pre-check
+npm view aide-memory@<version> dependents
+curl -s "https://api.npmjs.org/downloads/point/last-week/aide-memory" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("downloads"))'
+npm owner ls aide-memory
+
+# If eligible, unpublish directly
+npm unpublish aide-memory@<version>
+```
+
+**Support fallback:** only if the CLI refuses. File at [npmjs.com/support](https://www.npmjs.com/support) with your username, specific versions, reason, and confirmation of eligibility. Expect 2-5 business days.
+
+**Immutable-name caveat:** once a `pkg@version` identifier has been used, you can never republish under that same identifier — even after unpublish. If you unpublish 0.3.0 and want to "re-release" as 0.3.0, that's not possible; you must bump to 0.3.1.
+
+**24-hour waiting period for full-package republish:** if you unpublish ALL versions (i.e., the whole package), there is a 24h wait before you can publish anything new under that name.
+
+For the 0.1.1 and 0.2.0 versions (published 2026-04-08 and 2026-04-11), both are past the 72h window but likely meet the three-condition exception — CLI should work. See `docs/HANDOFF_MINIFIED_PUBLISH.md` for the session-specific context and a support-ticket template to use only if CLI refuses.
 
 ---
 

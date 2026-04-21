@@ -10,6 +10,7 @@
   "files": [
     "dist/cli/aide-memory.js",
     "dist/memory/index.js",
+    "dist/memory/cli.js",
     "scripts/hooks/defaults.json",
     "scripts/hooks/*.sh",
     "scripts/hooks/*.js",
@@ -19,9 +20,10 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:dist": "npm run build:dist:cli && npm run build:dist:lib",
+    "build:dist": "npm run build:dist:cli && npm run build:dist:lib && npm run build:dist:mcp",
     "build:dist:cli": "esbuild src/cli/aide-memory.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/cli/aide-memory.js",
     "build:dist:lib": "esbuild src/memory/index.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/memory/index.js",
+    "build:dist:mcp": "esbuild src/memory/cli.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/memory/cli.js",
     "prepublishOnly": "npm run build && npm run build:dist && ./scripts/verify-package.sh"
   },
   "dependencies": {

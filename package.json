@@ -1,54 +1,59 @@
 {
-  "name": "aide-memory",
+  "name": "aide-v0",
   "version": "0.2.0",
-  "description": "Persistent memory layer for AI coding agents — your agent remembers what you taught it",
-  "main": "dist/memory/index.js",
+  "description": "AIDE V0 - Local project-aware AI coding assistant with graph-based retrieval",
+  "main": "dist/cli/index.js",
   "bin": {
     "aide": "dist/cli/aide-memory.js",
-    "aide-memory": "dist/cli/aide-memory.js"
+    "aide-memory": "dist/cli/aide-memory.js",
+    "aide-legacy": "dist/cli/index.js"
   },
-  "files": [
-    "dist/cli/aide-memory.js",
-    "dist/memory/index.js",
-    "scripts/hooks/defaults.json",
-    "scripts/hooks/*.sh",
-    "scripts/hooks/*.js",
-    "src/templates/rules",
-    "README.md",
-    "LICENSE"
-  ],
   "scripts": {
+    "dev": "ts-node src/cli/index.ts",
     "build": "tsc",
-    "build:dist": "npm run build:dist:cli && npm run build:dist:lib",
+    "build:dist": "npm run build:dist:cli && npm run build:dist:lib && npm run build:dist:mcp",
     "build:dist:cli": "esbuild src/cli/aide-memory.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/cli/aide-memory.js",
     "build:dist:lib": "esbuild src/memory/index.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/memory/index.js",
-    "prepublishOnly": "npm run build && npm run build:dist && ./scripts/verify-package.sh"
+    "build:dist:mcp": "esbuild src/memory/cli.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/memory/cli.js",
+    "start": "node dist/cli/index.js",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify-tarball": "node scripts/verify-package.sh"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.7.0",
+    "better-sqlite3": "^11.0.0",
+    "chalk": "^4.1.2",
+    "chokidar": "^3.6.0",
+    "commander": "^12.0.0",
+    "express": "^5.2.1",
+    "fast-glob": "^3.3.3",
+    "marked": "^15.0.12",
+    "marked-terminal": "^7.3.0",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "ts-morph": "^23.0.0",
+    "web-tree-sitter": "^0.25.10",
+    "ws": "^8.18.3",
+    "zod": "^4.3.6"
   },
   "optionalDependencies": {
     "@huggingface/transformers": "^3.0.0"
   },
   "devDependencies": {
-    "esbuild": "^0.28.0"
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/express": "^5.0.6",
+    "@types/marked-terminal": "^6.1.1",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "keywords": [
-    "ai",
-    "memory",
-    "coding-agent",
-    "mcp",
-    "claude",
-    "cursor",
-    "context"
-  ],
-  "license": "SEE LICENSE IN LICENSE",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/aide-memory/aide-memory"
-  },
-  "homepage": "https://aide-memory.dev"
+  }
 }

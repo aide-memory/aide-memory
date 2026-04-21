@@ -41,6 +41,8 @@ describe('package.aide-memory.json', () => {
     expect(pkg.files).toContain('dist/cli/aide-memory.js');
     // Single bundled library entry (esbuild output)
     expect(pkg.files).toContain('dist/memory/index.js');
+    // MCP server entry (spawned via .mcp.json); bundled separately
+    expect(pkg.files).toContain('dist/memory/cli.js');
     // Hook scripts (bash + node helpers + defaults)
     expect(pkg.files).toContain('scripts/hooks/*.sh');
     expect(pkg.files).toContain('scripts/hooks/*.js');

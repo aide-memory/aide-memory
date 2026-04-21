@@ -203,11 +203,15 @@ ls $(npm root -g)/aide-memory/dist/
 
 **User intent:** remove access to old versions (0.1.1, 0.2.0) that ship unbundled TypeScript-derived source code. Both are currently installable and expose logic the user wants closed.
 
-**npm's unpublish policy (72-hour rule):**
-- Within 72 hours of publish: anyone can `npm unpublish` immediately.
-- After 72 hours: blocked by default. Removal requires contacting npm support with a reason.
+**npm's unpublish policy:**
+- **Within 72 hours of publish:** CLI unpublish works directly, as long as no other npm packages depend on yours.
+- **After 72 hours:** CLI unpublish still works directly IF ALL THREE:
+  1. No other npm packages depend on the version,
+  2. The version had fewer than 300 downloads over the last week, AND
+  3. The package has a single owner/maintainer.
+- If any of the three fails, CLI unpublish is refused — then you contact npm support.
 
-Both 0.1.1 (2026-04-08) and 0.2.0 (2026-04-11) are well past the 72-hour window as of 2026-04-21. Automatic unpublish will be refused. Two-step process:
+For aide-memory, the three conditions almost certainly hold (closed-source, small audience, single maintainer). **Try CLI unpublish first — it should work directly without a support ticket.** Only fall back to the ticket if the CLI refuses.
 
 ### Step 1 (immediate, automatic): deprecate
 
@@ -223,7 +227,26 @@ Effect:
 - Versions remain downloadable — deprecation is a soft signal, not a block.
 - This is the strongest control available without npm support.
 
-### Step 2 (request): unpublish via npm support
+### Step 2 (try CLI first): direct npm unpublish
+
+Since aide-memory likely meets all three post-72h criteria (no reverse deps, <300 downloads/week, single maintainer), CLI unpublish should work:
+
+```bash
+# Verify eligibility first
+npm view aide-memory@0.1.1 dependents    # should show [] or be empty
+npm view aide-memory@0.2.0 dependents    # same
+# Check weekly downloads (rough check)
+curl -s "https://api.npmjs.org/downloads/point/last-week/aide-memory" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print("last-week:", d.get("downloads"))'
+npm owner ls aide-memory                 # should show only one maintainer
+
+# If all three pass, unpublish directly:
+npm unpublish aide-memory@0.1.1
+npm unpublish aide-memory@0.2.0
+```
+
+If either command succeeds, you're done — the version is removed from the registry. If the command fails with a policy error, proceed to Step 3.
+
+### Step 3 (fallback, only if CLI refuses): npm support ticket
 
 File a support ticket at [https://www.npmjs.com/support](https://www.npmjs.com/support) requesting removal of specific versions. Use this framing:
 
@@ -245,7 +268,7 @@ File a support ticket at [https://www.npmjs.com/support](https://www.npmjs.com/s
 - If granted: the tarballs are removed from the registry. Anyone who has the package locally keeps it (npm unpublish doesn't reach into user machines), but new installs fail for those versions.
 - If declined: deprecation remains the only control. Users can still install but see warnings.
 
-### After unpublish succeeds
+### After CLI unpublish or support-granted unpublish succeeds
 
 Update README and landing page to reference 0.3.0+ only:
 - Remove any "install 0.1.1" or "v0.2.0 changelog" references

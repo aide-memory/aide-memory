@@ -80,6 +80,10 @@ if ! echo "$FILE_LINES" | grep -qE '^dist/memory/index\.js$'; then
   echo "FAIL: dist/memory/index.js (bundled library) missing from tarball"
   ERRORS=$((ERRORS + 1))
 fi
+if ! echo "$FILE_LINES" | grep -qE '^dist/memory/cli\.js$'; then
+  echo "FAIL: dist/memory/cli.js (bundled MCP server entry) missing from tarball"
+  ERRORS=$((ERRORS + 1))
+fi
 
 # 8. The bundled CLI must look minified (single file, no leading JSDoc block)
 # Extract the actual file from the tarball to verify
