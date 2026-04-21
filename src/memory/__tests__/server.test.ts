@@ -251,6 +251,28 @@ describe('MCP Server', () => {
       expect(latest.shared).toBe(true);
     });
 
+    it('accepts explicit null for optional fields (LLMs sometimes send null instead of omitting)', async () => {
+      // Plain .optional() rejects null with "expected string, received null".
+      // Every optional field uses .nullish().transform((v) => v ?? undefined)
+      // so null passes through as "not set" rather than erroring.
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          what: 'memory with explicit nulls',
+          layer: 'technical',
+          scope: null as any,
+          why: null as any,
+          context_label: null as any,
+          tags: null as any,
+          shared: null as any,
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Stored');
+      expect(text).toContain('project-wide'); // scope null → undefined → falls through to project-wide
+    });
+
     it('deleted memory does not appear in recall', async () => {
       await client.callTool({
         name: 'aide_remember',

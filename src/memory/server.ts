@@ -44,6 +44,14 @@ const lenientBoolean = z.preprocess((v) => {
   return v;
 }, z.boolean());
 
+/**
+ * The `.nullish().transform((v) => v ?? undefined)` chain used on every
+ * optional field accepts missing / undefined / null and always emits
+ * undefined downstream. LLMs sometimes send `{scope: null}` to mean "not
+ * set" — plain `.optional()` would reject with "expected string, received
+ * null". This chain makes every optional field forgiving.
+ */
+
 export function createServer(store: MemoryStore, options?: { logDir?: string | null }): McpServer {
   const logDir = options?.logDir ?? null;
   const server = new McpServer({
@@ -56,12 +64,12 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'aide_recall',
     'Retrieve context for an area of the codebase before planning or making changes. Returns contributor preferences, technical knowledge, area decisions, and project guidelines. Call this when starting work in a codebase area, before proposing plans, or when you may have lost earlier context.',
     {
-      paths: lenientArray(z.string()).optional().describe('File or directory paths you are working in. Returns memories scoped to these areas plus project-wide context.'),
-      ids: lenientArray(z.coerce.number()).optional().describe('Specific memory IDs to retrieve (for gap-filling). When provided, returns exactly these memories — no path matching.'),
-      query: z.string().optional().describe('Optional text to boost relevant results (e.g. "skeleton loading" or "authentication flow").'),
-      layers: lenientArray(z.enum(LAYER_VALUES)).optional().describe('Filter to specific layers: preferences, technical, area_context, guidelines.'),
-      contributor: z.string().optional().describe('Filter to a specific contributor.'),
-      limit: z.coerce.number().optional().describe('Max memories to return (default 20).'),
+      paths: lenientArray(z.string()).nullish().transform((v) => v ?? undefined).describe('File or directory paths you are working in. Returns memories scoped to these areas plus project-wide context.'),
+      ids: lenientArray(z.coerce.number()).nullish().transform((v) => v ?? undefined).describe('Specific memory IDs to retrieve (for gap-filling). When provided, returns exactly these memories — no path matching.'),
+      query: z.string().nullish().transform((v) => v ?? undefined).describe('Optional text to boost relevant results (e.g. "skeleton loading" or "authentication flow").'),
+      layers: lenientArray(z.enum(LAYER_VALUES)).nullish().transform((v) => v ?? undefined).describe('Filter to specific layers: preferences, technical, area_context, guidelines.'),
+      contributor: z.string().nullish().transform((v) => v ?? undefined).describe('Filter to a specific contributor.'),
+      limit: z.coerce.number().nullish().transform((v) => v ?? undefined).describe('Max memories to return (default 20).'),
     },
     async (params) => {
       const result = recall(store, {
@@ -109,14 +117,14 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     {
       what: z.string().describe('The specific knowledge to remember.'),
       layer: z.enum(LAYER_VALUES).describe('preferences = how someone likes to work. technical = facts about the stack. area_context = decisions for a code area. guidelines = team principles.'),
-      scope: z.string().optional().describe('Glob pattern for the code area this applies to (e.g. "src/components/dashboard/**"). Omit for project-wide.'),
-      why: z.string().optional().describe('Context for why this is worth remembering.'),
-      context_label: z.string().optional().describe('Feature grouping label (e.g. "dashboard skeleton loading", "Add App modal").'),
-      contributor: z.string().optional().describe('Who this knowledge came from (for preferences layer).'),
-      tags: lenientArray(z.string()).optional().describe('Tags for categorization.'),
-      source: z.enum(SOURCE_VALUES).optional().describe('How this was captured. Default: conversation.'),
-      shared: lenientBoolean.optional().describe('Whether this memory is shared (true, default) or personal (false). Only affects preferences layer file placement.'),
-      priority: z.enum(['always', 'normal']).optional().describe('always = auto-injected at session start. normal = standard recall.'),
+      scope: z.string().nullish().transform((v) => v ?? undefined).describe('Glob pattern for the code area this applies to (e.g. "src/components/dashboard/**"). Omit for project-wide.'),
+      why: z.string().nullish().transform((v) => v ?? undefined).describe('Context for why this is worth remembering.'),
+      context_label: z.string().nullish().transform((v) => v ?? undefined).describe('Feature grouping label (e.g. "dashboard skeleton loading", "Add App modal").'),
+      contributor: z.string().nullish().transform((v) => v ?? undefined).describe('Who this knowledge came from (for preferences layer).'),
+      tags: lenientArray(z.string()).nullish().transform((v) => v ?? undefined).describe('Tags for categorization.'),
+      source: z.enum(SOURCE_VALUES).nullish().transform((v) => v ?? undefined).describe('How this was captured. Default: conversation.'),
+      shared: lenientBoolean.nullish().transform((v) => v ?? undefined).describe('Whether this memory is shared (true, default) or personal (false). Only affects preferences layer file placement.'),
+      priority: z.enum(['always', 'normal']).nullish().transform((v) => v ?? undefined).describe('always = auto-injected at session start. normal = standard recall.'),
     },
     async (params) => {
       const memory = store.add({
@@ -149,11 +157,11 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'Update an existing memory. Use when information has changed, scope needs adjusting, or context needs updating. You can only update your own memories.',
     {
       id: z.coerce.number().describe('ID of the memory to update.'),
-      what: z.string().optional().describe('Updated knowledge text.'),
-      why: z.string().optional().describe('Updated context.'),
-      scope: z.string().optional().describe('Updated scope pattern.'),
-      context_label: z.string().optional().describe('Updated feature label.'),
-      priority: z.enum(['always', 'normal']).optional().describe('always = auto-injected at session start. normal = standard recall.'),
+      what: z.string().nullish().transform((v) => v ?? undefined).describe('Updated knowledge text.'),
+      why: z.string().nullish().transform((v) => v ?? undefined).describe('Updated context.'),
+      scope: z.string().nullish().transform((v) => v ?? undefined).describe('Updated scope pattern.'),
+      context_label: z.string().nullish().transform((v) => v ?? undefined).describe('Updated feature label.'),
+      priority: z.enum(['always', 'normal']).nullish().transform((v) => v ?? undefined).describe('always = auto-injected at session start. normal = standard recall.'),
     },
     async (params) => {
       const id = toNumber(params.id);
@@ -224,10 +232,10 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'aide_memories',
     'List stored memories for transparency and management. Shows what context is available.',
     {
-      layer: z.enum(LAYER_VALUES).optional().describe('Filter by layer.'),
-      scope: z.string().optional().describe('Filter by exact scope.'),
-      contributor: z.string().optional().describe('Filter by contributor.'),
-      limit: z.coerce.number().optional().describe('Max results (default 50).'),
+      layer: z.enum(LAYER_VALUES).nullish().transform((v) => v ?? undefined).describe('Filter by layer.'),
+      scope: z.string().nullish().transform((v) => v ?? undefined).describe('Filter by exact scope.'),
+      contributor: z.string().nullish().transform((v) => v ?? undefined).describe('Filter by contributor.'),
+      limit: z.coerce.number().nullish().transform((v) => v ?? undefined).describe('Max results (default 50).'),
     },
     async (params) => {
       const memories = store.list({
@@ -267,8 +275,8 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     {
       content: z.string().describe('The markdown content to import.'),
       layer: z.enum(LAYER_VALUES).describe('Which layer to import into.'),
-      scope: z.string().optional().describe('Scope for all imported memories.'),
-      context_label: z.string().optional().describe('Label for the import batch.'),
+      scope: z.string().nullish().transform((v) => v ?? undefined).describe('Scope for all imported memories.'),
+      context_label: z.string().nullish().transform((v) => v ?? undefined).describe('Label for the import batch.'),
     },
     async (params) => {
       const items = parseMarkdownItems(params.content);
@@ -304,9 +312,9 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
     'Search memories by keyword substring match. Use when looking for specific knowledge that may be stored — e.g. "what do we know about authentication?" or "any memories about testing?"',
     {
       keyword: z.string().describe('Text to search for in memory content (case-insensitive substring match on what and why fields).'),
-      layer: z.enum(LAYER_VALUES).optional().describe('Filter to a specific layer.'),
-      limit: z.coerce.number().optional().describe('Max results (default 50).'),
-      mode: z.enum(['auto', 'keyword', 'semantic']).optional().describe(
+      layer: z.enum(LAYER_VALUES).nullish().transform((v) => v ?? undefined).describe('Filter to a specific layer.'),
+      limit: z.coerce.number().nullish().transform((v) => v ?? undefined).describe('Max results (default 50).'),
+      mode: z.enum(['auto', 'keyword', 'semantic']).nullish().transform((v) => v ?? undefined).describe(
         "Search mode. 'auto' (default): keyword first, semantic fallback if <3 results. 'keyword': exact substring only. 'semantic': embedding similarity only."
       ),
     },
