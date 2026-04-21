@@ -184,22 +184,40 @@ Pick up from `docs/validation/MANUAL_E2E_VALIDATION.md`:
 
 ---
 
-## Cross-Branch: `minified-publish` Coordination
+## Cross-Branch: `minified-publish` — ALREADY LANDED (Apr 21, 2026)
 
-Another branch, `minified-publish`, is landing a bundling/release change (minification + how we ship the package). It will have its own handoff: `docs/sessions/HANDOFF_MINIFIED_PUBLISH.md`.
+**Status update:** when this handoff was first drafted, `minified-publish` was presented as a future merge to coordinate against. That's no longer accurate — while this handoff was being finalized, `minified-publish` merged and shipped three releases:
 
-**Instructions for after `minified-publish` merges:**
+- `0a84beb` — merge `feature/phase-1` into `minified-publish` (includes the MCP schema leniency fixes from `669e5bf`/`a7a105a`/`fbb872c`)
+- `d02c783` — **0.3.0 release** (first minified+bundled tarball; closed-source ready)
+- `a190f20` — **0.4.0 release** (hook logic consolidated into the bundled CLI — hooks are now thin shims like `exec node $PKG_ROOT/dist/cli/aide-memory.js hook pre-prompt`)
+- `93f56f2` — **0.4.1 release** (audit patches for two bugs surfaced in the 0.4.0 post-publish audit — see memory #169)
 
-1. **Read** `docs/sessions/HANDOFF_MINIFIED_PUBLISH.md` end-to-end to understand what the bundling change did (what got minified, what entry points changed, what the CLI/MCP boundaries now look like)
-2. **Full re-run of everything validated here** — the minified bundle could introduce subtle regressions in:
-   - Path resolution (`__dirname` shifts if bundler inlines scripts)
-   - Hook script invocations (hooks call `node /path/to/dist/memory/cli.js` — if the path moves post-minification the hooks break silently)
-   - JSON memory file reads (if `fs` calls get minified in a way that breaks relative-path resolution)
-   - MCP schema validation (if zod gets tree-shaken aggressively, coercion helpers could be removed)
-3. **Re-run order:**
-   - Automated: `npm test -- --run` (expect 660/660), then `bash scripts/hooks/__tests__/count-parity.sh`, `settings-behavior.test.sh`, `detect-correction.test.sh` (all should pass)
-   - Manual: re-run `MANUAL_E2E_VALIDATION.md` from step 0, skipping nothing. Every "Expected" line should still match.
-4. **Capture results in a NEW section of `PHASE_1_RESULTS.md`** titled "Post-minified-publish re-verification ({date}, SHA {post-merge-sha})." Note any regressions + their root cause. If the minified bundle breaks anything, fix on `feature/phase-1` or coordinate with the `minified-publish` author.
+Authoritative docs for the minified-publish architecture (on main now, not under `sessions/`):
+- `docs/HANDOFF_MINIFIED_PUBLISH.md` — the release handoff + post-release updates
+- `docs/RELEASING.md` — permanent playbook for every future release
+- `docs/VALIDATION_MINIFIED_PUBLISH.md` — pre-publish E2E procedures
+- `docs/AUDIT_MINIFIED_PUBLISH.md` — security audit findings
+- Memory `#151` — summary of the 0.3.0 ship (live URL, verified no-leak tarball, three-bundle invariant)
+- Memory `#169` — lessons from the 0.4.0 audit (e.g. `files` allowlist must be cross-referenced against runtime `readFileSync` calls, CI smoke against a packed tarball prevents re-occurrence)
+- Memory `#163` — validation discipline: test against install-from-tarball, NOT dev node_modules. Dev-mode hides packaging bugs.
+
+### Architectural invariants to preserve going forward (from memory #151)
+
+Any refactor that touches the release path must respect:
+1. **Three bundles.** CLI (`dist/cli/aide-memory.js`), library (`dist/memory/index.js`), MCP server (`dist/memory/cli.js`). Missing any breaks a user path.
+2. **Runtime `package.json` read.** Every entry point reads `package.json` via `fs.readFileSync` at runtime, NOT `require('../../package.json')` at bundle time. The latter inlines the dev-monorepo manifest (memory #162).
+3. **`scripts/verify-package.sh` is the CI gate.** It blocks source leaks (`.ts`/`.map`/`sourceMappingURL`), dev-manifest leaks, missing bundles. Never bypass.
+4. **Hooks are thin shims.** `scripts/hooks/*.sh` are now 2-3 line `exec node ... hook <name>` wrappers — the real logic lives in `src/cli/commands/hooks/*.ts` bundled into `dist/cli/aide-memory.js`.
+
+### What to do next (vs what I originally wrote)
+
+The original plan was "re-run everything after `minified-publish` merges." That already happened during the release validation (see `docs/VALIDATION_MINIFIED_PUBLISH.md`). **What still needs to run in a fresh session** is:
+
+1. **Re-read this handoff + `docs/HANDOFF_MINIFIED_PUBLISH.md` + `docs/RELEASING.md`** to get current on state.
+2. **Run the pre-flight block at the top of `docs/validation/MANUAL_E2E_VALIDATION.md`** (automated tests + bash smokes + build) against the current HEAD. If any fail, fix first.
+3. **Pick up the manual walk** from wherever it left off — last stopping point is between step 10 (E — cross-session correction, passed) and step 11 (G — concurrent sessions, next). See "What's Already Validated" + "Still To Validate (manual)" sections in this doc.
+4. **Periodically `git fetch` + check `git log HEAD..origin/feature/phase-1`** — per memory #170, the primary worktree may receive commits during parallel release activity and you should not assume origin is a fast-forward of your local HEAD.
 
 ---
 

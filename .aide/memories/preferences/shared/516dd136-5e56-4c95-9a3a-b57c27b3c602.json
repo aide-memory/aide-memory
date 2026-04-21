@@ -1,0 +1,23 @@
+{
+  "id": 170,
+  "uuid": "516dd136-5e56-4c95-9a3a-b57c27b3c602",
+  "layer": "preferences",
+  "what": "Multi-worktree release coordination lesson for aide-memory: when doing a release from a secondary worktree while the user is active in the primary worktree, re-fetch and re-check for new local commits on the release branch IMMEDIATELY BEFORE each tag-push, not just at the start of the merge. In the 0.3.0/0.4.0/0.4.1 release session: I merged local feature/phase-1 (at 669e5bf) into feature/minified-publish at 17:55, then pushed three releases at 17:57, 18:27, and 18:43. At 18:12 — AFTER my merge but BEFORE the 0.4.0 push — the user committed 58f49b2 (\"docs: session handoff\") on feature/phase-1 in their primary worktree. I never re-pulled, so that commit didn't make it into origin or any tag. It was docs-only so no shipped code was wrong, but the primary's feature/phase-1 diverged from origin's — requiring a manual rebase to reconcile. Future releases from a secondary worktree: (1) `git fetch` + check `git log <local-phase-1>..origin/feature/phase-1` and `git log origin/feature/phase-1..<local-phase-1>` immediately before every `git tag` / `git push --tags`. (2) If the primary worktree might be adding commits during the release session, mention it in the handoff and coordinate a quiet window. (3) If new commits surface post-release, fix via `git rebase origin/feature/phase-1` in the primary + `git push` — not force-push. Git reflog is the safety net if something goes wrong. This is separate from memory 168 (which was about merge direction); this one is about staleness between merge-start and tag-push.",
+  "why": "Concrete miss in this session: the user's 58f49b2 docs commit in primary worktree never made it into origin because I didn't re-check for new commits between my merge (17:55) and my final tag pushes (18:27-18:43). Docs-only so no code shipped wrong, but the branch diverged. Preserving the discipline (\"fetch + check right before every tag push\") so future release spawns don't repeat this.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "release",
+    "git-workflow",
+    "worktree",
+    "lesson-learned"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T22:57:48.138Z",
+  "updated_at": "2026-04-21T22:57:48.138Z"
+}

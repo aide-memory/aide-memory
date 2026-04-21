@@ -4,7 +4,32 @@ One-sitting top-to-bottom walk you can run in real Claude Code sessions against 
 
 Each step has an **Expected** line — if you hit it, move on. If not, report the step number and I'll dig in.
 
-**Time:** ~45-60 minutes end-to-end if you skim.
+**Time:** ~45-60 minutes end-to-end if you skim (plus ~5 min for the pre-flight automated pass).
+
+---
+
+## Pre-flight (REQUIRED before any manual step)
+
+The manual walk assumes the automated suite is green. **Run this first every time** — fresh session start, after merging a branch, after any dependency update, after a release bundle swap, or whenever you're resuming after a long break. If any check fails, fix that first before opening a Claude session.
+
+```bash
+cd /Users/meky/code/aide-v0
+
+# 1. Unit tests — expect 660/660 pass (as of Apr 21, 2026; number grows as regression tests are added)
+npm test -- --run 2>&1 | tail -5
+
+# 2. Bash smoke suites — each prints "PASS" at the end
+bash scripts/hooks/__tests__/count-parity.sh
+bash scripts/hooks/__tests__/settings-behavior.test.sh
+bash scripts/hooks/__tests__/detect-correction.test.sh
+
+# 3. Build is clean — tsc should exit 0 with no output
+npm run build 2>&1 | tail -3
+```
+
+**All four MUST pass before starting the manual walk.** If you're validating a freshly-published tarball (not dev-mode), also add the install-from-tarball smoke per `docs/RELEASING.md` §4 — dev-mode hides packaging-scoped bugs (missing bundles, dev-manifest leaks into the CLI bundle, etc.). See memory #163.
+
+If any of the above fail: stop, fix the failing test/smoke, then restart the manual walk. Do NOT skip the pre-flight — the manual walk's expected outputs rely on all these passing.
 
 ---
 

@@ -1,0 +1,24 @@
+{
+  "id": 169,
+  "uuid": "dd385a6a-c4bd-4e38-8858-ebc1d677d095",
+  "layer": "technical",
+  "what": "AUDIT LESSON for aide-memory releases: any change to package.aide-memory.json `files` allowlist must be cross-referenced against every `fs.readFileSync` / `require` / `import` at runtime in the published code. In 0.4.0 I removed scripts/hooks/defaults.json from the tarball (hook handlers inlined it via ES module JSON import) but missed that src/memory/settings.ts ALSO read that file at runtime via fs.readFileSync. Result: `loadDefaults()` silently returned {}, breaking `aide-memory config <hook-key>` (rejected all 18 hook-setting keys), `getSetting()` from recall path, and any other consumer. Also caught in 0.4.0: src/memory/server.ts hardcoded `version: '0.2.0'` in createServer() — a pre-existing bug from the 0.2.0 era that never got updated. Both fixed in 0.4.1. Future-release checklist item for docs/RELEASING.md: after changing `files` allowlist, grep the entire src/ tree for `readFileSync|require\\(|import .*from` patterns that reference the removed files and migrate each to an inline import OR keep the file shipped. Also: add a CI smoke step that runs `aide-memory config hooks.read.maxBlocks` on a freshly-installed tarball — would have caught both issues before publish.",
+  "why": "Caught 2 bugs in 0.4.0 post-publish audit that could have been caught pre-publish. Preserving the mitigation (inline-JSON pattern) and the process gap (no runtime smoke test of config validation against a packed tarball) so future spawns add the missing CI step instead of repeating the audit after release.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "release",
+    "audit",
+    "settings",
+    "files-allowlist",
+    "lesson-learned"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T22:46:25.160Z",
+  "updated_at": "2026-04-21T22:46:25.160Z"
+}
