@@ -1,254 +1,111 @@
-# Handoff — aide-memory minified-publish release
+# Handoff — aide-memory@0.3.0 release
 
-**Context for the publishing agent:** a previous session implemented the
-build-pipeline changes to ship aide-memory as a minified JS bundle via npm.
-Your job is to (a) survey everything that has accumulated since the live
-aide-memory@0.2.0 on npm, (b) decide the correct next version per semver,
-(c) write the release notes, and (d) publish.
+**Status: v0.3.0 published to npm on 2026-04-21T21:59:15Z.** This doc tracks what was done in the release session and what still needs attention.
 
 ---
 
-## What the previous session built (this branch)
+## DONE in this session
 
-Branch: `feature/minified-publish` (off `feature/phase-1@71f8a9b`).
-Single commit: **`d30f617`** — `feat(publish): minify + bundle at publish time via esbuild; tighten files allowlist`.
+### 1. Released `aide-memory@0.3.0` to npm
 
-### Changes in this commit
+- **Live on registry** since 2026-04-21T21:59:15Z — `latest` tag set to 0.3.0.
+- Verified via post-publish smoke test: `npm install aide-memory@0.3.0` in an empty project → `init` + `remember` + `recall` + `search` all work.
+- GitHub Release `v0.3.0` created (latest) at `ahmedmmeky/aide-v0`.
+- Release workflow: succeeded in 1m17s.
 
-- **esbuild added as devDependency.** `npm install --save-dev esbuild`.
-- **New npm scripts** (in both `package.json` and `package.aide-memory.json`):
-  - `build:dist` → runs CLI + library bundles
-  - `build:dist:cli` → `esbuild src/cli/aide-memory.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/cli/aide-memory.js`
-  - `build:dist:lib` → same flags for `src/memory/index.ts` → `dist/memory/index.js`
-  - `prepublishOnly` (in package.aide-memory.json) → `npm run build && npm run build:dist && ./scripts/verify-package.sh`
-- **Hook helpers migrated** to require the bundled library (`dist/memory/index`) instead of individual module files. Affects:
-  - `scripts/hooks/recall-for-path.js`
-  - `scripts/hooks/search-preview.js`
-  - `scripts/hooks/session-inject.js`
-- **`src/memory/index.ts`** now exports `computeScopedForPath` (needed by the migrated hook helper).
-- **`package.aide-memory.json`**:
-  - `files` allowlist tightened to: `dist/cli/aide-memory.js`, `dist/memory/index.js`, `scripts/hooks/*.{sh,js}`, `scripts/hooks/defaults.json`, `src/templates/rules`, `README.md`, `LICENSE`.
-  - `dependencies` slimmed to `better-sqlite3` only. commander, chalk, fast-glob, @modelcontextprotocol/sdk, zod are now bundled (no longer runtime deps).
-  - `optionalDependencies` keeps `@huggingface/transformers` (dynamic-imported, external).
-- **`scripts/verify-package.sh`** rewritten — fails on any `.ts` source, `.map` file, dev-only directory, unbundled dist output, or missing bundle in the tarball.
-- **`.npmignore`** hardened with `**/*.map`, `*.d.ts.map`, `*.ts`, `.github/`, `.git/`.
-- **`.github/workflows/release.yml`** runs `build:dist` after `build`, and `verify-package.sh` before `npm publish`.
-- **`src/__tests__/package.test.ts`** updated for the new manifest shape; version assertion loosened to a semver regex.
-- **All 654 tests pass** locally under this branch.
+### 2. Branches + tag
 
-### End-to-end verification already done
+- `feature/phase-1` on origin is now at **`d02c783`** (the release commit). Phase-1 is the canonical release line going forward.
+- `feature/minified-publish` is at the same commit (`d02c783`).
+- Tag `v0.3.0` → `d02c783`.
+- Merge commit `0a84beb` folded in phase-1's 5 MCP schema-leniency fixes before release.
 
-- `npm pack --dry-run` produces 30 files, 242 KB compressed, 935 KB unpacked.
-- No `.ts` source, no `.map` files, no `dist/cli/commands/memory/` or unbundled `dist/memory/*.js` leak into the tarball.
-- `./scripts/verify-package.sh` passes.
-- Clean-install test: `npm install ./aide-memory-0.2.0.tgz` in an empty project → `aide-memory init / remember / recall / search` all work end-to-end.
-- Published bundle head: `#!/usr/bin/env node` + single minified line. No original function names, no comments, no types visible.
+### 3. Release artifacts (shipped tarball)
 
----
+- 32 files, 388 KB compressed, 935 KB unpacked
+- **3 bundled minified JS entries:** `dist/cli/aide-memory.js` (CLI), `dist/memory/index.js` (library), `dist/memory/cli.js` (MCP server stdio)
+- **Hook glue:** 11 `.sh` + 4 `.js` helpers + `defaults.json` in `scripts/hooks/` (shipped as plain readable text — see "Hook visibility" in REMAINING below)
+- **Rule templates:** 5 `.md/.mdc` files
+- **Docs:** `README.md`, `README.npm.md`, `README.legacy.md`
+- **License:** `LICENSE.md` (17 clauses, NC jurisdiction, reserves pro-tier for future versions)
+- **Manifest:** `package.json` (published publication manifest — `name: aide-memory`, `license: "SEE LICENSE IN LICENSE.md"`, only `better-sqlite3` as runtime dep; everything else bundled)
 
-## What you (publishing agent) need to decide
+### 4. LICENSE.md created
 
-### 1. Version bump — **required before publish**
+Custom EULA, agent-researched to match the industry pattern for closed-source CLIs (same approach as Claude Code and GitHub Copilot CLI). 17 sections including DMCA §1201(f) interop carve-out, per-version licensing (so future paid versions are governed separately), AAA arbitration + class-action waiver + jury-trial waiver in Wake County NC, $100 aggregate liability cap, AI/training-data exclusion clause.
 
-`package.aide-memory.json` currently reads `"version": "0.2.0"`. **That version is already live on npm**, published 2026-04-11, and contains the pre-cleanup codebase (still has `--scan`, ships unbundled source). You cannot republish 0.2.0.
+**Not attorney-reviewed.** A 1-hour IP-counsel review is strongly advisable before introducing a paid tier or scaling distribution substantially. See memory 166 for the rationale and the 11 off-the-shelf licenses explicitly rejected + why.
 
-**Recommended: 0.3.0.** Rationale:
-- `--scan` removal is a breaking change (users invoking `aide-memory init --scan` will fail).
-- Multiple new features accumulated on `feature/phase-1` since live 0.2.0 (pending-memories import, mid-session drift-repair, settings refactor — see "Full diff to survey" below).
-- Pre-1.0 SemVer: bump the minor segment for breaking changes + new features.
+### 5. CHANGELOG.md written
 
-If you find something in the diff that warrants a 1.0.0 "we're stable now" declaration, consider that. Otherwise 0.3.0.
+Covers everything accumulated since the live 0.2.0 on npm (published 2026-04-11). Sections: Breaking / New features / Fixes / Internal / Distribution / License / Upgrading. See the file for the full list.
 
-Bump in `package.aide-memory.json` (NOT `package.json` — the root is the dev-monorepo manifest, irrelevant to what ships).
+### 6. Defense-in-depth hardening
 
-### 2. Full diff to survey
+- `scripts/verify-package.sh` — fails publish on any `.ts`, `.map`, unbundled source, sourceMappingURL reference, or dev-monorepo-leak string (`aide-v0`, `aide-legacy`, legacy dep names) in any of the three bundles.
+- `.npmignore` — `**/*.map`, `*.d.ts.map`, `*.ts`, `.github/`, `.git/` as belt-and-suspenders.
+- CLI bundle no longer inlines `package.json` at build time (switched from `require('../../package.json')` to runtime `fs.readFileSync`), removing a dev-manifest leak that was in the earlier commits.
 
-Published 0.2.0 was tagged at some commit on or near 2026-04-11. The full set of changes since then includes work from multiple sessions:
+### 7. CI workflow updated for Node 24 deprecation
 
-```bash
-# From the repo root, on feature/phase-1:
-git log --oneline --since="2026-04-10" feature/phase-1
-
-# Or compare against the published tarball contents:
-git log --format='%h %s' feature/phase-1 -- src/ scripts/hooks/ package.aide-memory.json
-```
-
-Known accumulated changes (not exhaustive — verify via git log):
-
-- **Breaking**: `aide-memory init --scan` flag removed (commit 6be74e6). `src/memory/scan.ts` deleted. Users relying on `--scan` should seed memories via `aide-memory remember` or the MCP `aide_remember` tool.
-- **New feature**: pending-memories import on MCP server startup (commit b7e5a4d, closes J6). Previously a crashed session could leave memories unimported.
-- **New feature**: mid-session drift-repair for derived artifacts via `read-config.sh` (commit 4382bed). `.claude/rules/aide-memory.md`, `.mcp.json`, and `.claude/settings.json` hook entries now re-sync automatically when they drift mid-session.
-- **Refactor**: dead settings removed, 18 public settings exposed via `aide-memory config` (commit fe809b3 + 6be74e6).
-- **Fix**: `detect-correction` hook regex now matches colloquial contractions like "don't", "can't" (commit d56e837). Previously these false-negatived.
-- **Docs**: manual E2E validation guide (commits a5c5624, 71f8a9b).
-- **Plus this commit (d30f617)**: minified-publish build pipeline.
-
-### 3. Release notes
-
-Author based on your full survey of the diff. Don't copy my list blindly — verify each entry, look for anything I missed, and group by section (Breaking / New / Fixes / Internal).
-
-Template:
-
-```markdown
-# aide-memory 0.3.0
-
-## Breaking changes
-- Removed `aide-memory init --scan` flag…
-- (any other breaking changes you find)
-
-## New features
-- Pending-memories import on MCP server startup…
-- Mid-session drift-repair for derived artifacts…
-- (any other new features)
-
-## Fixes
-- detect-correction hook regex matches colloquial contractions…
-- (any other fixes)
-
-## Internal (no user-facing change)
-- Published package is now bundled + minified via esbuild. Source TypeScript, source maps, and per-command files are no longer shipped. Install size is smaller (~242 KB tarball, ~935 KB unpacked).
-- Missing runtime deps (chalk, fast-glob) fixed — they are now bundled into the CLI binary.
-- Hooks reworked to import from the bundled library entry (`dist/memory/index.js`) rather than individual module files.
-
-## Upgrading from 0.2.x
-
-If you were using `aide-memory init --scan`, replace it with manual memory
-seeding. The `aide-memory remember` command or the MCP `aide_remember` tool
-creates memories individually.
-
-All other commands and behaviors are unchanged. The `.aide/` database
-format and `.claude/settings.json` hooks are fully compatible — no
-migration needed.
-```
-
-### 4. Publish steps
-
-The automated flow (via `.github/workflows/release.yml`) runs on tag push `v*`. Manual flow:
-
-```bash
-# On feature/minified-publish (this branch), or after merge to main:
-
-# 1. Bump version in package.aide-memory.json
-# (manually edit, or use a script)
-
-# 2. Run the full build + verify locally first
-npm run build                      # tsc
-npm run build:dist                 # esbuild bundles
-npm test                           # all 654 tests
-
-# 3. Verify the tarball that would ship
-cp package.json package.json.backup
-cp package.aide-memory.json package.json
-./scripts/verify-package.sh        # must PASS
-# (cleanup)
-mv package.json.backup package.json
-
-# 4. Commit the version bump + release-notes file
-git commit -am "chore(release): 0.3.0"
-
-# 5. Tag + push (this triggers the GitHub Actions release workflow)
-git tag v0.3.0
-git push origin feature/minified-publish --tags
-
-# The workflow will:
-# - npm ci
-# - npm run build
-# - npm run build:dist
-# - npm test
-# - cp package.aide-memory.json package.json
-# - ./scripts/verify-package.sh
-# - npm publish --access public
-# - Create a GitHub Release with generated notes
-```
-
-Alternatively, publish manually from a clean clone with the above sequence plus `npm publish --access public` — the tag push is just for the GitHub Release artifact.
-
-### 5. Post-publish sanity check
-
-```bash
-# From a clean machine or empty directory
-npm install -g aide-memory@0.3.0
-aide-memory --version                                       # 0.3.0
-cat $(npm root -g)/aide-memory/dist/cli/aide-memory.js | head -1
-# Should be: #!/usr/bin/env node
-# Second line should be a single long minified JS line
-ls $(npm root -g)/aide-memory/dist/
-# Should show only: cli/ memory/
-# Should NOT show: anything ending in .ts, .map, store.js, recall.js, etc.
-```
+`.github/workflows/release.yml` now sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` to opt into Node 24 runners ahead of the June 2026 forced migration. Bumped `setup-node` from Node 18 → 20 for the build environment. Deprecation warning resolved for the next release.
 
 ---
 
-## Things to flag to the user if you see them
+## REMAINING (in priority order)
 
-- If `git log feature/phase-1 -- src/templates/rules/` shows changes to rule template content since 0.2.0, mention that in release notes — users' `.claude/rules/aide-memory.md` will refresh via the drift-repair mechanism on next session.
-- If there are hook behavior changes (any `.sh` file in `scripts/hooks/`), call those out — they affect existing users' session flow.
-- If the MCP tool surface changed (any `src/memory/server.ts` change), call those out — they affect anyone depending on specific MCP tool shapes.
+### A. Await manual validation
 
-## Things NOT to change (guardrails)
+**Required before user-facing announcement / broader adoption push.**
 
-- Do not re-add `chalk`, `fast-glob`, `commander`, `zod`, or `@modelcontextprotocol/sdk` to the `dependencies` field of `package.aide-memory.json`. They are intentionally bundled. Adding them back causes double-install.
-- Do not loosen the `files` allowlist. It is the primary defense against source-map-style accidental source leaks (see Claude Code 2026-03-31 incident).
-- Do not skip `scripts/verify-package.sh` in CI — that's the safety net.
-- Do not run `npm publish` without bumping the version first. aide-memory@0.2.0 is already live.
+The automated pre-publish validation (`scripts/verify-package.sh`, unit tests, build/bundle/tarball checks) has passed. But **manual Phase 1 validation scenarios** against the now-published 0.3.0 have NOT been run this session. These live in:
 
-## If anything goes wrong during publish
+- `docs/validation/PHASE_1_RESULTS.md` (existing scenario results + methodology)
+- `docs/MANUAL_E2E_VALIDATION.md` if present (A-G + D/F/G/A7/gap-fill scenarios)
+- `docs/specs/PHASE_0_1_SPEC.md` § validation criteria
 
-- `npm unpublish` works within 72h of publish for corrections. Past that you must publish a new patch version.
-- If the tarball accidentally ships source code: immediately `npm unpublish`, fix, republish a patch. Do not leave exposed source in the registry.
+Expected flow: install `aide-memory@0.3.0` in a real project (not a scratch one), run the A-G scenarios + cross-session persistence + IDB-based blocking + concurrent sessions + session-start injection. Confirm:
+- Memories persist across sessions
+- Scoped recall returns the expected layers per scenario
+- Hooks fire correctly in real Claude Code sessions (not just isolated stdin pipes)
+- MCP tool calls succeed from real client
 
----
+Log results to `docs/validation/PHASE_1_RESULTS.md` or a new `docs/validation/V0.3.0_RESULTS.md`.
 
-## Unpublishing / deprecating previous versions — source exposure concern
+**If any scenario fails:** triage, fix, ship 0.3.1 patch. See `docs/RELEASING.md` for the patch-release process.
 
-**User intent:** remove access to old versions (0.1.1, 0.2.0) that ship unbundled TypeScript-derived source code. Both are currently installable and expose logic the user wants closed.
+### B. Deprecate + unpublish stale versions (0.1.1 and 0.2.0)
 
-**npm's unpublish policy:**
-- **Within 72 hours of publish:** CLI unpublish works directly, as long as no other npm packages depend on yours.
-- **After 72 hours:** CLI unpublish still works directly IF ALL THREE:
-  1. No other npm packages depend on the version,
-  2. The version had fewer than 300 downloads over the last week, AND
-  3. The package has a single owner/maintainer.
-- If any of the three fails, CLI unpublish is refused — then you contact npm support.
+User decision: remove access to old versions that ship unbundled/raw JavaScript source.
 
-For aide-memory, the three conditions almost certainly hold (closed-source, small audience, single maintainer). **Try CLI unpublish first — it should work directly without a support ticket.** Only fall back to the ticket if the CLI refuses.
-
-### Step 1 (immediate, automatic): deprecate
-
-Right after publishing 0.3.0, run:
+#### Step 1 (immediate): deprecate
 
 ```bash
 npm deprecate aide-memory@0.1.1 "Superseded by 0.3.0. This version shipped raw JavaScript source and is no longer supported — please upgrade."
 npm deprecate aide-memory@0.2.0 "Superseded by 0.3.0. This version shipped raw JavaScript source and is no longer supported — please upgrade."
 ```
 
-Effect:
-- Anyone running `npm install aide-memory@0.1.1` or `@0.2.0` gets a deprecation warning in their terminal.
-- Versions remain downloadable — deprecation is a soft signal, not a block.
-- This is the strongest control available without npm support.
+Soft warning on install; versions stay downloadable until unpublished.
 
-### Step 2 (try CLI first): direct npm unpublish
+#### Step 2 (try CLI directly — likely succeeds):
 
-Since aide-memory likely meets all three post-72h criteria (no reverse deps, <300 downloads/week, single maintainer), CLI unpublish should work:
+Per npm policy ([docs.npmjs.com/policies/unpublish](https://docs.npmjs.com/policies/unpublish)): after 72h, CLI unpublish works if ALL THREE: no reverse deps + <300 weekly downloads + single maintainer. aide-memory meets all three.
 
 ```bash
-# Verify eligibility first
-npm view aide-memory@0.1.1 dependents    # should show [] or be empty
-npm view aide-memory@0.2.0 dependents    # same
-# Check weekly downloads (rough check)
-curl -s "https://api.npmjs.org/downloads/point/last-week/aide-memory" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print("last-week:", d.get("downloads"))'
-npm owner ls aide-memory                 # should show only one maintainer
+# Eligibility pre-check
+npm view aide-memory@0.1.1 dependents
+npm view aide-memory@0.2.0 dependents
+curl -s "https://api.npmjs.org/downloads/point/last-week/aide-memory" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("downloads"))'
+npm owner ls aide-memory
 
-# If all three pass, unpublish directly:
+# If eligible, unpublish directly:
 npm unpublish aide-memory@0.1.1
 npm unpublish aide-memory@0.2.0
 ```
 
-If either command succeeds, you're done — the version is removed from the registry. If the command fails with a policy error, proceed to Step 3.
+#### Step 3 (fallback, only if CLI refuses):
 
-### Step 3 (fallback, only if CLI refuses): npm support ticket
-
-File a support ticket at [https://www.npmjs.com/support](https://www.npmjs.com/support) requesting removal of specific versions. Use this framing:
+File a support ticket at [npmjs.com/support](https://www.npmjs.com/support):
 
 > Subject: Unpublish request — aide-memory@0.1.1 and @0.2.0 (source exposure)
 >
@@ -262,35 +119,88 @@ File a support ticket at [https://www.npmjs.com/support](https://www.npmjs.com/s
 >
 > Thank you for considering this request.
 
-**What typically happens:**
-- npm support reviews within a few business days.
-- For source-exposure concerns with no reverse dependencies, removal is usually granted.
-- If granted: the tarballs are removed from the registry. Anyone who has the package locally keeps it (npm unpublish doesn't reach into user machines), but new installs fail for those versions.
-- If declined: deprecation remains the only control. Users can still install but see warnings.
+Expect 2-5 business days for review.
 
-### After CLI unpublish or support-granted unpublish succeeds
+#### After unpublish succeeds
 
-Update README and landing page to reference 0.3.0+ only:
-- Remove any "install 0.1.1" or "v0.2.0 changelog" references
-- Note in a FAQ section that older versions have been removed
-- Update shields.io badges if they pin to old versions
+Update README and landing page to reference 0.3.0+ only. Note: anyone with 0.1.1/0.2.0 already installed locally keeps working — unpublish only touches the registry.
 
-### Local-copy caveat
+### C. Hook visibility decision (open question)
 
-Once unpublished, any machine that already has 0.1.1 or 0.2.0 in its `node_modules/` or `~/.npm-global/lib/node_modules/` will keep working — `npm unpublish` removes from the registry only. Source code is still on those machines. This is unavoidable; the only way to get it off is convincing users to upgrade. The deprecation warning nudges them.
+Current state: `scripts/hooks/*.sh` (bash glue) and `scripts/hooks/*.js` (node helpers calling into the bundled `dist/memory/index.js`) ship as plain readable text in `node_modules/aide-memory/scripts/hooks/`. The **core logic** (memory engine, recall algorithm, MCP handlers) IS minified in the bundle — what's readable is the glue code that extracts JSON fields from stdin and spawns the node helpers.
+
+Decision pending: is this acceptable, or should hooks also be minified?
+
+**Option A — ship 0.3.1 with hooks minified.** Bundle each hook `.js` helper (recall-for-path.js, search-preview.js, session-inject.js, read-config.js) into a minified artifact at `dist/hooks/<name>.js`. Update `.sh` files to point there. Bash `.sh` files remain visible (bash has no "compile") but they'd be 10-20 lines of thin shim. ~2-4 hours. Version bump: 0.3.1.
+
+**Option B — consolidate into `aide-memory hook <name>` subcommand pattern.** Hook logic moves into the CLI bundle as subcommands. `.sh` files become single-line: `aide-memory hook pre-read`. Everything user-visible is single-line bash shim + minified CLI bundle. ~1-2 days. Version bump: 0.4.0 (breaking — hook-invocation shape changes).
+
+**Option C — accept current state.** Core IP is minified. Glue is visible but low-value.
+
+User decision needed. Affects next release scope.
+
+### D. Verify release notes are comprehensive
+
+CHANGELOG.md was written from my memory of commits + the handoff plan — **it was NOT written by surveying every commit since the last live 0.2.0 tarball.** The publishing agent's original mandate was to "survey everything that has accumulated since the live aide-memory@0.2.0."
+
+To verify the changelog is complete, run:
+
+```bash
+cd /Users/meky/code/aide-v0
+# Find the commit used for live 0.2.0 build
+# (approximately 2026-04-11)
+git log --oneline --since="2026-04-10" --until="2026-04-22" feature/phase-1 > /tmp/commits-since-020.txt
+# Compare to CHANGELOG.md entries
+```
+
+Look for commits that touched:
+- `src/memory/` — affects core behavior
+- `src/cli/commands/memory/` — affects CLI UX
+- `scripts/hooks/` — affects hook behavior
+- `src/templates/rules/` — users' rules files may differ
+- `src/memory/server.ts` — MCP tool shapes
+
+If any commit's user-visible change is missing from the changelog, amend CHANGELOG.md and push. (No re-publish needed; CHANGELOG.md is in the tarball but users read it on GitHub — a post-hoc edit is fine.)
+
+### E. Update landing page / external docs
+
+Per memory 121 + the LICENSE update:
+- ✅ Say "free" (current version)
+- ❌ Don't say "always free" / "free forever"
+- ✅ Can say "pro features planned"
+- ❌ Don't say "open source"
+
+Update `docs/PUBLIC_README.md`, landing page install instructions to use 0.3.0, and any marketing copy to match the revised memory 121.
+
+### F. Post-unpublish README/landing cleanup
+
+After 0.1.1 / 0.2.0 are unpublished (step B):
+- Remove any "install 0.1.1" or "v0.2.0 changelog" references from README / landing
+- Add a FAQ note that older versions have been removed
 
 ---
 
-## Future-release guide (create as permanent internal docs)
+## What's in each doc on this branch
 
-The full publish playbook now lives at [`docs/RELEASING.md`](./RELEASING.md) — that's the canonical reference for every future release. This handoff doc is a one-off for the 0.3.0 transition; after that, use `docs/RELEASING.md`.
+- **HANDOFF_MINIFIED_PUBLISH.md** (this file) — one-off for the 0.3.0 transition + remaining post-publish items
+- **RELEASING.md** — permanent release playbook for every future release (use this, not the handoff, for future releases)
+- **VALIDATION_MINIFIED_PUBLISH.md** — pre-publish E2E validation results (CLI + MCP + hooks via scratch install)
+- **AUDIT_MINIFIED_PUBLISH.md** — static + scenario audit (import-graph cleanliness, source-map check, legacy-identifier leak check, 9 real scenarios)
+- **CHANGELOG.md** — user-facing release notes for 0.3.0
 
----
+## Guardrails for the next release
+
+From memory 151 + validation scars:
+
+- **Never re-add pure-JS deps to `package.aide-memory.json` `dependencies`.** `commander`, `chalk`, `fast-glob`, `@modelcontextprotocol/sdk`, `zod` are intentionally bundled by esbuild. Adding them back causes npm to install them twice.
+- **Never loosen the `files` allowlist** to include directories like `dist/memory/` or `dist/cli/commands/`. Those would leak unbundled tsc output.
+- **Never drop any of the three bundles** (`dist/cli/aide-memory.js`, `dist/memory/index.js`, `dist/memory/cli.js`). Missing any breaks a user path.
+- **Never bypass `scripts/verify-package.sh`** in CI. It's the safety net against source-map/dev-manifest regressions.
+- **Read `package.json` at runtime, not via `require('../../package.json')`** — bundle-time require inlines the dev manifest.
+- **Merge feature branches INTO `feature/phase-1` before publishing** (not the other way). `feature/phase-1` should be the release line that every version tag lives on.
 
 ## Open items from the design discussion (optional follow-ups)
 
-These are NOT blockers for 0.3.0 publish. Captured as future work:
-
-- The `feature/binary` branch (Bun compile work) is abandoned. See memory 151. Can be deleted or kept as historical reference.
-- The `pre-binary-migration` git tag is on the old HEAD of feature/phase-1 before the --scan removal landed. Harmless to keep.
-- If source protection ever needs to be stronger than minified-npm (current approach), the upgrade path is Rust via napi-rs for sensitive modules. See memory 157.
+- The `feature/binary` branch (Bun compile exploration) is abandoned. See memory 151 history. Can be deleted or kept.
+- The `pre-binary-migration` git tag marks the pre-release rollback point. Harmless to keep.
+- If source protection ever needs to be stronger than minified-npm, the upgrade path is Rust via napi-rs for sensitive modules (not a different JS bundler). See memory 157.

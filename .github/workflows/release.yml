@@ -12,6 +12,11 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Opt into Node.js 24 runners for JS actions (default becomes Node 24 in
+    # June 2026; Node 20 runners removed September 2026). This env gets us
+    # ahead of the deprecation warning seen on v0.3.0 release.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
