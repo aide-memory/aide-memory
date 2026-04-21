@@ -1,4 +1,5 @@
 {
+  "id": 249,
   "uuid": "6f09a180-815c-4a61-b6a0-0c6def7d835a",
   "layer": "technical",
   "what": "SessionStart hook cleanup rules: (1) start/resume: DON'T touch any tracking files — other sessions might be concurrent. (2) clear/compact: clear only THIS session's tracking (recalled-paths, searched-queries, correction-pending, compact-pending). Never touch other sessions. For compact this is belt-and-suspenders with PreCompact Phase 2. Each session only manages its own files.",

@@ -1,4 +1,5 @@
 {
+  "id": 203,
   "uuid": "e0f9dc1b-1488-4ba2-9bba-463e26d9b90b",
   "layer": "preferences",
   "what": "When consolidating or auditing docs, ALWAYS cross-reference ALL related files — not just the primary file being edited. The V1-V22 consolidation into Sessions A-G was correct within the spec, but missed 6 additional scenarios from separate validation docs (INTEGRATION_TESTING.md, RUN_VALIDATION.md) that had never been merged into the spec. Check adjacent docs before claiming completeness.",

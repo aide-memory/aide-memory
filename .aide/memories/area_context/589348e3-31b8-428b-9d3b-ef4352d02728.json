@@ -1,4 +1,5 @@
 {
+  "id": 13,
   "uuid": "589348e3-31b8-428b-9d3b-ef4352d02728",
   "layer": "area_context",
   "what": "User directive Apr 20 2026 on `aide-memory init --scan`: if it's not working well across different project types, consider removing it entirely (not just deferring or improving). Validated on two projects — output is surface-level (package.json + top-level dir inference, got module system wrong on a TS project). Recommendation captured in docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md: Option A deepen with real tree-sitter analysis, Option B deprecate in favor of aide_import against existing CLAUDE.md/README. User leans toward B (\"maybe we can remove --scan entirely\"). Decision not yet final — awaiting user call post-Phase-1.",

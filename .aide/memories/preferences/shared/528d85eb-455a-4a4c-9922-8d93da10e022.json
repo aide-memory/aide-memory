@@ -1,4 +1,5 @@
 {
+  "id": 194,
   "uuid": "528d85eb-455a-4a4c-9922-8d93da10e022",
   "layer": "preferences",
   "what": "When hooks block with instructions (e.g. search hook says \"call aide_search\", read hook says \"call aide_recall\"), FOLLOW the hook instructions instead of bypassing with a different tool. The hooks are the product — if the agent ignores them, it undermines the entire value proposition.",

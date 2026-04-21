@@ -1,4 +1,5 @@
 {
+  "id": 210,
   "uuid": "fd803360-2de9-41ea-a3ff-517be52c0f7a",
   "layer": "preferences",
   "what": "Don't include internal metrics like test counts in public-facing content (landing page, README, npm). Users don't care about \"544 tests passing\" — focus on user-facing value props instead (local-first, zero cloud dependencies, cross-tool).",
@@ -9,6 +10,7 @@
   "tags": [],
   "source": "hook",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-09T17:02:11.416Z",

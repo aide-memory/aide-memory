@@ -1,0 +1,23 @@
+{
+  "id": 171,
+  "uuid": "17a04846-4760-448a-b5af-ebde197ace29",
+  "layer": "technical",
+  "what": "Ambient-side-effect lesson from aide-memory 0.4.0 hook consolidation regression: when porting bash scripts to TS handlers, the obvious hazard is missing a function's logic — but a subtler hazard is missing TOP-LEVEL SIDE EFFECTS triggered by `source`. Specific miss in 0.4.0: scripts/hooks/read-config.sh ended with a bare call to `_aide_drift_check` (not wrapped in a function invocation, just at the bottom of the file). Every bash hook did `source \"$SCRIPT_DIR/read-config.sh\"` and that source-time side effect ran a mtime check on .aide/config.json and spawned `resyncDerivedArtifacts()` in the background when changed. I ported read-config.sh's NAMED FUNCTIONS (`get_setting`, `get_setting_json`) but missed the ambient drift-check call — breaking the docs-promise \"next hook fire picks it up\" for mid-session config edits. Root cause: my audit process was function-by-function; side effects from `source` look like function definitions and get passed over. Future-porting checklist: when deleting a bash file that gets sourced by others, grep the file for (a) lines outside any function body — these are source-time side effects that MUST be ported separately, (b) trap handlers, (c) exported variables that callers read later. For .js files ported this way, also check (d) top-level module code that runs on require(), not just exported functions. The drift-check bug was filed by a primary-worktree audit after 0.4.1 was published; fix will ship as 0.4.2. Applies to any future aide-memory refactor that consolidates hook scripts — and more broadly to any bash → TS porting task.",
+  "why": "Caught post-0.4.1 by primary-worktree agent: the 0.4.0 hook consolidation missed the ambient _aide_drift_check side effect that every bash hook triggered via `source read-config.sh`. Function-by-function porting is insufficient when deleted files have source-time side effects. Future refactors of this kind (or similar bash → bundled-dispatcher migrations) need the checklist above to avoid the same class of silent regression.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "bash-to-ts",
+    "regression",
+    "lesson-learned",
+    "hook-migration"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T23:14:07.377Z",
+  "updated_at": "2026-04-21T23:14:07.377Z"
+}

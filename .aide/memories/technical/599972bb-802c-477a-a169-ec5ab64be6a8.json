@@ -1,4 +1,5 @@
 {
+  "id": 236,
   "uuid": "599972bb-802c-477a-a169-ec5ab64be6a8",
   "layer": "technical",
   "what": "Deployment strategy for aide-memory npm releases: 1) Tag a version: git tag v0.2.0, 2) Push tag: git push origin v0.2.0, 3) GitHub Actions workflow (.github/workflows/release.yml) auto-runs: builds, tests, swaps package.aide-memory.json → package.json, publishes to npm using NPM_TOKEN secret, creates GitHub Release. NPM_TOKEN is configured in aide-memory/aide-memory repo secrets (added April 2026). Manual alternative: npm login, cp package.aide-memory.json package.json, npm publish --access public, git checkout package.json.",
@@ -13,6 +14,7 @@
   ],
   "source": "conversation",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-09T16:09:32.915Z",

@@ -1,4 +1,5 @@
 {
+  "id": 8,
   "uuid": "3c020cac-3864-418f-9c7d-5e91ab7db187",
   "layer": "area_context",
   "what": "Binary distribution plan: compile aide-memory into a single binary via `bun compile`. `.claude/settings.json` hook entries invoke the binary directly (`{binary} hook pre-read` etc.) — no bash shims required, or optional 2-line `exec` shims as backward-compat. Current 15 bash + 3 JS hook scripts consolidate into ~13 binary subcommands. Ship via npm+platform-optional-deps (primary, esbuild-style), Homebrew tap (secondary), curl-pipe (tertiary). Same TypeScript codebase, different build target. Detailed plan: docs/specs/BINARY_MIGRATION_PLAN.md (drafted 2026-04-20 on branch claude/zealous-burnell-3f404e, not yet committed). Implementation blocked until Phase 0/1 validation passes.",

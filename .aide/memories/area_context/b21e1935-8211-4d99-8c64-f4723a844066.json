@@ -1,4 +1,5 @@
 {
+  "id": 24,
   "uuid": "b21e1935-8211-4d99-8c64-f4723a844066",
   "layer": "area_context",
   "what": "Session summary Apr 13-15 2026: Implemented 20+ changes to aide-memory hook system. Major: ID-based blocking (scoped_ids vs ids| tracking), focused scope matching (no grandparent scopes), settings framework (defaults.json + read-config.sh + pro gating), dynamic Stop 3→5→10, aide_recall ids param, PostToolUse response parsing fix, session-inject writes IDs, directory trigger removed, --force merge, --reset flag, macOS symlink fix, search always-soft, correction tuning, .ignore file, auto-update on MCP start, per-layer injection, resume clears tracking. Validated Sessions A-F live. All docs updated (spec, vision, followups, results). 1198 tests pass. 27/28 smoke tests pass. Next: run full validation scenarios A-I + U1-U3 from PHASE_0_1_SPEC.md section 12.3 with fresh test project at /tmp/aide-val.",

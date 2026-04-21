@@ -1,4 +1,5 @@
 {
+  "id": 6,
   "uuid": "1f94e6c5-579f-46b7-8ac5-1dbabc7239c6",
   "layer": "area_context",
   "what": "Progressive context warnings: DO NOT implement with transcript file size estimation — too inaccurate (JSONL metadata inflates size 2-3x, model may not match settings.json). False alarms undermine trust. Wait for Claude Code to expose token_used/context_remaining in hook input JSON. File feature request. Current save stack is sufficient: Stop hook (every turn) + PreCompact advisory (strong warning) + post-compact SessionStart (backup with agentic turn).",

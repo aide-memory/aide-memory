@@ -1,4 +1,5 @@
 {
+  "id": 4,
   "uuid": "0cb87eaa-77c3-46e2-8e03-7b33e92f74ef",
   "layer": "area_context",
   "what": "`.ignore` file management extracted into `src/memory/ignoreFile.ts` (exports `syncIgnoreFile`, `readHideFromGrep`, marker constants). Both `src/memory/init.ts` (updateIgnoreFile) and `src/cli/commands/memory/config.ts` (applySideEffects for `memories.hideFromGrep`) call through here. Marker convention: `# BEGIN aide-memory-managed` / `# END aide-memory-managed`. The syncer only ever rewrites content between the markers and preserves user entries outside them; legacy bare `.aide/memories/` lines (from older init versions) are migrated into the managed block on first sync. `aide-memory config memories.hideFromGrep <true|false>` now resyncs `.ignore` in-process — no more init --force needed.",

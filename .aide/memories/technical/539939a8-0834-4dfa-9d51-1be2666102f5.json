@@ -1,4 +1,5 @@
 {
+  "id": 233,
   "uuid": "539939a8-0834-4dfa-9d51-1be2666102f5",
   "layer": "technical",
   "what": "zod must be pinned to match MCP SDK's version exactly. MCP SDK @1.29.0 uses zod@4.x internally — if aide-v0 uses zod@3.x, TypeScript throws TS2589 \"Type instantiation is excessively deep\" on server.tool() calls. Fix: npm install zod@4.3.6 (or whatever version MCP SDK resolves). Also posthog-node SDK causes the same TS2589 conflict — use plain HTTP fetch to PostHog /batch endpoint instead.",
@@ -14,6 +15,7 @@
   ],
   "source": "hook",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-09T17:02:05.922Z",

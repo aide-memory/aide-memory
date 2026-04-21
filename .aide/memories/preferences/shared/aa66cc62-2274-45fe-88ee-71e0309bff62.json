@@ -1,4 +1,5 @@
 {
+  "id": 200,
   "uuid": "aa66cc62-2274-45fe-88ee-71e0309bff62",
   "layer": "preferences",
   "what": "User wants before/after comparison (without vs with aide-memory) in BOTH demo recordings AND validation scenarios — not just demos. Validation should include running the same task without aide-memory to establish a baseline, then with aide-memory to show improvement.",

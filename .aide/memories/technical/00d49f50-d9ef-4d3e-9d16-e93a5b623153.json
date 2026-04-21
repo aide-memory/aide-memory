@@ -1,4 +1,5 @@
 {
+  "id": 213,
   "uuid": "00d49f50-d9ef-4d3e-9d16-e93a5b623153",
   "layer": "technical",
   "what": "CRITICAL: aide-memory init must also configure the MCP server so aide_recall/aide_remember tools are available in Claude Code sessions. Currently init installs hooks that block and tell the agent to call aide_recall, but the MCP server isn't configured — so the agent can't call aide_recall and gets stuck in a blocking loop. Init needs to add the MCP server config to .claude/settings.json alongside the hooks.",

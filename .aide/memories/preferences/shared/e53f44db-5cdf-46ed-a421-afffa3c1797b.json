@@ -1,4 +1,5 @@
 {
+  "id": 205,
   "uuid": "e53f44db-5cdf-46ed-a421-afffa3c1797b",
   "layer": "preferences",
   "what": "BEFORE spinning off a planning session, ALWAYS check if a plan document already exists for that topic (correction 2026-04-20).\n\nCheck order:\n1. `docs/specs/<TOPIC>*.md` in the primary worktree via `ls /Users/meky/code/aide-v0/docs/specs/`\n2. `git log --all --oneline -- 'docs/specs/<TOPIC>*.md'` for committed versions on any branch\n3. Recent spawn worktree outputs under `.claude/worktrees/*/docs/specs/`\n4. If a plan exists → reconcile against it, don't spawn duplicate planning work. Spawn implementation sessions instead.\n\nContext that triggered this rule: user already had `docs/specs/BINARY_MIGRATION_PLAN.md` (572 lines, uncommitted in primary worktree) when Claude spun off a new binary planning session, resulting in duplicate work. User called this out directly.",

@@ -1,4 +1,5 @@
 {
+  "id": 274,
   "uuid": "baa590a1-950f-4939-bacd-458a5e45be13",
   "layer": "technical",
   "what": "Critical architectural tradeoff: you can have any 3 of {closed-source protection, local-first privacy, free distribution tier, hard revenue gating} but not all 4. Claude Code picked semi-open + server + free trial + API-key gating. Aide-memory currently wants closed + local + free + gated which is impossible. Must pick 3. Options: (A) Accept local-first reality — semi-open client, free is the distribution engine, compete on convenience/updates/support not hard locks. (B) Add a server for \"intelligent\" features (config gen, cleanup, team sync) — gives real gating but breaks local-first privacy. The \"valuable\" parts of aide-memory are algorithms which are easy to replicate once understood, so binary protection gives limited value without server-side logic.",

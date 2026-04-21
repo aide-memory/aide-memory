@@ -1,4 +1,5 @@
 {
+  "id": 17,
   "uuid": "795aae6d-d26b-4726-9e6b-035c1499429d",
   "layer": "area_context",
   "what": "Hook auto-update implemented (not deferred): On MCP server start, autoUpdateIfNeeded() checks _aideMemoryVersion in .claude/settings.json. If missing or older than current package version, auto-merges hooks, MCP config, and rules files — preserving user's other settings. No manual init --force needed for upgrades. --force also now merges instead of overwriting. Version stamp written to settings.json after update.",

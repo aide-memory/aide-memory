@@ -1,4 +1,5 @@
 {
+  "id": 297,
   "uuid": "f62e2491-6d1e-42f7-a9e1-16e63c450861",
   "layer": "technical",
   "what": "Holistic recall design (finalized): Four scopes, four mechanisms. (1) SESSION-SCOPED: SessionStart auto-injects top 15 most-recalled preferences + all guidelines, capped ~300 tokens. Memories can have priority: \"always\" (user-marked, always injected) or \"normal\" (subject to cap). Scope-specific preferences still surfaced via path hooks. (2) PATH-SCOPED: Read/Edit hooks show ALL four layer counts in preview, not just technical/area_context. Separate file|path and dir|path tracking entries. File recall on first read, directory recall forced on 2nd file in same dir. (3) QUERY-SCOPED: Grep/Glob hook runs keyword search preview (~80ms latency, imperceptible). Blocks if matches>0. (4) CORRECTION-SCOPED: UserPromptSubmit soft + flag, Stop checks flag. Deduplication: track returned memory IDs in session file (ids|5,11,15...), aide_recall filters out already-returned IDs. Zero duplicate tokens across file + directory recalls.",
@@ -14,6 +15,7 @@
   ],
   "source": "hook",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-10T12:07:48.847Z",

@@ -1,4 +1,5 @@
 {
+  "id": 235,
   "uuid": "572ec253-eb1b-4995-873a-3e085d777530",
   "layer": "technical",
   "what": "Session tracking cleanup centralized in scripts/hooks/clear-tracking.sh — shared function clear_session_tracking(cache_dir, sid) used by PreCompact and SessionStart. Adding new tracking file types only requires updating this one file. track-remember.sh is separate (only clears correction-pending flag, not full cleanup).",

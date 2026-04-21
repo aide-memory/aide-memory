@@ -23,7 +23,14 @@ bash scripts/hooks/__tests__/count-parity.sh
 bash scripts/hooks/__tests__/settings-behavior.test.sh
 bash scripts/hooks/__tests__/detect-correction.test.sh
 
-# 3. Build is clean — tsc should exit 0 with no output
+# 3. End-to-end autonomous smokes — spawn real MCP against dirty state.
+#    Covers H (auto-update on stale settings), J (pending-memory ingest
+#    on MCP start), and drift-repair (config.json edit → hook fires
+#    resync). These can't be unit-tested because they need the real
+#    startServer() path + hook dispatcher running together.
+bash scripts/hooks/__tests__/e2e-autonomous.sh
+
+# 4. Build is clean — tsc should exit 0 with no output
 npm run build 2>&1 | tail -3
 ```
 

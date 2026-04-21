@@ -1,4 +1,5 @@
 {
+  "id": 252,
   "uuid": "79817e08-e3c0-46e3-8e82-25aada640a9c",
   "layer": "technical",
   "what": "scopeMatchesPath focused-mode depth rule (recall.ts, April 2026 fix): scope is EXCLUDED when `scopeDepth < parentDepth`. Previously was `scopeDepth < parentDepth - 1` which wrongly included grandparent scopes for file queries. Example: query `src/api/routes.ts` (parentDepth=2), scope `src/**` (depth=1) → old `1 < 1` false → INCLUDED (BUG); new `1 < 2` true → EXCLUDED (correct per memory #95). The `-1` offset previously allowed \"one level above immediate parent\" which conflicts with the design \"only immediate parent + same level + deeper\". Tests e2e-comparison.test.ts and cli.test.ts were updated to match — they were asserting old buggy behavior.",

@@ -1,4 +1,5 @@
 {
+  "id": 168,
   "uuid": "edf100d7-922e-43f6-9baf-ea0673a3595f",
   "layer": "area_context",
   "what": "User wants to take the monetization/pivot exploration to Claude web for fresh perspective. Creating a session summary MD + prompt that includes: all product vision context, what's been built, binary distribution decision, and the core question about monetization path forward. User's original prompt captures the real question: \"this is foundation for something else\" — not just memory, but what's the bigger play and how to monetize it. Don't include analysis results in the MD, just the setup for Claude web to work with.",

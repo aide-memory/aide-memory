@@ -1,4 +1,5 @@
 {
+  "id": 181,
   "uuid": "bbc2382d-656e-4536-b04d-2446443ecfc4",
   "layer": "guidelines",
   "what": "RULE: Hook scripts must NEVER use __dirname or SCRIPT_DIR as project root for data access (.aide/, memories, tracking files). Always use 'cwd' from hook stdin JSON as PROJECT_ROOT. __dirname is only valid for packageRoot (finding dist/ and other package files). This applies to all JS scripts (recall-for-path.js, search-preview.js, session-inject.js) and all shell scripts.",

@@ -1,4 +1,5 @@
 {
+  "id": 195,
   "uuid": "5a4041f3-5349-4a66-8658-16f6edc8fa69",
   "layer": "preferences",
   "what": "User correction: HANDOFF_APRIL2.md is outdated and should NOT be referenced as a required doc for new sessions. The current source-of-truth docs are: (1) docs/PRODUCT_VISION.md, (2) docs/specs/PHASE_0_1_SPEC.md, (3) docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md. These three are the required reading for any new session or handoff, not the handoff doc.",

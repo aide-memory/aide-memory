@@ -1,4 +1,5 @@
 {
+  "id": 290,
   "uuid": "ec326144-6ac8-483f-93d6-d54b1292227a",
   "layer": "technical",
   "what": "read-config.sh had a latent flat-vs-nested key mismatch with `.aide/config.json`. `runConfig` (src/cli/commands/memory/config.ts) writes nested (`{hooks:{correction:{enabled:false}}}`) via setNestedValue, but the old read-config.sh looked up flat keys (`jq .\"hooks.correction.enabled\"`). The public/pro gating hid this — user overrides were never exercised because all settings were private. Dropping gating (Option A) required fixing lookup to nested via getpath + path-existence reduce (jq's `//` collapses explicit false/null to the fallback, so can't be used to distinguish \"missing\" from \"explicit false\").",

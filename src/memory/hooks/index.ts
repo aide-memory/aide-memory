@@ -4,6 +4,8 @@
  * errors silently (hooks must never break the agent).
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { readJsonStdin } from './stdio';
 import {
   detectCorrection,
@@ -18,6 +20,51 @@ import {
   trackRemember,
   trackSearch,
 } from './handlers';
+
+/**
+ * Mid-session drift check for derived artifacts (currently `.ignore` driven
+ * by `memories.hideFromGrep`). If the user edits `.aide/config.json` directly
+ * — bypassing the `aide-memory config` CLI — that write isn't seen by the
+ * running MCP session. But every hook fire is a chance to compare the config
+ * file's mtime against the last value we cached, and re-sync derived
+ * artifacts if drift is detected. The resync call is fire-and-forget so the
+ * hook exits fast.
+ *
+ * This is the TS port of the bash `_aide_drift_check` that lived in the
+ * old `scripts/hooks/read-config.sh` before the minified-publish migration
+ * collapsed the hooks into bundled CLI subcommands. The user-facing promise
+ * in `docs/user/cli-reference.md` ("next hook fire picks it up") depends on
+ * this running on every hook.
+ */
+function maybeTriggerDriftResync(input: { cwd?: string }): void {
+  try {
+    const projectRoot = input.cwd;
+    if (!projectRoot) return;
+
+    const configFile = path.join(projectRoot, '.aide', 'config.json');
+    const mtimeCache = path.join(projectRoot, '.aide', 'cache', 'config-mtime.txt');
+    if (!fs.existsSync(configFile)) return;
+
+    const curMtime = String(fs.statSync(configFile).mtimeMs);
+    let cachedMtime = '';
+    try { cachedMtime = fs.readFileSync(mtimeCache, 'utf8').trim(); } catch { /* no cache yet */ }
+
+    if (curMtime === cachedMtime) return;
+
+    // Write the new mtime first so concurrent hook fires don't all spawn
+    // parallel resyncs.
+    fs.mkdirSync(path.dirname(mtimeCache), { recursive: true });
+    fs.writeFileSync(mtimeCache, curMtime, 'utf8');
+
+    // Dynamically import init so hook cold-start doesn't pay for it unless
+    // drift is actually detected. Fire-and-forget.
+    import('../init').then((mod) => {
+      try { mod.resyncDerivedArtifacts(projectRoot); } catch { /* non-fatal */ }
+    }).catch(() => { /* non-fatal */ });
+  } catch {
+    // Drift check must NEVER break a hook.
+  }
+}
 
 export type HookName =
   | 'pre-read'
@@ -55,6 +102,9 @@ export async function dispatch(name: string): Promise<void> {
   }
   try {
     const input = await readJsonStdin();
+    // Drift-repair runs on every hook fire (see maybeTriggerDriftResync
+    // doc for why). It's fire-and-forget and catches its own errors.
+    maybeTriggerDriftResync(input);
     await handler(input);
   } catch {
     // Never break the agent on hook errors.

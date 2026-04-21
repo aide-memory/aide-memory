@@ -1,4 +1,5 @@
 {
+  "id": 19,
   "uuid": "891f8616-b9f6-48fb-b592-ed413e4e8fc4",
   "layer": "area_context",
   "what": "Decision: exclude .aide/memories/ from grep by default via .ignore file (ripgrep respects .ignore). Keeps memories in git (shared) but forces structured access via aide_recall/aide_search. Prevents grep from bypassing ranking, scoping, dedup, and recalled_count tracking. Configurable: users can opt in to include memories in search. Default = exclude.",

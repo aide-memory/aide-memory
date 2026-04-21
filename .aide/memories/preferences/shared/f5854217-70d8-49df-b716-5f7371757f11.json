@@ -1,4 +1,5 @@
 {
+  "id": 208,
   "uuid": "f5854217-70d8-49df-b716-5f7371757f11",
   "layer": "preferences",
   "what": "For research-heavy factual questions (who uses X tool in production, current state of Y landscape, feasibility of Z approach), delegate to the Agent tool with a thorough structured prompt UPFRONT instead of running piecemeal WebSearch calls across multiple turns. This session: I ran 4-5 piecemeal WebSearches about yao-pkg adoption across several turns and concluded \"no flagship users.\" Then when the user pushed me to verify harder, I spawned an Agent with a 12-point research prompt — it found AWS Amplify, Firebase CLI, Kong Insomnia, Balena Etcher, DataDog CI, Automattic Studio, Stoplight CLIs, and ~15 others in a single pass. Piecemeal search didn't surface them because I wasn't using GitHub code search (`\"@yao-pkg/pkg\" in:file filename:package.json`) which the Agent did. Rule: when the question is \"verify X in the real world\" and the answer could swing the decision, first action is Agent tool with a structured multi-target prompt, not WebSearch.",

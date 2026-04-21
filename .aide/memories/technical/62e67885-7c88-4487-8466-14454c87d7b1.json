@@ -1,4 +1,5 @@
 {
+  "id": 244,
   "uuid": "62e67885-7c88-4487-8466-14454c87d7b1",
   "layer": "technical",
   "what": "Directory recall prefix match bug: current code (pre-read-recall.sh line 102) treats directory recall as \"everything under this dir is recalled\" — wrong. Directory recall only returns directory-scoped memories, may miss file-specific ones. Fix: remove prefix match from file-level blocking check. Only exact file|path matches exempt files from blocking. dir|path only exempts the directory TRIGGER (don't re-prompt for broader context), NOT individual file blocks. Each file always blocks until individually recalled.",

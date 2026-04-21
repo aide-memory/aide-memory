@@ -1,4 +1,5 @@
 {
+  "id": 237,
   "uuid": "5a3fb8c9-e4c4-4752-8d24-4bc163d8e1f5",
   "layer": "technical",
   "what": "To produce `git diff <ref> -- <path>` for an untracked file you just wrote in a worktree, run `git add -N <path>` first (intent-to-add). Without it, git treats the working-tree file as if it doesn't exist relative to index and reports the ref's version as a pure deletion instead of a modification diff.",

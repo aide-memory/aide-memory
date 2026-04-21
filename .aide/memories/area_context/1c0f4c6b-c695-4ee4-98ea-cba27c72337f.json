@@ -1,4 +1,5 @@
 {
+  "id": 5,
   "uuid": "1c0f4c6b-c695-4ee4-98ea-cba27c72337f",
   "layer": "area_context",
   "what": "Cowork validation didn't work well — user will run validation scenarios manually with Claude Code guidance instead. Approach: agent tells user what to do, user runs in new sessions, provides output, iterate until done.",

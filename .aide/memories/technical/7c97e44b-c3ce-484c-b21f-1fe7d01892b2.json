@@ -1,4 +1,5 @@
 {
+  "id": 253,
   "uuid": "7c97e44b-c3ce-484c-b21f-1fe7d01892b2",
   "layer": "technical",
   "what": "Init creates .ignore file with .aide/memories/ entry to hide memory JSON files from grep (ripgrep). Default: hidden (memories.hideFromGrep = true). User can toggle: aide-memory config memories.hideFromGrep false. Prevents grep from bypassing structured aide_recall/aide_search access. .ignore is respected by ripgrep but does not affect git — memories stay committed.",

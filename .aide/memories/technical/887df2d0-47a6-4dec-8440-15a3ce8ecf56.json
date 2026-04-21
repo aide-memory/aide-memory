@@ -1,4 +1,5 @@
 {
+  "id": 258,
   "uuid": "887df2d0-47a6-4dec-8440-15a3ce8ecf56",
   "layer": "technical",
   "what": "Hook strength constraints by event type: UserPromptSubmit MUST be soft (additionalContext), never blocking — blocking rejects the user's message entirely so the agent never sees it. Stop and PreCompact can be blocking safely (Stop has stop_hook_active guard, PreCompact blocks before context loss). PreToolUse(Read) can block with session-scoped tracking to prevent infinite loops. PreToolUse on MCP tools (e.g. aide_recall) should be passthrough (just track, don't block).",
@@ -14,6 +15,7 @@
   ],
   "source": "hook",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-10T03:04:17.441Z",

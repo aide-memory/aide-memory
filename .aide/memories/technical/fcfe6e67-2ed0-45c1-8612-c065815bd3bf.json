@@ -1,4 +1,5 @@
 {
+  "id": 299,
   "uuid": "fcfe6e67-2ed0-45c1-8612-c065815bd3bf",
   "layer": "technical",
   "what": "Correction: Bun compile is NOT a decided decision. It is a POTENTIAL approach to hide source code that is still under evaluation. The decision to use binary distribution ties into the overall monetization/direction strategy which is still being explored. Do not present binary/Bun compile as decided in any docs or handoffs.",

@@ -1,4 +1,5 @@
 {
+  "id": 196,
   "uuid": "630f0537-c320-4eac-be38-6100830cdf67",
   "layer": "preferences",
   "what": "Claude Code billing switch commands: `claude config set --global apiProvider anthropic-console` to use Console API credits (pay-per-token). `claude login --api-key` + paste key from console.anthropic.com/settings/keys. To switch back to Pro/Max subscription: `claude login` (regular login). Fast mode on Console is 6x standard Opus pricing (~$30/150 per MTok). User has existing Console credits available.",
@@ -9,6 +10,7 @@
   "tags": [],
   "source": "conversation",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-08T04:29:34.603Z",

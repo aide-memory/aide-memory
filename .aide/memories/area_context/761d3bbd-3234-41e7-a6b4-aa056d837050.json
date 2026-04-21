@@ -1,4 +1,5 @@
 {
+  "id": 16,
   "uuid": "761d3bbd-3234-41e7-a6b4-aa056d837050",
   "layer": "area_context",
   "what": "Private config plan finalized: 16 settings hardcoded as defaults in hook scripts (no config reading infrastructure yet — Phase 2). Key new defaults to implement: hooks.read/edit.maxBlocks=1 (block once then soft), hooks.directoryTrigger.maxBlocks=1, hooks.stop.schedule consolidated as [{until:9,every:3},{until:29,every:5},{every:10}], hooks.correction.minWords=5 with negative filters. Config infrastructure (reading .aide/config.json to override defaults) deferred to Phase 2. Changing a default = changing the script code. Tests verify hardcoded behavior.",

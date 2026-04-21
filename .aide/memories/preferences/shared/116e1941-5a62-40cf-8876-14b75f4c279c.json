@@ -1,4 +1,5 @@
 {
+  "id": 186,
   "uuid": "116e1941-5a62-40cf-8876-14b75f4c279c",
   "layer": "preferences",
   "what": "User correction 2026-04-21 on class-of-issue fixes: when fixing a validation-type/schema/contract issue for ONE tool or entry point, audit the entire class for the same issue in the same pass. Don't fix just the one instance and ship — if aide_recall had z.number() → z.coerce.number() applied, every other MCP tool with a numeric param (aide_update id, aide_forget id, aide_search limit, aide_memories limit) should have gotten the same fix at the same time. Filing each one as a separate follow-up later when someone hits the bug is wasteful and burns user trust. Rule: when a fix is \"change pattern X everywhere it applies,\" grep for X and update all sites in one pass. Specifically for MCP tool schemas: check all `z.number()`, `z.string()`, etc. for whether coercion or validation should be consistent.",

@@ -56,13 +56,19 @@ type HookInput = {
 
 function resolveProjectRoot(input: HookInput): string {
   if (input.cwd) return input.cwd;
-  // Match the bash fallback: PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-  // When the hook dispatcher runs from dist/cli/aide-memory.js, __dirname/../..
-  // resolves to the package root (where the .aide/ directory lives during
-  // development/testing of the package itself). In production this is
-  // node_modules/aide-memory/ but hooks should always carry a real `cwd`
-  // field so this fallback is test-only.
-  return path.resolve(__dirname, '..', '..');
+  // Fallback when Claude Code doesn't pass cwd (test-only path).
+  //
+  // The bash equivalent used SCRIPT_DIR/../.. where SCRIPT_DIR was
+  // `scripts/hooks`, resolving to the repo root. The TS port must NOT
+  // use __dirname/../.. because this handler lives at
+  // `dist/memory/hooks/handlers.js` — two levels up is `dist/`, not
+  // repo root. And in an npm-installed scenario that'd resolve to
+  // `node_modules/aide-memory/dist/`, which is never the user's project.
+  //
+  // process.cwd() is where the `aide-memory` CLI (and therefore the
+  // hook shim that execs into it) was invoked — the correct analogue
+  // to the bash PROJECT_ROOT fallback.
+  return process.cwd();
 }
 
 function resolveSessionId(input: HookInput): string {

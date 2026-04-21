@@ -1,4 +1,5 @@
 {
+  "id": 215,
   "uuid": "091343d1-3c42-467e-bd47-2643d07223e8",
   "layer": "technical",
   "what": "Auto-update on MCP server start now covers ALL components: hooks (.claude/settings.json), MCP config (.mcp.json), rules files (if exist), directory structure (.aide/memories/*), .gitignore entries, and git post-checkout hook. Matches --force coverage exactly. Both merge, neither resets user config. Config (.aide/config.json) is not touched by either — future --reset flag for factory defaults if needed. Only difference: auto-update skips rules if they don't exist (un-init'd projects), --force always writes them.",

@@ -1,4 +1,5 @@
 {
+  "id": 238,
   "uuid": "5d9b1970-bd59-4cec-b9ea-0e10277bdfc6",
   "layer": "technical",
   "what": "All 9 hook optimization items implemented in one batch: (1) Settings framework with defaults.json + read-config.sh, (2) Block-once-then-soft for Read/Edit, (3) Directory prefix match fix — only exact file|path exempts, dir| only for directory trigger, (4) Stop 3→5→10 three-phase from config, (5) Correction detection tuning with negative filters + 3-word min, (6) PreCompact verified clean, (7) Injection per-layer from config, (8) All hooks wired to read-config.sh, (9) Resume clears tracking. 3 bugs found in audit and fixed (grep -Fv, MAX_BLOCKS wired to config). 1198 tests pass.",

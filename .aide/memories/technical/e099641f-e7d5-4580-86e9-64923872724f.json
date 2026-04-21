@@ -1,4 +1,5 @@
 {
+  "id": 286,
   "uuid": "e099641f-e7d5-4580-86e9-64923872724f",
   "layer": "technical",
   "what": "CRITICAL: MemoryStore has two constructor modes — { dbPath } (legacy SQLite-only, used in tests) and { projectRoot } (file-per-memory with JSON files + SQLite cache). All CLI commands and init MUST use { projectRoot } or JSON files are never created, silently breaking the entire file-per-memory architecture. This bug was found by real-world smoke testing after 592 unit tests all passed.",
@@ -12,6 +13,7 @@
   ],
   "source": "agent_discovery",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-08T03:55:07.608Z",

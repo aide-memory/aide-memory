@@ -1,4 +1,5 @@
 {
+  "id": 214,
   "uuid": "075d94cf-04aa-426d-817d-c6e899669bf9",
   "layer": "technical",
   "what": "Search hook changed from blocking to always-soft. Agent may already have matching memories from path-based aide_recall, so blocking forces redundant aide_search calls. Soft nudge lets agent decide whether to call aide_search based on what's already in context. Validated: agent correctly skipped aide_search when memories were already recalled.",

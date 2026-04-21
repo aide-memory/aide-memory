@@ -1,4 +1,5 @@
 {
+  "id": 269,
   "uuid": "a5d8e57c-d1e6-462b-851f-7723d163320b",
   "layer": "technical",
   "what": "PreCompact CONFIRMED: no way to give agent an agentic turn before/during compaction. This is a documented Claude Code architectural limitation (agent loop is async to compaction timer). v2.1.105 PreCompact support only added blocking (cancel compaction), not agentic turns. systemMessage is user-facing only, agent doesn't see it. continue field = stop Claude entirely, not \"give agent a turn.\" GitHub issue #32062 requests auto-save before compaction. Post-compact SessionStart save prompt adds minimal value — agent only has summary, Stop hook already saved during session. Keep PreCompact as cleanup-only, remove post-compact save prompt (keep preferences/guidelines injection).",

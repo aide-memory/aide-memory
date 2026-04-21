@@ -1,4 +1,5 @@
 {
+  "id": 177,
   "uuid": "763baf87-c3e5-44be-9747-3a2e13085a3a",
   "layer": "guidelines",
   "what": "aide-memory is FREE but CLOSED-SOURCE. Source lives in the private `ahmedmmeky/aide-v0` repo; the public repo `aide-memory/aide-memory` contains only README, LICENSE, release workflow, issue templates, and post-binary release artifacts. Binary distribution partly protects the source. Model is free-as-in-beer, NOT free-as-in-speech — similar to Discord/Zoom.\n\nPROHIBITED framings in any public-facing copy: \"open source\", \"fully open\", \"source available\", \"free and open\", \"forkable\", plus any `git clone + npm install + npm test` block that implies the public repo contains buildable source. ACCEPTABLE replacements: \"free\", \"free to install\", \"free, private to your team\", \"free, memories live in your git repo\", \"no cloud dependency\", \"your data never leaves your repo\", \"private-by-default\" (about memories, not source). Contribution sections should be recast as \"Issues &amp; feedback\" pointing at the GitHub issues endpoint — no clone/install instructions for the public repo.",

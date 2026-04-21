@@ -1,4 +1,5 @@
 {
+  "id": 293,
   "uuid": "f00724ac-c5b9-4e92-be15-e1e8c808080f",
   "layer": "technical",
   "what": "Cowork validation should use Desktop Commander extension (not raw Computer Use) for terminal/Claude Code session automation. Cowork must kick off parallel agents as much as possible — don't wait sequentially when tasks are independent.",

@@ -1,4 +1,5 @@
 {
+  "id": 9,
   "uuid": "415f5648-90c1-42ba-b456-3dc00d979a2e",
   "layer": "area_context",
   "what": "U1 validation finding (Apr 20 2026): All 7 scoped memories for src/api/routes.ts were tracked and available to the agent (ids 87–102 covered via earlier recalls on sibling files). Agent followed 6/7 conventions when implementing DELETE /users/:id — cleanly missed rate-limit (#92 rateLimiter('user', 50)). This surfaces an honest product signal: aide-memory delivers context, but agents can still ignore individual memories. Possible causes: rate-limit interpreted as middleware-layer concern, stub implementation bias, or memory wording implying middleware enforcement. Validates the system works (context surfaced via ID-based blocking) while highlighting a real limit of the value prop.",

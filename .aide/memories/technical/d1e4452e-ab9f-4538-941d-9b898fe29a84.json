@@ -1,4 +1,5 @@
 {
+  "id": 281,
   "uuid": "d1e4452e-ab9f-4538-941d-9b898fe29a84",
   "layer": "technical",
   "what": "PostHog API key is hardcoded in src/memory/analytics.ts (phc_ztrzpvb...). It's baked into the npm package — users don't need .env or any config for analytics. Opt-out via AIDE_TELEMETRY=off env var. The .env file at project root is for local dev only and stays in .gitignore.",

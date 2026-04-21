@@ -1,4 +1,5 @@
 {
+  "id": 7,
   "uuid": "21f66978-d3a9-4b8b-916f-cae4d217dbd9",
   "layer": "area_context",
   "what": "PUBLIC_README.md doc links must point to aide-memory.dev (e.g. https://aide-memory.dev/docs/cli-reference), not local paths like docs/user/cli-reference.md. The public GitHub repo has no docs/user/ directory — those files live in aide-v0 (private) and aide-memory-web (Nextra site).",
@@ -12,6 +13,7 @@
   ],
   "source": "hook",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-09T21:48:53.994Z",

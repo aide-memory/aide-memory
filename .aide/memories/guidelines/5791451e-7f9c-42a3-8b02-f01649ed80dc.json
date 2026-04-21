@@ -1,4 +1,5 @@
 {
+  "id": 175,
   "uuid": "5791451e-7f9c-42a3-8b02-f01649ed80dc",
   "layer": "guidelines",
   "what": "Block errors UX priorities (from user 2026-04-20, for P1.18 exploration):\n\n1. **Stop hook \"returned blocking error\" wording is the top issue.** Claude Code renders Stop hook blocks with language that makes users think something is broken. Users may think the tool errored. Needs reframing — either via Claude Code output shape changes, an Anthropic feature request, or user-facing explanation so people don't panic. This is the #1 block-errors UX concern.\n\n2. **Soft blocks lack visibility.** When hooks return additionalContext (soft nudge), the prompt isn't surfaced to the user — only the agent sees it. User thinks it would be helpful if users could also see the soft-nudge prompt (opt-in or default?) so they understand why the agent is calling aide_recall/aide_search.\n\nExplore fixes in BOTH directions: hide/soften the alarming \"error\" label on Stop blocks, and ADD visibility for soft nudges.",

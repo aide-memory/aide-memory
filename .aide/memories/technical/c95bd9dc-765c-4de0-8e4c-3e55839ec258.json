@@ -1,4 +1,5 @@
 {
+  "id": 279,
   "uuid": "c95bd9dc-765c-4de0-8e4c-3e55839ec258",
   "layer": "technical",
   "what": "aide-memory@0.2.0 is already published to npm (2026-04-11) but is STALE — it contains pre-cleanup code including --scan, unbundled sources, and missing-deps bugs (chalk, fast-glob not listed). feature/phase-1 has significantly advanced beyond it (scan removed, pending-memories import, drift-repair, 18-setting public surface, test suite at 654 tests). Any next publish must bump PAST 0.2.0 — recommended 0.3.0 (breaking via --scan removal under pre-1.0 SemVer). Live 0.1.1 (2026-04-08) is the prior stable; 0.2.0 (2026-04-11) should optionally be deprecated via `npm deprecate aide-memory@0.2.0 \"superseded by 0.3.0 — contained pre-release bugs\"` after 0.3.0 publish. Verify before publish: `curl -s https://registry.npmjs.org/aide-memory | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(list(d[\"versions\"].keys()))'`.",

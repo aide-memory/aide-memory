@@ -1,4 +1,5 @@
 {
+  "id": 18,
   "uuid": "827585ed-bd8a-41ad-8d07-46ad5695171e",
   "layer": "area_context",
   "what": "Product questions to address: (1) Add version check on CLI/MCP server start — warn if outdated, recommend update. updater.ts already exists. (2) Track \"last seen\" in PostHog for churn inference — no reliable npm uninstall hook. (3) Add before/after comparison to demo — same task without aide-memory (agent makes mistake) vs with (agent gets it right). Strongest marketing asset. (4) Consider preuninstall script in package.json as best-effort uninstall tracking.",

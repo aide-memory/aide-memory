@@ -1,4 +1,5 @@
 {
+  "id": 271,
   "uuid": "b49a9bea-c378-4409-94e9-23650978c4f6",
   "layer": "technical",
   "what": "aide-memory npm publish is scoped via package.aide-memory.json (NOT root package.json). Its `files` field includes only: dist/memory/*.js, dist/cli/aide-memory.js, dist/cli/commands/memory/, scripts/hooks/, src/templates/rules/, README, LICENSE. Its `dependencies` are only 4: better-sqlite3, commander, @modelcontextprotocol/sdk, zod. The root package.json (name: aide-v0) still lists old AIDE deps (tree-sitter-javascript, tree-sitter-typescript, ts-morph, chokidar, marked, marked-terminal, express, ws, axios, web-tree-sitter) and bins (aide-legacy: dist/cli/index.js) — those are dev-only and NOT what ships. scripts/build.sh does the publish build (tsc + copy templates + copy hooks). Binary migration target must match package.aide-memory.json scope, NOT the root package.json scope.",

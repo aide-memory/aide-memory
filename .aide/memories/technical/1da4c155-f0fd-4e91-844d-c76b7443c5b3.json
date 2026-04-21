@@ -1,4 +1,5 @@
 {
+  "id": 220,
   "uuid": "1da4c155-f0fd-4e91-844d-c76b7443c5b3",
   "layer": "technical",
   "what": "Configurable settings policy (DECIDED 2026-04-20): All settings listed in PHASE_0_1_SPEC.md (hook intensity, recall limits, injection per-layer, scope depth, etc.) must be user-configurable at launch — NO pro/free gating, NO `public: true/false` flag check, NO `pro: true/false` gate.\n\nImplementation:\n- Remove pro/public metadata from defaults.json (or ignore it in read-config.sh)\n- `aide-memory config <key> <value>` must work for every listed setting\n- Validate that changing each setting actually changes runtime behavior (not cosmetic)\n\nDrop from spec: \"Configurable hook intensity (Phase 2 pro feature)\" framing. All configurability is free/launch.",

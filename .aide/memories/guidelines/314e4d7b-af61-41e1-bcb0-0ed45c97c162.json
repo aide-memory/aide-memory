@@ -1,4 +1,5 @@
 {
+  "id": 171,
   "uuid": "314e4d7b-af61-41e1-bcb0-0ed45c97c162",
   "layer": "guidelines",
   "what": "Validation discipline for closed-source npm publishes: always run end-to-end scenarios against an install-from-tarball (NOT against source dir + dev node_modules). This session caught TWO critical bugs that static code review alone missed: (1) missing MCP server bundle (`dist/memory/cli.js`) — would have shipped a \"working\" tarball where `aide-memory init` succeeds but the MCP server fails silently on first use, (2) dev-monorepo package.json leak in CLI bundle — visible only after extracting a real tarball and grepping the minified output. Workflow that works: `cp package.json /tmp/dev.json && cp package.aide-memory.json package.json && npm pack && mv /tmp/dev.json package.json`, then `npm install ./aide-memory-*.tgz` into a fresh scratch project, then exercise CLI + MCP + hooks. Running CLI/tests from the dev worktree with full dev node_modules hides these classes of bugs because the full tsc output + all dev deps are present. Time cost: ~10 min for a full install-and-scenario pass. Value: catches packaging bugs before they hit users.",

@@ -1,4 +1,5 @@
 {
+  "id": 212,
   "uuid": "00bbf93d-5dc7-4dd1-90af-e7c5505c761d",
   "layer": "technical",
   "what": "Search hook enforcement fix: pre-search-nudge.sh must NOT write to searched-queries tracking file on block. Tracking is only written by track-search.sh (PostToolUse:aide_search) after aide_search is actually called. This matches the read hook pattern (pre-read-recall.sh doesn't track, track-recall.sh does). Without this, agent can bypass search blocking by retrying the same grep.",

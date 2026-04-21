@@ -1,4 +1,5 @@
 {
+  "id": 15,
   "uuid": "74f4230f-5d58-4c11-9dad-6af0c4b8fad3",
   "layer": "area_context",
   "what": "File blocking after directory recall: block-once then soft-with-remaining-count. After first recall, future reads show \"N more scoped memories not yet recalled\" as soft nudge — agent knows what's outstanding and decides. Nothing silently lost. Also: anything running locally can be extracted — only server-side code is truly private. Pro features requiring code privacy must run server-side (API model).",

@@ -1,4 +1,5 @@
 {
+  "id": 12,
   "uuid": "4f6959eb-0b38-404c-b33d-ab9f5def3535",
   "layer": "area_context",
   "what": "Distribution strategy: current npm ships readable JS + bash scripts. To protect source code, compile to binary via `bun compile`. MCP server + CLI becomes single binary, hooks become thin bash wrappers calling the binary. Distribute via homebrew/curl/npm-wrapping-binary. Same TypeScript codebase, just different build target. Pro features with server-side logic are the only truly unbypassable protection. Local pro flags can always be edited. Also: window-style recall pagination (offset/limit/exclude_ids) and search dedup independence from recall — both as fast follows.",

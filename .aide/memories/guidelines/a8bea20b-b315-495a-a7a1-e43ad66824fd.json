@@ -1,4 +1,5 @@
 {
+  "id": 180,
   "uuid": "a8bea20b-b315-495a-a7a1-e43ad66824fd",
   "layer": "guidelines",
   "what": "Binary migration validation requirement (from user 2026-04-20): After shifting hook logic into the `aide-memory` binary (via `bun compile`), the WHOLE system must be verified to work normally — not just spot-checked. Plan must include a dedicated regression-validation phase that re-runs all existing validation scenarios (A-G + IDB-1 through IDB-9 + U1-U3) against the binary-backed hooks to confirm parity with the JS/bash implementation. Any divergence = release blocker.\n\nDo NOT treat this as \"obvious, will test along the way.\" It must be an explicit phase in the binary migration plan with its own checklist.",

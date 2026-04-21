@@ -1,4 +1,5 @@
 {
+  "id": 217,
   "uuid": "0fb6cabc-b128-4057-91c1-08b1ba8246e9",
   "layer": "technical",
   "what": "src/orchestration/__tests__/toolExecutor.test.ts has 15 pre-existing failures on feature/phase-1@ee3d006 (find_symbol, get_symbol_detail, get_references, get_dependencies, read_file_outline, read_file). Requires tree-sitter graph indexing that isn't set up by default. Unrelated to memory/CLI code — memory+CLI tests are 434/434 passing. Do not panic; do not investigate as a regression during binary migration phases.",

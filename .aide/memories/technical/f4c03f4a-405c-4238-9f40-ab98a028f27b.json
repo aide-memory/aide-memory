@@ -1,4 +1,5 @@
 {
+  "id": 296,
   "uuid": "f4c03f4a-405c-4238-9f40-ab98a028f27b",
   "layer": "technical",
   "what": "Hook scripts reference paths relative to the aide-v0 project root (scripts/hooks/recall-for-path.js uses __dirname to find project root). When hooks run from a DIFFERENT project directory (like /tmp/aide-val), the scripts can't find the MemoryStore dist files because __dirname points to aide-v0, not the test project. The hooks need to operate on the CURRENT project's memories, not aide-v0's. This is why Read hooks don't fire in test projects — recall-for-path.js opens the wrong store.",

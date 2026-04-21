@@ -1,4 +1,5 @@
 {
+  "id": 183,
   "uuid": "d666be71-ac1d-4b3e-b45e-e44e71465d2f",
   "layer": "guidelines",
   "what": "Claude Code is validated end-to-end in PHASE_1_RESULTS.md (sessions A-G); Cursor is NOT. PHASE_0_1_SPEC marks P1.9 Cursor Validation and P1.17 5-scenarios-in-Cursor as DEFERRED (\"awaiting user Cursor reactivation\"). External copy should claim Cursor support but hedge: \"Claude Code is validated end-to-end; Cursor is supported via generated `.cursor/` config and the same MCP protocol, with tool-specific UX still being verified.\"",

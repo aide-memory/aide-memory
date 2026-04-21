@@ -1,4 +1,5 @@
 {
+  "id": 167,
   "uuid": "eb2440ed-b19a-4126-98e3-161d32b9484a",
   "layer": "area_context",
   "what": "Hook count parity: ALL count-related fields (scoped_count, scoped_ids, layers breakdown, topics) in scripts/hooks/recall-for-path.js now derive from a single source of truth — computeScopedForPath() in src/memory/recall.ts. That helper applies the focused-scope filter (exact file + immediate parent + deeper, NO grandparent, NO project-wide) in one place. If you change the blocking-scope rule, update computeScopedForPath and every hook count updates automatically. Guarded by hooks.test.ts parity test + scripts/hooks/__tests__/count-parity.sh smoke test.",

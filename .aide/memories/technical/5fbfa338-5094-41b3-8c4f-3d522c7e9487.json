@@ -1,4 +1,5 @@
 {
+  "id": 240,
   "uuid": "5fbfa338-5094-41b3-8c4f-3d522c7e9487",
   "layer": "technical",
   "what": "MCP server lifecycle (April 2026): the aide-memory MCP server is NOT a persistent daemon — it's a stdio child process Claude Code spawns at session start and kills at session end. \"Recovery\" from an outage happens automatically whenever a new Claude session starts with a healthy `.mcp.json`. The new `ingestPendingMemories()` function (added Apr 20) runs in `startServer()` right after MemoryStore creation, so any memories written to `.aide/pending-memories.jsonl` during an outage get ingested on the next good session start. Hooks remain independent of MCP (pure bash scripts), so blocking/correction detection still work even when MCP is down — the agent just falls back to writing the jsonl file per the instruction in detect-correction.sh.",

@@ -1,4 +1,5 @@
 {
+  "id": 192,
   "uuid": "34964cc5-6a31-46e6-92ba-62a3b28d9359",
   "layer": "preferences",
   "what": "CRITICAL PROCESS RULE: After spinning off implementation agents, ALWAYS review every agent's changes line-by-line against the plan BEFORE committing. Agents have limited context and can miss parts of the plan. I have more context than they do — the review is my responsibility. Never trust \"all tests pass\" as proof of completeness. Check each plan item was actually implemented, not just that nothing broke.",

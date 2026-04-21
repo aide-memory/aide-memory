@@ -1,4 +1,5 @@
 {
+  "id": 31,
   "uuid": "e0e7c55b-bf2f-44c3-a48d-656ebee22572",
   "layer": "area_context",
   "what": "Final blocking approach aligned: purely ID-coverage based. Block if unrecalled IDs + new file. Soft if unrecalled IDs + encountered before. Silent if all IDs covered or no memories. Directory trigger likely redundant with ID-based checking — individual file recalls already cover directory-scoped memories via scopeMatchesPath. PostToolUse DOES fire for MCP tools — fix was one jq path change (tool_response is array of {type,text}). Session-inject writes injected IDs to tracking at SessionStart so injected memories don't cause redundant blocking.",

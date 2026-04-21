@@ -1,4 +1,5 @@
 {
+  "id": 283,
   "uuid": "db639e34-e9bb-4d88-8aaa-85a0fed19354",
   "layer": "technical",
   "what": "PreCompact feature request should include detailed implementation attempts: exit 0 + decision:block (proceeds immediately), exit 2 + decision:block (hard error, no agentic turn), exit 0 + systemMessage (shown to user, unclear if agent sees), hookSpecificOutput (validation error — only valid for PreToolUse/UserPromptSubmit/PostToolUse), suppressOutput (doesn't work for Stop/PreCompact), v2.1.105 only added cancel capability. All combinations tested. No way to give agent a tool-calling turn during compaction.",

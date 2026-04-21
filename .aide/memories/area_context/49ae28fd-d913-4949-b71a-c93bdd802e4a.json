@@ -1,4 +1,5 @@
 {
+  "id": 11,
   "uuid": "49ae28fd-d913-4949-b71a-c93bdd802e4a",
   "layer": "area_context",
   "what": "BINARY_MIGRATION_PLAN.md §7.1 / §0 references \"src/cli/commands/init.ts\" for --scan removal, but the actual aide-memory init command lives at src/cli/commands/memory/init.ts. The top-level src/cli/commands/init.ts is the legacy AIDE indexer init and never had --scan. Any future phase spawn reading the plan should apply it to src/cli/commands/memory/init.ts (and the CLI registration in src/cli/aide-memory.ts).",

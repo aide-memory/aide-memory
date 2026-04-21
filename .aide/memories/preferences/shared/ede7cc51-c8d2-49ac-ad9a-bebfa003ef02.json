@@ -1,4 +1,5 @@
 {
+  "id": 207,
   "uuid": "ede7cc51-c8d2-49ac-ad9a-bebfa003ef02",
   "layer": "preferences",
   "what": "When recommending between multiple options, commit to ONE and state it clearly. Don't end with \"should I do A or B?\" when the reasoning already points to A. The user had to ask \"wdym so use yao-pkg or rust??\" because my previous message ended with a menu instead of a recommendation. Pattern: present the analysis, then give a single clean call. Alternatives belong in a \"here's why not the others\" paragraph, not as an unresolved choice the user now has to arbitrate.",

@@ -1,4 +1,5 @@
 {
+  "id": 29,
   "uuid": "d8f10a9a-b688-4375-8dea-0ead3a006278",
   "layer": "area_context",
   "what": "Scenario J (MCP server unavailable / graceful degradation) status as of Apr 20 2026: CODE is complete — hooks write to .aide/pending-memories.jsonl when MCP is down and agent is instructed to notify user to start the server (see commits 8e27ab6, 3182ed2, 60496f0 from Apr 9-14). But VALIDATION has never been executed — no live session where MCP was killed and fallback path was verified end-to-end. PHASE_1_RESULTS.md has no J section. Do not confuse code work with validation — J is still pending.",

@@ -1,4 +1,5 @@
 {
+  "id": 2,
   "uuid": "042d24ec-4679-4b0c-a730-fa64e3142a6f",
   "layer": "area_context",
   "what": "The industry-standard delivery pattern for closed-source Node CLIs is \"thin npm wrapper + binary downloaded from elsewhere\" (GitHub Releases, CDN, S3). Users run `npm install -g`, postinstall fetches platform binary, symlinks CLI. Examples all ship this way: Cypress, Playwright, Sentry CLI, Snyk CLI, Prisma CLI, esbuild, swc, Turbo, Biome, Rspack, Rolldown, lightningcss, DataDog CI. The plan's Phase 4 already specifies this pattern. The orthogonal decision is what the binary itself is compiled with — and the modern direction for new serious CLIs that care about BOTH protection and performance is Rust core (via napi-rs or standalone binary) + thin TS wrapper + npm distribution. That's what Turbo / swc / Biome / Rspack / Rolldown / lightningcss all do. If aide-memory ever needs stronger protection than yao-pkg bytecode gives, the idiomatic upgrade path is \"port the sensitive module(s) to Rust napi-rs\", not \"find a stronger JS bundler\".",

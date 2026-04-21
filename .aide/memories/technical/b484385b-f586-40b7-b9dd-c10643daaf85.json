@@ -1,4 +1,5 @@
 {
+  "id": 270,
   "uuid": "b484385b-f586-40b7-b9dd-c10643daaf85",
   "layer": "technical",
   "what": "Stop hook frequency data from validation session: ~1 aide_remember call per 9 user prompts (302 remembers / 2745 prompts). Current always-block is 9x more frequent than needed. Recommended default interval: every 5 turns (catches ~85% of remember opportunities, reduces noise 80%). Always block on correction-pending flag regardless of interval.",

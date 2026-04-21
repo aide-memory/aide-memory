@@ -1,4 +1,5 @@
 {
+  "id": 170,
   "uuid": "2895b037-e8f9-4028-8e7b-56e415a6d238",
   "layer": "guidelines",
   "what": "MCP tool schema design principle (locked in Apr 21 2026): every new MCP tool parameter in src/memory/server.ts must tolerate LLM output quirks EXCEPT enum values, which stay strict. Specifically: numbers accept string form via `z.coerce.number()`; arrays accept single-item shortcuts via the `lenientArray()` helper; booleans accept string \"true\"/\"false\"/\"1\"/\"0\" via `lenientBoolean`; every optional field uses `.nullish().transform((v) => v ?? undefined)` to accept both null and undefined. Enums intentionally reject unknown values (prevents silent bad-data storage — if the LLM mistypes \"tech\" for \"technical\", we want the error loud, not silent). When adding a new MCP tool: grep existing tools for the same input shape, copy the schema pattern, add a regression test in src/memory/__tests__/server.test.ts that exercises the lenient path. All 660 tests + the 6 lenient-regression tests lock this in.",

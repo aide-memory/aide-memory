@@ -1,4 +1,5 @@
 {
+  "id": 285,
   "uuid": "df4e9526-a121-425b-b196-0a0037c1473a",
   "layer": "technical",
   "what": "Embedding service FIXED and wired up: (1) update() in store.ts now regenerates embeddings when what/why/context_label change — same fire-and-forget pattern as add(). (2) startServer() in server.ts now creates EmbeddingService, initializes in background, attaches via setEmbeddingService(). Tries @huggingface/transformers first, falls back to local Ollama. No API keys needed. Graceful degradation if neither backend available — FTS5/LIKE search unaffected.",
@@ -13,6 +14,7 @@
   ],
   "source": "hook",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-10T12:23:56.864Z",

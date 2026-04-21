@@ -1,4 +1,5 @@
 {
+  "id": 1,
   "uuid": "00526242-66aa-4566-b326-d804d0fc21e3",
   "layer": "area_context",
   "what": "Hook design decisions (finalized April 10, 2026): (1) aide_recall ranking: return top 5 by normal ranking (area_context priority preserved), THEN append 1-2 from any layer with zero representation. Total 5-9 results. Topics in nudge preview come from same pool as actual recall results — same ranking, same memories. (2) ALL four layers at every touchpoint, top 8 topics overall + extras from underrepresented layers. (3) Stop hook wording maps to aide-memory layers: \"any decisions, technical constraints, preferences, or guidelines from this conversation?\" — direct layer mapping. (4) Search hook (Grep/Glob): runs preview inline, blocks if matches>0. aide_search mode param (auto/keyword/semantic) with descriptions in tool schema. (5) Two-phase correction: UserPromptSubmit soft + flag, Stop checks flag + normal persist, PostToolUse(aide_remember) clears flag. (6) File query → file-specific rank first. Directory query → directory rank first. 2+ files in same directory triggers forced directory-level recall: hook counts tracked files per directory, if >=2 and directory not recalled, blocks for directory recall. (7) Edit/Write hook: blocks if memories exist and path not recalled. (8) PreCompact clears ALL session tracking. (9) Planning: PreToolUse on Plan surfaces preferences/guidelines.",
@@ -15,6 +16,7 @@
   ],
   "source": "hook",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-10T03:38:34.091Z",

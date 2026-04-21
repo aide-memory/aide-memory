@@ -1,4 +1,5 @@
 {
+  "id": 262,
   "uuid": "8fe48988-2ba5-4dba-8df2-961f0178c688",
   "layer": "technical",
   "what": "PreCompact hook bug: pre-compact-save.sh exits with code 0 (line 31), so it NEVER actually blocks compaction despite outputting {\"decision\":\"block\"} in JSON. Exit code is what matters for blocking, not the JSON content. Fix: use exit 2 for true blocking, with a two-phase flag pattern (compact-pending-{sid}.txt) to avoid infinite loop — first trigger blocks (agent saves), second trigger allows compaction through.",

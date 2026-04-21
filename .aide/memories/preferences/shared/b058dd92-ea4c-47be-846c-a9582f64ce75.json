@@ -1,4 +1,5 @@
 {
+  "id": 201,
   "uuid": "b058dd92-ea4c-47be-846c-a9582f64ce75",
   "layer": "preferences",
   "what": "User has multiple product ideas beyond aide-memory to evaluate: (1) Interview software, (2) Learning how to use AI tools (product), (3) Learning in general in advent of AI (separate product), (4) Context switching tool across multiple jobs/school/side projects with different tools per context (j1: cursor/codelassian/rovo dev, j2: cursor, school: gemini, side projects: claude, personal: claude/gemini/chatgpt), (5) Developer analytics/tracking. Key requirement: need originality and actual defensibility in whatever is chosen. These should be compared as market opportunities alongside the aide-memory pivots. User wants to prioritize across all options.",

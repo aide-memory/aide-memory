@@ -1,4 +1,5 @@
 {
+  "id": 173,
   "uuid": "3f3da199-8b84-4b23-8b05-0d93baa5b8c5",
   "layer": "guidelines",
   "what": "PHASE_0_1_SPEC.md is the single source of truth for all remaining work. AUDIT_GAPS_REPORT.md is stale/redundant — everything was consolidated into the REMAINING section of the spec (sections A-H with priority table). Don't create separate tracking files.",
@@ -12,6 +13,7 @@
   ],
   "source": "hook",
   "shared": true,
+  "priority": "normal",
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-09T21:37:48.578Z",
