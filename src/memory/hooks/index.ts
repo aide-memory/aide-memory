@@ -6,6 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn } from 'child_process';
 import { readJsonStdin } from './stdio';
 import {
   detectCorrection,
@@ -56,11 +57,25 @@ function maybeTriggerDriftResync(input: { cwd?: string }): void {
     fs.mkdirSync(path.dirname(mtimeCache), { recursive: true });
     fs.writeFileSync(mtimeCache, curMtime, 'utf8');
 
-    // Dynamically import init so hook cold-start doesn't pay for it unless
-    // drift is actually detected. Fire-and-forget.
-    import('../init').then((mod) => {
-      try { mod.resyncDerivedArtifacts(projectRoot); } catch { /* non-fatal */ }
-    }).catch(() => { /* non-fatal */ });
+    // Spawn a DETACHED + UNREFED child to actually do the resync. An in-
+    // process `import().then()` would keep the Node event loop alive until
+    // the resync completed — blowing pre-compact / post-tool-use latency
+    // budgets. Spawn + detach + unref + stdio:ignore is true fire-and-
+    // forget: this hook process can exit immediately, the child keeps
+    // running independently.
+    try {
+      const cliEntry = path.resolve(__dirname, '..', '..', 'cli', 'aide-memory.js');
+      const child = spawn(process.execPath, [cliEntry, 'internal-resync', projectRoot], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: projectRoot,
+      });
+      child.unref();
+    } catch {
+      // Spawn failure is non-fatal — next hook fire will retry since we
+      // already updated the mtime cache. Worst case: user runs `aide-memory
+      // config` to trigger resync via the CLI path instead.
+    }
   } catch {
     // Drift check must NEVER break a hook.
   }

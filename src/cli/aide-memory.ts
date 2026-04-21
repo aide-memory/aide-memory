@@ -214,6 +214,23 @@ export function createProgram(): Command {
       runHook(name);
     });
 
+  // Internal: background resync entry, spawned detached by the hook
+  // dispatcher's maybeTriggerDriftResync when `.aide/config.json` mtime
+  // drifts from the cached value. Not documented as a user-facing command.
+  program
+    .command('internal-resync <projectRoot>', { hidden: true })
+    .description('Internal: resync derived artifacts (spawned by hooks on config drift)')
+    .action((projectRoot: string) => {
+      try {
+        // Defer the import so CLI cold-start isn't taxed for unrelated commands.
+        const { resyncDerivedArtifacts } = require('../memory/init');
+        resyncDerivedArtifacts(projectRoot);
+      } catch {
+        // Swallow — this is best-effort background work.
+      }
+      process.exit(0);
+    });
+
   return program;
 }
 

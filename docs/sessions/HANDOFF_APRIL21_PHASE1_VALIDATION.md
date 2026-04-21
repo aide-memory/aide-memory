@@ -68,7 +68,7 @@ All commits on `feature/phase-1`. Listed newest → oldest.
 - Legacy `.ignore` files (bare `.aide/memories/` entry) migrate on first sync
 - `aide-memory config memories.hideFromGrep <true|false>` live-syncs via `applySideEffects` in `config.ts`
 - Centralized `resyncDerivedArtifacts(projectRoot)` in `init.ts` is the single source of truth — called from CLI write path AND `autoUpdateIfNeeded` (unconditional at MCP startup, before version check, so direct edits to `config.json` get picked up)
-- Mid-session drift check: `_aide_drift_check` in `scripts/hooks/read-config.sh` compares config.json mtime against `.aide/cache/config-mtime.txt`. On mtime change, fires a background `resyncDerivedArtifacts` call. Every hook that sources `read-config.sh` triggers the check — so config edits get picked up by the next hook fire, no session restart needed
+- Mid-session drift check: `maybeTriggerDriftResync()` in `src/memory/hooks/index.ts` (TS dispatcher) compares config.json mtime against `.aide/cache/config-mtime.txt`. On mtime change, spawns a DETACHED+UNREFED `aide-memory internal-resync` child — fire-and-forget so the hook process exits fast (important for pre-compact latency). The child runs `resyncDerivedArtifacts(projectRoot)`. Every hook fire runs the mtime check at dispatch-entry — so config edits get picked up by the next hook fire, no session restart needed. The legacy bash `_aide_drift_check` side effect in `scripts/hooks/read-config.sh` was silently dropped in the 0.4.0 hook consolidation (memory #171); re-ported to the TS dispatcher in the 0.4.2 regression fix
 - Cross-session propagation works via the shared mtime cache file
 
 **Settings framework (`scripts/hooks/defaults.json`, `src/memory/settings.ts`, `src/cli/commands/memory/config.ts`):**

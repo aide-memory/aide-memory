@@ -426,4 +426,118 @@ describe('All hooks handle empty input without crashing', () => {
   }
 });
 
+// ─── Drift-repair: direct config.json edit → next hook fires resync ────────
+
+describe('Drift-repair (maybeTriggerDriftResync in hook dispatcher)', () => {
+  // Locks in the user-facing promise from docs/user/cli-reference.md:
+  // "If you hand-edit .aide/config.json, running sessions pick up the change
+  //  on the next hook fire (file read, edit, or prompt)."
+  //
+  // Regression history: the bash _aide_drift_check side-effect in the old
+  // scripts/hooks/read-config.sh was silently dropped in the 0.4.0 hook
+  // consolidation (memory #171). This test re-ports to the TS dispatcher
+  // so the regression can't recur unnoticed.
+  //
+  // Implementation note: the drift check spawns a DETACHED+UNREFED child
+  // process so the hook exits fast (pre-compact has a latency budget).
+  // That means the test must wait for the child to finish before asserting
+  // on derived-artifact state.
+
+  let tempProject: string;
+
+  beforeEach(() => {
+    tempProject = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-drift-vitest-'));
+    execSync('git init -q', { cwd: tempProject, stdio: 'pipe' });
+    execSync(`node ${path.join(REPO_ROOT, 'dist', 'cli', 'aide-memory.js')} init`, {
+      cwd: tempProject,
+      stdio: 'pipe',
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempProject, { recursive: true, force: true });
+    // Wipe the per-project SQLite cache under ~/.aide/projects/<hash>/
+    try {
+      const crypto = require('crypto');
+      const resolved = fs.realpathSync(tempProject);
+      const hash = crypto.createHash('sha1').update(resolved).digest('hex').slice(0, 12);
+      fs.rmSync(path.join(os.homedir(), '.aide', 'projects', hash), {
+        recursive: true,
+        force: true,
+      });
+    } catch { /* non-fatal test cleanup */ }
+  });
+
+  it('edits to .aide/config.json re-sync .ignore within ~2s of the next hook fire', async () => {
+    const ignorePath = path.join(tempProject, '.ignore');
+    const configPath = path.join(tempProject, '.aide', 'config.json');
+
+    // Sanity: init should have produced a managed .ignore block.
+    expect(fs.existsSync(ignorePath)).toBe(true);
+    expect(fs.readFileSync(ignorePath, 'utf8')).toMatch(/aide-memory-managed/);
+
+    // Wait long enough for the next mtime to land in a distinct tick.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    // Hand-edit bypasses `aide-memory config` — simulates user opening
+    // .aide/config.json in vim, merging a teammate's diff, etc.
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    config.memories = { ...(config.memories || {}), hideFromGrep: false };
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+    // Fire ANY hook. maybeTriggerDriftResync runs unconditionally at the
+    // top of dispatch(), so `pre-prompt` works even though the inner
+    // detectCorrection handler exits silent for non-correction prompts.
+    execSync(
+      `echo '{"session_id":"drift-vitest","cwd":"${tempProject}","prompt":"drift-repair regression test prompt"}' ` +
+        `| bash ${path.join(REPO_ROOT, 'scripts', 'hooks', 'detect-correction.sh')}`,
+      { encoding: 'utf8', timeout: 10_000 }
+    );
+
+    // Drift-repair is spawned detached + unrefed, so poll for the side
+    // effect. The child runs `aide-memory internal-resync` which loads
+    // init.ts and calls resyncDerivedArtifacts — typically < 1s on a
+    // warm system.
+    const deadline = Date.now() + 5_000;
+    let ignoreGone = false;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (!fs.existsSync(ignorePath)) { ignoreGone = true; break; }
+      const content = fs.readFileSync(ignorePath, 'utf8');
+      if (!content.includes('aide-memory-managed')) { ignoreGone = true; break; }
+    }
+
+    expect(ignoreGone).toBe(true);
+  }, 15_000);
+
+  it('no config-edit → no resync (mtime unchanged)', async () => {
+    // If the cached mtime matches current mtime, we should NOT spawn a
+    // resync child. First hook seeds config-mtime.txt; second hook (no
+    // config edit) should leave .ignore exactly as it was.
+    const ignorePath = path.join(tempProject, '.ignore');
+    const mtimeCache = path.join(tempProject, '.aide', 'cache', 'config-mtime.txt');
+
+    execSync(
+      `echo '{"session_id":"drift-vitest-2","cwd":"${tempProject}","prompt":"seed mtime"}' ` +
+        `| bash ${path.join(REPO_ROOT, 'scripts', 'hooks', 'detect-correction.sh')}`,
+      { encoding: 'utf8', timeout: 10_000 }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+
+    expect(fs.existsSync(mtimeCache)).toBe(true);
+    expect(fs.existsSync(ignorePath)).toBe(true);
+    const ignoreBefore = fs.readFileSync(ignorePath, 'utf8');
+
+    execSync(
+      `echo '{"session_id":"drift-vitest-2","cwd":"${tempProject}","prompt":"no config edit this turn"}' ` +
+        `| bash ${path.join(REPO_ROOT, 'scripts', 'hooks', 'detect-correction.sh')}`,
+      { encoding: 'utf8', timeout: 10_000 }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    expect(fs.existsSync(ignorePath)).toBe(true);
+    expect(fs.readFileSync(ignorePath, 'utf8')).toBe(ignoreBefore);
+  }, 15_000);
+});
+
 

@@ -1362,7 +1362,7 @@ REMAINING (source of truth — all pending items with concrete next steps):
   - SessionStart injects IDs: session-inject.js writes injected memory IDs to ids| in tracking file, preventing redundant blocking.
   - Directory trigger removal: each file evaluated individually by scoped ID coverage. No dir| tracking.
   - aide_recall ids param: supports `{ids: [6,7,8]}` for gap-filling specific missing memories.
-  - Settings framework: defaults.json with per-key value/public/pro metadata. read-config.sh sources settings.
+  - Settings framework: defaults.json with per-key value/public/pro metadata. Bundled CLI (`src/memory/settings.ts`) is the single reader for both hooks and `aide-memory config`. `read-config.sh` was removed in the 0.4.0 hook consolidation.
   - Injection per-layer: injection.preferences, injection.guidelines, injection.technical, injection.area_context settings control what gets injected at SessionStart.
   - Resume clears tracking: SessionStart clears THIS session's tracking on resume/compact/clear (agent loses context, must re-recall).
   - Correction detection tuning: negative filters, 3+ word minimum, match at message start only. Default `hooks.correction.minWords: 3` (in detect-correction.sh).

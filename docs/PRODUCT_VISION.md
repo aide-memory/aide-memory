@@ -720,7 +720,7 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 - SessionStart tracks injected memory IDs to prevent redundant blocking
 - Memory priority field (`always` for auto-injected, `normal` for standard)
 - Embedding auto-management: generated on add, regenerated on update, cleaned on remove
-- Settings framework: `defaults.json` with 18 settings (value/public/pro metadata), `read-config.sh` shared reader with three-layer resolution (hook default, defaults.json, user config). All settings private currently -- public config + pro gating deferred to Phase 2.
+- Settings framework: `defaults.json` with 16 settings (all public since Apr 2026), read by the bundled CLI at runtime via `src/memory/settings.ts`. `aide-memory config KEY VALUE` validates keys and writes to `.aide/config.json`; hooks read the resolved value on each fire. Legacy `read-config.sh`/`read-config.js` readers were consolidated into the TS dispatcher in the 0.4.0 hook refactor.
 - Auto-update on MCP server start (checks version, merges hooks/MCP/rules/dirs/.gitignore)
 - `.ignore` file hides memories from grep by default
 - 47 tests passing, zero type errors
@@ -1320,7 +1320,7 @@ Adding a new tool: copy the adapter template, configure hook event names and MCP
 
 ### Unified Configuration
 
-**Current implementation:** `defaults.json` defines 18 settings, each with `value`, `public`, and `pro` metadata fields. `read-config.sh` is a shared reader used by all hooks, implementing three-layer resolution: hook-internal default -> `defaults.json` -> user `config.json` override. All 18 settings are currently private (not exposed to users). Public config surface and pro gating are deferred to Phase 2.
+**Current implementation:** `defaults.json` defines 16 settings, each with `value`, `public`, and `pro` metadata fields (`pro: false` across all of them — no paid tier in Phase 1). The bundled CLI (`src/memory/settings.ts` → `dist/cli/aide-memory.js`) is the single reader used by both hooks and `aide-memory config`, resolving: hook-internal default → `defaults.json` → `.aide/config.json` override. Unknown keys rejected with suggestions. All settings are public and user-settable.
 
 **Settings include:** hook enable/disable flags, recall limits, blocking thresholds, stop interval parameters, correction detection sensitivity, nudge verbosity, and auto-update behavior.
 

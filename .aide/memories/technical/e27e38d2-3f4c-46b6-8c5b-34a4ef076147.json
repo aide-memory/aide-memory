@@ -1,0 +1,23 @@
+{
+  "id": 172,
+  "uuid": "e27e38d2-3f4c-46b6-8c5b-34a4ef076147",
+  "layer": "technical",
+  "what": "Background-spawn pattern for aide-memory hook side effects (drift-repair, any future ambient resync): if a hook dispatcher needs to trigger work that must NOT block hook return (e.g., the `_aide_drift_check` → `resyncDerivedArtifacts` pattern — the hook returns immediately while the resync happens in the background), use Node's `child_process.spawn()` with `detached: true, stdio: 'ignore'` followed by `.unref()`. Do NOT use `execSync`, `spawnSync`, or `spawn()` without detach — those block the hook process until the child exits, which pushes light hooks (pre-compact ~25ms baseline, post-tool-use ~38ms) over their 1.5× budget. The old bash used `(node -e \"...\" >/dev/null 2>&1 &) 2>/dev/null` which is double-forked and detached. TS equivalent: `spawn('node', ['-e', script], { detached: true, stdio: 'ignore' }).unref()`. For any future hook-adjacent background work (telemetry flush, usage ping, memory compaction), same rule applies — hook return MUST be independent of the background child's lifetime. If in doubt, benchmark hook latency vs the Phase 0 baseline per docs/validation/.",
+  "why": "Post-0.4.2 review flagged that the drift-check port needs to preserve the bash background-spawn semantics. If a TS port uses execSync instead, every hook fire blocks on the child — tight-budget hooks would blow their latency. Saving the explicit correct pattern so future dispatchers or side-effect additions don't regress hook latency.",
+  "scope": "src/memory/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "background-spawn",
+    "performance",
+    "constraint"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T23:18:59.802Z",
+  "updated_at": "2026-04-21T23:18:59.802Z"
+}
