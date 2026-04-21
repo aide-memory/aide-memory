@@ -50,7 +50,7 @@ describe('package.aide-memory.json', () => {
     // Rule templates (no trailing slash in allowlist form)
     expect(pkg.files).toContain('src/templates/rules');
     expect(pkg.files).toContain('README.md');
-    expect(pkg.files).toContain('LICENSE');
+    expect(pkg.files).toContain('LICENSE.md');
   });
 
   it('files array does NOT include per-command or tsc-output globs (would leak unbundled source)', () => {
