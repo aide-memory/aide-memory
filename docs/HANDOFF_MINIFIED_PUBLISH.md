@@ -1,17 +1,28 @@
-# Handoff — aide-memory@0.3.0 release
+# Handoff — aide-memory releases 0.3.0 → 0.4.1
 
-**Status: v0.3.0 published to npm on 2026-04-21T21:59:15Z.** This doc tracks what was done in the release session and what still needs attention.
+**Current `latest` on npm: `aide-memory@0.4.1` (2026-04-21T22:44:35Z).** Three releases shipped across this session: 0.3.0 (minified publish architecture), 0.4.0 (hook logic bundled into CLI), 0.4.1 (post-publish bug fixes). This doc tracks what shipped and what still needs attention.
 
 ---
 
 ## DONE in this session
 
-### 1. Released `aide-memory@0.3.0` to npm
+### 1. Released three npm versions
 
-- **Live on registry** since 2026-04-21T21:59:15Z — `latest` tag set to 0.3.0.
-- Verified via post-publish smoke test: `npm install aide-memory@0.3.0` in an empty project → `init` + `remember` + `recall` + `search` all work.
-- GitHub Release `v0.3.0` created (latest) at `ahmedmmeky/aide-v0`.
-- Release workflow: succeeded in 1m17s.
+| Version | Published | Summary |
+|---|---|---|
+| **0.4.1** | 2026-04-21T22:44:35Z | Patch: fixes two bugs caught in post-publish 0.4.0 audit (see Audit Findings below) |
+| 0.4.0 | 2026-04-21T22:28:59Z | Hook logic consolidated into `aide-memory hook <name>` CLI subcommand; .sh files reduced to 4-line shims |
+| 0.3.0 | 2026-04-21T21:59:15Z | First minified-publish release (bundled CLI, library, MCP server; no source code shipped); --scan flag removed |
+
+Current release smoke test (0.4.1, post-publish):
+- `npm install aide-memory@0.4.1` clean install succeeds
+- `aide-memory --version` → `0.4.1` ✓
+- `aide-memory init` creates `.aide/`, `.claude/`, `.mcp.json` ✓
+- CLI lifecycle (remember + list + recall + search + update + forget + stats + config + sync + cleanup) all work ✓
+- MCP server spawn from `dist/memory/cli.js` → `tools/list` returns 7 tools ✓
+- All 11 hook shims dispatch correctly through the bundled CLI ✓
+- Zero readable source on disk — `find node_modules/aide-memory -name "*.ts" -o -name "*.map"` returns nothing; hook `.sh` files are 4-line shims
+- `scripts/verify-package.sh` passes with all defense-in-depth checks (no `.ts`, no `.map`, no dev-manifest leaks, no `sourceMappingURL` references in bundles, no missing bundle entries)
 
 ### 2. Branches + tag
 
@@ -49,6 +60,18 @@ Covers everything accumulated since the live 0.2.0 on npm (published 2026-04-11)
 ### 7. CI workflow updated for Node 24 deprecation
 
 `.github/workflows/release.yml` now sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` to opt into Node 24 runners ahead of the June 2026 forced migration. Bumped `setup-node` from Node 18 → 20 for the build environment. Deprecation warning resolved for the next release.
+
+---
+
+## Audit findings from this session (all addressed)
+
+Two bugs caught in post-0.4.0 audit and fixed in 0.4.1:
+
+1. **`aide-memory config <hook-key>` rejected every hook-setting key.** 0.4.0 dropped `scripts/hooks/defaults.json` from the published tarball (the JSON was inlined into the hook dispatcher via esbuild JSON import). But `src/memory/settings.ts` was still reading that file from disk at runtime via `fs.readFileSync`. With the file missing, `loadDefaults()` silently returned `{}`, so `validateConfigKey('hooks.read.maxBlocks')` failed with "Unknown config key" and the list of valid keys shrank from ~31 to ~13 (AideConfig leaves only). Fix: inline the JSON in `settings.ts` via the same ES module JSON import pattern. Ships in 0.4.1.
+
+2. **MCP server advertised `version: '0.2.0'` on initialize.** `src/memory/server.ts` `createServer()` hardcoded the version literal, a holdover from the 0.2.0 era that never got bumped for 0.3.0 or 0.4.0. MCP clients surfacing `serverInfo.version` saw the wrong version. Fix: read version from installed package.json at runtime. Ships in 0.4.1.
+
+**Lesson for future releases:** any change to the `files` allowlist in `package.aide-memory.json` must be cross-referenced against every `fs.readFileSync` / `require` at runtime in the published code. The hook dispatcher's handlers caught this at build time (via JSON import), but `settings.ts` wasn't in the refactor scope and was missed. Added `scripts/verify-package.sh` checks in the history but none covered this specific pattern — worth adding a smoke-test step to CI that reads an arbitrary hook setting post-install.
 
 ---
 
