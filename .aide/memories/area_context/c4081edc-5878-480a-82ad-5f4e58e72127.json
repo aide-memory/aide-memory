@@ -1,0 +1,20 @@
+{
+  "uuid": "c4081edc-5878-480a-82ad-5f4e58e72127",
+  "layer": "area_context",
+  "what": "Validation O (dynamic stop hook 3→5→10) passed Apr 20 2026: 19 prompts in /tmp/aide-val-h resumed session confirmed Phase 1 (every 3) fires at prompts 3, 6, 9 and Phase 2 (every 5) fires at 14, 19 — exactly 5 apart from last Phase 1 fire. Implementation uses \"turns since last fire\" counter that resets after each fire, not modulo arithmetic. Phase 3 (every 10) not tested (needs 30+ prompts) but two-phase transition validates the schedule logic. Also incidentally validated H (auto-update): resumed session had restored hooks active (Stop, UserPromptSubmit, aide_remember PostToolUse all fired in debug log), proving Claude Code re-reads settings.json on resume.",
+  "why": "Two validation scenarios (H + O) confirmed in a single session. O is the last timing-dependent scenario. H was previously unclear about whether resume picks up updated hooks — now confirmed yes.",
+  "scope": "docs/validation/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "validation",
+    "phase-1"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T01:17:41.779Z",
+  "updated_at": "2026-04-21T01:17:41.779Z"
+}

@@ -1,0 +1,21 @@
+{
+  "uuid": "d3f0c6a3-a471-4ca9-9532-e03351a6f87d",
+  "layer": "area_context",
+  "what": "Binary migration's primary goal per user is SOURCE CODE PROTECTION, not distribution simplicity or hook consolidation. npm's model exposed source; user wants closed-source distribution. Plan §1 lists three goals as co-equal — user clarified source protection is the one that matters. Implication: if Bun compile hits blockers (better-sqlite3, signing, size), alternatives optimized for source protection are in scope — bytenode (V8 bytecode via normal npm, ~1 day, medium-high protection), obfuscated minified npm (~2 hours, low-med protection), Node SEA / pkg / nexe (similar to Bun), full Rust/Go rewrite (weeks, strong). None of the JS-to-binary approaches (Bun, SEA, pkg, bytenode) stop a determined reverse-engineer — all produce extractable artifacts; they stop casual inspection. Strong protection requires compiled native code (Rust/Go).",
+  "why": "User explicitly clarified this turn. The plan treats three goals as equal, but the user treats source protection as the driver. Future phase spawns need this to make correct tradeoffs — if Phase N hits a Bun-specific blocker, the question \"is the cost worth it?\" depends on whether source protection is THE goal (cheaper alternatives exist) or part of a bundle with distribution + hook consolidation (then Bun is the right all-in-one answer).",
+  "scope": "project",
+  "context_label": "binary migration motivation",
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "source-protection",
+    "strategic-priority"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T02:09:55.594Z",
+  "updated_at": "2026-04-21T02:09:55.594Z"
+}

@@ -1,0 +1,21 @@
+{
+  "uuid": "5a3fb8c9-e4c4-4752-8d24-4bc163d8e1f5",
+  "layer": "technical",
+  "what": "To produce `git diff <ref> -- <path>` for an untracked file you just wrote in a worktree, run `git add -N <path>` first (intent-to-add). Without it, git treats the working-tree file as if it doesn't exist relative to index and reports the ref's version as a pure deletion instead of a modification diff.",
+  "why": "Hit this while producing rebrand diffs: scope files existed on feature/phase-1 but not in my worktree's HEAD, so `git diff feature/phase-1 -- path` showed the file being \"deleted\" until I ran `git add -N`. This is the standard way to get review-ready unified diffs when your branch doesn't track the files yet.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "git",
+    "workflow",
+    "diffs"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T21:26:49.322Z",
+  "updated_at": "2026-04-20T21:26:49.322Z"
+}

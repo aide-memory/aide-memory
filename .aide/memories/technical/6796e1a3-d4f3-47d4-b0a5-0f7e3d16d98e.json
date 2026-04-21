@@ -1,0 +1,20 @@
+{
+  "uuid": "6796e1a3-d4f3-47d4-b0a5-0f7e3d16d98e",
+  "layer": "technical",
+  "what": "Claude Code hook config is read once at session start — settings.json changes mid-session don't activate new hooks in that session. Therefore `autoUpdateIfNeeded()` in the MCP server follows a \"heal on first run, works on second run\" pattern: the file gets rewritten correctly when the stale session launches, but the restored hooks only become active on the *next* Claude Code session in that directory. This is a Claude Code platform limitation, not an aide-memory bug. Validating auto-update (scenario H) requires two sessions: session 1 triggers the rewrite, session 2 confirms the restored hooks fire.",
+  "why": "During U3/H validation I incorrectly called H \"passed\" after seeing the file diff, without acknowledging that the hooks weren't active in the session that triggered the update. User rightly pushed back — this is a real two-step validation that needs both sessions to prove end-to-end. Documenting so future sessions don't make the same shortcut.",
+  "scope": "src/memory/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "validation",
+    "hooks"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T21:00:48.218Z",
+  "updated_at": "2026-04-20T21:00:48.218Z"
+}

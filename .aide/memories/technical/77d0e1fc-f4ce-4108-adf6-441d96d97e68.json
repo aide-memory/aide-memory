@@ -1,0 +1,22 @@
+{
+  "uuid": "77d0e1fc-f4ce-4108-adf6-441d96d97e68",
+  "layer": "technical",
+  "what": "better-sqlite3 fails at runtime in Bun-compiled binaries. Symptom: `Could not find module root given file: \"/$bunfs/root/<binary>\". Do you have a package.json file?` thrown from `bindings` package's `getRoot()`. Root cause: the `bindings` npm package (used by better-sqlite3 to locate its .node binding) walks the physical filesystem up to find a package.json — Bun's /$bunfs/ virtual FS has none. Bun compile bundles the code fine; it's the runtime dlopen lookup that fails. Confirmed workaround: `bun:sqlite` (built-in, no N-API bindings) compiles + runs cleanly. 90%+ API-compatible for the aide-memory operations (prepare/all/get/run/iterate, pragma, close, transactions). Sidecar .node patching is fragile and not recommended.",
+  "why": "Phase 1 spike confirmed this. Any future spawn trying to compile aide-memory with Bun will hit this exact error. Pre-recording the root cause + confirmed fallback saves hours of diagnosis.",
+  "scope": "src/memory/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "bun-compile",
+    "better-sqlite3",
+    "native-bindings"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T02:01:09.832Z",
+  "updated_at": "2026-04-21T02:01:09.832Z"
+}

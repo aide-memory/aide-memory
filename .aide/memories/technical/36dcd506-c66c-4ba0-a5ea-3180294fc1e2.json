@@ -1,0 +1,22 @@
+{
+  "uuid": "36dcd506-c66c-4ba0-a5ea-3180294fc1e2",
+  "layer": "technical",
+  "what": "On Claude Code Stop hooks, `systemMessage` is dropped when `decision:\"approve\"`. It is only delivered to the agent/user when paired with `decision:\"block\"`. This means you cannot use `{\"decision\":\"approve\",\"systemMessage\":\"...\"}` as a non-blocking way to nudge the agent at turn end — the message goes nowhere. Confirmed by the EmotionPulse plugin author in closed issue https://github.com/anthropics/claude-code/issues/43478. Implication: any Stop-hook-driven prompt requires `decision:\"block\"`, which is what causes the \"Stop hook returned blocking error\" terminal label. There is no documented workaround — the `asyncRewake` undocumented field (see memory id 111) may be the escape hatch.",
+  "why": "Non-obvious platform rule. Without this memory, future sessions will waste time re-trying the `approve + systemMessage` pattern when exploring Stop hook UX. Documented by the plugin community but not in official Claude Code docs.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "claude-code",
+    "stop-hook",
+    "platform-constraint"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T21:20:55.979Z",
+  "updated_at": "2026-04-20T21:20:55.979Z"
+}

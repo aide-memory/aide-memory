@@ -720,3 +720,76 @@ function isOlderVersion(a: string, b: string): boolean {
   }
   return false; // equal
 }
+
+/**
+ * Ingest memories from `.aide/pending-memories.jsonl` into the store.
+ * Written by the correction-detection fallback when MCP was unavailable.
+ * On success, the file is archived to `pending-memories.jsonl.imported-{ts}`
+ * so users can audit what was imported. Malformed lines are kept in the
+ * original file. Returns count of successfully imported memories.
+ */
+export function ingestPendingMemories(projectRoot: string, store: MemoryStore): number {
+  const file = path.join(projectRoot, '.aide', 'pending-memories.jsonl');
+  if (!fs.existsSync(file)) return 0;
+
+  let raw: string;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch {
+    return 0; // unreadable — skip silently
+  }
+
+  const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+  if (lines.length === 0) {
+    // Empty file — just remove it
+    try { fs.unlinkSync(file); } catch { /* non-fatal */ }
+    return 0;
+  }
+
+  let imported = 0;
+  const failed: string[] = [];
+
+  for (const line of lines) {
+    try {
+      const p = JSON.parse(line);
+      // Map the fallback-file shape (`content`) to CreateMemory (`what`).
+      const what = p.what ?? p.content;
+      if (!p.layer || !what) {
+        failed.push(line);
+        continue;
+      }
+      store.add({
+        layer: p.layer,
+        what,
+        why: p.why,
+        scope: p.scope ?? undefined,
+        context_label: p.context_label,
+        contributor: p.contributor,
+        tags: Array.isArray(p.tags) ? p.tags : undefined,
+        source: p.source ?? 'hook',
+        shared: typeof p.shared === 'boolean' ? p.shared : undefined,
+        priority: p.priority,
+        generated_by: p.generated_by,
+      });
+      imported++;
+    } catch {
+      failed.push(line);
+    }
+  }
+
+  // Archive the original file so we don't re-import it.
+  if (imported > 0) {
+    const archive = `${file}.imported-${Date.now()}`;
+    try { fs.renameSync(file, archive); } catch { /* non-fatal */ }
+  }
+
+  // If any lines failed to parse/validate, keep them for the user to inspect.
+  if (failed.length > 0) {
+    try { fs.writeFileSync(file, failed.join('\n') + '\n', 'utf8'); } catch { /* non-fatal */ }
+  } else if (imported === 0) {
+    // Nothing imported and nothing failed — treat file as empty/garbage, remove.
+    try { fs.unlinkSync(file); } catch { /* non-fatal */ }
+  }
+
+  return imported;
+}

@@ -1,0 +1,23 @@
+{
+  "uuid": "8b0b394a-c482-4c33-854c-93269ca60653",
+  "layer": "technical",
+  "what": "Binary migration — canonical plan location + version decision (2026-04-20):\n\n**Canonical plan** (authoritative, supersedes the other two):\n`/Users/meky/code/aide-v0/.claude/worktrees/sharp-chebyshev-4a0dce/docs/specs/BINARY_MIGRATION_PLAN.md`\n\n**Source plans** (read-only reference for technical detail where canonical plan points at them):\n- Primary (phase structure, exit criteria format): `/Users/meky/code/aide-v0/docs/specs/BINARY_MIGRATION_PLAN.md` — uncommitted on `feature/phase-1` worktree\n- Technical-deep (compile targets, hook subcommand contracts, regression validation §7): `/Users/meky/code/aide-v0/.claude/worktrees/zealous-burnell-3f404e/docs/specs/BINARY_MIGRATION_PLAN.md`\n\n**Version decision:** 0.1.1 (current) → 0.2.0 (first binary release, published PARALLEL to 0.1.1) → 0.3.0 (any future breaking change). Primary plan's versioning wins — spawned plan's \"0.2.x → 0.3.0\" is rejected because there is no intermediate 0.2.x node version to migrate from.\n\n**Branch:** implementation lives on `feature/binary` branched from `feature/phase-1`. Do NOT merge back to `feature/phase-1` until Phase 6 regression validation passes.",
+  "why": "Plan location + versioning decision are now in the plan header + §8 Versioning. Demoting to normal.",
+  "scope": "docs/specs/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "plan-location",
+    "versioning",
+    "0.2.0",
+    "feature-binary"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T22:02:10.715Z",
+  "updated_at": "2026-04-20T23:07:58.606Z"
+}

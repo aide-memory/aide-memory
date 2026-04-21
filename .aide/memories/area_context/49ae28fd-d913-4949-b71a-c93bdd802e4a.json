@@ -1,0 +1,21 @@
+{
+  "uuid": "49ae28fd-d913-4949-b71a-c93bdd802e4a",
+  "layer": "area_context",
+  "what": "BINARY_MIGRATION_PLAN.md §7.1 / §0 references \"src/cli/commands/init.ts\" for --scan removal, but the actual aide-memory init command lives at src/cli/commands/memory/init.ts. The top-level src/cli/commands/init.ts is the legacy AIDE indexer init and never had --scan. Any future phase spawn reading the plan should apply it to src/cli/commands/memory/init.ts (and the CLI registration in src/cli/aide-memory.ts).",
+  "why": "Phase 0 hit this; subsequent phases reading the same canonical plan (sharp-chebyshev-4a0dce) will hit it too. Pre-recording the correct path saves a re-investigation.",
+  "scope": "src/cli/**",
+  "context_label": "binary migration plan interpretation",
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "plan-inaccuracy",
+    "cli"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T01:21:51.876Z",
+  "updated_at": "2026-04-21T01:21:51.876Z"
+}

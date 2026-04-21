@@ -1,0 +1,21 @@
+{
+  "uuid": "d3014e95-6793-48c3-b3e9-fe7e6fbd8a15",
+  "layer": "technical",
+  "what": "package.aide-memory.json is MISSING `chalk` and `fast-glob` as dependencies, but both are imported at runtime: chalk throughout src/cli/commands/memory/*.ts, fast-glob in src/memory/scopes.ts. The live aide-memory@0.1.1 npm package likely crashes on a clean install where the user's node_modules doesn't transitively provide them. Bun compile bundles both into the binary, so this isn't a binary-migration blocker, but it IS a live bug in the current Node-distribution path. Fix: add `\"chalk\": \"^4.1.2\"` and `\"fast-glob\": \"^3.3.3\"` to `package.aide-memory.json` dependencies before the next publish.",
+  "why": "Discovered during Phase 1 dep audit. Important for anyone maintaining the npm publish path independent of the binary migration — could be affecting real users on 0.1.1.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "npm-packaging",
+    "aide-memory-scope",
+    "bug"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T02:01:15.410Z",
+  "updated_at": "2026-04-21T02:01:15.410Z"
+}

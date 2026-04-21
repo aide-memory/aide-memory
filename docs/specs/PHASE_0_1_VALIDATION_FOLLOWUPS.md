@@ -270,3 +270,78 @@ All items implemented as of April 13, 2026. Actual order diverged from plan -- i
 - Cleanup command at `src/cli/commands/memory/cleanup.ts`
 - Uses 7d default, configurable via `--older-than`
 - Safe to remove active session file — session will re-block on next read and re-populate via aide_recall (no data loss)
+
+---
+
+## New Follow-up: Hooks on File Creation (Write tool)
+
+**Problem:** When a user creates a new file in a package/directory that already has scoped memories, the agent has no visibility into the context for that area. Read and Edit hooks check for directory-scoped memories, but Write (creating a new file) doesn't surface the memories for the directory being written into. This creates a gap: the agent can create files that violate area conventions without ever seeing the scoped memories.
+
+**Scenarios where this matters:**
+- Agent creates a new component in `src/components/` without seeing scoped conventions (skeleton loading, naming patterns, prop shapes)
+- Agent scaffolds a new API route in `src/api/` without seeing scoped decisions (camelCase, requestId, rate limiting)
+- Agent adds a test file in `tests/auth/` without knowing the shared auth mock setup
+
+**Proposed behavior:**
+- On Write to a new file path, look up memories scoped to the parent directory(ies)
+- If scoped memories exist and IDs aren't tracked: BLOCK or SOFT with the standard "N memories for this directory" nudge
+- Reuse the ID-based tracking so if directory memories were already seen via a sibling Read/Edit, no re-block
+- Consider: soft-only for Write (less disruptive) vs block like Read/Edit (stronger guarantee)
+
+**Open questions:**
+- Does Write currently fire pre-edit-recall.sh? (Settings show Write matcher uses pre-edit-recall.sh already — but behavior for new-file paths may differ since the file doesn't exist yet)
+- Should this extend beyond Write to other file-creation patterns (Bash `touch`, `mkdir`, framework scaffolding commands)?
+- How to handle path resolution when the target file doesn't exist yet (scope matching should still work on parent dirs)
+
+**Implementation notes:**
+- `scripts/hooks/pre-edit-recall.sh` already handles Write matcher per `.claude/settings.json`
+- Need to verify it correctly resolves parent-directory scoped memories for paths that don't yet exist
+- Validation scenario needed: create new file in a directory with scoped memories, verify block fires
+
+---
+
+## New Follow-up: Mid-Session Project-Wide Memory Invisibility
+
+**Problem:** Project-wide memories (preferences/guidelines with no scope) that are created mid-session are invisible to the rest of that same session. Discovered in U3 validation (Apr 20, 2026):
+
+1. Agent stored preference #106 ("add contract comment above every function") in Session A as project-wide (no scope)
+2. Same agent, later in Session B (continuation), was asked to add `hasExpired()` to `src/auth/jwt.ts`
+3. Agent created the function with NO contract comment — never saw memory #106
+4. Debug log: `recalled 0x` for #106; tracking file shows IDs [87–105] but NOT 106
+5. Pre-edit-recall fired but produced no block because:
+   - Memory #106 is project-wide → path-based blocking doesn't catch it (scope-gated)
+   - `src/auth/**` scoped memories already tracked → no block from those
+   - SessionStart injection only runs on new sessions → #106 never got injected into current session
+
+**Two potential approaches:**
+
+**Approach 1: Inject on storage**
+When `aide_remember` stores a project-wide preference/guideline, append a "new preference stored" nudge into the tool response the agent sees. This keeps the new memory in the agent's immediate context for the rest of the session without requiring a session restart. Simple, low-cost. Downside: only works while the agent is actively processing tools — doesn't help if the agent is just in a conversational turn.
+
+**Approach 2: Track on storage**
+On `aide_remember` for project-wide memories, write the new ID directly into the session's `recalled-ids` tracking file immediately. This prevents redundant blocks if the agent later calls `aide_recall`, but doesn't solve the surfacing problem (ID-based blocking is scope-gated — project-wide IDs never block). Would need to pair with Approach 1 or with broader injection into pre-tool context. On its own, insufficient.
+
+**Recommended:** Approach 1. Project-wide memories inherently depend on injection (SessionStart + in-conversation) rather than path-scoped blocking. Extending injection to "just-stored" is the natural fit.
+
+**Validation plan:**
+- Session C (fresh Claude Code session after #106 was stored) — verify SessionStart injection surfaces #106 and a new `hasExpired`-style function gets the contract comment
+- Confirms whether the gap is limited to same-session continuation (as diagnosed) vs. a broader injection problem
+
+---
+
+## Resolved: Pending Memory Import on MCP Recovery (Apr 20, 2026)
+
+**Problem:** `.aide/pending-memories.jsonl` (written by `detect-correction.sh` fallback when MCP is unavailable) had no import mechanism. The file was write-only — orphaned memories never reached the store. PHASE_0_1_SPEC.md:1012 (step J6) assumed an import existed; it didn't.
+
+**Fix shipped:** `ingestPendingMemories(projectRoot, store)` added to `src/memory/init.ts` and wired into `src/memory/server.ts` `startServer()` right after `MemoryStore` construction.
+
+On every MCP server startup:
+1. Reads `.aide/pending-memories.jsonl`
+2. Parses each JSONL line, maps `content`→`what` for schema compatibility, calls `store.add()`
+3. On successful import, archives the file to `pending-memories.jsonl.imported-{timestamp}` (audit trail — not deleted)
+4. Malformed lines kept in a regenerated `pending-memories.jsonl` so the user can inspect
+5. Prints `aide-memory: imported N pending memor(y|ies) from .aide/pending-memories.jsonl` to stderr
+
+**Validated:** Session J end-to-end (see `docs/validation/PHASE_1_RESULTS.md` J1–J6).
+
+**Housekeeping follow-on:** extend `aide-memory cleanup` (or SessionStart TTL cleanup) to sweep old `*.imported-*` archive files after ~7 days. Not urgent — files are tiny, but the archive count will grow if users hit MCP outages frequently.

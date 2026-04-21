@@ -1,0 +1,20 @@
+{
+  "uuid": "f71cbc08-bbb7-4603-8127-1d48c203d736",
+  "layer": "preferences",
+  "what": "Don't pad time estimates with safety multipliers. When I said \"4-8 hours\" for the better-sqlite3 → bun:sqlite shim (Option A), the user pushed back and the actual scope was 45-90 minutes: 5 source files, a 20-line shim, small shared API surface (prepare/exec/pragma/transaction/close). Pattern: before quoting a range, grep the actual blast radius (files touched, API calls affected), then estimate. Err toward the tight end; don't reflexively double-up for \"unknowns\" unless there's a specific named unknown.",
+  "why": "Direct user correction this turn. Persisting so future me doesn't reflexively pad — the user consistently wants tight numbers backed by concrete blast-radius data.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "meky",
+  "tags": [
+    "estimates",
+    "communication"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T02:02:36.295Z",
+  "updated_at": "2026-04-21T02:02:36.295Z"
+}

@@ -1,0 +1,20 @@
+{
+  "uuid": "415f5648-90c1-42ba-b456-3dc00d979a2e",
+  "layer": "area_context",
+  "what": "U1 validation finding (Apr 20 2026): All 7 scoped memories for src/api/routes.ts were tracked and available to the agent (ids 87–102 covered via earlier recalls on sibling files). Agent followed 6/7 conventions when implementing DELETE /users/:id — cleanly missed rate-limit (#92 rateLimiter('user', 50)). This surfaces an honest product signal: aide-memory delivers context, but agents can still ignore individual memories. Possible causes: rate-limit interpreted as middleware-layer concern, stub implementation bias, or memory wording implying middleware enforcement. Validates the system works (context surfaced via ID-based blocking) while highlighting a real limit of the value prop.",
+  "why": "User ran U1 DELETE endpoint scenario. Memory system delivered all relevant memories, but agent still missed one convention. This is a validation signal to include in PHASE_1_RESULTS and a possible Phase 2 follow-up (can we make critical memories harder to ignore? agent-side compliance check?).",
+  "scope": "docs/validation/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "validation",
+    "phase-1"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T20:14:19.976Z",
+  "updated_at": "2026-04-20T20:14:19.976Z"
+}

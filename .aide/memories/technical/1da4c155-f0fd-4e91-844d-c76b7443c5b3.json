@@ -1,0 +1,22 @@
+{
+  "uuid": "1da4c155-f0fd-4e91-844d-c76b7443c5b3",
+  "layer": "technical",
+  "what": "Configurable settings policy (DECIDED 2026-04-20): All settings listed in PHASE_0_1_SPEC.md (hook intensity, recall limits, injection per-layer, scope depth, etc.) must be user-configurable at launch — NO pro/free gating, NO `public: true/false` flag check, NO `pro: true/false` gate.\n\nImplementation:\n- Remove pro/public metadata from defaults.json (or ignore it in read-config.sh)\n- `aide-memory config <key> <value>` must work for every listed setting\n- Validate that changing each setting actually changes runtime behavior (not cosmetic)\n\nDrop from spec: \"Configurable hook intensity (Phase 2 pro feature)\" framing. All configurability is free/launch.",
+  "why": "User explicit decision on 2026-04-20. Spec framed configurability as Phase 2 pro feature — rejected. All settings must be exposed and functional at launch, with validation proving they actually alter behavior. Simplifies codepath (no gating logic) and aligns with open-source positioning.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "settings-framework",
+    "launch",
+    "no-pro-gate"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T20:41:11.246Z",
+  "updated_at": "2026-04-20T20:41:11.246Z"
+}

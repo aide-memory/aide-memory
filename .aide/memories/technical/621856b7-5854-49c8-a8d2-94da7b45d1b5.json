@@ -1,0 +1,23 @@
+{
+  "uuid": "621856b7-5854-49c8-a8d2-94da7b45d1b5",
+  "layer": "technical",
+  "what": "Claude Code v2.1.114 binary contains undocumented `asyncRewake`, `rewakeMessage`, and `rewakeSummary` fields in BashCommandHookSchema (settings.json hook config). `asyncRewake: true` \"runs the hook in background and wakes the model on exit code 2\". `rewakeSummary` (@internal) is the user-visible terminal label, defaulting to \"Stop hook feedback\" (NOT \"blocking error\"). `rewakeMessage` (@internal) is the prefix for the system-reminder sent to the model. Verified by extracting strings from /Users/meky/.local/share/claude/versions/2.1.114 — schema fields at offsets 158508–158511, 158532–158534; user-facing label \"Stop hook feedback\" at offsets 203427/203632. Possibly only wired for Teammate/Task hooks, not yet confirmed empirically for Stop. If it works for Stop, it's the cleanest fix for the \"Stop hook returned blocking error\" first-impression issue.",
+  "why": "Explored as part of BLOCK_ERRORS_UX_EXPLORATION.md. This is non-obvious (only found via binary string extraction), directly actionable for the primary hook UX problem, and could change across minor versions since @internal — so future sessions should re-verify before shipping.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "claude-code",
+    "ux",
+    "undocumented",
+    "stop-hook"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T21:20:16.292Z",
+  "updated_at": "2026-04-20T21:20:16.292Z"
+}

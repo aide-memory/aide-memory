@@ -1,0 +1,25 @@
+{
+  "uuid": "cf78ff49-4f83-4c45-9e6f-6a2e0a5e94b9",
+  "layer": "guidelines",
+  "what": "aide-memory's product model — three ORTHOGONAL axes (clarified after repeated confusion 2026-04-20):\n\n**Axis 1: Paid tier / feature gating = NO.**\nProduct is FREE. No paid tier exists. No feature gating by license. No pro vs free distinction.\n\n**Axis 2: Settings configurability = YES (fully public).**\nEvery setting in defaults.json is user-configurable via `aide-memory config`. No `public: true/false` metadata checks, no `pro: true/false` gates. Settings are transparent and adjustable.\n\n**Axis 3: Source code visibility = NO (proprietary, closed-source).**\nSource lives in private dev repo (`ahmedmmeky/aide-v0`). Public repo (`aide-memory/aide-memory`) only has curated README + LICENSE + release workflow + issue templates + binary release assets. Source is NOT open and NOT intended to become open. Binary migration extends this protection.\n\n**These three axes are INDEPENDENT.** Don't conflate:\n- \"No pro gating\" (Axis 1) ≠ \"Open source\" (Axis 3 not NO)\n- \"Configurable settings\" (Axis 2) ≠ \"Open source\" (Axis 3 not NO)\n- \"Source protection\" (Axis 3) ≠ \"Paid tier\" (Axis 1 not YES)\n\n**Positioning for external content:**\n- ✓ \"Free\" — accurate (Axis 1)\n- ✓ \"All features, no gates\" — accurate (Axis 1 + Axis 2)\n- ✓ \"Private, in your repo, not in cloud\" — accurate (memories are local/git-scoped)\n- ❌ \"Open source\" — WRONG (Axis 3)\n- ❌ \"Paid tier coming\" — WRONG (Axis 1)\n- ❌ \"Pro features unlocked\" — WRONG (Axis 1 + 2)\n\nComparable product model: Discord, Zoom (free + all features + closed source).\n\nMental check before writing any marketing copy or product justification: walk through all three axes. Don't let one axis's answer contaminate another.",
+  "why": "I made three cascading errors this session by conflating these orthogonal axes: (1) assumed no-pro-gating implied code protection off, (2) assumed source was public because public repo exists, (3) used \"free and open\" framing. All from failing to treat these as independent axes. Locking in the distinction prevents future sessions from repeating any permutation of the same mistake.",
+  "scope": "docs/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "product-model",
+    "positioning",
+    "free-vs-open",
+    "source-protection",
+    "pro-gating",
+    "mental-model",
+    "correction"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T22:27:53.259Z",
+  "updated_at": "2026-04-20T22:27:53.259Z"
+}

@@ -426,3 +426,156 @@ The block-once-then-soft approach (item 2) and directory prefix match fix (item 
 4. **Session-inject didn't track injected IDs** -- Memories injected at SessionStart weren't written to the tracking file, causing immediate re-blocks on files whose memories were already injected.
 5. **Directory trigger redundant with ID-based blocking** -- After implementing ID-based blocking, the directory trigger was redundant and sometimes conflicted. Removed entirely.
 
+---
+
+## U1–U3 Validation Results (Apr 20, 2026)
+
+Three user-centric scenarios from PHASE_0_1_SPEC section 12.3, run in `/tmp/aide-val` with 16 pre-seeded memories.
+
+### U1: Team Decisions — `6/7` conventions applied
+
+**Prompt:** *"Add a DELETE /users/:id endpoint to src/api/routes.ts"*
+
+All 7 scoped memories for routes.ts were in session tracking (ids 87–102, covered via earlier Reads on sibling files). ID-based blocking correctly returned SILENT for the Edit — no gap in delivery.
+
+| Memory | Followed |
+|---|---|
+| [96] Epoch ms timestamps (`Date.now()`) | ✅ |
+| [97] Soft delete, never hard DELETE | ✅ |
+| [90] camelCase keys | ✅ |
+| [91] async/await | ✅ |
+| [100] Functions <30 lines | ✅ (13 lines) |
+| [98] requestId on error responses | ✅ (memory literally says "error responses") |
+| [92] Rate limit `rateLimiter('user', 50)` | ❌ |
+
+**Debug log:** `/Users/meky/.claude/debug/0850e190-e6ed-4378-ad45-4fdfb8d584e0.txt`
+
+**Key signal:** System delivered all relevant memories; agent judgment still allowed one miss. Documents a real limit of the value prop — **delivery ≠ compliance**. Captured in memory #102 for cross-session context. Possible Phase 2 follow-up: surface high-priority memories more forcefully (agent-side compliance check, stronger framing in block message).
+
+### U2: Correction Learning Loop — PASS end-to-end
+
+**Session A:** Asked for `GET /orders/:id`. Agent implemented with bare object return.
+
+User correction: *"no, for GET endpoints we always return { data, meta } wrapped — never the bare object"*
+
+- `20:17:26.453` UserPromptSubmit flagged correction
+- `20:17:26.472` Agent called `aide_remember` → stored id 105, scoped `src/api/**`
+- `20:17:31.446` Stop hook fired with **standard message** (no "correction wasn't stored" prefix) — confirms PostToolUse `track-remember.sh` cleared the flag
+
+**Session B (continuation):** Asked for `GET /products/:id`.
+
+- `20:18:51.200` PreToolUse block: *"1 memories... Call aide_recall({ids: [105]})"* — proves freshly-stored correction surfaced via ID-based blocking
+- `20:18:53.220` Agent called `aide_recall`
+- `20:19:15.889` routes.ts written with `{ data: product, meta: { requestId } }` — exact envelope applied
+
+**All three phases validated:** detect → store → clear flag → recall → apply. Full correction loop works across sessions.
+
+### U3: Behavioral Preferences — PASS across fresh sessions, exposes mid-session gap
+
+**Session A:** User stated preference naturally (not a correction): *"When you add new functions in this project, always include a one-line comment above them describing the public contract..."*
+
+- Agent correctly detected preference (not correction), proactively called `aide_remember`
+- Stored as id 106, layer=preferences, contributor=test-user, **no scope** (project-wide)
+- Agent retroactively added contract comments to its own newly-added functions (deleteUser, getOrder)
+
+**Session B (same agent continuation):** Asked to create `src/auth/jwt.ts` with `hasExpired(token)`.
+
+- Agent created the file **without a contract comment** — memory #106 never surfaced
+- Tracking file missing id 106: `ids|87,88,89,90,91,92,93,94,96,97,98,99,100,101,105`
+- Pre-edit-recall fired (line 612) but no block — project-wide scope isn't caught by path-based blocking, and SessionStart injection only runs on new sessions
+
+**Session C (fresh session, ID `4fbf64b9`):** Asked for `verifySignature(token, publicKey)` in `src/auth/jwt.ts`.
+
+- SessionStart injection at `20:32:14.485` included memory #106 as the first bullet under `## Session Preferences`
+- Agent implemented with exact compliance: `// Verifies an RS256 JWT's signature against a public key; returns true if valid, false if malformed or mismatched. No side effects.`
+
+**Gap identified:** Project-wide preferences/guidelines created mid-session stay invisible to that same session. Path-based blocking is scope-gated; SessionStart injection is start-of-session-only. Fix approach noted in `docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md` → "Mid-Session Project-Wide Memory Invisibility" (Approach 1 — inject on storage).
+
+### Summary
+
+| Scenario | Outcome |
+|---|---|
+| U1 | 6/7 pass — delivery works, agent judgment is the ceiling |
+| U2 | Full loop validated end-to-end |
+| U3 | Fresh-session behavior works; same-session gap documented as follow-up |
+
+Two new Phase 1 follow-ups filed during these runs:
+1. **Hooks on file creation (Write tool)** — verify parent-dir scoped memories surface when creating new files
+2. **Mid-session project-wide memory invisibility** — project-wide memories stored mid-session don't reach the current session
+
+---
+
+## H, O, J Validation Results (Apr 20, 2026)
+
+### H: Auto-update on MCP Server Start — PASS (two-session pattern)
+
+**Setup:** fresh project `/tmp/aide-val-h`, ran `aide-memory init`, then corrupted `.claude/settings.json` to simulate stale v0.1.5 state:
+- Removed 6 hook matchers (Write, Grep, Glob, aide_recall PreToolUse, aide_update/aide_forget/aide_search PostToolUse)
+- Added `_userCustomSetting: "preserve-me-across-update"` to verify user keys survive
+
+**Session 1:** started Claude Code in the corrupted project. `autoUpdateIfNeeded()` fired on MCP startup:
+- `_aideMemoryVersion` bumped 0.1.5 → 0.2.0 ✅
+- All 6 missing hook matchers restored ✅
+- `_userCustomSetting` preserved ✅
+- The restored hooks were NOT active in Session 1 itself — Claude Code loads `settings.json` once at session start, so the file was rewritten mid-session but the in-memory hook registry was still the stale version.
+
+**Session 2 (resume of Session 1):** confirmed restored hooks fire — Stop, UserPromptSubmit, PostToolUse `aide_remember` all visible in debug log. Resume re-reads `settings.json`, so the updated hooks became live on the next session entry.
+
+**Key finding captured in memory #108:** auto-update follows a "heal on first run, works on second run" pattern. Validating H fully requires two sessions.
+
+### O: Dynamic Stop Hook (3→5→10) — PASS (two phases validated)
+
+**Setup:** 19 sequential prompts in the resumed `/tmp/aide-val-h` session.
+
+| Phase | Expected | Observed |
+|---|---|---|
+| Phase 1 (turns 1–9, every 3) | fires at turns 3, 6, 9 | ✅ exact |
+| Phase 2 (turns 10–29, every 5) | fires 5 turns after last Phase 1 fire | ✅ fired at 14 and 19 |
+| Phase 3 (turns 30+, every 10) | — | Not tested (would need 30+ prompts) |
+
+**Implementation detail learned:** the counter tracks "turns since last fire" and resets after each fire, not `count % N == 0`. Captured in memory #126.
+
+### J: MCP Server Unavailable — PASS (all 6 steps after implementing the missing import)
+
+**Setup:** broke `/tmp/aide-val-h/.mcp.json` by pointing the command to a non-existent path. Opened a fresh Claude Code session.
+
+| Step | Expected | Result |
+|---|---|---|
+| J1 | MCP server fails to start | ✅ banner: "1 MCP server failed · /mcp" |
+| J2 | Session remains usable (hooks are bash, don't need MCP) | ✅ agent responsive, no hang |
+| J3 | Correction triggers UserPromptSubmit | ✅ additionalContext injected, agent attempted `aide_remember` |
+| J4 | Agent falls back to `.aide/pending-memories.jsonl` | ✅ file written with valid memory JSON |
+| J5 | Agent notifies user to start MCP | ✅ "Start the MCP server and it'll be picked up" |
+| J6 | Pending memories ingested on MCP recovery | ✅ *after* implementing `ingestPendingMemories()` |
+
+**J6 gap + fix (Apr 20, 2026):** the spec called for pending memories to be imported on MCP recovery, but the code was never written. Searched entire codebase — only references to `pending-memories.jsonl` were `.gitignore`, `init.ts` gitignore list, and the `detect-correction.sh` write instruction. No reader. Memory #131 captured the gap.
+
+Implemented `ingestPendingMemories()` in `src/memory/init.ts` and wired into `startServer()` in `src/memory/server.ts`. On every MCP startup:
+1. Reads `.aide/pending-memories.jsonl` if it exists
+2. For each line, maps schema (`content` → `what`) and calls `store.add()`
+3. On successful import, renames the file to `pending-memories.jsonl.imported-{timestamp}` (audit trail, not deleted)
+4. Malformed lines kept in the original file so the user can inspect
+5. Prints `aide-memory: imported N pending memor(y|ies) from .aide/pending-memories.jsonl` to stderr
+
+**Validated by manually spawning a fresh MCP server against the test project.** stderr printed the import message, `aide-memory list --layer preferences` confirmed the "Use spaces for indentation" memory landed as ID `[3]`, and `.aide/` contained the archive file (no plain `pending-memories.jsonl`).
+
+**Key lifecycle insight captured in memory #135:** the aide-memory MCP server is not a persistent daemon — it's a stdio child process Claude Code spawns per session. Recovery from MCP outages is automatic: any new session with a healthy `.mcp.json` triggers `ingestPendingMemories()` on startup and catches up whatever accumulated during the outage.
+
+### Summary
+
+| Scenario | Outcome |
+|---|---|
+| H | PASS — auto-update rewrites settings correctly, restored hooks active on next session |
+| O | PASS — Phase 1 and Phase 2 transitions behave per schedule; Phase 3 untested (30+ prompts needed) |
+| J | PASS — full graceful-degradation loop works end-to-end after adding `ingestPendingMemories()` |
+
+### Remaining Scenarios
+
+- **K** — Plan persistence across sessions (organic, not pre-seeded)
+- **L** — Multiple corrections in one session, all recalled next
+- **M** — Scope exclusion precision (no cross-directory leakage)
+- **I** — `.ignore` grep exclusion
+- **init --scan** — importing generated memories from code analysis
+- **Settings framework** — change defaults, verify behavior actually shifts
+- **IDB-1 through IDB-9** — ID-based blocking scenarios (many incidentally covered by A–G/U1–U3)
+

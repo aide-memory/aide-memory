@@ -1,0 +1,21 @@
+{
+  "uuid": "b49a9bea-c378-4409-94e9-23650978c4f6",
+  "layer": "technical",
+  "what": "aide-memory npm publish is scoped via package.aide-memory.json (NOT root package.json). Its `files` field includes only: dist/memory/*.js, dist/cli/aide-memory.js, dist/cli/commands/memory/, scripts/hooks/, src/templates/rules/, README, LICENSE. Its `dependencies` are only 4: better-sqlite3, commander, @modelcontextprotocol/sdk, zod. The root package.json (name: aide-v0) still lists old AIDE deps (tree-sitter-javascript, tree-sitter-typescript, ts-morph, chokidar, marked, marked-terminal, express, ws, axios, web-tree-sitter) and bins (aide-legacy: dist/cli/index.js) — those are dev-only and NOT what ships. scripts/build.sh does the publish build (tsc + copy templates + copy hooks). Binary migration target must match package.aide-memory.json scope, NOT the root package.json scope.",
+  "why": "Critical scoping fact for the binary migration — elevated to always-inject per user. The plan and my earlier concerns conflated the dev monorepo's full codebase with what actually ships as aide-memory. Real scope: 4 deps, memory module + aide-memory CLI + memory CLI commands only. Every binary-migration phase spawn must see this immediately at session start.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "npm-packaging",
+    "aide-memory-scope"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T01:48:30.724Z",
+  "updated_at": "2026-04-21T01:51:24.398Z"
+}

@@ -1,0 +1,21 @@
+{
+  "uuid": "0fb6cabc-b128-4057-91c1-08b1ba8246e9",
+  "layer": "technical",
+  "what": "src/orchestration/__tests__/toolExecutor.test.ts has 15 pre-existing failures on feature/phase-1@ee3d006 (find_symbol, get_symbol_detail, get_references, get_dependencies, read_file_outline, read_file). Requires tree-sitter graph indexing that isn't set up by default. Unrelated to memory/CLI code — memory+CLI tests are 434/434 passing. Do not panic; do not investigate as a regression during binary migration phases.",
+  "why": "Discovered in Phase 0 baseline run on feature/binary. Any future spawn running `npm test` on this branch family will see the same 15 failures and waste time investigating. Flagging as known-state so future phases skip straight to memory/CLI test verification.",
+  "scope": "src/orchestration/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "tests",
+    "pre-existing-failure",
+    "orchestration"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T01:21:46.924Z",
+  "updated_at": "2026-04-21T01:21:46.924Z"
+}

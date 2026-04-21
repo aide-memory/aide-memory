@@ -1,0 +1,22 @@
+{
+  "uuid": "d666be71-ac1d-4b3e-b45e-e44e71465d2f",
+  "layer": "guidelines",
+  "what": "Claude Code is validated end-to-end in PHASE_1_RESULTS.md (sessions A-G); Cursor is NOT. PHASE_0_1_SPEC marks P1.9 Cursor Validation and P1.17 5-scenarios-in-Cursor as DEFERRED (\"awaiting user Cursor reactivation\"). External copy should claim Cursor support but hedge: \"Claude Code is validated end-to-end; Cursor is supported via generated `.cursor/` config and the same MCP protocol, with tool-specific UX still being verified.\"",
+  "why": "User rule during the external-content rebrand was \"claim Claude Code AND Cursor as supported tools.\" But the spec is explicit that Cursor validation hasn't run. Leaving the claim un-hedged would overclaim. This guideline stays in effect until P1.9/P1.17 land — once Cursor is validated in live scenarios, the hedge can be dropped.",
+  "scope": "docs/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "marketing",
+    "accuracy",
+    "cursor",
+    "validation"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T21:26:55.973Z",
+  "updated_at": "2026-04-20T21:26:55.973Z"
+}

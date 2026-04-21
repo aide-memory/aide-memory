@@ -1,0 +1,20 @@
+{
+  "uuid": "c63b494f-37b5-44bf-8e13-6721df0d4626",
+  "layer": "technical",
+  "what": "Gap confirmed twice Apr 20 2026: `.aide/pending-memories.jsonl` has NO import/replay mechanism. Verified by (1) grep of whole codebase — only .gitignore + init.ts gitignore list + detect-correction.sh write instruction, and (2) direct read of src/memory/server.ts:375-419 startServer() flow which has no ingestion step between autoUpdateIfNeeded and MCP transport connect. `aide-memory sync import` only processes .aide/memories/**/*.json (canonical memory files) — pending-memories.jsonl has a different schema (content/generated_by fields) and is NOT covered. The spec PHASE_0_1_SPEC.md:1012 line J6 \"Verify pending memories can be imported\" was NEVER implemented. Follow-up: auto-import on MCP server startup — extend autoUpdateIfNeeded or add sibling ingestPendingMemories() that reads the jsonl, maps schema (content→what, generated_by object→author_type/tool), calls store.add(), then deletes or archives the file. Critical because J4 validation proved agent DOES write valid memories there when MCP is down — those are real user corrections being silently orphaned.",
+  "why": "User asked to double-check whether import exists. Did second thorough check via grep + direct server.ts read. Gap confirmed — no implementation anywhere. J1-J5 passed in live validation on /tmp/aide-val-h but J6 blocked by this missing code.",
+  "scope": "src/memory/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "validation",
+    "hooks"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T01:52:40.673Z",
+  "updated_at": "2026-04-21T01:56:16.860Z"
+}

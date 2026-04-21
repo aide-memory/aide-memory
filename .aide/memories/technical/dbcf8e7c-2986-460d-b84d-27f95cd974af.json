@@ -1,0 +1,24 @@
+{
+  "uuid": "dbcf8e7c-2986-460d-b84d-27f95cd974af",
+  "layer": "technical",
+  "what": "Repo topology + source protection model (CORRECTED 2026-04-20):\n\n**Private dev repo** (full source, never public): `ahmedmmeky/aide-v0` on GitHub (clone at `/Users/meky/code/aide-v0`). Contains full source, docs, specs, internal plans, validation results.\n\n**Public distribution repo** (curated, no source): `aide-memory/aide-memory` on GitHub. Contains ONLY:\n- `README.md` (from private `docs/PUBLIC_README.md`)\n- `LICENSE`\n- `.github/workflows/release.yml`\n- Issue templates\n- Post-binary: binary assets attached to release tags\n\n**Source code is NOT in the public repo and is NOT intended to ever be.** Product is free but NOT open source — closed-source proprietary code, free-as-in-beer distribution.\n\n**Binary migration IS for source protection.** Purposes (all three are core, not side-effects):\n1. Source code protection — compiled binary doesn't reveal source. Reinforces the existing private-source model.\n2. Distribution simplicity — single binary, zero Node runtime requirement\n3. Hook logic consolidation — bash+node glue disappears\n\n**What's OUT of scope (NOT reasons for binary):**\n- License verification skeleton / paid tier (there is no paid tier)\n- Feature gating infrastructure (all settings remain public and user-configurable)\n\n**CRITICAL for external-content positioning (memory 107):** Do NOT describe aide-memory as \"open source\" in any marketing copy. Source is proprietary. Acceptable framings: \"free,\" \"free and private to your team,\" \"free, memories live in your git repo,\" \"no cloud dependency.\" Prohibited: \"open source,\" \"fully open,\" \"source available,\" anything implying source visibility.\n\n**CI for public-repo release:** `.github/workflows/release.yml` lives in public repo but needs private source to build. Current mechanism (confirm before binary migration implementation): likely clones private repo via GitHub Actions token. Binary build pipeline must preserve this access pattern + ensure binary artifacts (not source) get uploaded to public repo's release tags.",
+  "why": "User corrected me TWICE on source visibility: (1) source is not public, (2) binary migration IS for source protection. Previous version of this memory said \"binary does not introduce new source-hiding\" — wrong, binary extends and reinforces source protection as a primary purpose. This is the third correction on related topics; must be locked in canonically to prevent further drift.",
+  "scope": "docs/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "repo-topology",
+    "public-repo",
+    "private-repo",
+    "source-visibility",
+    "correction",
+    "positioning"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T22:25:09.116Z",
+  "updated_at": "2026-04-20T22:26:44.798Z"
+}

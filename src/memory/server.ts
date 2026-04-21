@@ -402,6 +402,17 @@ export async function startServer(projectPath: string): Promise<void> {
 
   const store = new MemoryStore({ projectRoot: projectPath });
 
+  // Ingest any memories written to .aide/pending-memories.jsonl while MCP was unavailable.
+  try {
+    const { ingestPendingMemories } = await import('./init');
+    const ingested = ingestPendingMemories(projectPath, store);
+    if (ingested > 0) {
+      console.error(`  aide-memory: imported ${ingested} pending memor${ingested === 1 ? 'y' : 'ies'} from .aide/pending-memories.jsonl`);
+    }
+  } catch {
+    // Ingest failure is non-fatal
+  }
+
   // Initialize embedding service in background (non-blocking, graceful degradation)
   const embeddingService = new EmbeddingService();
   embeddingService.initialize().then((ready) => {

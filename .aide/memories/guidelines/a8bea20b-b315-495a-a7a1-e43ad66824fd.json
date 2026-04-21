@@ -1,0 +1,23 @@
+{
+  "uuid": "a8bea20b-b315-495a-a7a1-e43ad66824fd",
+  "layer": "guidelines",
+  "what": "Binary migration validation requirement (from user 2026-04-20): After shifting hook logic into the `aide-memory` binary (via `bun compile`), the WHOLE system must be verified to work normally — not just spot-checked. Plan must include a dedicated regression-validation phase that re-runs all existing validation scenarios (A-G + IDB-1 through IDB-9 + U1-U3) against the binary-backed hooks to confirm parity with the JS/bash implementation. Any divergence = release blocker.\n\nDo NOT treat this as \"obvious, will test along the way.\" It must be an explicit phase in the binary migration plan with its own checklist.",
+  "why": "Binary migration regression validation requirement is now baked into the plan at `docs/specs/BINARY_MIGRATION_PLAN.md` §4.2 and Phase 6. Demoting to normal priority — plan is the canonical source, no need to auto-inject this separately.",
+  "scope": "docs/specs/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "regression",
+    "validation",
+    "P1.20",
+    "release-gate"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-20T20:49:39.391Z",
+  "updated_at": "2026-04-20T23:07:56.877Z"
+}
