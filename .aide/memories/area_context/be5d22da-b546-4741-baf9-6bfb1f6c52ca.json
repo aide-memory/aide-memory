@@ -1,0 +1,21 @@
+{
+  "uuid": "be5d22da-b546-4741-baf9-6bfb1f6c52ca",
+  "layer": "area_context",
+  "what": "Binary compiler migration between JS-to-binary tools (e.g., yao-pkg → Bun, or Bun → Deno) is cheap — ~1-2 days — IF the architecture follows the npm-wrapper + subcommand-contract pattern. Components that stay identical across compiler swaps: (1) npm wrapper package code (only the download URL changes), (2) binary's subcommand contract (`aide-memory hook pre-read` etc. — Claude Code settings.json entries don't change), (3) database schema + SQLite file format, (4) `.aide/memories/` JSON file layout, (5) user-facing CLI surface. Components that change: build tool in CI, possibly a tiny runtime shim (e.g., `src/memory/db.ts` for better-sqlite3/bun:sqlite switching under Bun), `package.aide-memory.json` devDependencies. User update path: zero code changes required. `npm update -g aide-memory` triggers postinstall that downloads the new binary blob; symlink swaps transparently; next CLI invocation uses new binary. No re-`init`, no hook reinstall, no data migration needed. This architectural property (compiler-agnostic CLI) is worth preserving as the binary migration goes forward — avoid coupling user-facing contracts or data formats to any specific compiler's idioms.",
+  "why": "Enables hybrid \"start with tool A, migrate to tool B later\" strategies at low cost. Useful pattern to preserve as the migration proceeds — if Phase 2+ accidentally couples to yao-pkg-specific mechanisms (e.g., hardcoded ~/.cache/pkg-native/ paths, pkg.assets config idioms leaking into runtime code), the future migration gets expensive. Flag it in code review.",
+  "scope": "project",
+  "context_label": "binary migration architecture",
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "migration-path",
+    "architecture"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T17:39:34.179Z",
+  "updated_at": "2026-04-21T17:39:34.179Z"
+}

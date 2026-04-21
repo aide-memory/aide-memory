@@ -1,8 +1,8 @@
 {
   "uuid": "9f30f6c9-0b05-4efb-9f9e-8384aa630d99",
   "layer": "technical",
-  "what": "User decision Apr 21 2026 on derived-artifact resync (e.g. .ignore file): the CLI write path already live-resyncs via config.ts applySideEffects(). Question raised: who else listens for config.json changes? Answer: nobody does file-watching. Direct edits to .aide/config.json won't trigger resync. User's direction: centralize resync in one place — autoUpdateIfNeeded() on MCP server startup. All derived-artifact resyncs (currently just .ignore, more to come) should go through one shared function called both from config CLI writes AND from MCP startup drift-repair. Pattern: settings read on-demand (no resync needed) for hooks; settings that produce side-effects on disk (derived artifacts) resync via shared function on write + startup.",
-  "why": "User's direction on how to handle config change propagation. Not obvious from code — centralizes what's currently two paths (CLI write + nothing) into two well-defined paths (CLI write + MCP startup). Avoids needing chokidar-style file watching for Phase 1.",
+  "what": "Derived-artifact resync design (Apr 21 2026, final). Problem: some settings produce on-disk files whose content depends on the setting (currently only .ignore from memories.hideFromGrep, extensible). Hook-read settings don't need resync because get_setting re-reads config.json fresh on every invocation.\n\nFour trigger points, all calling the same `resyncDerivedArtifacts(projectRoot)` function in src/memory/init.ts:\n1. `aide-memory config KEY VALUE` CLI write → config.ts applySideEffects → instant\n2. MCP server startup (new Claude Code session OR /mcp reconnect) → autoUpdateIfNeeded calls it unconditionally before the version check\n3. Any hook fire after direct edit of .aide/config.json (mid-session drift-repair) → mtime check in shared read-config.sh fires background resync when mtime differs from cached value (.aide/cache/config-mtime.txt)\n4. Cross-session propagation: session A edits config → session B's next hook fire picks it up via the same mtime cache (shared file)\n\nMulti-session semantics: each Claude Code session spawns its OWN MCP child process. No shared long-running daemon. Sessions don't coordinate. The shared file-mtime cache is the propagation channel. Each session's hooks independently detect drift via mtime.\n\nThe mtime check goes in read-config.sh (not per-hook) so every hook inherits the behavior without per-script changes.",
+  "why": "User asked about multi-session behavior and whether mtime check should be on all hooks vs just detect-correction. Final design is simpler than initial proposal: centralize in read-config.sh so every hook gets it, and rely on shared cache file for cross-session propagation. Capturing so future implementation matches the agreed design.",
   "scope": "src/memory/**",
   "context_label": null,
   "contributor": "ahmedmmeky",
@@ -16,5 +16,5 @@
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-21T17:01:54.197Z",
-  "updated_at": "2026-04-21T17:01:54.197Z"
+  "updated_at": "2026-04-21T18:34:12.968Z"
 }

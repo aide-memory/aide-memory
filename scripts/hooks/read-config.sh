@@ -12,8 +12,49 @@
 # flat dot-paths (e.g. "hooks.correction.enabled"). The reader splits the
 # flat key on '.' and walks the nested user config via jq's getpath.
 #
+# Sourcing this file ALSO triggers a best-effort drift-repair for derived
+# artifacts (currently `.ignore`): if `.aide/config.json`'s mtime differs
+# from the cached value in `.aide/cache/config-mtime.txt`, spawn a
+# background resync. This is the mid-session sync path — sessions running
+# when the config file is edited directly pick up the change on their
+# next hook fire without needing a restart.
+#
 # Usage: source "$SCRIPT_DIR/read-config.sh"
 #        MAX_BLOCKS=$(get_setting "hooks.read.maxBlocks")
+
+# --- Derived-artifact drift check (config.json mtime → background resync) ---
+# Runs at source-time. Cheap: stat + file read + compare. Only triggers the
+# node-based resync when mtime actually changed. Backgrounded so hook
+# execution is never blocked.
+_aide_drift_check() {
+  local config_file="$PROJECT_ROOT/.aide/config.json"
+  local mtime_cache="$PROJECT_ROOT/.aide/cache/config-mtime.txt"
+  [ -f "$config_file" ] || return 0
+
+  local cur_mtime
+  cur_mtime=$(stat -f "%m" "$config_file" 2>/dev/null || stat -c "%Y" "$config_file" 2>/dev/null)
+  [ -z "$cur_mtime" ] && return 0
+
+  local cached_mtime
+  cached_mtime=$(cat "$mtime_cache" 2>/dev/null || echo "")
+
+  if [ "$cur_mtime" != "$cached_mtime" ]; then
+    # Package root = two levels up from this script (scripts/hooks/).
+    local pkg_root
+    pkg_root=$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd)
+    if [ -n "$pkg_root" ] && [ -f "$pkg_root/dist/memory/init.js" ]; then
+      # Background, non-blocking. Silently swallows errors — the worst case
+      # is the user runs `aide-memory config` or restarts, which already
+      # resync cleanly.
+      mkdir -p "$(dirname "$mtime_cache")" 2>/dev/null
+      (node -e "require('$pkg_root/dist/memory/init').resyncDerivedArtifacts('$PROJECT_ROOT')" >/dev/null 2>&1 &) 2>/dev/null
+      echo "$cur_mtime" > "$mtime_cache" 2>/dev/null
+    fi
+  fi
+}
+# PROJECT_ROOT and SCRIPT_DIR are set by the sourcing hook script — safe
+# to reference here because sourcing is synchronous.
+_aide_drift_check
 
 # Emit the user-override for $1 from .aide/config.json as JSON (`null` when
 # absent). Uses path-existence via `getpath(...) // null` + a `paths()` check

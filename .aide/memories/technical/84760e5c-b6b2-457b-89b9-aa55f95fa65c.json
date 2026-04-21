@@ -1,0 +1,23 @@
+{
+  "uuid": "84760e5c-b6b2-457b-89b9-aa55f95fa65c",
+  "layer": "technical",
+  "what": "yao-pkg's recurring antivirus false-positive problem: the tool ships a PATCHED Node binary (modified with a prelude bootstrap that reads an embedded snapshot). The patching itself triggers ML/heuristic AV engines — most commonly Windows Defender, Kaspersky, Bitdefender, but sporadic flags across 5-15 of VirusTotal's ~70 engines per Node release. Maintainer robertsLando acknowledges this is unfixable at the tool level (yao-pkg#156): the patched runtime diverges from the widely-deployed official Node hash. Code signing HELPS but does NOT fully eliminate it — reporter of yao-pkg#167 confirms signed binaries still get flagged. Compare: Bun compile uses a distinct JSC-based runtime signed upstream by Oven with growing SmartScreen reputation — one high-profile incident (bun#16981) was resolved by both Microsoft and Bun adding signing. Mitigation approaches that DO work (all compilers): Apple Developer Program ($99/yr) + automated notarization via `xcrun notarytool submit --wait` in CI, Azure Artifact Signing for Windows (~$120/yr, credentials in Key Vault, integrates with GitHub Actions via AzureSignTool), per-release SHA256 checksums published alongside binaries, reactive false-positive submission to Microsoft WDSI (https://www.microsoft.com/wdsi/filesubmission) plus per-vendor processes for Kaspersky/Bitdefender/etc. Note: EV certs no longer bypass SmartScreen instantly (Microsoft changed 2024 — both OV and EV start reputation from zero), so don't pay the $400-600/yr EV premium unless you need faster identity verification. For aide-memory this is part of why Bun is preferred — the AV support-ticket burden during any yao-pkg phase would damage \"private by default\" positioning.",
+  "why": "Material factor I missed in earlier yao-pkg vs Bun comparisons. Documents the specific technical reason for the AV delta (patched Node vs distinct runtime) plus the required infrastructure any binary distribution needs regardless of compiler. Future spawns weighing compilers should see this upfront.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "antivirus",
+    "code-signing",
+    "yao-pkg",
+    "bun-compile"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T17:48:21.654Z",
+  "updated_at": "2026-04-21T17:48:21.654Z"
+}

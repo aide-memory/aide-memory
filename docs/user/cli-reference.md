@@ -381,14 +381,26 @@ overrides.
 and (if possible) near-matching suggestions. The full set of keys comes
 from two sources:
 
-- Hook/recall/injection knobs — see `scripts/hooks/defaults.json` (all 18
-  are user-settable at launch).
+- Hook/recall/injection knobs — see `scripts/hooks/defaults.json` (all
+  user-settable).
 - Legacy capture/telemetry/tags schema — `capture.enabled`,
   `telemetry.enabled`, `contributor`, `tags.presets`, etc.
 
 Every public setting is seeded into `.aide/config.json` on `aide-memory init`
 and on MCP-server auto-update, so you can `cat .aide/config.json` to see
 every knob and its default.
+
+**When do changes take effect?**
+
+| How the change was made | When it applies |
+|---|---|
+| `aide-memory config KEY VALUE` (this command) | Immediately. The command also syncs any derived files on disk (e.g. `.ignore` when you toggle `memories.hideFromGrep`). |
+| Direct edit of `.aide/config.json` (any text editor) | Picked up on the next hook fire in any running Claude Code session (file read, edit, user prompt, etc.). No restart required. If you want instant propagation across all running sessions, reconnect the MCP server (`/mcp` → reconnect in Claude Code) — that also reruns the drift-repair check. |
+| New Claude Code session | `autoUpdateIfNeeded` runs on MCP startup and applies any pending setting-derived changes before the agent sees its first prompt. |
+
+**Tip:** when in doubt after a settings change, run `/mcp` in your Claude
+Code session and pick reconnect — it guarantees the MCP server and all
+derived files (`.ignore`, etc.) are in sync with `.aide/config.json`.
 
 **Examples:**
 

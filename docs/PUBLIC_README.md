@@ -174,6 +174,11 @@ aide-memory config capture.enabled          # read
 aide-memory config capture.enabled false    # write
 ```
 
+Changes via `aide-memory config` apply immediately. If you hand-edit
+`.aide/config.json`, running sessions pick up the change on the next
+hook fire. For instant propagation across all open sessions, reconnect
+the MCP server in Claude Code via `/mcp` → reconnect.
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | `capture.enabled` | `true` | Enable/disable all automatic hook capture |
