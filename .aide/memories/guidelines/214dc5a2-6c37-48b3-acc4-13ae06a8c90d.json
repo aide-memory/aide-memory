@@ -1,0 +1,23 @@
+{
+  "uuid": "214dc5a2-6c37-48b3-acc4-13ae06a8c90d",
+  "layer": "guidelines",
+  "what": "npm release-ops policy for aide-memory (canonical guide at docs/RELEASING.md on feature/minified-publish): (1) Unpublish rules CORRECTED from earlier framing: within 72h of publish, CLI `npm unpublish <pkg>@<version>` works directly (only condition: no reverse deps). After 72h, CLI unpublish STILL works directly if ALL THREE: no reverse deps AND fewer than 300 weekly downloads AND single owner/maintainer. Support ticket is the FALLBACK only if the CLI refuses despite eligibility. For aide-memory (closed-source, small audience, solo maintainer), all three hold — try CLI first. Pre-check: `npm view <pkg>@<version> dependents`, `curl -s https://api.npmjs.org/downloads/point/last-week/<pkg>`, `npm owner ls <pkg>`. Support contact (npmjs.com/support) only needed in edge cases. (2) Deprecation vs unpublish: `npm deprecate pkg@X.Y.Z \"message\"` is instant, soft — versions stay installable but show warnings. Unpublish is hard — removed from registry. Always deprecate first (immediate), then try CLI unpublish, then support ticket as last resort. (3) Local-copy caveat: unpublish reaches the registry only. Machines already having the version in node_modules keep working. (4) Version discipline: never republish over an existing version — npm refuses; always bump. Pre-1.0: minor for breaking, patch for everything else. Once `pkg@version` has been used, that identifier can never be reused even after unpublish (immutable names). Unpublishing ALL versions triggers a 24h wait before republishing under the same package name. (5) Verification gate: scripts/verify-package.sh runs before npm publish in CI workflow; never bypass. For specific 0.1.1/0.2.0 unpublish tied to this session see docs/HANDOFF_MINIFIED_PUBLISH.md § \"Unpublishing\" (includes CLI commands + support template).",
+  "why": "Corrected per npm's actual policy (docs.npmjs.com/policies/unpublish). Earlier framing wrongly implied support ticket was always needed after 72h; in fact CLI unpublish works in most cases for closed-source products with solo maintainer and low downloads. Distinction matters for this session's 0.1.1/0.2.0 removal — should try CLI first, not file a ticket first.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "release",
+    "npm",
+    "unpublish",
+    "deprecate",
+    "ops"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T20:45:21.738Z",
+  "updated_at": "2026-04-21T21:07:04.671Z"
+}
