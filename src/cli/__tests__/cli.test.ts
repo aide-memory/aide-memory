@@ -98,8 +98,12 @@ describe('aide-memory CLI', () => {
   // ---- 1. aide-memory recall ----
   describe('recall', () => {
     it('returns formatted memories for a path', () => {
+      // Seed two memories at the same level as the query — both should appear.
+      // Previously this test also verified that grandparent scope (`src/**`)
+      // was pulled in, but per memory #95/#96 the focused filter excludes
+      // grandparent scopes from recall results.
       store.add({ layer: 'technical', what: 'WAL mode for SQLite', scope: 'src/memory/**' });
-      store.add({ layer: 'preferences', what: 'Use vitest', scope: 'src/**' });
+      store.add({ layer: 'preferences', what: 'Use vitest across memory module', scope: 'src/memory/**' });
       store.close();
 
       // Re-create store to avoid locked db
@@ -112,6 +116,22 @@ describe('aide-memory CLI', () => {
       expect(output).toContain('vitest');
       // Check layer grouping headers
       expect(output).toMatch(/Technical Context|Preferences/);
+    });
+
+    it('excludes grandparent scopes from recall (focused filter)', () => {
+      store.add({ layer: 'technical', what: 'WAL mode for SQLite', scope: 'src/memory/**' });
+      store.add({ layer: 'preferences', what: 'Use vitest', scope: 'src/**' });
+      store.close();
+
+      // Re-create store to avoid locked db
+      store = new MemoryStore({ projectRoot: project.root });
+
+      runCli(['recall', 'src/memory/']);
+
+      const output = getOutput();
+      expect(output).toContain('WAL mode');
+      // src/** is a grandparent of src/memory/ → excluded from focused recall
+      expect(output).not.toContain('Use vitest');
     });
   });
 
@@ -389,6 +409,42 @@ describe('aide-memory CLI', () => {
       expect(fs.existsSync(path.join(project.root, '.aide', 'memories', 'technical'))).toBe(true);
       expect(fs.existsSync(path.join(project.root, '.aide', 'memories', 'area_context'))).toBe(true);
       expect(fs.existsSync(path.join(project.root, '.aide', 'config.json'))).toBe(true);
+    });
+
+    it('rejects the removed --scan flag with an unknown option error', () => {
+      // --scan was removed in Apr 2026 (see docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md).
+      // Commander's exitOverride only applies to the root program, not subcommands —
+      // so on an unknown option to `init`, commander writes to stderr and calls
+      // process.exit(1). Our spy throws "process.exit(1)". Either outcome proves
+      // the flag is no longer accepted.
+      let err: unknown;
+      let stderrCapture = '';
+      const origWriteErr = process.stderr.write;
+      process.stderr.write = ((chunk: unknown) => {
+        stderrCapture += String(chunk);
+        return true;
+      }) as typeof process.stderr.write;
+
+      try {
+        runCli(['init', '--scan']);
+      } catch (e) {
+        err = e;
+      } finally {
+        process.stderr.write = origWriteErr;
+      }
+
+      expect(err).toBeDefined();
+      const anyErr = err as { code?: string; message?: string };
+      // Accept any of these signals (commander's rejection mode varies
+      // between root and subcommand paths).
+      expect(
+        anyErr.code === 'commander.unknownOption' ||
+          /unknown option.*--scan/i.test(anyErr.message ?? '') ||
+          /unknown option.*--scan/i.test(stderrCapture) ||
+          /process\.exit\(1\)/.test(anyErr.message ?? '')
+      ).toBe(true);
+      // And commander must have printed the standard "unknown option" message.
+      expect(stderrCapture).toMatch(/unknown option.*--scan/i);
     });
   });
 

@@ -20,6 +20,13 @@ CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 PROJECT_ROOT="${CWD:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 SID="${SESSION_ID:-default}"
 
+# hooks.precompact.mode: "cleanup" (default) clears session tracking, "off" skips.
+source "$SCRIPT_DIR/read-config.sh"
+MODE=$(get_setting "hooks.precompact.mode")
+if [ "$MODE" = "off" ]; then
+  exit 0
+fi
+
 # Clear ALL session tracking — agent is about to lose context
 source "$SCRIPT_DIR/clear-tracking.sh"
 clear_session_tracking "$PROJECT_ROOT/.aide/cache" "$SID"

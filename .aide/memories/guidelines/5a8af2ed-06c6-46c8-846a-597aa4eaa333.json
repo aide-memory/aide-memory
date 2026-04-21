@@ -1,0 +1,22 @@
+{
+  "uuid": "5a8af2ed-06c6-46c8-846a-597aa4eaa333",
+  "layer": "guidelines",
+  "what": "Before any aide-memory npm publish (or any closed-source npm publish in this repo), explicitly verify that `.map` source map files are excluded from the published tarball. The Claude Code leak on 2026-03-31 happened exactly this way — Anthropic's `.npmignore` / `package.json` `files` field didn't exclude .map, the source map shipped, and the entire 512K-line original TypeScript was recoverable via the map. Concrete checks: (1) `npm pack --dry-run` on package.aide-memory.json and grep the output for `.map` entries. (2) Ensure `.npmignore` contains `*.map` AND `**/*.map`. (3) In the `files` field of `package.aide-memory.json`, use explicit file globs (not directory globs that include maps). (4) CI check: fail the publish if any .map file is in the tarball. Bun compile can also produce embedded source maps via `--sourcemap` — ensure release builds do NOT pass `--sourcemap` (or pass `--sourcemap=none`).",
+  "why": "The Claude Code leak is the most actionable lesson from this research — and it's a single specific check that's easy to forget. Memory 138 captures the context; this captures the concrete pre-publish verification that any future release work needs to perform.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "release",
+    "source-protection",
+    "npm-publish",
+    "source-maps"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T16:24:00.870Z",
+  "updated_at": "2026-04-21T16:24:00.870Z"
+}

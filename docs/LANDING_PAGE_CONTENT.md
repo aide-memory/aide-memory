@@ -177,13 +177,10 @@ One npm package. SQLite for caching. JSON files for persistence. Git for sync. T
 # 1. Install in any project
 npx aide-memory init
 
-# 2. (Optional) Generate initial memories from your project structure
-npx aide-memory init --scan
-
-# 3. Start working -- hooks capture corrections automatically
+# 2. Start working -- hooks capture corrections automatically
 # When you say "No, use composition here," the hook stores it
 
-# 4. Check what's been captured
+# 3. Check what's been captured
 npx aide-memory list
 
 # 5. Next session, your agent gets nudges automatically

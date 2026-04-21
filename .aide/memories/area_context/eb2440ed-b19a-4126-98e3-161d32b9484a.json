@@ -1,0 +1,20 @@
+{
+  "uuid": "eb2440ed-b19a-4126-98e3-161d32b9484a",
+  "layer": "area_context",
+  "what": "Hook count parity: ALL count-related fields (scoped_count, scoped_ids, layers breakdown, topics) in scripts/hooks/recall-for-path.js now derive from a single source of truth — computeScopedForPath() in src/memory/recall.ts. That helper applies the focused-scope filter (exact file + immediate parent + deeper, NO grandparent, NO project-wide) in one place. If you change the blocking-scope rule, update computeScopedForPath and every hook count updates automatically. Guarded by hooks.test.ts parity test + scripts/hooks/__tests__/count-parity.sh smoke test.",
+  "why": "Prevents drift between the integer nudge (\"N memories not yet recalled\") and the layer breakdown preview. Validation on /tmp/aide-l-test showed integer=2 while preview summed to 4 because the two were computed from different filters.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "testing"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T16:35:19.499Z",
+  "updated_at": "2026-04-21T16:35:19.499Z"
+}

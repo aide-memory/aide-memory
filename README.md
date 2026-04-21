@@ -133,7 +133,7 @@ All commands use the `aide-memory` binary (aliased as `aide`).
 
 | Command | Description |
 |---------|-------------|
-| `init [--scan] [--update-rules]` | Create `.aide/`, install hooks, write editor rules, configure MCP |
+| `init [--update-rules]` | Create `.aide/`, install hooks, write editor rules, configure MCP |
 | `recall <path>` | Recall memories scoped to a file or directory path |
 | `remember <what>` | Store a memory with `--layer`, `--scope`, `--tags`, `--why` |
 | `update <id>` | Update an existing memory's content, scope, or context |
@@ -144,8 +144,6 @@ All commands use the `aide-memory` binary (aliased as `aide`).
 | `config <key> [value]` | Get or set configuration (dot-notation keys) |
 | `sync import` | Rebuild SQLite cache from JSON memory files |
 | `sync export` | Ensure all memories have corresponding JSON files |
-
-Use `--scan` with `init` to generate initial memories from your project structure, stack detection, and config files.
 
 ---
 

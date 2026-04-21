@@ -32,6 +32,13 @@ fi
 # Get memory info for this file
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/read-config.sh"
+
+# Respect hooks.read.maxBlocks=0 as a kill switch — exit silently when disabled.
+MAX_BLOCKS=$(get_setting "hooks.read.maxBlocks")
+if [ "$MAX_BLOCKS" = "0" ]; then
+  exit 0
+fi
+
 RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
 
 # No result or zero count = no memories for this path → SILENT

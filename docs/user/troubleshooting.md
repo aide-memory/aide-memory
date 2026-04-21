@@ -196,7 +196,7 @@ rm -rf .aide/
 rm -rf ~/.aide/projects/
 
 # 3. Re-initialize
-aide-memory init --scan
+aide-memory init
 ```
 
 This destroys all stored memories. Only do this if you want a complete fresh start.

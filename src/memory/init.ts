@@ -2,19 +2,17 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { AideConfig } from './config';
-import { scanProject } from './scan';
 import { MemoryStore } from './store';
-import type { MemoryLayer } from './types';
+import { syncIgnoreFile, readHideFromGrep } from './ignoreFile';
+import { listPublicDefaults, flatMapToNested } from './settings';
 
 export interface InitResult {
   created: string[];
   skipped: string[];
   warnings: string[];
-  memoriesGenerated?: number;
 }
 
 export interface InitOptions {
-  scan?: boolean;
   updateRules?: boolean;
   force?: boolean;
 }
@@ -340,8 +338,81 @@ function writeRulesFiles(
 }
 
 /**
+ * Deep-merge helper used when seeding public settings into an existing
+ * user config. Primitives and arrays replace wholesale; plain objects
+ * recurse so we never stomp on user overrides.
+ *
+ * Only fills in keys that are *absent* in `target`. If the user has
+ * explicitly set a value (including `false` or `0`), we leave it alone.
+ */
+function deepMergeKeepExisting(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>
+): Record<string, unknown> {
+  for (const [key, value] of Object.entries(source)) {
+    const existing = target[key];
+    if (
+      existing !== undefined &&
+      existing !== null &&
+      typeof existing === 'object' &&
+      !Array.isArray(existing) &&
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
+      deepMergeKeepExisting(existing as Record<string, unknown>, value as Record<string, unknown>);
+    } else if (existing === undefined) {
+      target[key] = value;
+    }
+  }
+  return target;
+}
+
+/**
+ * Seed `.aide/config.json` with every public setting from
+ * `scripts/hooks/defaults.json` so users can see all knobs in one place
+ * and edit them with their normal editor.
+ *
+ * Behavior:
+ *   - Creates the file with the defaults if missing.
+ *   - Merges into existing JSON, preserving every key the user has set
+ *     (including non-aide keys) and every aide key that's already
+ *     populated. Only absent keys get seeded.
+ *
+ * Returns whether the file changed so callers can report it.
+ */
+function writePublicSettings(projectRoot: string): { written: boolean } {
+  const configPath = path.join(projectRoot, '.aide', 'config.json');
+  const defaultsFlat = listPublicDefaults();
+  const defaultsNested = flatMapToNested(defaultsFlat);
+
+  let current: Record<string, unknown> = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      current = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+    } catch {
+      current = {};
+    }
+  }
+
+  const beforeJson = JSON.stringify(current);
+  deepMergeKeepExisting(current, defaultsNested);
+  const afterJson = JSON.stringify(current);
+  if (beforeJson === afterJson) {
+    return { written: false };
+  }
+
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
+  return { written: true };
+}
+
+/**
  * Create .aide/config.json with defaults.
  * Uses the existing AideConfig class which auto-loads defaults and saves via set().
+ * Also seeds all public hook settings from scripts/hooks/defaults.json so
+ * every configurable knob is visible to the user in one place.
  */
 function writeConfig(
   projectRoot: string,
@@ -349,8 +420,16 @@ function writeConfig(
   force: boolean
 ): { created: string[]; skipped: string[] } {
   const configPath = path.join(projectRoot, '.aide', 'config.json');
+  const alreadyExists = fs.existsSync(configPath);
 
-  if (fs.existsSync(configPath) && !force) {
+  // If config already exists and we're not forcing, still merge in any
+  // new public settings so upgraded installs gain visibility into knobs
+  // that were added in a new release — never overwriting user values.
+  if (alreadyExists && !force) {
+    const { written } = writePublicSettings(projectRoot);
+    if (written) {
+      return { created: ['.aide/config.json (public settings seeded)'], skipped: [] };
+    }
     return { created: [], skipped: ['.aide/config.json'] };
   }
 
@@ -361,6 +440,8 @@ function writeConfig(
     config.reset(); // resets to clean defaults and saves
   }
   config.set('contributor', contributor);
+  // Seed public hook settings alongside AideConfig defaults.
+  writePublicSettings(projectRoot);
   return { created: ['.aide/config.json'], skipped: [] };
 }
 
@@ -403,48 +484,25 @@ function updateGitignore(projectRoot: string): { created: string[]; skipped: str
  * Create/update .ignore file to hide memory files from grep (ripgrep).
  * Controlled by config `memories.hideFromGrep` (default: true).
  * .ignore is respected by ripgrep but does not affect git.
+ *
+ * Uses marker comments (BEGIN/END aide-memory-managed) so we only touch
+ * our own section — any user-added entries outside the markers are preserved.
+ * Legacy .ignore files (from older init versions that wrote the bare entry
+ * without markers) are migrated on first sync.
  */
 function updateIgnoreFile(projectRoot: string): { created: string[]; skipped: string[] } {
   const created: string[] = [];
   const skipped: string[] = [];
-  const ignorePath = path.join(projectRoot, '.ignore');
-  const entry = '.aide/memories/';
 
-  let hideFromGrep = true;
-  try {
-    const configPath = path.join(projectRoot, '.aide', 'config.json');
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      if (config.memories?.hideFromGrep === false) {
-        hideFromGrep = false;
-      }
-    }
-  } catch { /* default to true */ }
+  const hideFromGrep = readHideFromGrep(projectRoot);
+  const result = syncIgnoreFile(projectRoot, hideFromGrep);
 
-  if (!hideFromGrep) {
-    if (fs.existsSync(ignorePath)) {
-      const content = fs.readFileSync(ignorePath, 'utf8');
-      if (content.includes(entry)) {
-        const updated = content.split('\n').filter(l => l.trim() !== entry).join('\n');
-        fs.writeFileSync(ignorePath, updated, 'utf8');
-        skipped.push('.ignore (memories.hideFromGrep disabled, entry removed)');
-      }
-    }
-    return { created, skipped };
+  if (result.changed && result.message) {
+    created.push(result.message);
+  } else if (!result.changed && hideFromGrep) {
+    skipped.push('.ignore (aide-memory section already present)');
   }
 
-  let content = '';
-  if (fs.existsSync(ignorePath)) {
-    content = fs.readFileSync(ignorePath, 'utf8');
-    if (content.includes(entry)) {
-      skipped.push('.ignore (already has .aide/memories/)');
-      return { created, skipped };
-    }
-  }
-
-  const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
-  fs.writeFileSync(ignorePath, content + `${separator}${entry}\n`, 'utf8');
-  created.push('.ignore (.aide/memories/ hidden from grep)');
   return { created, skipped };
 }
 
@@ -587,27 +645,6 @@ export async function initProject(
   result.skipped.push(...hook.skipped);
   result.warnings.push(...hook.warnings);
 
-  // 6. Pre-train scan (optional)
-  if (options?.scan) {
-    const memories = scanProject(resolvedRoot);
-    if (memories.length > 0) {
-      const store = new MemoryStore({ projectRoot: resolvedRoot });
-      try {
-        for (const mem of memories) {
-          store.add({
-            layer: mem.layer as MemoryLayer,
-            what: mem.what,
-            scope: mem.scope,
-            source: mem.source,
-          });
-        }
-        result.memoriesGenerated = memories.length;
-      } finally {
-        store.close();
-      }
-    }
-  }
-
   return result;
 }
 
@@ -702,6 +739,14 @@ export function autoUpdateIfNeeded(projectRoot: string, currentVersion: string):
     // Update git post-checkout hook (merge, uses markers to replace aide section only)
     const hookResult = installPostCheckoutHook(projectRoot, true);
     if (hookResult.created.length > 0) updated.push(...hookResult.created);
+
+    // Seed any new public settings into .aide/config.json so upgraded
+    // installs gain visibility into knobs added in a new release. Never
+    // overwrites user values — only fills in missing keys.
+    const settingsResult = writePublicSettings(projectRoot);
+    if (settingsResult.written) {
+      updated.push('.aide/config.json (public settings seeded)');
+    }
   } catch {
     // Auto-update failure is non-fatal — server continues normally
   }

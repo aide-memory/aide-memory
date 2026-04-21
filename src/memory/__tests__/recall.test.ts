@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MemoryStore } from '../store';
-import { recall, scopeMatchesPath } from '../recall';
+import { recall, scopeMatchesPath, computeScopedForPath } from '../recall';
+import type { Memory } from '../types';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -44,6 +45,116 @@ describe('scopeMatchesPath', () => {
 
   it('handles paths with backslashes (Windows)', () => {
     expect(scopeMatchesPath('src\\components\\**', 'src/components/Button.tsx')).toBe(true);
+  });
+
+  describe('focused mode — grandparent exclusion (memory #95/#96)', () => {
+    it('focused: immediate parent scope matches', () => {
+      // src/api/** for src/api/routes.ts → immediate parent → INCLUDE
+      expect(scopeMatchesPath('src/api/**', 'src/api/routes.ts', { focused: true })).toBe(true);
+    });
+
+    it('focused: exact file scope matches', () => {
+      expect(scopeMatchesPath('src/api/routes.ts', 'src/api/routes.ts', { focused: true })).toBe(true);
+    });
+
+    it('focused: grandparent scope is excluded', () => {
+      // src/** for src/api/routes.ts → grandparent → EXCLUDE
+      expect(scopeMatchesPath('src/**', 'src/api/routes.ts', { focused: true })).toBe(false);
+    });
+
+    it('focused: great-grandparent scope is excluded', () => {
+      expect(scopeMatchesPath('src/**', 'src/api/v2/routes.ts', { focused: true })).toBe(false);
+    });
+
+    it('focused: grandparent of deep path is excluded (design memory #95)', () => {
+      // src/components/** for src/components/dashboard/Widget.tsx → grandparent → EXCLUDE
+      expect(scopeMatchesPath('src/components/**', 'src/components/dashboard/Widget.tsx', { focused: true })).toBe(false);
+    });
+
+    it('focused: project scope ("project") still matches (filtered separately by computeScopedForPath)', () => {
+      // scopeMatchesPath itself doesn't exclude project — that is the job of computeScopedForPath
+      expect(scopeMatchesPath('project', 'src/api/routes.ts', { focused: true })).toBe(true);
+      expect(scopeMatchesPath(null, 'src/api/routes.ts', { focused: true })).toBe(true);
+    });
+
+    it('focused: deeper/nested scope is included (child of query)', () => {
+      // Directory query src/api/ + child scope src/api/v2/** → INCLUDE
+      expect(scopeMatchesPath('src/api/v2/**', 'src/api/', { focused: true })).toBe(true);
+    });
+
+    it('focused: sibling scopes do not match', () => {
+      expect(scopeMatchesPath('src/auth/**', 'src/api/routes.ts', { focused: true })).toBe(false);
+    });
+  });
+});
+
+describe('computeScopedForPath — focused-scope single source of truth', () => {
+  function mem(partial: Partial<Memory>): Memory {
+    return {
+      id: partial.id ?? 0,
+      uuid: partial.uuid ?? 'u',
+      layer: partial.layer ?? 'technical',
+      what: partial.what ?? 'x',
+      why: null,
+      scope: partial.scope ?? null,
+      context_label: null,
+      contributor: 'meky',
+      tags: [],
+      source: 'conversation',
+      shared: true,
+      generated_by: null,
+      derived_from: null,
+      created_at: '',
+      updated_at: '',
+      recalled_count: 0,
+      last_recalled_at: null,
+    };
+  }
+
+  // Seed mirrors the validation scenario from /tmp/aide-l-test:
+  //   src/auth/**, src/api/**, src/**, exact src/api/routes.ts, no-scope project-wide
+  const memories: Memory[] = [
+    mem({ id: 1, layer: 'guidelines',   scope: 'src/auth/**',        what: 'auth rule' }),
+    mem({ id: 2, layer: 'technical',    scope: 'src/api/**',         what: 'api tech' }),       // immediate parent
+    mem({ id: 3, layer: 'preferences',  scope: 'src/**',             what: 'src pref' }),        // grandparent — exclude
+    mem({ id: 4, layer: 'area_context', scope: 'src/api/routes.ts',  what: 'routes area' }),    // exact file
+    mem({ id: 5, layer: 'guidelines',   scope: null,                 what: 'project-wide' }),   // project — exclude
+    mem({ id: 6, layer: 'technical',    scope: 'src/api/v2/**',      what: 'deeper nested' }),  // deeper — N/A for file
+  ];
+
+  it('includes immediate parent + exact file, excludes grandparent + project-wide', () => {
+    const out = computeScopedForPath(memories, 'src/api/routes.ts');
+    expect(out.count).toBe(2);
+    expect(out.ids.sort()).toEqual([2, 4]);
+    expect(out.layers).toEqual({ technical: 1, area_context: 1 });
+  });
+
+  it('integer count equals sum of layer breakdown values (parity guarantee)', () => {
+    const out = computeScopedForPath(memories, 'src/api/routes.ts');
+    const layerSum = Object.values(out.layers).reduce((a, b) => a + (b ?? 0), 0);
+    expect(out.count).toBe(layerSum);
+  });
+
+  it('directory query includes child (deeper nested) scopes', () => {
+    const out = computeScopedForPath(memories, 'src/api/');
+    // src/api/**, exact file, src/api/v2/** — all IN; src/auth sibling OUT; src/** grandparent OUT; project-wide OUT
+    const ids = out.ids.sort((a, b) => a - b);
+    expect(ids).toEqual([2, 4, 6]);
+    expect(out.count).toBe(3);
+  });
+
+  it('project-wide memories NEVER appear in scoped set (handled by SessionStart)', () => {
+    const onlyProjectWide = [mem({ id: 10, scope: null, what: 'p' }), mem({ id: 11, scope: 'project', what: 'q' })];
+    const out = computeScopedForPath(onlyProjectWide, 'src/api/routes.ts');
+    expect(out.count).toBe(0);
+    expect(out.ids).toEqual([]);
+    expect(out.layers).toEqual({});
+  });
+
+  it('unrelated path returns empty scoped set', () => {
+    const out = computeScopedForPath(memories, 'docs/notes.md');
+    expect(out.count).toBe(0);
+    expect(out.ids).toEqual([]);
   });
 });
 
@@ -102,18 +213,20 @@ describe('recall', () => {
     expect(result.memories.length).toBe(6);
   });
 
-  it('filters by path — only returns matching scope', () => {
+  it('filters by path — only returns matching scope (focused: no grandparents)', () => {
     const result = recall(store, {
       paths: ['src/components/dashboard/Sidebar.tsx'],
     });
 
     const whats = result.memories.map(m => m.what);
 
-    // Should include: dashboard area_context, components preference, project guidelines, project technical
+    // Should include: dashboard area_context (immediate parent), project guidelines, project technical
     expect(whats).toContain('Skeleton loading replaces ALL legacy loaders');
-    expect(whats).toContain('Keep components under 150 lines');
     expect(whats).toContain('Composition over conditionals for component variants');
     expect(whats).toContain('Vitest not Jest — use describe/it from vitest');
+
+    // Should NOT include: grandparent scope src/components/** (memory #95 design)
+    expect(whats).not.toContain('Keep components under 150 lines');
 
     // Should NOT include: CLI commands or memory technical
     expect(whats).not.toContain('Each CLI command gets its own file');
@@ -121,18 +234,21 @@ describe('recall', () => {
   });
 
   it('returns memories ordered by layer priority', () => {
+    // Use a path where all four layers can participate: files directly under
+    // src/components/** include a preference (grandparent is excluded for deeper
+    // queries, so query at that level).
     const result = recall(store, {
-      paths: ['src/components/dashboard/Sidebar.tsx'],
+      paths: ['src/components/Button.tsx'],
     });
 
     const layers = result.memories.map(m => m.layer);
 
-    // area_context should come before technical, preferences, guidelines
-    const areaIdx = layers.indexOf('area_context');
+    // preferences (Keep components under 150 lines) should come before guidelines
     const prefIdx = layers.indexOf('preferences');
     const guideIdx = layers.indexOf('guidelines');
 
-    expect(areaIdx).toBeLessThan(prefIdx);
+    expect(prefIdx).toBeGreaterThanOrEqual(0);
+    expect(guideIdx).toBeGreaterThanOrEqual(0);
     expect(prefIdx).toBeLessThan(guideIdx);
   });
 
@@ -190,13 +306,15 @@ describe('recall', () => {
     expect(fresh.last_recalled_at).toBeTruthy();
   });
 
-  it('returns matched scopes', () => {
+  it('returns matched scopes (focused: no grandparents)', () => {
     const result = recall(store, {
       paths: ['src/components/dashboard/Sidebar.tsx'],
     });
 
+    // Immediate parent scope is included
     expect(result.matched_scopes).toContain('src/components/dashboard/**');
-    expect(result.matched_scopes).toContain('src/components/**');
+    // Grandparent src/components/** is NOT — excluded by focused filter (memory #95)
+    expect(result.matched_scopes).not.toContain('src/components/**');
   });
 
   it('deleted memories do not appear in recall', () => {

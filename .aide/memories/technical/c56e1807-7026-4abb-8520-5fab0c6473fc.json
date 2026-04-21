@@ -1,0 +1,22 @@
+{
+  "uuid": "c56e1807-7026-4abb-8520-5fab0c6473fc",
+  "layer": "technical",
+  "what": "Correction to memory 138's framing: the practical protection gap between Bun compile (bundled minified JS) and yao-pkg (V8 bytecode) is NARROWER than I initially implied — roughly 2-3× more friction, not 10×. Bun without source maps: ~15-30 min with bun-decompile + unbuned to reach readable-if-ugly JS. yao-pkg bytecode: hours with Ghidra + ghidra_nodejs plugin. Both are in the \"hours\" tier for a motivated reverse-engineer, not qualitatively different. The key 2025-2026 development is LLM-assisted decompilation: LLM4Decompile (trained on 2B tokens, outperforms Ghidra alone by 100%+), GhidrOllama, GhidraMCP — these weaken ALL pure-JS protection tiers similarly. For aide-memory, the choice between Bun and yao-pkg should turn on ergonomics (better-sqlite3 compatibility, npm-wrapper simplicity, dev workflow) not protection. Both stop casual snooping. Neither stops a determined reverser with a few hours. Only Rust native (via napi-rs for sensitive modules) materially raises the cost. yao-pkg adoption signal also thin — 874 GitHub stars, no famous named production users I could find. Maintained by small team, not an industry heavyweight.",
+  "why": "User pushed back this turn with \"hours to reverse engineer seems pretty easy still\" — prompted me to verify my earlier yao-pkg-is-much-better framing. Honest answer: the protection gap is small. Memory 138 is still directionally right but this nuance matters for the actual Bun-vs-yao-pkg decision. Future spawns evaluating compilers should weigh ergonomics over the protection delta.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "source-protection",
+    "correction",
+    "llm-reverse-engineering"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T16:33:14.463Z",
+  "updated_at": "2026-04-21T16:33:14.463Z"
+}

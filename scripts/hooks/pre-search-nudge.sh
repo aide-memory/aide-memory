@@ -24,8 +24,11 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/read-config.sh"
 
-# Check search mode — "soft" (default) or future "block" support
+# Check search mode — "soft" (default), "off" (disabled), or "block".
 SEARCH_MODE=$(get_setting "hooks.search.mode")
+if [ "$SEARCH_MODE" = "off" ]; then
+  exit 0
+fi
 
 RESULT=$(node "$SCRIPT_DIR/search-preview.js" "$QUERY" "$PROJECT_ROOT" 2>/dev/null)
 
@@ -75,20 +78,21 @@ if [ "$ALREADY_SEARCHED" = "true" ]; then
   exit 0
 fi
 
-# Parse scoped vs project-wide counts for block/soft decision
-SCOPED_COUNT=$(echo "$RESULT" | jq -r '.scoped_count // 0' 2>/dev/null)
-TOTAL_MEMORIES=$(echo "$RESULT" | jq -r '.total_memories // 0' 2>/dev/null)
-
-# Not yet searched — always soft nudge (never block).
-# The agent may already have these memories from a path-based aide_recall,
-# so blocking forces redundant aide_search calls. Soft lets the agent decide.
+# Not yet searched. Mode decides between soft (default) and block.
 NUDGE="${COUNT} aide memories match '${QUERY}' (${TOP_MATCHES}). Call aide_search({keyword: '${QUERY}'}) if not already in context."
 
-echo "$NUDGE" | jq -Rs '{
-  hookSpecificOutput: {
-    hookEventName: "PreToolUse",
-    additionalContext: .
-  }
-}'
+if [ "$SEARCH_MODE" = "block" ]; then
+  echo "$NUDGE" | jq -Rs '{
+    decision: "block",
+    reason: .
+  }'
+else
+  echo "$NUDGE" | jq -Rs '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      additionalContext: .
+    }
+  }'
+fi
 
 exit 0

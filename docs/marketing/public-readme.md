@@ -27,7 +27,6 @@ AIDE Memory uses hooks that fire automatically at the right moments. Tested adop
 - **FTS5 search** -- BM25-ranked keyword search across all memories.
 - **Local embeddings** -- optional semantic search via Transformers.js or Ollama. No API keys.
 - **Cross-tool** -- works with Claude Code and Cursor. Same memories across both.
-- **Pre-train scan** -- `--scan` flag detects your stack and generates initial memories from project structure.
 - **Zero dependencies on external services** -- no Docker, no Chroma, no cloud, no API keys required.
 
 ---
@@ -66,15 +65,7 @@ Start a coding session. The hooks capture context as you go:
 
 Your agent remembers. When it opens a file, the PreToolUse hook nudges: "8 memories exist for this path." The agent recalls what is relevant and uses it.
 
-### 4. Pre-populate (optional)
-
-```bash
-npx aide-memory init --scan
-```
-
-Scans your codebase and generates initial memories from project structure, stack detection, and configuration files.
-
-### 5. Inspect
+### 4. Inspect
 
 ```bash
 aide-memory list                    # See all stored memories
@@ -88,7 +79,7 @@ aide-memory stats                   # View analytics
 
 | Command | Description |
 |---------|-------------|
-| `aide-memory init [--scan] [--update-rules]` | Create `.aide/`, write rules, install hooks, configure MCP |
+| `aide-memory init [--update-rules]` | Create `.aide/`, write rules, install hooks, configure MCP |
 | `aide-memory recall <path>` | Recall memories for a file or directory path |
 | `aide-memory remember <what>` | Store a memory (`--layer`, `--scope`, `--tags`, `--why`) |
 | `aide-memory update <uuid>` | Update an existing memory (`--what`, `--why`, `--scope`, `--tags`) |

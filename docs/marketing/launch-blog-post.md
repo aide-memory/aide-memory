@@ -107,14 +107,6 @@ npx aide-memory init
 
 That is it. The init command creates the directory structure, installs hooks, writes editor rules, and configures the MCP server. Start working normally. The hooks capture context as you go. Next session, your agent remembers.
 
-If you want to pre-populate with project structure:
-
-```bash
-npx aide-memory init --scan
-```
-
-This detects your stack, frameworks, and project layout, then generates initial memories so the agent has context from the first interaction.
-
 ## What is next
 
 Phase 1 is individual memory -- your agent remembers what you taught it across sessions. That is shipping now.

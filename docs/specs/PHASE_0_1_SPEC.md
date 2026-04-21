@@ -1442,7 +1442,7 @@ File feature request:
 
 3. **Search Tools — Explore Soft Blocking** — Currently only Grep/Glob hooked. Bash commands (grep, find, rg) bypass hooks. Accepted gap — Claude Code doesn't expose matchers for Bash. Glob does NOT respect .ignore (Claude Code issue #20609). Explore: can soft nudging be extended to other search patterns? Agent subagent searches?
 
-4. **`aide-memory init --scan` validation** — Verify that `init --scan` correctly detects project type, stack, frameworks, and generates structural memories. Test with diverse project types (Node.js, Python, Go, monorepo). Ensure generated memories have appropriate scopes (not all project-wide). Validate that scan-generated memories surface correctly via Read hooks.
+4. ~~**`aide-memory init --scan` validation**~~ — `--scan` was removed in Apr 2026 (output was too surface-level — package.json + dir inference only). See `docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md` (Deferred: Auto-scan for Codebase Pattern Discovery) for the deferred Phase 2 revisit.
 
 **P1.20: Distribution Strategy + Binary** (explore prior to publishing new version / demoing)
 - Current npm ships readable JS + bash — all source accessible
@@ -1775,7 +1775,7 @@ Phase 0 is business/legal infrastructure with no engineering dependencies. Can r
 | P1.12 | Analytics & Telemetry | Local `analytics` table in SQLite (event, value, tool, timestamp). Default-ON anonymous telemetry (opt-out via `aide config telemetry off`). Events: install, init, memory_stored, memory_recalled, hook_triggered, tool_used. | recalled_count in store | M | P1.1, P1.11 (opt-out config) |
 | P1.13 | aide stats | CLI command displaying: memory count by layer, most-recalled, stale candidates, capture source breakdown, hook effectiveness. | Nothing | S | P1.12 (reads analytics) |
 | P1.14 | aide-memory init | One-command setup: creates `.aide/` directory tree, writes rules files for all tools, sets up hooks, **auto-configures MCP server in tool allowlists** (Claude Code settings.json, Cursor mcp.json), creates config.json with defaults, downloads embedding model, configures `.gitignore`, installs post-checkout hook. Also: `aide-memory init --update-rules` to refresh rules without touching config/memories. | Nothing | M | P1.1, P1.4, P1.8, P1.9, P1.10, P1.11 |
-| P1.15 | Pre-train Scan | `aide-memory init --scan` scans codebase: detects project type, stack, frameworks, key patterns, existing docs. Generates ~20-30 structural memories. **The aide-memory tool itself scans (reads package.json, directory structure, config files). No LLM needed.** | Old tree-sitter analysis (different purpose) | M | P1.14 (init command) |
+| ~~P1.15~~ | ~~Pre-train Scan~~ | **REMOVED (Apr 2026).** `aide-memory init --scan` was removed because output was too surface-level (package.json + dir inference only). See follow-up "Deferred: Auto-scan for Codebase Pattern Discovery" in PHASE_0_1_VALIDATION_FOLLOWUPS.md. Use `aide_import` against existing CLAUDE.md / README for richer onboarding. | — | — | — |
 | P1.16 | npm Package | Clean package.json for `aide-memory`. Build: tsc + bundle/minify. npx support. Binary entry point. Exclude old aide-v0 code. | Current aide-v0 package.json | M | All code complete |
 | P1.17 | Pre-ship Validation | Controlled comparison: **realistic general coding tasks** (not "remember X" — agent shouldn't know it's being tested for recall). Measurable quality difference. At least 5 scenarios across Claude Code + Cursor. Prove value within single session AND across sessions. | E2E comparison test exists (different format) | M | Everything working |
 | P1.18 | Plugin/Marketplace | Claude Code plugin listing (marketplace discovery). Cursor extension/adapter listing if applicable. Increases visibility alongside npm distribution. | Nothing | S | P1.16 (package ready) |
@@ -1863,10 +1863,10 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 | Order | Component | Can parallel? | Notes |
 |-------|-----------|--------------|-------|
 | 14 | P1.14 aide init | After Sprint 2-3 | Orchestrates all setup: dirs, rules, hooks, config, model download, gitignore. |
-| 15 | P1.15 Pre-train Scan | After P1.14 | `--scan` flag on init. Lightweight codebase analysis. |
+| ~~15~~ | ~~P1.15 Pre-train Scan~~ | — | Removed Apr 2026 (see PHASE_0_1_VALIDATION_FOLLOWUPS.md). |
 | 16 | P1.16 npm Package | After all code | Package.json cleanup, build pipeline, npx support. |
 
-**End of Sprint 4 deliverable:** `npx aide-memory init` works end-to-end, pre-train populates initial memories.
+**End of Sprint 4 deliverable:** `npx aide-memory init` works end-to-end.
 
 #### Sprint 5 — Validation & Polish (Week 5-6)
 
@@ -2116,7 +2116,7 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 - [ ] Binary name: `aide-memory` (avoids conflicts with other AIDE products or old aide binary)
 - [ ] Commander.js command structure:
   ```
-  aide-memory init [--scan] [--update-rules]   Create .aide/, write rules, set up hooks, configure MCP
+  aide-memory init [--update-rules]             Create .aide/, write rules, set up hooks, configure MCP
   aide-memory recall <path>                     Recall memories for a file/directory path
   aide-memory remember <what>                   Store a memory (--layer, --scope, --tags, --why)
   aide-memory update <uuid>                     Update an existing memory (--what, --why, --scope, --tags)
@@ -2369,7 +2369,6 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 - [ ] Idempotent: running twice doesn't duplicate or overwrite (checks for existing files)
 - [ ] Completes in < 2 minutes (most time is model download)
 - [ ] `aide-memory init --update-rules`: refreshes rules files only, without touching config, memories, or hooks. For when aide-memory ships updated/improved rules in a new version.
-- [ ] `aide-memory init --scan`: see P1.15
 
 **Design note — tool onboarding framework:** All rules files, hook configs, and MCP configs are generated from templates in `src/templates/`. Adding support for a new tool = adding a new template set (file paths, formatting conventions, hook event names). Same memory data, different output format per tool. Target: one-day effort per new tool.
 
@@ -2380,30 +2379,9 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 - Rules file already exists (from previous init): update it (replace contents), don't create duplicate
 - Network unavailable (can't download model): init succeeds without embeddings, log warning "Embedding model not downloaded — semantic search disabled. Run `aide-memory init --download-model` later."
 
-### P1.15 — Pre-train Scan
+### ~~P1.15 — Pre-train Scan~~ (REMOVED Apr 2026)
 
-**Done looks like:** `aide init --scan` populates ~20-30 structural memories from codebase analysis.
-
-- [ ] Detects project type: Node.js, Python, Go, Rust, Java, etc. (from package.json, go.mod, Cargo.toml, pyproject.toml, etc.)
-- [ ] Detects frameworks: React, Next.js, Express, Django, FastAPI, etc.
-- [ ] Detects testing framework: Vitest, Jest, pytest, Go testing, etc.
-- [ ] Detects build system: tsc, webpack, vite, esbuild, etc.
-- [ ] Detects existing docs: CLAUDE.md, .cursorrules, CONTRIBUTING.md, README.md
-- [ ] Detects monorepo structure: packages/, apps/, workspace config
-- [ ] Generates memories as `technical` layer with appropriate scopes:
-  - "Project uses TypeScript with Vitest for testing" [project-wide]
-  - "React components in src/components/ use functional components with hooks" [src/components/**]
-  - "Express API routes in src/api/" [src/api/**]
-- [ ] Generated memories tagged with `source: "agent_discovery"`
-- [ ] Memory count: 15-30 (enough to be useful, not so many they're noise)
-- [ ] Scan completes in < 30 seconds for a typical project
-- [ ] Scan does NOT read file contents in detail — reads package.json, directory structure, file extensions, config files. Not a full AST analysis.
-- [ ] User shown summary: "Generated 23 structural memories from codebase scan. Run `aide list` to review."
-
-**Edge cases:**
-- Empty project (no files): generate 0 memories, inform user
-- Monorepo: scan root + each detected package, scope memories appropriately
-- Very large project (10K+ files): scan only top-level structure and key config files, don't traverse deeply
+Removed because output was too surface-level — `package.json` + top-level directory inference only. Testing on a realistic Express app produced 4 memories, one of which was wrong (called a TS project "CommonJS modules"). See `docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md` → "Deferred: Auto-scan for Codebase Pattern Discovery" for the Phase 2 revisit criteria (real tree-sitter-backed code-pattern analysis). Until then, `aide_import` against existing CLAUDE.md / README / design docs is the recommended onboarding path.
 
 ### P1.16 — npm Package
 
@@ -2464,7 +2442,7 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
   - Nudge + recall (PreToolUse fires → agent recalls → uses context)
   - Cross-session persistence (session 1 teaches → session 2 remembers)
   - Search (FTS5 keyword search finding relevant memories)
-  - Pre-train scan (init --scan populates structural memories)
+  - ~~Pre-train scan (init --scan populates structural memories)~~ (removed Apr 2026 — see P1.15)
 - [ ] Full-flow demo (3-5 minutes): init → work on a feature → correction captured → new session → context recalled → better output
 - [ ] All demos show realistic coding tasks, not contrived "remember X" scenarios
 - [ ] Assets usable in: landing page, README, blog posts, HN launch, social media
@@ -2483,7 +2461,7 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 - [ ] Full CLI reference page:
   | Command | Description | Example |
   |---------|-------------|---------|
-  | `aide-memory init` | Set up project | `aide-memory init --scan` |
+  | `aide-memory init` | Set up project | `aide-memory init` |
   | `aide-memory recall` | Get context for a path | `aide-memory recall src/auth/` |
   | `aide-memory remember` | Store knowledge | `aide-memory remember "Use datetime()" --layer technical` |
   | `aide-memory update` | Edit a memory | `aide-memory update <uuid> --tags security` |
@@ -2752,23 +2730,23 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 
 #### Flow 5: Init → First Session → Recall
 
-**Goal:** Verify the complete first-time user experience: init creates everything, MCP is auto-configured, scan generates useful memories, first file read triggers nudge. Proves zero-config install works end-to-end.
+**Goal:** Verify the complete first-time user experience: init creates everything, MCP is auto-configured, first file read triggers nudge. Proves zero-config install works end-to-end.
 
 **Setup:** An existing Node.js project with package.json, src/ directory, existing CLAUDE.md.
 
 **Test steps:**
-1. Run `aide init --scan`
+1. Run `aide init`
 2. Verify .aide/ directory structure created
 3. Verify rules files written for all tools
 4. Verify config.json created with defaults
 5. Verify .gitignore updated
 6. Verify post-checkout hook installed
-7. Verify scan generated 15+ structural memories
+7. Run `aide_import` against existing CLAUDE.md to seed initial memories
 8. Simulate a PreToolUse hook call for a file in the project
-9. Verify nudge includes scan-generated memories
+9. Verify nudge includes imported memories
 10. Verify existing CLAUDE.md was NOT modified (only rules files in .claude/rules/ created)
 
-**Pass criteria:** Full init → scan → recall flow works in under 2 minutes.
+**Pass criteria:** Full init → import → recall flow works in under 2 minutes.
 
 #### Flow 6: Within-Session and Cross-Session Value
 

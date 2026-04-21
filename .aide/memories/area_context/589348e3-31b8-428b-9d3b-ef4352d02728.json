@@ -1,0 +1,20 @@
+{
+  "uuid": "589348e3-31b8-428b-9d3b-ef4352d02728",
+  "layer": "area_context",
+  "what": "User directive Apr 20 2026 on `aide-memory init --scan`: if it's not working well across different project types, consider removing it entirely (not just deferring or improving). Validated on two projects — output is surface-level (package.json + top-level dir inference, got module system wrong on a TS project). Recommendation captured in docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md: Option A deepen with real tree-sitter analysis, Option B deprecate in favor of aide_import against existing CLAUDE.md/README. User leans toward B (\"maybe we can remove --scan entirely\"). Decision not yet final — awaiting user call post-Phase-1.",
+  "why": "User correction/directive from validation run. Low-value feature candidate for removal. Captured so future sessions evaluating the scan feature start from user's stated preference (willing to remove) rather than defaulting to \"keep and improve.\"",
+  "scope": "docs/specs/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "validation",
+    "phase-1"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T02:28:40.151Z",
+  "updated_at": "2026-04-21T02:28:40.151Z"
+}

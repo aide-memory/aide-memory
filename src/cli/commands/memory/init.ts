@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import { initProject, type InitOptions } from '../../../memory/init';
 import { brand } from './utils';
 
-export function runInit(options: { scan?: boolean; updateRules?: boolean; force?: boolean; reset?: boolean }): void {
+export function runInit(options: { updateRules?: boolean; force?: boolean; reset?: boolean }): void {
   const projectRoot = process.cwd();
 
   // Handle --reset: reset config to factory defaults, then run normal init
@@ -22,7 +22,6 @@ export function runInit(options: { scan?: boolean; updateRules?: boolean; force?
   }
 
   const initOptions: InitOptions = {
-    scan: options.scan,
     updateRules: options.updateRules,
     force: options.force,
   };
@@ -54,10 +53,6 @@ export function runInit(options: { scan?: boolean; updateRules?: boolean; force?
         for (const item of result.warnings) {
           console.log(chalk.yellow(`  ! ${item}`));
         }
-      }
-
-      if (result.memoriesGenerated !== undefined) {
-        console.log(brand(`\nGenerated ${result.memoriesGenerated} memories from pre-train scan.`));
       }
     })
     .catch((err) => {

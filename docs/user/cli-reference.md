@@ -364,12 +364,31 @@ Get or set configuration using dot-notation keys.
 aide-memory config <key> [value]
 ```
 
+**Scope:** Configuration is **per-project**. Values live in
+`<project>/.aide/config.json`, next to the project's memories. A global
+user config (`~/.aide/config.json`) is planned for Phase 2 so preferences
+can persist across projects — for now every project carries its own
+overrides.
+
 **Arguments:**
 
 | Argument | Type | Description |
 |----------|------|-------------|
 | `key` | string, required | Configuration key in dot-notation |
 | `value` | string, optional | Value to set (omit to read current value) |
+
+**Key validation:** Unknown keys are rejected with a list of valid keys
+and (if possible) near-matching suggestions. The full set of keys comes
+from two sources:
+
+- Hook/recall/injection knobs — see `scripts/hooks/defaults.json` (all 18
+  are user-settable at launch).
+- Legacy capture/telemetry/tags schema — `capture.enabled`,
+  `telemetry.enabled`, `contributor`, `tags.presets`, etc.
+
+Every public setting is seeded into `.aide/config.json` on `aide-memory init`
+and on MCP-server auto-update, so you can `cat .aide/config.json` to see
+every knob and its default.
 
 **Examples:**
 
@@ -378,21 +397,35 @@ aide-memory config <key> [value]
 aide-memory config capture.enabled
 # Output: true
 
-# Set a value
+# Set a boolean
 aide-memory config capture.enabled false
 # Output: Set capture.enabled = false
 
-# Read nested value
+# Read a nested value
 aide-memory config capture.hooks.preToolUse
 # Output: true
+
+# Disable the Stop-hook correction prompt
+aide-memory config hooks.correction.enabled false
+
+# Set a JSON array value
+aide-memory config hooks.stop.schedule '[{"every":5}]'
 
 # Disable telemetry
 aide-memory config telemetry.enabled false
 ```
 
-Values are auto-parsed: `true`/`false` become booleans, numbers become numbers, everything else stays a string.
+Values are auto-parsed: `true`/`false` become booleans, integers and
+floats become numbers, JSON objects and arrays (`{...}` / `[...]`) are
+parsed as JSON, and everything else stays a string.
 
-**Error:** If key is not set: `(not set)`
+**Errors:**
+
+- `Unknown config key: "..."` — the key wasn't in defaults.json or the
+  legacy AideConfig schema. The error lists suggestions and the full
+  key set. Exits non-zero.
+- `(not set)` — the key is valid but you haven't assigned a value yet;
+  reads fall back to the default from `scripts/hooks/defaults.json`.
 
 ---
 

@@ -123,7 +123,7 @@ Recalled in priority order: area context first (most specific), then technical, 
 ## CLI commands
 
 ```bash
-aide-memory init [--scan]           # Setup (--scan pre-populates project structure)
+aide-memory init                    # Setup
 aide-memory recall <path>           # Recall memories for a file path
 aide-memory remember <what>         # Store a memory
 aide-memory update <uuid>           # Edit an existing memory
@@ -176,9 +176,6 @@ It is a file-based memory layer that lives in your repo. Human-readable JSON. Di
 ```bash
 # Install and setup
 npx aide-memory init
-
-# Optional: pre-populate with project structure
-npx aide-memory init --scan
 
 # Start working normally -- hooks capture context as you go
 # Next session, your agent remembers

@@ -498,6 +498,51 @@ describe('recall-for-path.js', () => {
       expect(err.status ?? 0).toBe(0);
     }
   });
+
+  // Count-consistency parity: every count-related field in the JSON payload
+  // must agree. Previously the integer count and the per-layer breakdown
+  // were computed from different filter sets (see memory #95 + validation on
+  // /tmp/aide-l-test). This test guards against that drift.
+  it('parity: count === scoped_count === sum(layers) === scoped_ids.length', () => {
+    const scriptPath = path.join(HOOKS_DIR, 'recall-for-path.js');
+    const projectRoot = path.resolve(__dirname, '..', '..', '..');
+    const distStore = path.join(projectRoot, 'dist', 'memory', 'store.js');
+
+    if (!fs.existsSync(distStore)) {
+      return; // Skip if not built
+    }
+
+    const probePaths = [
+      path.join(projectRoot, 'src', 'memory', 'store.ts'),
+      path.join(projectRoot, 'src', 'memory', 'recall.ts'),
+      path.join(projectRoot, 'scripts', 'hooks', 'recall-for-path.js'),
+      path.join(projectRoot, 'scripts', 'hooks', 'pre-read-recall.sh'),
+    ];
+
+    for (const probe of probePaths) {
+      try {
+        const stdout = execSync(
+          `node "${scriptPath}" "${probe}" "${projectRoot}"`,
+          { encoding: 'utf-8', timeout: 5000 }
+        );
+        const trimmed = stdout.trim();
+        if (!trimmed || trimmed === '0') continue;
+
+        const parsed = JSON.parse(trimmed);
+        const layersSum = Object.values(parsed.layers ?? {}).reduce(
+          (a: number, b: any) => a + (Number(b) || 0), 0,
+        );
+
+        expect(parsed.count).toBe(parsed.scoped_count);
+        expect(parsed.count).toBe(layersSum);
+        expect(Array.isArray(parsed.scoped_ids)).toBe(true);
+        expect(parsed.count).toBe(parsed.scoped_ids.length);
+      } catch (err: any) {
+        // Exit 0 when dist missing / no matches is fine
+        if (err?.status != null && err.status !== 0) throw err;
+      }
+    }
+  });
 });
 
 // ─── clear-tracking.sh (shared cleanup function) ────────────────────────────

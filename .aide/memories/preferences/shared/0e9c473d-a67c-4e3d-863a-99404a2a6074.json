@@ -1,0 +1,19 @@
+{
+  "uuid": "0e9c473d-a67c-4e3d-863a-99404a2a6074",
+  "layer": "preferences",
+  "what": "User correction 2026-04-21: \"Not cosmetic, dont belittle issues.\" When reporting validation findings or gaps, do NOT downgrade severity with words like \"minor,\" \"cosmetic,\" \"nit,\" or \"belittling\" framings. Report findings neutrally and let the user decide priority. Applies especially to count-consistency / preview-text bugs — those were filed as \"cosmetic mismatch\" but the user pushed back: inconsistent counts are real bugs because users rely on counts to decide whether to call recall. The correct framing is \"count X is correct because [design rationale], count Y is wrong because [drift/old-path]\", then fix.",
+  "why": "User explicit correction on how I frame validation findings. Affects all future reporting. Preferences layer so it gets surfaced at SessionStart injection.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T16:27:36.833Z",
+  "updated_at": "2026-04-21T16:27:36.833Z"
+}

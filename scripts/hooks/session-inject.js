@@ -21,19 +21,23 @@ try {
     process.exit(0);
   }
 
-  // Load per-layer injection settings from defaults.json
-  const defaults = JSON.parse(fs.readFileSync(path.join(__dirname, 'defaults.json'), 'utf8'));
+  // Load per-layer injection settings (user config overrides defaults).
+  const { getSetting } = require(path.join(__dirname, 'read-config.js'));
+  const prefLimit = getSetting(projectRoot, 'injection.preferences') ?? 15;
+  const techEnabled = getSetting(projectRoot, 'injection.technical') ?? false;
+  const areaEnabled = getSetting(projectRoot, 'injection.area_context') ?? false;
+  const guidelinesMode = getSetting(projectRoot, 'injection.guidelines') ?? 'all';
+  const priorityOverride = getSetting(projectRoot, 'injection.priorityAlwaysOverride') ?? true;
 
-  const prefLimit = defaults['injection.preferences']?.value ?? 15;
-  const techEnabled = defaults['injection.technical']?.value ?? false;
-  const areaEnabled = defaults['injection.area_context']?.value ?? false;
-  const guidelinesMode = defaults['injection.guidelines']?.value ?? 'all';
-  const priorityOverride = defaults['injection.priorityAlwaysOverride']?.value ?? true;
-
-  // Helper: load a layer with a configurable limit
-  // setting: false → skip, "all" → no limit, number → top N
+  // Helper: load a layer with a configurable limit.
+  // setting semantics:
+  //   false   → skip entirely (return nothing)
+  //   0       → same as false (treat "zero" as "do not inject")
+  //   'all'   → no cap
+  //   number >0 → top N by most-recent updated_at
+  //   anything else (null/undefined) → fall back to no cap
   function loadLayer(store, layer, setting) {
-    if (setting === false) return [];
+    if (setting === false || setting === 0) return [];
     const all = store.list({ layer });
     all.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
     if (setting === 'all') return all;

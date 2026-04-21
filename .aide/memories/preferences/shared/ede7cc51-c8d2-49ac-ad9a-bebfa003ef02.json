@@ -1,0 +1,20 @@
+{
+  "uuid": "ede7cc51-c8d2-49ac-ad9a-bebfa003ef02",
+  "layer": "preferences",
+  "what": "When recommending between multiple options, commit to ONE and state it clearly. Don't end with \"should I do A or B?\" when the reasoning already points to A. The user had to ask \"wdym so use yao-pkg or rust??\" because my previous message ended with a menu instead of a recommendation. Pattern: present the analysis, then give a single clean call. Alternatives belong in a \"here's why not the others\" paragraph, not as an unresolved choice the user now has to arbitrate.",
+  "why": "Direct user feedback pattern this turn — they had to push me to pick after I presented parallel options. Related to memory 134 (don't pad estimates) but distinct: this is about committing to a recommendation instead of hedging with a menu.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "meky",
+  "tags": [
+    "communication",
+    "recommendations"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T02:34:30.626Z",
+  "updated_at": "2026-04-21T02:34:30.626Z"
+}

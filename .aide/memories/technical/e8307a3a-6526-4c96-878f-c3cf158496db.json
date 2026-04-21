@@ -1,0 +1,22 @@
+{
+  "uuid": "e8307a3a-6526-4c96-878f-c3cf158496db",
+  "layer": "technical",
+  "what": "Deno compile is a serious alternative I missed in earlier Bun-vs-yao-pkg framing. Deno Land Inc (Ryan Dahl, VC-backed), Deno 2.3 (2025) added Node native addon support to `deno compile` — meaning better-sqlite3 would likely work without the /$bunfs/ bindings issue Bun hits. Also got code signing for Windows in 2.3. Full real binary-compiler landscape for npm-distributed Node code in 2026: (1) Bun compile — Anthropic-backed, ships Claude Code, near-Node API compat, native addons broken; (2) Deno compile — Deno Land, full npm + native addon support, but runtime has restrictive permissions model (--allow-read etc.) and some Node API drift; (3) Node.js SEA — official, beta since Node 25.5 --build-sea, no bytecode (weakest protection); (4) yao-pkg — small team, V8 bytecode default, handles native addons. Earlier framing of \"Bun vs small-OSS\" was incomplete — Deno is a legitimate well-funded alternative. If aide-memory's Bun + shim approach ever becomes problematic, Deno compile is the ~1-2 day pivot that eliminates the better-sqlite3 problem entirely, at the cost of working through Deno's permissions model for hooks. Still recommending Bun for aide-memory (Anthropic validation + minimal Node API drift + 90-min shim cost), but Deno is the first fallback, not yao-pkg.",
+  "why": "Material omission from memories 138/144 — user pushed back with \"only small OSS projects? are you sure?\" and research surfaced Deno compile as a real alternative I hadn't evaluated. Future binary-migration spawns need to see Deno in the option set, not just Bun + yao-pkg + SEA. Also documents why we're staying on Bun despite Deno's native-addon advantage.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "binary-migration",
+    "deno-compile",
+    "correction",
+    "compiler-landscape"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T16:54:07.560Z",
+  "updated_at": "2026-04-21T16:54:07.560Z"
+}

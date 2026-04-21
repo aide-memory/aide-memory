@@ -192,24 +192,6 @@ The `preferences` layer has a special directory split: `shared/` (team-visible, 
 
 ---
 
-## Pre-train scan
-
-`aide-memory init --scan` generates initial memories without any LLM. It reads:
-
-- `package.json` (frameworks, build tools, module type, monorepo detection)
-- `tsconfig.json` (strict mode, compilation target)
-- `go.mod`, `Cargo.toml`, `pyproject.toml` (language detection)
-- Directory structure (`src/`, `test/`, `docs/`, `packages/`)
-- Test config (Vitest, Jest, Mocha, pytest)
-- CI config (GitHub Actions, GitLab CI, CircleCI)
-- Linting/formatting (ESLint, Prettier, Biome)
-- Package manager (npm, yarn, pnpm, bun)
-- Existing documentation (CLAUDE.md, .cursorrules, CONTRIBUTING.md)
-
-Each detected fact becomes a `technical` layer memory with `source: "agent_discovery"`. Targets 15-30 memories for a typical project. Deduplicates by `what` field.
-
----
-
 ## Analytics
 
 The `analytics` SQLite table tracks events (recalls, stores, searches) with timestamps. The `aide-memory stats` command aggregates:

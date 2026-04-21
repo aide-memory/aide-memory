@@ -22,6 +22,13 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/read-config.sh"
+
+# Respect hooks.edit.maxBlocks=0 as a kill switch — exit silently when disabled.
+MAX_BLOCKS=$(get_setting "hooks.edit.maxBlocks")
+if [ "$MAX_BLOCKS" = "0" ]; then
+  exit 0
+fi
+
 RESULT=$(node "$SCRIPT_DIR/recall-for-path.js" "$FILE_PATH" "$PROJECT_ROOT" 2>/dev/null)
 
 if [ -z "$RESULT" ] || [ "$RESULT" = "0" ]; then

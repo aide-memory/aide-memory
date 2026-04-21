@@ -1,0 +1,20 @@
+{
+  "uuid": "f474e6e1-1813-43eb-a65a-abf68220d7a5",
+  "layer": "technical",
+  "what": "IDB validation rigor (Apr 21 2026): to fully exercise pre-read-recall.sh and pre-edit-recall.sh, seed >=10 memories AND cover the full permutation matrix. The hook has multiple decision axes that must all be verified:\n\n**Decision axis (block type):**\n- FORCE_SOFT (project <10 memories) → always additionalContext (soft)\n- ENCOUNTERED (file| in tracking) + missing IDs → additionalContext (soft)\n- NEW file + NONE covered → decision:\"block\" (hard) with path-based message\n- NEW file + SOME covered + SOME missing → decision:\"block\" (hard) with ID-based message\n- ALL covered → SILENT (no output)\n\n**Message content axis:**\n- Path-based: \"N memories for {path} (L1, L2) — topics: ... . Call aide_recall({paths:[...]})\"\n- ID-based: \"N memories for {path} not yet recalled. Call aide_recall({ids: [...]})\"\n- Preview format: layer breakdown + topics only on path-based branch\n\n**Scope matching axis (per memory #95/#96):**\n- Exact file scope — INCLUDED\n- Immediate parent scope — INCLUDED\n- Grandparent scope — EXCLUDED (focused mode)\n- Sibling subtree scope — EXCLUDED\n- Project-wide (null/'project') — EXCLUDED (handled by SessionStart, not path-blocks)\n- Directory query (path ends /) — INCLUDES child/descendant scopes\n\nAll permutations must be exercised in a project with >=10 memories to defeat FORCE_SOFT, otherwise hard-block and soft paths look identical in output.",
+  "why": "User correction: \"Not just for hard block branches but hard to soft, messages for layers or messages for ids left, all the permutations that are there\". Future IDB-N validations must cover the full matrix — any validation that tests only one axis is incomplete.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "validation",
+    "hooks"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T16:45:38.385Z",
+  "updated_at": "2026-04-21T16:47:06.176Z"
+}

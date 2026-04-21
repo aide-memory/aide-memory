@@ -120,10 +120,9 @@ The directory trigger (block on first file read in a new directory) was removed 
 - `offset` and `exclude_ids` parameters still available as future enhancements
 - ID-based blocking + `ids` param covers the primary use case (get specific missing memories)
 
-### init --scan Validation
-- Verify `aide-memory init --scan` works with the new memory system
-- Add validation scenario for importing initial memories from code analysis
-- If tree-sitter analysis doesn't work for all languages, fix or make more basic
+### ~~init --scan Validation~~ (REMOVED Apr 2026)
+- `--scan` was removed (see "Deferred: Auto-scan for Codebase Pattern Discovery" below).
+- Onboarding now uses `aide_import` against existing CLAUDE.md / README / docs.
 
 ### UX Exploration Session
 - Collect all hook output samples (block, soft, silent, stop, precompact)
@@ -223,7 +222,7 @@ These scenarios validate the ID-based blocking system that replaced block-once-t
 - U1: Pre-seeded context (without vs with)
 - U2: Correction learning loop
 - U3: Behavioral preferences
-- NEW: init --scan importing
+- ~~NEW: init --scan importing~~ (--scan removed Apr 2026)
 - NEW: Settings framework validation (changing defaults changes behavior)
 - NEW: ID-based blocking scenarios (IDB-1 through IDB-9 above)
 
@@ -419,3 +418,17 @@ Doesn't surface route patterns, auth middleware design, SQLite WAL mode config, 
 **Option B — Deprecate:** Remove `--scan` entirely. Replace with stronger onboarding via `aide_import` against existing CLAUDE.md / README / docs — richer signal, less inference guesswork. The "viral hook" pitch shifts from "one command generates your context" to "aide-memory ingests your existing docs and makes them recall-able."
 
 **Recommend:** B for Phase 1 (simpler, less risky), A as a Phase 2 pro feature if users ask for it. Also fix the module-system inference bug (was called CommonJS for a TS project).
+
+**Decision (Apr 21, 2026):** Option B accepted — `--scan` removed. See next section for the deferred revisit criteria.
+
+---
+
+## Deferred: Auto-scan for Codebase Pattern Discovery
+
+--scan was removed in Apr 2026 because output was too surface-level
+(package.json + dir inference only — 4 memories from an Express app,
+one wrong). Phase 2 could revisit with real tree-sitter-backed
+analysis that looks at code patterns (auth middleware, route conventions,
+SQLite config, etc.). Until then, users should use `aide_import`
+against existing CLAUDE.md / README / design docs — richer signal
+with less inference guesswork.

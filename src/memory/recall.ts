@@ -2,9 +2,64 @@ import type { Memory, MemoryLayer, RecallQuery, RecallResult } from './types';
 import type { MemoryStore } from './store';
 import fs from 'fs';
 import path from 'path';
+import { getSetting } from './settings';
 
 const LAYER_ORDER: MemoryLayer[] = ['area_context', 'technical', 'preferences', 'guidelines'];
 const DEFAULT_LIMIT = 20;
+
+/**
+ * Result of computeScopedForPath — the single source of truth for "what
+ * counts as scoped-for-blocking" at a given path. Hooks derive every
+ * count-related field (integer count, layer breakdown, topics) from this.
+ */
+export interface ScopedForPath {
+  /** The matching memories — EXCLUDES project-wide (null/'project') and grandparent scopes. */
+  memories: Memory[];
+  /** IDs in the same order as `memories`. Used for ID-based recall blocking. */
+  ids: number[];
+  /** Count per layer derived from the same filtered set as `memories`. */
+  layers: Partial<Record<MemoryLayer, number>>;
+  /** Total number of scoped memories (always === memories.length). */
+  count: number;
+}
+
+/**
+ * Single source of truth for the focused-scope filter used by hooks.
+ *
+ * Returns memories matching the given path under the "focused" rule
+ * (immediate parent + same level + deeper — no grandparent scopes) AND
+ * excluding project-wide memories (null / "project" scope). Project-wide
+ * memories are handled by SessionStart injection, not path-based blocking.
+ *
+ * All count-related hook fields — the integer "N memories" nudge, the
+ * layer breakdown, the topic keywords — MUST be derived from this single
+ * filtered set so they cannot disagree.
+ *
+ * @param memories - Candidate memories (typically store.list() result).
+ * @param filePath - Query path (relative to project root preferred).
+ */
+export function computeScopedForPath(memories: Memory[], filePath: string): ScopedForPath {
+  const matching = memories.filter(m => {
+    // Project-wide memories are NEVER scoped-for-blocking.
+    if (!m.scope || m.scope === 'project') return false;
+    // Use focused matcher to exclude grandparent scopes.
+    return scopeMatchesPath(m.scope, filePath, { focused: true });
+  });
+
+  const layers: Partial<Record<MemoryLayer, number>> = {};
+  const ids: number[] = [];
+  for (const m of matching) {
+    layers[m.layer] = (layers[m.layer] || 0) + 1;
+    ids.push(m.id);
+  }
+
+  return {
+    memories: matching,
+    ids,
+    layers,
+    count: matching.length,
+  };
+}
 
 /**
  * Append a recall event to .aide/recall-log.jsonl for observability.
@@ -93,6 +148,17 @@ export function scopeMatchesPath(scope: string | null, filePath: string, options
   if (!isDescendant && !isChildScope) return false;
 
   // Focused mode: exclude grandparent scopes
+  // Rule (from design memory #95/#96): only match scopes at the IMMEDIATE parent
+  // level or deeper. Scopes above the immediate parent (grandparent+) are too
+  // broad and are already handled by SessionStart injection.
+  //
+  // Examples for query `src/api/routes.ts` (parent = `src/api`, parentDepth=2):
+  //   `src/api/routes.ts` (depth 3, exact file)   → INCLUDE (deeper/same)
+  //   `src/api/**`        (depth 2, immediate)    → INCLUDE (parent level)
+  //   `src/**`            (depth 1, grandparent)  → EXCLUDE
+  //
+  // Child scopes (e.g. `src/api/v2/**` for query `src/api/`) are always allowed
+  // — they are DESCENDANTS of the query, not ancestors.
   if (options?.focused && isDescendant) {
     // Get the query path's parent directory
     const queryParent = normalizedPath.includes('/')
@@ -105,16 +171,13 @@ export function scopeMatchesPath(scope: string | null, filePath: string, options
       ? normalizedPath.replace(/\/$/, '')
       : queryParent;
 
-    // Scope must be at effectiveParent level or deeper (not above it)
-    // scopeBase depth must be >= effectiveParent depth
     const scopeDepth = scopeBase.split('/').length;
     const parentDepth = effectiveParent ? effectiveParent.split('/').length : 0;
 
-    // Allow scope at parent level or one level above (covers feature area scopes)
-    // e.g., src/components/** (depth 2) is valid for src/components/dashboard/Widget.tsx (parent depth 3)
-    // but src/** (depth 1) is too broad for the same file
-    if (scopeDepth < parentDepth - 1) {
-      return false; // grandparent+ scope — exclude
+    // Scope must be at immediate parent level or deeper.
+    // scopeDepth < parentDepth means scope is ABOVE the immediate parent — a grandparent.
+    if (scopeDepth < parentDepth) {
+      return false;
     }
   }
 
@@ -155,7 +218,17 @@ function keywordScore(memory: Memory, query: string): number {
  * 5. Cap at limit
  */
 export function recall(store: MemoryStore, query: RecallQuery, logDir?: string | null): RecallResult {
-  const limit = query.limit ?? DEFAULT_LIMIT;
+  // Resolve recall settings from user config (falls back to defaults.json).
+  // Per-call `query.limit` still wins so MCP callers can override ad hoc.
+  const projectRoot = store.getProjectRoot();
+  const configuredLimit = projectRoot ? getSetting<number>(projectRoot, 'recall.limit') : null;
+  const ensureLayerDiversity = projectRoot
+    ? (getSetting<boolean>(projectRoot, 'recall.ensureLayerDiversity') ?? true)
+    : true;
+  const layerDiversityMinLimit = projectRoot
+    ? (getSetting<number>(projectRoot, 'recall.layerDiversityMinLimit') ?? 5)
+    : 5;
+  const limit = query.limit ?? configuredLimit ?? DEFAULT_LIMIT;
 
   // No status filter — all memories in the store are active
   const listOptions: { contributor?: string } = {};
@@ -246,13 +319,14 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
   });
 
   // Select top N with round-robin layer representation.
-  // Total never exceeds limit. If limit >= 5, swap lowest-ranked entries
-  // with 1 from each unrepresented layer to ensure diversity.
+  // Total never exceeds limit. If limit >= layerDiversityMinLimit AND
+  // ensureLayerDiversity is true, swap lowest-ranked entries with 1 from
+  // each unrepresented layer to ensure diversity.
   let results: Memory[];
   if (limit) {
     const topN = scored.slice(0, limit);
 
-    if (limit >= 5) {
+    if (ensureLayerDiversity && limit >= layerDiversityMinLimit) {
       const representedLayers = new Set(topN.map(s => s.memory.layer));
       const remaining = scored.slice(limit);
 

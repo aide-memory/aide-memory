@@ -1,0 +1,21 @@
+{
+  "uuid": "6c4db3e6-46d4-4dbe-945e-497a45104a6c",
+  "layer": "preferences",
+  "what": "Don't flip recommendations across turns as research catches up. Pattern this session: gave 4 directional shifts on binary-compiler choice over 6 turns (Bun → yao-pkg → \"yao-pkg not that much better\" → back to Bun) because each user pushback exposed research I should have done upfront. User explicitly called this out (\"why do you keep switching\"). Rule: when a recommendation requires verifying real-world facts (tool popularity, actual protection levels, industry adoption, production users), DO THE WEB RESEARCH FIRST via Agent/WebSearch, then commit once. Distinct from memory 141 (don't hedge within a single message) — this is about multi-turn consistency. Cost of upfront rigor: ~5 min of tool calls. Cost of iteration-via-friction: user has to keep correcting, trust erodes, final decision takes 4× as many turns.",
+  "why": "Direct user frustration this turn — they called out the oscillation explicitly. Separate failure mode from memories 134 and 141. Future sessions on strategic decisions (not just this binary migration) should trigger upfront research before first recommendation, not rely on user pushback to surface gaps.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "meky",
+  "tags": [
+    "communication",
+    "recommendations",
+    "research-rigor"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T16:49:05.247Z",
+  "updated_at": "2026-04-21T16:49:05.247Z"
+}

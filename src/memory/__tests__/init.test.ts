@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { initProject, detectContributor } from '../init';
+import {
+  IGNORE_BEGIN_MARKER,
+  IGNORE_END_MARKER,
+  MEMORIES_IGNORE_ENTRY,
+} from '../ignoreFile';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -84,6 +89,43 @@ describe('initProject', () => {
     expect(config.capture.enabled).toBe(true);
 
     expect(result.created).toContain('.aide/config.json');
+  });
+
+  it('writes .ignore with aide-memory-managed markers on fresh init', async () => {
+    await initProject(projectRoot);
+
+    const ignorePath = path.join(projectRoot, '.ignore');
+    expect(fs.existsSync(ignorePath)).toBe(true);
+    const content = fs.readFileSync(ignorePath, 'utf8');
+    expect(content).toContain(IGNORE_BEGIN_MARKER);
+    expect(content).toContain(MEMORIES_IGNORE_ENTRY);
+    expect(content).toContain(IGNORE_END_MARKER);
+    // Entry sits inside the markers, not loose.
+    const begin = content.indexOf(IGNORE_BEGIN_MARKER);
+    const entry = content.indexOf(MEMORIES_IGNORE_ENTRY);
+    const end = content.indexOf(IGNORE_END_MARKER);
+    expect(begin).toBeLessThan(entry);
+    expect(entry).toBeLessThan(end);
+  });
+
+  it('migrates a legacy .ignore (bare entry, no markers) on re-init', async () => {
+    // Pre-seed a legacy .ignore like older versions wrote.
+    fs.writeFileSync(
+      path.join(projectRoot, '.ignore'),
+      'dist/\n.aide/memories/\nuser-entry/\n',
+      'utf8'
+    );
+
+    await initProject(projectRoot, { force: true });
+
+    const content = fs.readFileSync(path.join(projectRoot, '.ignore'), 'utf8');
+    // Single entry, now wrapped in markers.
+    expect((content.match(/\.aide\/memories\//g) || []).length).toBe(1);
+    expect(content).toContain(IGNORE_BEGIN_MARKER);
+    expect(content).toContain(IGNORE_END_MARKER);
+    // User entries preserved.
+    expect(content).toContain('dist/');
+    expect(content).toContain('user-entry/');
   });
 
   it('updates .gitignore without duplicating entries', async () => {

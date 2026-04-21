@@ -39,16 +39,6 @@ It also:
 - Installs a `post-checkout` git hook to keep the SQLite cache in sync
 - Detects your contributor name from `git config user.name`
 
-### Optional: pre-train scan
-
-Generate initial memories from your project structure:
-
-```bash
-npx aide-memory init --scan
-```
-
-This reads `package.json`, `tsconfig.json`, directory structure, CI config, and other files to produce 15-30 technical memories automatically. No LLM needed.
-
 ## 2. Store your first memory
 
 ```bash

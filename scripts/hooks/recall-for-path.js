@@ -1,7 +1,23 @@
 #!/usr/bin/env node
 // Direct store access for memory COUNT — no MCP, just SQLite.
-// Used by pre-read-recall.sh hook to count memories matching a file path.
-// Returns ONLY the count (a single integer), never memory content.
+// Used by pre-read-recall.sh and pre-edit-recall.sh hooks to count memories
+// matching a file path. Returns a JSON payload (or "0" for the empty case).
+//
+// SINGLE SOURCE OF TRUTH: The `scoped_count`, `scoped_ids`, `layers`
+// breakdown, and `topics` fields are ALL derived from the same filtered set
+// produced by computeScopedForPath() in src/memory/recall.ts. This guarantees
+// the nudge integer and the layer/topic preview cannot disagree.
+//
+// Focused-scope filter rules (memory #95, #96):
+//   - Exact file scope → INCLUDED
+//   - Immediate parent scope → INCLUDED
+//   - Deeper/nested child scope → INCLUDED (for directory queries)
+//   - Grandparent scope → EXCLUDED
+//   - Project-wide (null / 'project') scope → EXCLUDED (handled by SessionStart)
+//
+// `project_count` / `total_memories` are informational only (softening
+// threshold, total-memories preview) and are NOT used as block triggers.
+//
 // Requires: npm run build (needs dist/ compiled output)
 
 const path = require('path');
@@ -26,15 +42,20 @@ try {
     process.exit(0);
   }
 
-  // Load MemoryStore from the package's compiled dist
+  // Load MemoryStore + shared count helper from the package's compiled dist.
+  // computeScopedForPath is the SINGLE source of truth for the focused-scope
+  // filter used by ALL hook counts.
   const distPath = path.join(packageRoot, 'dist', 'memory');
   const { MemoryStore } = require(path.join(distPath, 'store'));
-  const { scopeMatchesPath } = require(path.join(distPath, 'recall'));
+  const { computeScopedForPath } = require(path.join(distPath, 'recall'));
 
   // Convert absolute path to relative for scope matching
   // Scopes are stored as relative (e.g. "src/memory/**") but Claude Code
   // passes absolute paths (e.g. "/Users/.../src/memory/store.ts")
-  // Resolve symlinks first — macOS /tmp → /private/tmp causes mismatches
+  // Resolve symlinks first — macOS /tmp → /private/tmp causes mismatches.
+  // Preserve trailing slash so that directory queries stay directory queries —
+  // the focused-scope rule treats them differently from file queries.
+  const hadTrailingSlash = filePath.endsWith('/');
   let resolvedProject = projectRoot;
   let resolvedFile = filePath;
   try { resolvedProject = fs.realpathSync(projectRoot); } catch {}
@@ -44,66 +65,54 @@ try {
   if (path.isAbsolute(resolvedFile) && resolvedFile.startsWith(resolvedProject)) {
     relativePath = path.relative(resolvedProject, resolvedFile);
   }
+  if (hadTrailingSlash && !relativePath.endsWith('/')) {
+    relativePath = relativePath + '/';
+  }
 
   // Open store using projectRoot (constructor accepts string project path)
   const store = new MemoryStore({ projectRoot });
 
-  // Get all active memories matching the path scope
+  // Get all memories once; derive BOTH the focused-scope set (for blocking /
+  // layers / topics) and the raw matching set (for the informational
+  // total/project counts).
   const allMemories = store.list();
-  const matching = [];
+
+  // Focused-scope set — the single source of truth for all block-relevant counts.
+  const scoped = computeScopedForPath(allMemories, relativePath);
+
+  // Informational project-wide count (NOT used for blocking — SessionStart
+  // handles project-wide injection). Kept for the preview + softening gate.
+  let project_count = 0;
   for (const m of allMemories) {
-    if (scopeMatchesPath(m.scope, relativePath)) {
-      matching.push(m);
-    }
+    if (!m.scope || m.scope === 'project') project_count++;
   }
 
   store.close();
+
+  // The "matching" set used for ALL preview/count derivation is the focused
+  // scoped set. This is what guarantees integer == sum-of-layers.
+  const matching = scoped.memories;
 
   if (matching.length === 0) {
     process.stdout.write('0');
     process.exit(0);
   }
 
-  // Count per layer
-  const layers = {};
-  for (const m of matching) {
-    layers[m.layer] = (layers[m.layer] || 0) + 1;
-  }
+  // Layers breakdown — derived from the focused set (parity with scoped_count).
+  const layers = scoped.layers;
 
-  // Classify memories: file-specific vs directory-scoped vs project-wide
-  // For blocking decisions, only count scopes with depth >= minScopeDepth path segments.
-  // Broad scopes like src/** (depth 1) are too generic to justify blocking —
-  // they match every file in the project. Specific scopes like src/api/**
-  // (depth 2) are worth blocking for.
-  // Read minScopeDepth from defaults.json
-  let MIN_SCOPE_DEPTH = 2;
-  try {
-    const defaults = JSON.parse(fs.readFileSync(path.join(__dirname, 'defaults.json'), 'utf8'));
-    MIN_SCOPE_DEPTH = defaults['recall.minScopeDepth']?.value ?? 2;
-  } catch (e) {
-    // Fall back to hardcoded default
-  }
+  const scoped_count = scoped.count;
+  const scoped_ids = scoped.ids;
+  // file_count / dir_count kept for backwards compatibility with any
+  // consumer that read them, but they are now computed from the focused set.
   let file_count = 0;
   let dir_count = 0;
-  let project_count = 0;
-  let scoped_count = 0; // only specific-enough scopes — used for blocking
-  const scoped_ids = []; // IDs of scoped memories — used for ID-based recall check
   for (const m of matching) {
-    const s = m.scope;
-    if (!s || s === 'project') {
-      project_count++;
-    } else if (s.endsWith('/') || s.endsWith('/**') || s.endsWith('/*')) {
+    const s = m.scope || '';
+    if (s.endsWith('/') || s.endsWith('/**') || s.endsWith('/*')) {
       dir_count++;
-      const scopeBase = s.replace(/\/?\*\*\/?$/, '').replace(/\/?\*$/, '').replace(/\/$/, '');
-      const depth = scopeBase ? scopeBase.split('/').length : 0;
-      if (depth >= MIN_SCOPE_DEPTH) {
-        scoped_count++;
-        scoped_ids.push(m.id);
-      }
     } else {
       file_count++;
-      scoped_count++; // exact file scope — always specific enough
-      scoped_ids.push(m.id);
     }
   }
 
