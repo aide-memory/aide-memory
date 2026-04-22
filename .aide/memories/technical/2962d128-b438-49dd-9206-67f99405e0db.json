@@ -1,0 +1,24 @@
+{
+  "id": 174,
+  "uuid": "2962d128-b438-49dd-9206-67f99405e0db",
+  "layer": "technical",
+  "what": "__dirname-based path resolution is UNRELIABLE across aide-memory's dual build outputs. The repo compiles src/ two ways: (1) tsc → dist/memory/hooks/handlers.js, dist/cli/aide-memory.js, etc. — preserves source tree structure; (2) esbuild --bundle --minify → collapses everything into dist/cli/aide-memory.js + dist/memory/index.js + dist/memory/cli.js as single-file bundles. The published package ships ONLY the bundled output. `__dirname` at runtime resolves to the FILE's location (after bundling, NOT the original src/ location), so `path.resolve(__dirname, '..', '..', 'foo')` gives different results for tsc-output vs bundled-output. Concrete 0.4.2 bug: drift-repair spawn used `path.resolve(__dirname, '..', '..', 'cli', 'aide-memory.js')` — correct in tsc output (handlers.js at dist/memory/hooks/ → ../../cli/aide-memory.js ✓) but wrong in the bundle (all code collapsed into dist/cli/aide-memory.js where __dirname = dist/cli/ → ../../cli/aide-memory.js resolves to <pkgroot>/cli/aide-memory.js which doesn't exist). Tests caught it because vitest hooks.test.ts runs the .sh shim which execs node against the BUNDLED output. Robust patterns for runtime path needs: (a) use `process.argv[1]` when you want the CLI entry being run — correct in both contexts; (b) inject paths at build time via esbuild `--define` for anything truly stable; (c) never rely on relative-to-__dirname paths except for file reads WITHIN the same module boundary. Rule of thumb: if a src file computes a path via __dirname that crosses esbuild bundle boundaries (dist/memory/... → dist/cli/... or vice versa), the bundled version will be wrong.",
+  "why": "0.4.2 audit caught this with a failing drift-repair test. The __dirname/../../cli/aide-memory.js pattern is a specific antipattern in this repo's dual-output layout. Future refactors need to know that src files which compute paths to other src files will produce different results between tsc output and bundled output — and the PUBLISHED package runs the bundled output, so tsc-local tests that pass don't prove the bundled path is correct.",
+  "scope": "src/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "bundling",
+    "esbuild",
+    "dual-build",
+    "dirname",
+    "constraint"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T00:33:12.611Z",
+  "updated_at": "2026-04-22T00:33:12.611Z"
+}
