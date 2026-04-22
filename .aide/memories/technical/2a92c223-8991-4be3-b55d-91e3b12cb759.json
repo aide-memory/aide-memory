@@ -1,0 +1,21 @@
+{
+  "id": 173,
+  "uuid": "2a92c223-8991-4be3-b55d-91e3b12cb759",
+  "layer": "technical",
+  "what": "Pattern for true fire-and-forget side effects from hook dispatchers (aide-memory TS hook layer): DO NOT use `import('../init').then(...)` — the pending microtask keeps Node's event loop alive until the side effect completes, blowing latency budgets (pre-compact especially). INSTEAD: `child_process.spawn(process.execPath, [cliEntry, 'internal-subcommand', arg], { detached: true, stdio: 'ignore', cwd })` + `child.unref()`. Expose the actual work as a `hidden: true` CLI subcommand (pattern: `aide-memory internal-<name>`) so spawn has a clean entry point and test harnesses can invoke it directly. The hook exits in ~10ms; the child runs independently. This was adopted for `maybeTriggerDriftResync` in `src/memory/hooks/index.ts` targeting the hidden `internal-resync <projectRoot>` subcommand in `src/cli/aide-memory.ts`. Regression tests in `src/memory/__tests__/hooks.test.ts` poll for the side effect with a ~5s window. Pattern applies to any future hook side effect (scheduled memory cleanup, analytics flushes, SessionStart background refresh, etc.).",
+  "why": "Non-obvious foot-gun: `import().then()` LOOKS like fire-and-forget but blocks hook exit via the Node event loop, causing hooks to overrun their latency budget. Future work adding hook side effects (likely candidates: memory cleanup, analytics, SessionStart warmup) will re-encounter this pattern. Memory #171 documents the specific 0.4.0 drift-check regression; this memory captures the implementation pattern for the general case so future spawns don't rediscover detached+unref the hard way.",
+  "scope": "src/memory/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "performance"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-21T23:32:15.349Z",
+  "updated_at": "2026-04-21T23:32:15.349Z"
+}
