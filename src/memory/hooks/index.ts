@@ -64,7 +64,19 @@ function maybeTriggerDriftResync(input: { cwd?: string }): void {
     // forget: this hook process can exit immediately, the child keeps
     // running independently.
     try {
-      const cliEntry = path.resolve(__dirname, '..', '..', 'cli', 'aide-memory.js');
+      // Resolve the CLI entry robustly in BOTH build outputs:
+      //   - tsc output: handlers.js at dist/memory/hooks/ → __dirname/../../cli/aide-memory.js
+      //   - bundled output: the caller IS dist/cli/aide-memory.js, so process.argv[1] points there
+      // Prefer process.argv[1] when it looks like an aide-memory CLI entry;
+      // fall back to the __dirname calculation for tsc-direct contexts.
+      let cliEntry = process.argv[1] && /aide-memory(?:\.js)?$/.test(process.argv[1])
+        ? process.argv[1]
+        : path.resolve(__dirname, '..', '..', 'cli', 'aide-memory.js');
+      if (!fs.existsSync(cliEntry)) {
+        // Last-ditch fallback — try the other layout.
+        const alt = path.resolve(__dirname, '..', '..', 'cli', 'aide-memory.js');
+        if (fs.existsSync(alt)) cliEntry = alt;
+      }
       const child = spawn(process.execPath, [cliEntry, 'internal-resync', projectRoot], {
         detached: true,
         stdio: 'ignore',

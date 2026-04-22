@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.2 — 2026-04-21
+
+Patch release restoring mid-session drift-repair for derived artifacts and fixing a hook-dispatch path-resolution bug caught in post-0.4.1 audit.
+
+### Fixes
+
+- **Mid-session config edits now resync derived artifacts again.** When the 0.4.0 hook consolidation collapsed `scripts/hooks/read-config.sh` into the bundled CLI, an ambient side effect — the `_aide_drift_check` call that ran at the bottom of that sourced file — silently disappeared. As a result, editing `.aide/config.json` by hand (e.g. flipping `memories.hideFromGrep`) no longer triggered re-sync of the `.ignore` file until the MCP server restarted. Restored as `maybeTriggerDriftResync()` in the hook dispatcher; runs on every hook fire, spawns a detached + `unref()`-ed child so hook latency is unaffected. User-facing promise in `docs/user/cli-reference.md` ("next hook fire picks it up") is accurate again. Regression test added.
+
+- **Hook `resolveProjectRoot` fallback matches bash semantics.** The 0.4.0 TS port used `path.resolve(__dirname, '..', '..')` as the `cwd`-missing fallback — which resolves to `dist/` when running the tsc output of `src/memory/hooks/handlers.ts`, not the package root. Swapped to `process.cwd()` which matches the original bash `SCRIPT_DIR/../..` semantics in practice (Claude Code always passes `cwd` in production; fallback only hits in tests).
+
+- **Drift-repair spawn resolves the CLI entry correctly in both build outputs.** The spawn call now prefers `process.argv[1]` (robust against the bundled-vs-tsc-output layout difference) with a `__dirname`-based fallback for tsc-direct invocation contexts.
+
+### Internal
+
+- 658 tests pass (3 new: two drift-repair tests + test of `internal-resync` subcommand).
+- Pre-flight bash smoke suites extended to cover the drift-repair path end-to-end.
+- `MANUAL_E2E_VALIDATION.md` step 15 exercises the drift-repair manually.
+- Hidden `aide-memory internal-resync <projectRoot>` subcommand added for the detached child spawn; not part of the user-facing CLI.
+
+No other changes from 0.4.1. All features, CLI commands, hooks, and MCP tools remain identical.
+
+---
+
 ## 0.4.1 — 2026-04-21
 
 Patch release fixing two bugs caught in a post-publish audit of 0.4.0.
