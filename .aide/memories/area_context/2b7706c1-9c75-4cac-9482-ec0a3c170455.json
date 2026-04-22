@@ -1,0 +1,20 @@
+{
+  "id": 305,
+  "uuid": "2b7706c1-9c75-4cac-9482-ec0a3c170455",
+  "layer": "area_context",
+  "what": "Preferences-layer drift from memory #297's finalized design: spec says SessionStart injects \"top 15 most-recalled preferences\" + scope-filtered (scope-specific preferences surface via path hooks, not SessionStart). Current loadLayer() in src/memory/hooks/handlers.ts:483-493 for preferences layer: (a) calls store.list({layer:'preferences'}) with NO scope filter — a scope:\"src/api/**\" preference would appear at SessionStart even though spec says it shouldn't; (b) sorts by updated_at desc instead of recalled_count desc — a preference that got created recently but is rarely surfaced gets prioritized over one that's been used a lot. Observable effects today are minor because most preferences are project-wide and the cap defaults to 15. But the drift is real and worth a focused fix in the same commit that extends loadLayer to accept a scope filter per layer. For guidelines layer the CURRENT code (inject-all-regardless-of-scope) matches #297 (\"all guidelines\") — only the preferences layer is drift. Fix sketch: `if (layer === 'preferences') { const all = store.list({layer}).filter(m => !m.scope || m.scope === 'project'); all.sort((a,b) => (b.recalled_count ?? 0) - (a.recalled_count ?? 0) || (b.updated_at||'').localeCompare(a.updated_at||'')); ... }`",
+  "why": "Discovered while reconciling MANUAL_E2E_VALIDATION.md step 3 expected output with the actual implementation. Memory #297 is the authoritative design but the preferences branch never got scope-filtered or most-recalled-sorted. Capturing so the preferences fix doesn't get forgotten if we only ship the easier doc fix for step 3.",
+  "scope": "src/memory/hooks/handlers.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T02:57:04.181Z",
+  "updated_at": "2026-04-22T02:57:04.181Z"
+}

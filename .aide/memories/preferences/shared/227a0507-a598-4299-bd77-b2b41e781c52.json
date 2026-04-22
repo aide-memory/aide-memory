@@ -1,0 +1,24 @@
+{
+  "id": 175,
+  "uuid": "227a0507-a598-4299-bd77-b2b41e781c52",
+  "layer": "preferences",
+  "what": "Parallel-worktree release race observed in practice — memory 170 prediction materialized. During the 0.4.2 cycle, two Claude agents in separate worktrees independently built the same drift-repair fix. Both pushed toward a release concurrently. I (minified-publish worktree) was asked by the user to ship and did the full flow: merge phase-1's fix commits, add my own CLI-entry-resolution improvement (process.argv[1] + __dirname fallback, needed because the agent's pure-__dirname approach silently fails in the bundled CLI where __dirname = dist/cli/ not dist/memory/hooks/), bump to 0.4.2, tag v0.4.2, push — all while the other worktree was working the same problem. My tag got to origin first and triggered the publish workflow. The other worktree's release commit became redundant. Their reconcile path was correct and non-destructive: `git fetch origin --tags` → `git reset --hard origin/feature/phase-1` → `git cherry-pick <their-unique-memory-commit>` → push. No force-push, no damage, their unique work (a docs/memory commit) preserved on top. Winning discipline going forward: (1) whoever tags first wins and that's fine as long as the winning commit is CORRECT; (2) reconcile via reset-to-tag-parent then cherry-pick unique commits — never rebase-over-the-published-tag; (3) both agents should check `git fetch origin --tags` immediately before their own `git tag` command to surface the race and let one side yield; (4) if you DO push a redundant release commit (before reconcile), just don't push the tag — only the agent that pushes the TAG triggers the workflow. The real cost in 0.4.2 was ~10 minutes of wasted work on the other worktree's side, not any shipping risk. The CORRECT version is what's on npm.",
+  "why": "Memory 170 was theoretical. 0.4.2 is the first observed case of it happening: two worktrees, same fix, one tagged first, other reconciled cleanly. Capturing the actual reconcile sequence that worked (fetch-tags → reset-hard → cherry-pick uniques → push) so the next time this happens (inevitable with the multi-worktree pattern) neither side panics or force-pushes. Stored as preferences because it encodes a coordination protocol, not a codebase fact.",
+  "scope": "project",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "release",
+    "coordination",
+    "parallel-worktrees",
+    "race",
+    "lesson-observed"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T01:59:53.007Z",
+  "updated_at": "2026-04-22T01:59:53.007Z"
+}

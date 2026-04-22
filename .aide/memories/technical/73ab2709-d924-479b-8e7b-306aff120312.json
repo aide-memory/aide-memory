@@ -1,0 +1,24 @@
+{
+  "id": 310,
+  "uuid": "73ab2709-d924-479b-8e7b-306aff120312",
+  "layer": "technical",
+  "what": "PARTIALLY RESOLVED (2026-04-22): Mem #175 #1 \"blocking error wording\" is resolved for Stop, but PreToolUse label is HARDCODED — cannot be customized via any JSON field.\n\n**Verified labels (Claude Code 2.1.117):**\n- Stop: `Stop hook feedback:` ✅ soft (via undocumented rewakeSummary default)\n- PreToolUse:Read/Bash/Edit: `PreToolUse:X hook returned blocking error` ❌ alarming, **hardcoded**\n\n**Definitive research (Apr 22 2026, via binary decompile):** The render logic in Claude Code's TUI (`hook_blocking_error` subtype) literally concatenates `hookName + \" hook returned blocking error\"` — no substitution slot, no overridable field. Confirmed across binary string extraction (0 matches for blockSummary/deniedSummary/preToolSummary/hookSummary), full PreToolUse schema enumeration, GitHub issues (no FR exists), and public docs. Only Stop hooks have the `rewakeSummary`/`hookLabel` escape hatches; PreToolUse has none. Future change requires either an Anthropic release or AIDE architectural shift.\n\n**JSON shape doesn't help either (empirical):**\n- `{decision: \"block\", reason: \"...\"}` → same alarming label\n- `{hookSpecificOutput: {permissionDecision: \"deny\", ...}}` → same alarming label\nBoth produce identical UI rendering.\n\n**Remaining realistic options for PreToolUse label:**\n1. **Option G — hook inlines memory bodies into additionalContext, no block needed.** Hook queries SQLite directly, emits memory content as additionalContext. Claude gets context without needing to call aide_recall. No \"blocking error\" UI. Hybrid fallback for >10k payloads: use current block. Best long-term UX but larger change.\n2. **Accept the label, add systemMessage reframing line.** User sees \"blocking error\" AND a softer \"aide-memory · expected behavior, this isn't a crash\" line alongside. Quick but imperfect.\n3. **Remove hard block entirely, rely on .claude/rules/aide-memory.md for compliance.** No guarantee if Claude skips the rules. Mem #295 notes rules-mode makes hard-block rare in practice.\n4. **File Anthropic FR** — no feature request exists for hook label customization. We'd be first.\n\n**Eliminated options:**\n- ~~Modern permissionDecision shape~~ (empirically same label)\n- ~~Undocumented platform field~~ (doesn't exist per binary scan)\n- ~~continue:false + stopReason~~ (halts Claude, unusable for pre-read/pre-edit retry-after-recall flow)\n\n**Two other empirical findings (still valid):**\n1. asyncRewake creates infinite loops without stop_hook_active guard — do NOT enable without guard.\n2. rewakeSummary custom values are NOT honored (only its default \"Stop hook feedback\" works).\n\n**Next decision point:** pick between Option G (architectural, cleanest) vs. Option 2 (reframing, quick). Mem #175 #2 (systemMessage visibility for soft blocks) is independent of this choice and can ship regardless.",
+  "why": "Research now definitive: the label is hardcoded at render level. No hidden field, no platform escape hatch — confirmed via full binary string extraction. Future sessions should not waste time hunting for one. Also distills the decision to two realistic remaining paths (Option G redesign vs. quick reframe + accept) and calls out that Mem #175 #2 can proceed independently.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "open-question",
+    "mem-175-verification",
+    "stop-hook",
+    "label",
+    "empirical"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T03:44:41.815Z",
+  "updated_at": "2026-04-22T04:48:21.074Z"
+}

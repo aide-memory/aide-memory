@@ -1,0 +1,21 @@
+{
+  "id": 315,
+  "uuid": "f91968ab-6544-4fe9-85f1-4a81eebcab85",
+  "layer": "technical",
+  "what": "Telemetry / analytics default is ON (opt-out model) — user explicitly corrected this on 2026-04-22. `src/memory/config.ts` DEFAULT_CONFIG.telemetry.enabled = true. `src/memory/store.ts:83` telemetryEnabled defaults to true. The constructor at src/memory/store.ts:139-152 only flips it to false when user explicitly sets `telemetry.enabled: false` in .aide/config.json. IMPORTANT: I previously stored memory #266 claiming the default was opt-in (false) — that was WRONG and has been deleted. The code has always been opt-out; no change to behavior happened. The \"telemetry\" name is misleading — it only gates the LOCAL Analytics table writer in store.ts; aide-memory has NO phone-home channel. Despite the name, no data leaves the user's machine. Confirm in any future reference: defaults=TRUE, semantics=opt-out, impact=local-only. User preference per memory #202 (still valid): users share analytics by default for product-visibility signals.",
+  "why": "Supersedes deleted memory #266 which was factually wrong. This is the authoritative description of telemetry default. Captured after user caught my error — I had treated #266 as newer=authoritative when it actually contradicted both the code and the prior user preference #202.",
+  "scope": "src/memory/store.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "architecture"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T04:52:52.200Z",
+  "updated_at": "2026-04-22T04:52:52.200Z"
+}

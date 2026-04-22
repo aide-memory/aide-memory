@@ -1,0 +1,20 @@
+{
+  "id": 317,
+  "uuid": "8a540888-8ae4-445e-84d6-ee8d1022ccf7",
+  "layer": "guidelines",
+  "what": "Config naming lesson (2026-04-22): `recall.minScopeDepth` name is too internal-jargon. User expected \"how many levels up from the file do I look\" as the mental model but the implementation measures \"how many fixed segments does the scope have\". These two models sound similar but diverge: \"levels up = 1\" means different things depending on file depth (asymmetric) while \"scope has N segments\" is absolute. The intuitive mental model fails the core use case (mid-depth scopes like `src/api/**` reaching ALL descendants regardless of how deep) because asymmetric-distance matching can't express \"scopes with ≥2 segments match anywhere under them\". Keeping the absolute-specificity model, but renaming to something clearer. Options under discussion: (a) `recall.includeBroadScopes` boolean (default false — cleanest, drops the rarer \"strictness>=3\" tier which isn't useful); (b) `recall.scopeStrictness` with values loose/normal/strict. Lesson for future config additions: write docs/examples from the USER mental model FIRST, then see if the implementation can match. If it can't, either rename aggressively or accept that the config will need a paragraph of explanation.",
+  "why": "Meta-lesson from today's config-naming confusion. Future `aide-memory` configs should be named to match user intuition even when that means hiding implementation details like \"number of fixed segments in a glob.\" The asymmetry insight (distance-from-file is not a stable semantic, scope-specificity is) is worth preserving so future depth-like configs don't fall into the same trap.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T05:21:48.191Z",
+  "updated_at": "2026-04-22T05:21:48.191Z"
+}

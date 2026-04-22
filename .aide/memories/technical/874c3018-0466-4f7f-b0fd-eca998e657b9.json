@@ -1,0 +1,25 @@
+{
+  "id": 300,
+  "uuid": "874c3018-0466-4f7f-b0fd-eca998e657b9",
+  "layer": "technical",
+  "what": "Claude Code platform mechanisms for surfacing hook activity to the user (researched Apr 21 2026, relevant to mem #175 UX fast-follow):\n\n**Native hook→user channels (officially supported):**\n- `systemMessage` (top-level JSON field, universal across hook events): \"Warning message shown to the user\". Fires inline in terminal when hook returns it. THIS IS THE KEY PRIMITIVE for surfacing soft-block activity. Pair with hookSpecificOutput.additionalContext — Claude gets the context, user gets the systemMessage line.\n- `stopReason` (when `continue: false`): user-only message, \"Not shown to Claude\"\n- Note: rendering treatment (color/prefix) needs eyeball-test before shipping — docs call systemMessage a \"warning message\" which risks reproducing mem #175's alarming-error problem. Verify in a live session first.\n\n**Debug-mode channels (off by default, require user opt-in):**\n- `claude --debug hooks` → in-memory event log\n- `claude --debug-file /path/to/log` → file-backed; tailable\n- `/debug` slash command mid-session\n- These capture hookSpecificOutput.additionalContext, stderr, JSON decisions — full firehose\n\n**Status line (configurable bar at bottom of TUI):**\n- `statusLine` field in settings.json, type: \"command\", points to shell script\n- Script receives session JSON on stdin (model, cwd, context %), stdout becomes status line\n- Event-driven updates + optional `refreshInterval` seconds\n- Could render last-N hook events by tailing a log we write\n- Requires user to opt in by editing settings\n\n**What Claude Code does NOT offer:**\n- Transcript `.jsonl` under `~/.claude/projects/<hash>/` does NOT capture hookSpecificOutput.additionalContext — tailing it won't show soft blocks\n- `/hooks` command lists CONFIGURED hooks, not FIRED hooks\n- No CLAUDE_DEBUG / ANTHROPIC_LOG env vars that surface hook output to terminal\n\n**Unsupported hack (do not ship):** `echo \"...\" > /dev/tty` — breaks in non-TTY (CI, IDE), likely corrupts Claude Code rendering.\n\n**Feasibility ranking for soft-block visibility (mem #175):**\n1. **systemMessage on soft-inject paths** (pre-read-recall.sh, pre-edit-recall.sh, post-tool-use) — officially supported, inline per-event, zero user setup, smallest impl. Ship this first.\n2. **Own activity log + `aide tail` CLI** — complement for history/audit, requires second pane\n3. **Ship a statusLine script (opt-in)** — persistent glance surface, polish-tier\n4. **Document `claude --debug-file` + `tail -f`** — zero code, fallback for deep debugging\n\n**Stop-hook \"error\" label half of mem #175:** Can't fix rendering from our side — requires Anthropic change or user-education docs.\n\nDocs: https://code.claude.com/docs/en/hooks.md, https://code.claude.com/docs/en/statusline.md, https://code.claude.com/docs/en/debug-your-config.md#debug-hooks",
+  "why": "CORRECTION to earlier version of this memory. Prior text stated \"No status line, badge, toast, or banner API exposed to hooks\" and \"Hooks have no official terminal-write mechanism\" — both WRONG. Claude Code exposes `systemMessage` as a universal hook output field that writes directly to the user's terminal, and `statusLine` is a user-configurable bar that can read from our own outputs. This fundamentally changes the implementation plan for mem #175: soft-block visibility doesn't need our own log infrastructure — it needs us to return `systemMessage` alongside the existing additionalContext payloads. First research pass (via claude-code-guide agent) missed these fields; direct WebFetch of hooks.md caught them.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "claude-code",
+    "hooks",
+    "ux",
+    "soft-block",
+    "visibility",
+    "debug"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T02:06:30.128Z",
+  "updated_at": "2026-04-22T02:25:23.211Z"
+}

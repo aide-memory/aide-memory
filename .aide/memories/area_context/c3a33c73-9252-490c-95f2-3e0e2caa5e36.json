@@ -1,0 +1,21 @@
+{
+  "id": 301,
+  "uuid": "c3a33c73-9252-490c-95f2-3e0e2caa5e36",
+  "layer": "area_context",
+  "what": "Three doc-vs-code mismatches found in MANUAL_E2E_VALIDATION.md during 2026-04-22 full-scenario simulation against /tmp/aide-e2e (all hook-dispatcher paths simulated via direct `node dist/cli/aide-memory.js hook <name>` stdin pipes): (1) STEP 3 SessionStart injection: doc says scoped guidelines like \"API uses camelCase\" at `src/api/**` should NOT surface at SessionStart, but implementation calls `store.list({layer})` with no scope filter — old pre-0.4.0 `scripts/hooks/session-inject.js` had identical no-scope-filter impl (git show 09a898a confirms), so this isn't a 0.4.0 regression. Spec §657-661 only says \"Scope-specific *preferences* still surfaced via Read/Edit hooks\" — ambiguous for guidelines. Decision needed: fix doc to match code OR filter injection by scope. (2) STEP 6 gap-filling: doc says re-read with partially-covered IDs should be SOFT additionalContext, but implementation emits `decision:block`. Functionally agent still gets the right ids:[N] nudge. (3) STEP 8 correction phrasing: doc example `\"no, we use epoch seconds not milliseconds\"` does NOT match CORRECTION_PATTERN — the regex requires `no[, ]+(don't|use|instead|...)` so the word directly after `no, ` must be a correction verb, not `we`. Doc example should be `\"no, use epoch seconds instead\"`. Existing detect-correction.test.sh uses correct phrasing (`no, dont use tabs`). Remediation: fix the three doc snippets rather than the code, since the actual behavior is intentional per spec + history.",
+  "why": "These mismatches would cause future validators to report false regressions. Captured so the doc can be updated in a focused commit rather than wasted debugging loops next time someone runs the manual walk.",
+  "scope": "docs/validation/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "validation"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T02:26:05.557Z",
+  "updated_at": "2026-04-22T02:26:05.557Z"
+}

@@ -1,0 +1,21 @@
+{
+  "id": 302,
+  "uuid": "6260345b-9d57-4981-8bd6-da739dc86b57",
+  "layer": "technical",
+  "what": "End-to-end simulation playbook for the 17-step MANUAL_E2E_VALIDATION.md walk: the entire hook-side surface can be driven WITHOUT a live `claude --debug` session by piping stdin JSON directly into `node dist/cli/aide-memory.js hook <name>`. Input shapes: pre-read/pre-edit `{session_id,cwd,tool_input:{file_path}}`; pre-search `{session_id,cwd,tool_input:{pattern}}`; pre-prompt `{session_id,cwd,prompt}`; post-tool-use-recall/post-remember/post-search `{session_id,cwd,tool_name,tool_input,tool_response:[{type:\"text\",text:\"...[N]...\"}]}`; session-start `{session_id,cwd,source:\"startup\"|\"compact\"|\"resume\"|\"clear\"}`; pre-compact + stop `{session_id,cwd}`. trackRecallPost parses memory IDs from `[N]` patterns in tool_response text — payload format MUST be the array-of-{text} shape Claude Code emits, NOT `{content:[{type:\"text\",...}]}` (wrong shape produces silent failure). Cannot simulate: the agent's *behavioral* response (does it actually call aide_recall after a nudge?) — that's what a human-driven claude --debug walk adds. But the hook-emit-correct-envelope half is 100% mechanically testable this way. Useful when a user asks \"simulate everything autonomously before I walk it manually.\"",
+  "why": "Saves ~45 min of manual walk time for every regression check, and catches hook-dispatcher regressions (bad envelope shape, wrong decision:block vs additionalContext) without needing a live Claude Code session. Complements `scripts/hooks/__tests__/e2e-autonomous.sh` which only covers H/J/drift-repair — this captures the full flow.",
+  "scope": "docs/validation/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "integration"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T02:26:17.441Z",
+  "updated_at": "2026-04-22T02:26:17.441Z"
+}

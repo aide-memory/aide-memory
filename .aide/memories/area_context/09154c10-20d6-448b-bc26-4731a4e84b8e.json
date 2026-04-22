@@ -1,0 +1,20 @@
+{
+  "id": 318,
+  "uuid": "09154c10-20d6-448b-bc26-4731a4e84b8e",
+  "layer": "area_context",
+  "what": "0.4.3 final config decision (2026-04-22): `recall.minScopeDepth` ships with default `1` (permissive, not the `2` previously drafted). Rationale: default=2 works great for `src/`-prefixed projects (typical Node/TS) but fails silently for flat projects (Next.js `pages/**`, SvelteKit `routes/**`) where natural feature scopes ARE depth 1. Default=1 means every scoped memory surfaces for its matching files regardless of path segment count — works across ALL project shapes. Users who have many broad scopes and find per-file recall noisy can bump to 2 with one command (`aide-memory config recall.minScopeDepth 2`) — broad scopes then demote to SessionStart only. Supersedes the earlier default=2 design in memories #311, #312 — those were correct for the `src/api/**` deep-file fix but wrong as a universal default. Docs in `docs/user/configuration.md` now include a visual bar-diagram walkthrough showing which scopes are \"above/below the bar\" at values 1/2/3. User directive for future config-addition work: ALWAYS include a visual walkthrough in configuration.md (not just a parameter table row). Pattern: rank examples by specificity, draw a BAR indicating the threshold, show \"above = per-file, below = SessionStart only\" under 3 different config values. Other settings that should get similar treatment in a follow-up doc pass: `hooks.stop.schedule` (turn counter vs block points timeline), `memories.softening.threshold` (project-size → soft/hard transition), `injection.maxChars` (layer budget + truncation), `hooks.read.maxBlocks` (0/1 before/after).",
+  "why": "Locks in the flipped default + the visual-docs pattern so future sessions don't undo the default or add new configs without the visual walkthrough. The default flip reason (flat projects vs src-prefixed) is the key insight a future reader needs — without it they might revert to '2 is more principled' without realizing it breaks Next.js-style projects.",
+  "scope": "docs/user/configuration.md",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T22:17:12.056Z",
+  "updated_at": "2026-04-22T22:17:12.056Z"
+}

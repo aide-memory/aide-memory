@@ -1,0 +1,21 @@
+{
+  "id": 304,
+  "uuid": "d064c330-59d3-4946-ba5e-c5a8ab8dad49",
+  "layer": "area_context",
+  "what": "Four config-surface product bugs uncovered by scripts/hooks/__tests__/all-configs-behavior.test.sh (2026-04-22): public config keys that live in `aide-memory config` valid-keys list but have zero runtime effect. (1) `capture.*` family (5 keys: capture.enabled + capture.hooks.preCompact/preToolUse/stop/userPromptSubmit) — legacy pre-0.4.0 AideConfig schema superseded by hooks.* family in defaults.json; no runtime reader. Users reading the config docs and setting e.g. capture.hooks.preToolUse=false to silence read hooks will find it does nothing. Real toggles: hooks.read/edit.maxBlocks, hooks.correction.enabled, hooks.precompact.mode, hooks.stop.schedule. (2) `contributor` — store.ts (line ~108) hardcodes detectGitUser() unconditionally; config.contributor never consulted. Listed in docs/user/cli-reference.md:387 as valid. (3) `embeddings.backend` / `embeddings.model` — EmbeddingService.initialize() tries TransformersBackend then OllamaBackend in fixed order regardless of config; model name hardcoded inside transformers backend. Setting embeddings.backend=ollama doesn't change order. (4) `nudge.visible` — documented in configuration.md:69 as \"Show nudge text in terminal\" but no handler reads it; nudges always render via additionalContext (agent-only per Claude Code platform). This is the soft-block visibility gap from memory #175 — config surfaced a user promise the code never fulfilled. Remediation options per key: wire it up to real behavior, or remove from collectValidKeys() + docs. The new smoke (15 PASS + 12 SKIP + 0 FAIL) is now in the pre-flight so any attempt to wire one of these will be detected by the PASS/SKIP delta.",
+  "why": "These 9 public config keys are a user-trust liability: docs say they do something, code says they don't. Captured now so the remediation bundle can address them in one pass rather than getting re-discovered piecemeal when a user files \"I set X and nothing happened\" bug reports. Also locks in the SKIP categorization from all-configs-behavior.test.sh so future regressions that appear to \"wire up\" one of these (but actually don't) are caught by the test delta.",
+  "scope": "src/memory/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "api-contract"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T02:56:53.204Z",
+  "updated_at": "2026-04-22T02:56:53.204Z"
+}

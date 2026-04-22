@@ -1,0 +1,21 @@
+{
+  "id": 311,
+  "uuid": "42febb10-c4eb-4537-a6f9-93652b1b40d5",
+  "layer": "area_context",
+  "what": "Scope-depth configurability design (proposed 2026-04-22, pending user confirmation). Two new configs to replace hard-coded focused-mode behavior in `src/memory/recall.ts` `scopeMatchesPath`: (1) `recall.focusedScopeMinSegments` (default `2`): fixed-prefix segment count required for a scope to match descendants at arbitrary depth in focused mode. Setting to 2 means `src/api/**` (2 fixed segments) matches `src/api/routes/routeA.ts` (currently it doesn't — grandparent exclusion fires). Setting to 1 restores current behavior. Setting to 3 is stricter. Single-segment scopes like `src/**` are always filtered out of focused-mode (too broad; handled via SessionStart). (2) `injection.preferences.scopeFilter` (default `true`): whether SessionStart injection excludes scoped preferences (per memory #297's spec — scoped prefs surface via path hooks instead). Setting to `false` restores current \"inject all preferences regardless of scope\" behavior. Coherence invariant: if `focusedScopeMinSegments=2` AND `scopeFilter=true` (both defaults), mid-depth-scoped preferences like `src/api/**` still reach deep files via path-recall even though they're skipped at SessionStart. The single source of truth (`computeScopedForPath` at `recall.ts:20-50`) means any change propagates to pre-read/pre-edit block-vs-soft decisions, CLI `aide-memory recall`, and MCP `aide_recall` consistently. Supersedes (as configurable version) the drift from memory #305 and the narrow focused-mode from memory #147.",
+  "why": "Design decision for the ship-bundle-v2 remediation. Encoded here so the `focusedScopeMinSegments=2` default (a real behavior change from today's narrow match) doesn't get quietly dropped during implementation. The coherence invariant between the two configs is the part most likely to get lost — both defaults together produce the intuitive behavior; changing only one creates gaps.",
+  "scope": "src/memory/recall.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "architecture"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T03:54:25.739Z",
+  "updated_at": "2026-04-22T03:54:25.739Z"
+}

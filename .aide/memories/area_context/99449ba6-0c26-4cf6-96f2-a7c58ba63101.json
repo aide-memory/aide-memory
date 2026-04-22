@@ -1,0 +1,21 @@
+{
+  "id": 312,
+  "uuid": "99449ba6-0c26-4cf6-96f2-a7c58ba63101",
+  "layer": "area_context",
+  "what": "SessionStart injection configurability — three settings that control what/how-much lands in SessionStart context (2026-04-22, pending implementation in upcoming bundle). (1) `injection.maxChars` (default 1200) — overall character cap applied AFTER all layer-specific limits combine; currently hard-coded as MAX_INJECT_CHARS constant in handlers.ts:481. Truncation appends '\\n...truncated'. Users who want richer context bump to 2000+; token-sensitive users drop to 600. (2) `injection.preferences.excludeScoped` (default false) — when true, SessionStart skips preferences with a non-null scope (they still surface via Read/Edit path hooks). Default false preserves current \"inject all prefs regardless of scope\" behavior which matters because most user preferences tend to be scoped in practice. (3) `recall.focusedScopeMinSegments` (default 2) — minimum fixed-prefix segments for a scope to match descendants at arbitrary depth in focused mode. Fixes the gap where `src/api/**`-scoped memories don't surface for `src/api/routes/routeA.ts` under current hard-coded focused-mode. Setting to 1 restores current behavior. Re-introduces configurability lost when `recall.minScopeDepth` was removed in fe809b3 as \"dead\" — that removal was Chesterton's-fence wrong: the config appeared unused only because computeScopedForPath stopped reading it and hard-coded the logic, not because the capability was gone.",
+  "why": "Decisions locked in for the 15-change remediation bundle. The default values matter — `excludeScoped=false` and `focusedScopeMinSegments=2` together produce the intuitive user experience (prefs surface everywhere they're relevant, deep files see mid-scoped mems). maxChars=1200 preserves current behavior while unblocking users who want bigger injection.",
+  "scope": "src/memory/hooks/handlers.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "architecture"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T04:05:53.555Z",
+  "updated_at": "2026-04-22T04:05:53.555Z"
+}

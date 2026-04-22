@@ -1,0 +1,24 @@
+{
+  "id": 320,
+  "uuid": "2aa43b81-2e66-44ab-a1ee-98b4ca2078b7",
+  "layer": "guidelines",
+  "what": "Doc-transparency requirement for shipping hook visibility (Apr 22 2026):\n\n**Every doc update related to hook behavior MUST include two things:**\n\nA. **The \"blocking error\" label is platform-locked** — hardcoded in Claude Code's TUI render logic (confirmed via binary decompile, mem #310). Users will see `PreToolUse:X hook returned blocking error` and it's not an aide-memory crash.\n\nB. **Users can configure blocking behavior** — multiple knobs exist to soften, limit, or disable blocks. Every callout must list the relevant knobs so users don't feel stuck.\n\n**Required coverage when writing or updating docs:**\n\n1. **External user-facing docs** (public README, install guide, launch material, any FAQ):\n   - FAQ entry: \"Why do I see 'PreToolUse:Read hook returned blocking error'?\"\n     - Claude Code renders this label for any intentional hook block; not an aide-memory crash\n     - What triggers it (scoped memories not yet recalled for this path)\n     - Read the reason text beneath — it tells you what's happening\n     - We've requested Anthropic add a non-alarming label option\n   - FAQ entry: \"How do I reduce / disable the blocks?\"\n     - `hooks.visible: false` → hide user-facing messages (blocks still function)\n     - `hooks.read.maxBlocks` / `hooks.edit.maxBlocks` → 0 to never block, 1 for once per session per path\n     - `hooks.search.mode: off`, `hooks.correction.enabled: false`, `hooks.precompact.mode: off` → disable specific hooks entirely\n     - `memories.softening.threshold` → projects under N memories auto-soften (default 10)\n     - Future: `recall.mode: autoInject` (Option G, follow-up) → bypass blocks entirely\n\n2. **Internal spec / follow-up docs** (active phase spec, phase follow-ups, validation results):\n   - What we shipped (`systemMessage` visibility, `hooks.visible` config, reason reframing via systemMessage)\n   - What we couldn't ship and why (citing binary decompile research for \"blocking error\" label)\n   - Anthropic FR link/status\n   - Option G status as Phase 1 follow-up\n   - Full list of user-configurable block knobs for reference\n\n3. **In-code comments** near `emitBlockDecision` and each hook that can hard-block:\n   - One-line note that \"PreToolUse:X hook returned blocking error\" is platform-rendered\n   - Pointer to the FAQ entry or memory for future devs\n   - Reference to the related config knobs\n\n**Why this matters:** Users asking \"is aide-memory broken?\" when they see \"blocking error\" is the exact UX failure mem #175 identified. Without transparency AND clear options to configure, we ship something that looks broken on first encounter and feels like users have no recourse. The config levers are already wired — docs just need to surface them.\n\n**Don't gloss over or defer this.** If a doc update doesn't include BOTH the limitation callout AND the configurable-levers callout, the update isn't done.",
+  "why": "User flagged (Apr 22): the callout about the \"blocking error\" limitation should also tell users how to configure block behavior — there are multiple knobs (hooks.visible, maxBlocks, search.mode, correction.enabled, precompact.mode, softening.threshold, future recall.mode). Without that, users feel stuck. Memory updated to require BOTH transparency (can't hide label) AND agency (here's what you can control) in every doc touch.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "docs",
+    "transparency",
+    "blocking-error",
+    "platform-limitation",
+    "shipping-checklist"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T22:40:07.120Z",
+  "updated_at": "2026-04-22T22:46:29.151Z"
+}

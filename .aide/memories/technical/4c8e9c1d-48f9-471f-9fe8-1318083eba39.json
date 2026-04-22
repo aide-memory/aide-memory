@@ -1,0 +1,25 @@
+{
+  "id": 308,
+  "uuid": "4c8e9c1d-48f9-471f-9fe8-1318083eba39",
+  "layer": "technical",
+  "what": "Empirical Claude Code hook-output rendering observations (2026-04-21, from /tmp/aide-ux-test/ fixture — FULL RESULTS):\n\n**systemMessage (exit 0 + `systemMessage` field):**\n- Color: white (plain text)\n- No \"error\" word, no alarming prefix\n- Auto-prefix: `<HookEventName>:<ToolName> says:` — NOT suppressible\n- Example: `PreToolUse:Bash says: aide-memory injected 3 memories`\n- Implication: lead AIDE messages with `aide-memory` branding so the auto-prefix reads as routing info\n- **Multiline honored:** `\\n` in systemMessage renders as real line breaks with proper indentation. Enables structured output like:\n  ```\n  PreToolUse:Read says: aide-memory · 3 memories recalled\n    • technical: auth token patterns\n    • area_context: error handling\n  ```\n- **ANSI color codes are honored:** green / yellow / red render correctly. We can tint messages for severity (green = save success, amber = nudge, white = informational).\n\n**exit 2 (hard block):**\n- Full label: `Error: PreToolUse:Bash hook error: [bash /path/to/script.sh]:` followed by first line of stderr\n- Contains BOTH \"Error:\" prefix AND \"hook error:\" words — alarming\n- Renders with error styling (red)\n- Includes full hook command path — noisy\n- **Side effect:** cancels sibling parallel tool calls in the same batch. If Claude calls Read+Read+Read in parallel and one hook returns exit 2, the other two are cancelled with `Cancelled: parallel tool call Bash(…) errored`. Our current pre-read-recall/pre-edit-recall hard-block path disrupts parallel execution — worth auditing impact.\n\n**continue:false + stopReason:**\n- Label: `PreToolUse:Bash hook stopped continuation:` — **no \"Error\" word**\n- White text, less alarming than exit 2\n- Per docs: halts Claude processing entirely after the hook. Not a drop-in for per-tool blocks.\n- **BUT:** in empirical test, tool still EXECUTED before the stop (echo output appeared in transcript). So the flow is: hook runs → tool runs → turn ends → no further processing. Verify semantics for Stop hook specifically (Stop fires at end, so \"halt after\" may be effectively a no-op, making continue:false a cleaner label for Stop-hook blocks than exit 2).\n\n**Auto-prefix variants observed:**\n- `<Event>:<Tool> says:` → for systemMessage\n- `Error: <Event>:<Tool> hook error: [cmd]:` → for exit 2 stderr\n- `<Event>:<Tool> hook stopped continuation:` → for continue:false + stopReason\n\n**Validates:**\n- `systemMessage` IS the right primitive for soft-block visibility (Phase 1 fast-follow per mem #175 #2) — ship it\n- Hard-block \"Error\" label IS unavoidable for exit 2 — mem #175 #1 still needs one of: (a) soften stderr content only, (b) switch Stop to continue:false for softer label, (c) try mem #242 undocumented `rewakeSummary` field\n\n**Still-to-test:**\n- `rewakeSummary` + `asyncRewake` on a Stop hook fixture (mem #242 lead) — could override \"blocking error\" label entirely\n- Size cap behavior (>10k systemMessage) — not critical yet\n- exit 2 parallel-cancel behavior under real AIDE hooks (does this actually hurt us today?)",
+  "why": "Full empirical validation of the primitives available for the UX fast-follow. Converts the design-space analysis in mems #300 and #303 into concrete, shipped-or-not decisions. Key new discoveries beyond docs: (1) ANSI honored — unlocks severity-colored messages, (2) multiline preserved with indentation — enables structured output, (3) continue:false has a distinct non-\"Error\" label — alternative path for Stop-hook softening, (4) exit 2 cancels sibling parallel calls — hidden cost of current hard-block patterns worth auditing.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "claude-code",
+    "hooks",
+    "systemMessage",
+    "ux",
+    "empirical",
+    "rendering"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T03:29:22.764Z",
+  "updated_at": "2026-04-22T03:36:16.480Z"
+}

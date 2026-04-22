@@ -1,0 +1,20 @@
+{
+  "id": 306,
+  "uuid": "5984d369-8055-4de7-b27d-0592c967e462",
+  "layer": "technical",
+  "what": "Latent path-resolution bug in preRead/preEdit hooks (src/memory/hooks/handlers.ts:125-188 and :195-245): `const filePath = input.tool_input?.file_path` is used raw in hasRecalledFile(projectRoot, sessionId, filePath) without resolving relative→absolute first. But trackRecall (line 611) DOES resolve: `const absPath = path.isAbsolute(p) ? p : path.join(projectRoot, p)` before writing `file|<abs>` to tracking. Asymmetry: if filePath comes in relative, the `file|` tracking line stored is absolute but the lookup compares against the relative string → no match → encountered=false forever → every read is treated as first-read → hard block. Production-safe today because Claude Code's Read/Edit tools require absolute paths in the tool schema. But any caller that passes relative (tests, future MCP-to-MCP integrations, custom hooks) hits the soft-block transition break. One-line fix at line 126 and 196: `const filePath = rawFilePath && !path.isAbsolute(rawFilePath) ? path.resolve(projectRoot, rawFilePath) : rawFilePath`. Same fix for preEdit. Low risk, high robustness. Was not caught by existing tests because hooks.test.ts uses absolute paths throughout.",
+  "why": "Discovered during 2026-04-22 full-scenario simulation when relative-path input to pre-read unexpectedly blocked instead of going soft despite file| tracking being populated. Documented so a future robustness pass doesn't have to re-derive the root cause.",
+  "scope": "src/memory/hooks/handlers.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T02:57:14.048Z",
+  "updated_at": "2026-04-22T02:57:14.048Z"
+}

@@ -1,0 +1,25 @@
+{
+  "id": 319,
+  "uuid": "40123224-7bf3-483e-9abf-f1aaf6840a54",
+  "layer": "preferences",
+  "what": "Standard workflow for new feature / fast-follow implementations (user preference, always-injected — apply to every code-change task unless user explicitly overrides):\n\n**Before touching code:**\n1. **Separate worktree off the active branch** — never implement directly on the active feature branch if other work may be concurrent. Name the branch descriptively (`feature/<phase>-<slug>`).\n2. **`git fetch origin` + use latest** as the worktree base — don't branch off a stale local ref.\n3. **Confirm the plan** is captured in memory and/or a draft spec before coding, so implementation has a reference.\n\n**During implementation:**\n4. **Config-gate new user-facing features** — every new visible behavior needs a knob in the config schema (`defaults.json` + `src/memory/config.ts` if TS-side). Default to \"on\" / \"visible\" when the feature helps the user understand what the system is doing, especially in early rollout phases. Users can opt out; they shouldn't have to opt in to basic transparency.\n5. **Don't duplicate what the host tool (Claude Code, etc.) already shows.** Surface what's otherwise invisible. Internal accounting (track-* hooks, cleanup operations) stays silent. Soft injections, detections, and auto-actions get surfaced.\n6. **Reason text that the agent consumes stays untouched** when adding user-facing reassurance. Use `systemMessage` (user-only channel) for framing. Don't conflate user-facing and agent-facing channels.\n\n**Before shipping:**\n7. **Update the product-vision doc** with any directional change. Not just code — reflect the intent shift.\n8. **Update the active phase spec doc** with what was actually built (may differ from the spec's original plan).\n9. **Update the relevant follow-up doc** (marking items as done, adding new follow-ups discovered).\n10. **Update internal docs** (CLAUDE.md equivalents, rules files, developer README).\n11. **Update external docs** (public README, any launch material, install docs) if user-visible behavior changed.\n12. **Thorough QA: bug audit + unit tests + smoke tests + automated tests. Double/triple-check before declaring done.**\n\n**Reference-by-role, not-by-filename:**\nWhen storing design decisions or workflow memories, reference docs by role — \"the active phase spec\", \"the product-vision doc\", \"relevant follow-up doc\", \"internal rules file\", \"external README\", etc. — NOT by exact filename. File names change; roles are stable. This keeps memories from going stale after renames/restructures.\n\n**Deviations from this workflow require explicit user override, not implicit shortcut.**",
+  "why": "User explicitly asked this be stored as a high-priority preference to bind all future feature work. Captures the entire shape of \"how we ship\" from workspace setup through testing and docs. Using role-based references instead of exact filenames prevents the memory from going stale. Always-injected so every session starts with this baseline.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "user",
+  "tags": [
+    "workflow",
+    "shipping",
+    "preferences",
+    "always-inject",
+    "qa",
+    "docs"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T22:20:03.398Z",
+  "updated_at": "2026-04-22T22:20:03.398Z"
+}

@@ -1,0 +1,25 @@
+{
+  "id": 307,
+  "uuid": "805efc15-b9b1-4668-87d8-356252550098",
+  "layer": "guidelines",
+  "what": "User-specified direction for hook visibility UX (Apr 21 2026, from mem #175 follow-up discussion):\n\n**Desired behavior:** Visibility of hook output to the user should be CONFIGURABLE — users decide their preferred verbosity level. Two shapes to consider:\n\n- **Granular:** per-hook-class toggle — `nudge.visible`, `soft.visible`, `block.visible` (or similar) so users can show recall nudges but hide soft injections, etc.\n- **Simpler:** single global `hooks.output.visible` or `hooks.verbosity` knob — one switch for everything\n\nUser leans toward simpler but wants to preserve ability to go granular if needed. Decision can be made after the empirical rendering test (PreToolUse UX fixture at /tmp/aide-ux-test/) once we know what visibility options are available.\n\n**Existing code state (verified 2026-04-21 on feature/phase-1):**\n- `nudge.visible` IS defined in `src/memory/config.ts` (default `false`) with tests in `src/memory/__tests__/config.test.ts` and `deep-integration.test.ts`\n- It is NOT in `scripts/hooks/defaults.json`\n- It is NOT referenced by any hook script (`scripts/hooks/*.sh`)\n- So: schema exists, persistence works, but no hook reads it to gate output\n- Wiring TODO: add to defaults.json (or decide if it should only live in TS config), then consume in relevant hook scripts (candidates: pre-read-recall.sh, pre-edit-recall.sh, pre-search-nudge.sh, detect-correction.sh — anywhere soft-block visibility matters)\n\n**Implementation implication for UX_EXPLORATION doc:** whatever output shape we land on (systemMessage, own log, statusLine), the \"on/off\" control needs to route through a single config knob the user can flip. Don't hardcode visibility into the hook logic — gate behind config read.\n\n**Related config knobs already wired (for pattern reference):** hooks.read.maxBlocks, hooks.edit.maxBlocks, hooks.stop.schedule, hooks.search.mode, hooks.correction.enabled, hooks.precompact.mode (all in scripts/hooks/defaults.json, read via scripts/hooks/read-config.sh presumably).",
+  "why": "User explicitly flagged this as a future design requirement (\"should be configurable\") and correctly recalled that the `nudge.visible` schema exists but isn't wired. Captures both the UX direction AND the concrete dangling-schema state so the implementation session doesn't need to rediscover either. Guidelines layer because this is team/project direction on how the visibility feature should be shaped, not a fact about current behavior.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "ux",
+    "hooks",
+    "config",
+    "visibility",
+    "nudge",
+    "fast-follow"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T03:02:41.510Z",
+  "updated_at": "2026-04-22T03:02:41.510Z"
+}

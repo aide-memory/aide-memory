@@ -1,0 +1,21 @@
+{
+  "id": 309,
+  "uuid": "a0931f2c-977c-4d57-8dbe-532a1ef62f41",
+  "layer": "area_context",
+  "what": "Embedding backend wiring design (proposed 2026-04-22, pending user confirmation before implementation): `embeddings.backend` accepts 4 values — `auto` (default, current silent try-transformers-then-ollama-then-keyword fallback chain), `transformers` (force local bundled backend, ERROR loudly if `@huggingface/transformers` optional dep not installed), `ollama` (force ollama, error if server unreachable), `none` (disable semantic search entirely, keyword-only). `embeddings.model` accepts backend-specific model names (default BAAI/bge-small-en-v1.5 for transformers, nomic-embed-text for ollama). Rationale for keeping transformers as OPTIONAL dep not bundled: adds ~30MB + native-dep complexity, violates aide-memory's small-footprint positioning. Users who want semantic search install via `npm install -g @huggingface/transformers` — progressive enhancement. `auto` as silent default preserves current UX (no one is worse off), explicit values give loud errors so users who try to force transformers without deps understand why. Cloud backends (OpenAI, Cohere, Voyage) are Phase 2+ — not in this wiring pass.",
+  "why": "Concrete wiring design for `embeddings.backend` + `embeddings.model` — two of the 9 config-surface bugs from memory #304 slated for remediation. Storing so the design doesn't drift when the implementer (me or next session) actually wires it. Key invariant: don't force transformers to become a required dep; keep it optional + progressive enhancement.",
+  "scope": "src/memory/embeddings/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "config"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T03:33:16.429Z",
+  "updated_at": "2026-04-22T03:33:16.429Z"
+}

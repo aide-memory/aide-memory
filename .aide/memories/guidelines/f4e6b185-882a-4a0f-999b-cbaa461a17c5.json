@@ -1,0 +1,21 @@
+{
+  "id": 314,
+  "uuid": "f4e6b185-882a-4a0f-999b-cbaa461a17c5",
+  "layer": "guidelines",
+  "what": "Pre-ship validation sequence for code remediation bundles (2026-04-22, applies to any bundle ≥5 changes touching hooks/recall/settings/embeddings): 10 checks that MUST all pass before commit + release. (1) `npm run build` clean. (2) `npm test -- --run --exclude '**/.claude/worktrees/**' --exclude '**/.cursor/worktrees/**'` — all pass (baseline 658/658 as of 2026-04-22). (3) settings-behavior.test.sh. (4) detect-correction.test.sh. (5) all-configs-behavior.test.sh (current target: 18 PASS + 3 SKIP + 0 FAIL post-bundle). (6) e2e-autonomous.sh (H + J + drift-repair). (7) In-depth code review of every changed file — read-through for correctness, edge cases, error handling. (8) Full 17-step simulation against fresh /tmp/aide-e2e via stdin-pipe into `node dist/cli/aide-memory.js hook <name>` — tests hook dispatch envelope without needing live Claude Code session (playbook in memory #302). (9) Install-from-tarball smoke: `npm pack` → install into fresh temp dir → run lifecycle (init/remember/recall/search/list) + fire pre-read hook with drift-repair → confirm bundle works end-to-end (catches packaging bugs dev-mode misses per memory #163). (10) Manual walk of key scenarios (3, 4, 6, 8 in MANUAL_E2E_VALIDATION.md) in a real claude --debug session — validates AGENT behavior response to nudges, which sim step 8 can't exercise. Ship only if all 10 green. The sequence adds ~45 min to any bundle commit — worth it to avoid post-publish audit patches like 0.4.1 and 0.4.2.",
+  "why": "This session produced a 22-change bundle (code + tests + docs) and the user explicitly asked for bug review + unit testing + smoke + in-depth review + validation scenarios + config verification as part of the plan. Locking the 10-step sequence as a reusable standard so future bundles don't skip steps. Complements docs/RELEASING.md step-4 smoke list but goes further — includes the simulation playbook + code review as mandatory not optional.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "integration"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T04:27:14.442Z",
+  "updated_at": "2026-04-22T04:27:14.442Z"
+}

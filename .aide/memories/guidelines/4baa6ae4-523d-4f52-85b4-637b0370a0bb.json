@@ -1,0 +1,21 @@
+{
+  "id": 313,
+  "uuid": "4baa6ae4-523d-4f52-85b4-637b0370a0bb",
+  "layer": "guidelines",
+  "what": "User direction on config hygiene (2026-04-22): when adding ANY new config setting to aide-memory, always (1) include an inline clarifying comment in `scripts/hooks/defaults.json` or the TypeScript schema explaining what the setting does, its default, and when to change it; (2) add/update the corresponding section in `docs/user/configuration.md` with the same info for end users; (3) update `docs/user/cli-reference.md` valid-keys list + one-line description; (4) ensure `scripts/hooks/__tests__/all-configs-behavior.test.sh` has a case proving the setting actually changes behavior (PASS) or explicitly documents why it can't (SKIP with reason). This is a repeating pattern — configs getting added without docs caused the 4-product-bug situation from memory #304. Checklist applies to BOTH new settings and any setting whose semantics change (e.g. embeddings.backend gaining new accepted values).",
+  "why": "Locks in the \"configs without docs is a user-trust bug\" rule discovered when auditing the config surface. Every config addition from this point forward should go through all 4 checklist steps — prevents future dead-config drift.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "testing"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-22T04:18:12.454Z",
+  "updated_at": "2026-04-22T04:18:12.454Z"
+}
