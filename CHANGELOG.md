@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.4.3 — 2026-04-22
+
+Minor release: polish + correctness sweep. Fixes several latent bugs, expands correction-detection coverage, and introduces three configurable knobs for SessionStart injection + scope-matching behavior. Also cleans up dead public-config keys that were listed as valid but had no runtime effect.
+
+### Config surface changes
+
+- **Several `AideConfig` keys are no longer accepted by `aide-memory config`:** `capture.enabled`, `capture.hooks.preCompact`, `capture.hooks.preToolUse`, `capture.hooks.stop`, `capture.hooks.userPromptSubmit`, `nudge.visible`. These were never actually read by any runtime code — setting them did nothing. They're removed from the valid-keys list so users stop thinking they do something. (If you had any of these in your `.aide/config.json`, they're now ignored; safe to delete the entries.) See `docs/user/configuration.md` for `hooks.*` replacements that do what the `capture.*` names suggested.
+
+- **Scope matching is now configurable AND more consistent.** The previous focused-mode rule was asymmetric: `src/**`-scoped memories matched direct-child files but not grandchildren, and `src/api/**`-scoped memories failed to reach deep files like `src/api/routes/routeA.ts`. Fixed under a new config knob `recall.minScopeDepth` (default `1`) that measures scope specificity. With default `1`, every scope matches its descendants at any depth — so `src/api/**` now correctly surfaces for `src/api/routes/routeA.ts`, and `src/**` surfaces for everything under `src/`. Users with many broad scopes who find per-file recall noisy can bump to `2` (broad scopes like `src/**` get filtered to SessionStart only). See `docs/user/configuration.md` for a visual walkthrough.
+
+### New features
+
+- **`recall.minScopeDepth`** (default `2`) — makes focused-mode scope matching configurable. Fixes the long-standing gap where mid-depth scopes like `src/api/**` didn't surface for deeper files like `src/api/routes/routeA.ts` because they were treated as grandparents. Now scopes with ≥2 fixed segments match descendants at any depth. Set to `1` for the old narrow behavior, or `3+` for stricter scoping. Re-introduces configurability that was accidentally removed when the original `recall.minScopeDepth` was hard-coded into `computeScopedForPath` during Phase 1 cleanup.
+
+- **`injection.excludeScopedPreferences`** (default `false`) — opt-in to filter scoped preferences out of SessionStart injection. Default keeps the current "inject all prefs regardless of scope" behavior. Flip to `true` for tighter initial token usage when you have many area-scoped preferences — they'll still surface via Read/Edit path hooks when the agent touches matching paths.
+
+- **`injection.maxChars`** (default `1200`) — overall character cap for the combined SessionStart injection. Replaces the previously hardcoded `MAX_INJECT_CHARS` constant. Bump to 2000+ for richer initial context, drop to 600 for token-conscious sessions.
+
+- **`contributor` config is now wired up.** Setting `aide-memory config contributor "TeamBot"` actually overrides the git user on new memories. Default `'auto'` reads `git config user.name` as before. Useful for shared repos where multiple humans contribute under a single handle.
+
+- **`embeddings.backend` + `embeddings.model` configs are now wired up.** Accepted values for `backend`: `auto` (default — try transformers → ollama → keyword-only), `transformers` (force local via optional `@huggingface/transformers` dep), `ollama` (force local Ollama at `localhost:11434`), `none` (disable semantic search). `embeddings.model` accepts backend-specific model names (`Xenova/bge-small-en-v1.5` for transformers, `nomic-embed-text` for ollama, or any other supported model).
+
+- **Correction regex extended** to match real-world phrasings: `no, we use X not Y`, `no, I want X instead`, `no, it should be X`, `no, you should use X`, `no, try X instead`. The `^no I mean ...` false-positive filter narrowed to only catch reference clarifications (`no I mean the other file`) — corrections like `no I mean use X instead` now fire correctly.
+
+- **SessionStart section reorder:** `## Always` (priority-marked memories) renders FIRST in the injection output. Under the previous order (always-last), large-project SessionStarts with char-cap truncation could chop off the priority-always section entirely.
+
+- **Preferences sort by `recalled_count desc, updated_at desc`** at SessionStart. Heavily-used preferences rise to the top of the 15-slot cap. New/rarely-recalled prefs get ordered by recency among themselves as tiebreaker.
+
+### Fixes
+
+- **`preRead`/`preEdit` resolve relative → absolute before `hasRecalledFile` lookup.** Production Claude Code always sends absolute paths, so this was latent, but tests and any future relative-path caller (custom MCP integrations, etc.) now correctly transition from hard-block to soft on second read.
+
+- **`recall-log.jsonl` entries use normalized relative paths** instead of whatever the caller passed. Makes log entries consistent across CLI + MCP callers and portable across machines.
+
+- **`contributor` override was previously ignored.** Code hardcoded `detectGitUser()` and never consulted the config. Wired up as described above.
+
+- **`embeddings.backend` / `embeddings.model` were previously ignored.** Code tried Transformers → Ollama in fixed order regardless of config. Wired up as described above.
+
+### Dead-code cleanup
+
+- **6 dead config keys removed from `AideConfig.defaults()`:** `capture.*` family (5), `nudge.visible` (1). These had no runtime reader. `nudge.visible` will return (with real wiring) when the hook-output visibility UX work lands; the other 5 are gone for good.
+
+### Internal
+
+- `scripts/hooks/__tests__/all-configs-behavior.test.sh` now covers every public config (21 PASS, 3 SKIP, 0 FAIL) — enforces that every setting visible in `aide-memory config` either changes observable behavior OR is explicitly flagged as SKIP with a reason. Previous coverage was only 5 of 16 settings.
+- New `scripts/hooks/__tests__/install-from-tarball.smoke.sh` — packs the published tarball, installs into a fresh temp dir, runs full CLI lifecycle + drift-repair. Catches packaging-shape regressions that dev-mode tests miss (per memory #163).
+- 660 unit tests + 4 bash smokes + 1 install-from-tarball smoke all pass.
+- `detect-correction.test.sh` expanded from 9 to 17 cases covering the new regex branches.
+- `MANUAL_E2E_VALIDATION.md` updated for the new configs + revised expected outputs for steps 3, 6, 8.
+
+### Upgrading from 0.4.2
+
+No action required for normal usage. If you had any `capture.*` or `nudge.visible` entries in your `.aide/config.json`, they're silently ignored now — safe to delete, no behavior change.
+
+If your project had `src/api/**`-scoped memories that never surfaced for deeply-nested files like `src/api/routes/routeA.ts`: good news — they now do, automatically.
+
+---
+
 ## 0.4.2 — 2026-04-21
 
 Patch release restoring mid-session drift-repair for derived artifacts and fixing a hook-dispatch path-resolution bug caught in post-0.4.1 audit.
