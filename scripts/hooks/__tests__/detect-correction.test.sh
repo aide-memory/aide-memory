@@ -97,6 +97,18 @@ assert_case "non-apostrophized 'cant'" \
   "no, cant do that" "correction"
 assert_case "apostrophized 'can\\'t'" \
   "no, can't do that" "correction"
+assert_case "no, we use X not Y (your example)" \
+  "no, we use epoch seconds not milliseconds" "correction"
+assert_case "no, I want X instead" \
+  "no, I want spaces instead of tabs" "correction"
+assert_case "no, it should be X" \
+  "no, it should be camelCase" "correction"
+assert_case "no, you should use X" \
+  "no, you should use async/await" "correction"
+assert_case "no, try X instead" \
+  "no, try Zod instead of Yup" "correction"
+assert_case "no I mean use X instead (override of FP filter)" \
+  "no I mean use spaces instead" "correction"
 
 echo
 echo "Decisions (should nudge → area_context/technical):"
@@ -112,6 +124,10 @@ echo
 echo "False-positive filters (should skip):"
 assert_case "'no I mean' filter" \
   "no I mean something else" "skip"
+assert_case "'no I mean the other' reference clarification" \
+  "no I mean the other file" "skip"
+assert_case "'no I mean that one' reference clarification" \
+  "no I mean that one" "skip"
 assert_case "single-word / too short" \
   "ok" "skip"
 

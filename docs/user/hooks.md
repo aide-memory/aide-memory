@@ -153,26 +153,26 @@ All recall tracking is session-scoped via `session_id` (available in hook stdin 
 
 ## Disabling individual hooks
 
-Each hook can be disabled independently via config:
+Each hook can be disabled independently via config. (The old `capture.*` family was removed in 0.4.3 in favor of the more specific `hooks.*` controls.)
 
 ```bash
-# Disable the stop hook (no reflection prompt)
-aide-memory config capture.hooks.stop false
+# Disable the stop-hook reflection prompt (effectively)
+aide-memory config hooks.stop.schedule '[{"every":100}]'
 
 # Disable correction detection
-aide-memory config capture.hooks.userPromptSubmit false
+aide-memory config hooks.correction.enabled false
 
-# Disable the file-read nudge and recall tracking
-aide-memory config capture.hooks.preToolUse false
+# Disable the file-read nudge and blocking
+aide-memory config hooks.read.maxBlocks 0
 
-# Disable pre-compact save prompt
-aide-memory config capture.hooks.preCompact false
+# Disable file-edit nudge and blocking
+aide-memory config hooks.edit.maxBlocks 0
 
-# Disable session start cleanup
-aide-memory config capture.hooks.sessionStart false
+# Disable pre-compact cleanup (preserve tracking across /compact)
+aide-memory config hooks.precompact.mode off
 
-# Disable all hooks at once
-aide-memory config capture.enabled false
+# Silence the pre-search nudge
+aide-memory config hooks.search.mode off
 ```
 
 ## Claude Code vs Cursor differences

@@ -6,19 +6,11 @@ import path from 'path';
  * This is the canonical source of truth for all config keys and their types.
  */
 const DEFAULT_CONFIG = {
+  // Schema version. Bumped on breaking config shape changes.
   version: 1,
-  capture: {
-    enabled: true,
-    hooks: {
-      preToolUse: true,
-      stop: true,
-      userPromptSubmit: true,
-      preCompact: true,
-    },
-  },
-  nudge: {
-    visible: false,
-  },
+
+  // Tag presets surfaced by `aide_remember` — suggestion UI only, no runtime
+  // gating. Safe to extend with your team's domain-specific tags.
   tags: {
     presets: [
       'architecture',
@@ -32,14 +24,46 @@ const DEFAULT_CONFIG = {
       'api-contract',
     ],
   },
+
+  // Analytics / telemetry. DEFAULT = TRUE (opt-out model) — analytics rows
+  // are written to the local Analytics table by default so users get stats +
+  // the project gets product-visibility signals. Flip to false with
+  // `aide-memory config telemetry.enabled false` to disable recording.
+  //
+  // NB: "telemetry" here is LOCAL-ONLY — aide-memory has NO phone-home
+  // channel regardless of this flag. The data lives in your .aide/memory.db
+  // and never leaves your machine. The "telemetry" name is a carryover from
+  // the original opt-in framing; under the hood it only gates the local
+  // Analytics writer in store.ts.
   telemetry: {
     enabled: true,
   },
+
+  // `contributor` is attached to every memory this instance stores. Default
+  // 'auto' reads `git config user.name` at memory-creation time. Override
+  // with any string to use a team handle / display name instead of your
+  // personal git identity — useful for shared repos where multiple
+  // humans contribute from the same machine.
   contributor: 'auto' as string,
+
+  // Embedding backend for semantic search. Default 'auto' = try bundled
+  // @huggingface/transformers optional dep first, fall back to a local
+  // ollama server at localhost:11434, fall back to keyword-only search.
+  // Set to 'transformers', 'ollama', or 'none' to force a choice (error
+  // loudly if the required dep/service is missing). Cloud backends
+  // (openai, cohere, voyage) are Phase 2+.
+  //
+  // `model` overrides the default model name for the active backend:
+  //   transformers default: Xenova/bge-small-en-v1.5 (~30MB, local)
+  //   ollama default: nomic-embed-text
   embeddings: {
-    model: 'bge-small-en-v1.5' as string,
-    backend: 'transformers' as string,
+    model: 'auto' as string,
+    backend: 'auto' as string,
   },
+
+  // `aide-memory` post-command network fetch to check for a newer npm
+  // version. Prints a one-line upgrade hint on stderr when a newer is
+  // available. Set to false to disable the network call entirely.
   updates: {
     check: true,
   },
@@ -136,7 +160,7 @@ export class AideConfig {
 
   /**
    * Get a config value using dot-notation.
-   * Example: config.get('capture.hooks.preToolUse') => true
+   * Example: config.get('embeddings.backend') => 'auto'
    */
   get(key: string): any {
     return getByPath(this.config, key);

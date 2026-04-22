@@ -31,11 +31,11 @@ The CLI walks up from the current directory looking for `.aide/`. If your projec
 
 1. **Hooks disabled in config.** Check:
    ```bash
-   aide-memory config capture.enabled
-   aide-memory config capture.hooks.preToolUse
-   aide-memory config capture.hooks.stop
+   aide-memory config hooks.read.maxBlocks    # should be 1
+   aide-memory config hooks.edit.maxBlocks    # should be 1
+   aide-memory config hooks.correction.enabled  # should be true
    ```
-   All should return `true`.
+   Value `0` / `false` means that hook is disabled. (The legacy `capture.*` keys were removed in 0.4.3 — they had no runtime effect.)
 
 2. **MCP server not configured in your editor.** Ensure the MCP server is registered. For Claude Code, check your `mcp_servers` configuration. For Cursor, check your MCP settings.
 
@@ -44,9 +44,9 @@ The CLI walks up from the current directory looking for `.aide/`. If your projec
    aide-memory init --update-rules
    ```
 
-4. **Build is stale.** The `recall-for-path.js` hook requires compiled output in `dist/`. If you are developing locally:
+4. **Build is stale.** Hook dispatch happens via `dist/cli/aide-memory.js` (bundled since 0.4.0). If you are developing locally, rebuild:
    ```bash
-   npm run build
+   npm run build && npm run build:dist
    ```
 
 ---

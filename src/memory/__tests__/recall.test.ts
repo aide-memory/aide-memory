@@ -47,9 +47,9 @@ describe('scopeMatchesPath', () => {
     expect(scopeMatchesPath('src\\components\\**', 'src/components/Button.tsx')).toBe(true);
   });
 
-  describe('focused mode — grandparent exclusion (memory #95/#96)', () => {
+  describe('focused mode — minScopeDepth rule (0.4.3+)', () => {
     it('focused: immediate parent scope matches', () => {
-      // src/api/** for src/api/routes.ts → immediate parent → INCLUDE
+      // src/api/** for src/api/routes.ts → depth 2 ≥ default minScopeDepth=2 → INCLUDE
       expect(scopeMatchesPath('src/api/**', 'src/api/routes.ts', { focused: true })).toBe(true);
     });
 
@@ -57,18 +57,27 @@ describe('scopeMatchesPath', () => {
       expect(scopeMatchesPath('src/api/routes.ts', 'src/api/routes.ts', { focused: true })).toBe(true);
     });
 
-    it('focused: grandparent scope is excluded', () => {
-      // src/** for src/api/routes.ts → grandparent → EXCLUDE
+    it('focused: single-segment scope (src/**) excluded by default minScopeDepth=2', () => {
+      // src/** has depth 1 < 2 → EXCLUDE (too broad)
       expect(scopeMatchesPath('src/**', 'src/api/routes.ts', { focused: true })).toBe(false);
     });
 
-    it('focused: great-grandparent scope is excluded', () => {
+    it('focused: single-segment scope also excluded for deeper paths', () => {
       expect(scopeMatchesPath('src/**', 'src/api/v2/routes.ts', { focused: true })).toBe(false);
     });
 
-    it('focused: grandparent of deep path is excluded (design memory #95)', () => {
-      // src/components/** for src/components/dashboard/Widget.tsx → grandparent → EXCLUDE
-      expect(scopeMatchesPath('src/components/**', 'src/components/dashboard/Widget.tsx', { focused: true })).toBe(false);
+    it('focused: mid-depth scope reaches deep descendants (0.4.3 change)', () => {
+      // src/components/** (depth 2) for src/components/dashboard/Widget.tsx → INCLUDE
+      // Previously excluded as "grandparent"; now permitted because it meets minScopeDepth=2.
+      expect(scopeMatchesPath('src/components/**', 'src/components/dashboard/Widget.tsx', { focused: true })).toBe(true);
+    });
+
+    it('focused: minScopeDepth=1 restores pre-0.4.3 permissive behavior', () => {
+      expect(scopeMatchesPath('src/**', 'src/api/routes.ts', { focused: true, minScopeDepth: 1 })).toBe(true);
+    });
+
+    it('focused: minScopeDepth=3 stricter — src/api/** (depth 2) excluded', () => {
+      expect(scopeMatchesPath('src/api/**', 'src/api/routes.ts', { focused: true, minScopeDepth: 3 })).toBe(false);
     });
 
     it('focused: project scope ("project") still matches (filtered separately by computeScopedForPath)', () => {
@@ -213,22 +222,22 @@ describe('recall', () => {
     expect(result.memories.length).toBe(6);
   });
 
-  it('filters by path — only returns matching scope (focused: no grandparents)', () => {
+  it('filters by path — returns matching scopes with minScopeDepth=2 default (0.4.3)', () => {
     const result = recall(store, {
       paths: ['src/components/dashboard/Sidebar.tsx'],
     });
 
     const whats = result.memories.map(m => m.what);
 
-    // Should include: dashboard area_context (immediate parent), project guidelines, project technical
+    // Should include: dashboard area_context (immediate parent),
+    // src/components/** (depth 2 meets minScopeDepth=2), project memories.
     expect(whats).toContain('Skeleton loading replaces ALL legacy loaders');
     expect(whats).toContain('Composition over conditionals for component variants');
     expect(whats).toContain('Vitest not Jest — use describe/it from vitest');
+    // src/components/** (depth 2) now matches descendants — 0.4.3 change.
+    expect(whats).toContain('Keep components under 150 lines');
 
-    // Should NOT include: grandparent scope src/components/** (memory #95 design)
-    expect(whats).not.toContain('Keep components under 150 lines');
-
-    // Should NOT include: CLI commands or memory technical
+    // Should NOT include: sibling CLI commands or unrelated memory module
     expect(whats).not.toContain('Each CLI command gets its own file');
     expect(whats).not.toContain('better-sqlite3 is synchronous — do not use await');
   });
@@ -306,15 +315,15 @@ describe('recall', () => {
     expect(fresh.last_recalled_at).toBeTruthy();
   });
 
-  it('returns matched scopes (focused: no grandparents)', () => {
+  it('returns matched scopes (focused mode with minScopeDepth=2, 0.4.3)', () => {
     const result = recall(store, {
       paths: ['src/components/dashboard/Sidebar.tsx'],
     });
 
-    // Immediate parent scope is included
+    // Immediate parent scope is included.
     expect(result.matched_scopes).toContain('src/components/dashboard/**');
-    // Grandparent src/components/** is NOT — excluded by focused filter (memory #95)
-    expect(result.matched_scopes).not.toContain('src/components/**');
+    // src/components/** (depth 2) now included under minScopeDepth=2 default.
+    expect(result.matched_scopes).toContain('src/components/**');
   });
 
   it('deleted memories do not appear in recall', () => {

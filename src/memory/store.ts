@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { execSync } from 'child_process';
 import type { Memory, MemoryFile, CreateMemory, MemoryLayer, GeneratedBy } from './types';
 import { initFts5, backfillFts5Index, escapeFts5Query } from './fts5';
-import type { EmbeddingService } from './embeddings';
+import { EmbeddingService, TransformersBackend, OllamaBackend } from './embeddings';
 import { Analytics } from './analytics';
 
 const SCHEMA_VERSION = 3;
@@ -136,18 +136,53 @@ export class MemoryStore {
     // Initialize analytics
     this.analytics = new Analytics(this.db);
 
-    // Check telemetry config if in file-per-memory mode (has project root)
+    // Read project-mode config once: telemetry, contributor override, embeddings.
     if (typeof arg !== 'string' && 'projectRoot' in arg) {
       try {
         const configPath = path.join(arg.projectRoot, '.aide', 'config.json');
         if (fs.existsSync(configPath)) {
           const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+
+          // Telemetry
           if (configData.telemetry?.enabled === false) {
             this.telemetryEnabled = false;
           }
+
+          // Contributor override: default 'auto' uses detectGitUser(); any
+          // other non-empty string overrides. Useful for shared repos where
+          // multiple humans contribute under a team handle.
+          const configContributor = configData.contributor;
+          if (
+            typeof configContributor === 'string' &&
+            configContributor !== 'auto' &&
+            configContributor.trim() !== ''
+          ) {
+            this.defaultContributor = configContributor;
+          }
+
+          // Embeddings backend selection. Default 'auto' falls through to the
+          // built-in fallback chain (transformers → ollama). Explicit values
+          // construct the named backend with optional model override. 'none'
+          // leaves embeddingService null — keyword/FTS5 search only.
+          const backendChoice: string = configData.embeddings?.backend ?? 'auto';
+          const modelChoice: string = configData.embeddings?.model ?? 'auto';
+          if (backendChoice === 'none') {
+            // Explicit opt-out: skip embedding service entirely.
+            this.embeddingService = null;
+          } else if (backendChoice === 'transformers' || backendChoice === 'ollama') {
+            // Construct a preferred backend per config. Backends are
+            // statically imported at the top of this file (no circular risk —
+            // embeddings.ts doesn't import from store.ts).
+            const model = modelChoice !== 'auto' ? modelChoice : undefined;
+            const backend = backendChoice === 'transformers'
+              ? new TransformersBackend(model)
+              : new OllamaBackend(model);
+            this.embeddingService = new EmbeddingService(backend);
+          }
+          // 'auto' (default): no preferred backend, caller drives selection.
         }
       } catch {
-        // Config read failure is non-fatal — default to enabled
+        // Config read failure is non-fatal — defaults apply.
       }
     }
 

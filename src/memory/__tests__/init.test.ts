@@ -84,9 +84,9 @@ describe('initProject', () => {
     expect(config.contributor).toBe('Test User');
     // Telemetry is an object with .enabled in the full AideConfig schema
     expect(config.telemetry.enabled).toBe(true);
-    // Capture hooks should be present from defaults
-    expect(config.capture).toBeDefined();
-    expect(config.capture.enabled).toBe(true);
+    // Embeddings defaults — 'auto' backend + model (0.4.3 change: was 'transformers'/'bge-small-en-v1.5')
+    expect(config.embeddings).toBeDefined();
+    expect(config.embeddings.backend).toBe('auto');
 
     expect(result.created).toContain('.aide/config.json');
   });

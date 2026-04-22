@@ -381,10 +381,17 @@ overrides.
 and (if possible) near-matching suggestions. The full set of keys comes
 from two sources:
 
-- Hook/recall/injection knobs — see `scripts/hooks/defaults.json` (all
-  user-settable).
-- Legacy capture/telemetry/tags schema — `capture.enabled`,
-  `telemetry.enabled`, `contributor`, `tags.presets`, etc.
+- Hook/recall/injection knobs — see `scripts/hooks/defaults.json` (19 keys
+  covering hook behavior, recall, scope-matching, SessionStart injection,
+  and memory-storage visibility).
+- Integration schema — `telemetry.enabled` (default ON, local-only),
+  `contributor` (default `"auto"`, override with a team handle),
+  `embeddings.backend` / `embeddings.model` (auto / transformers / ollama /
+  none), `tags.presets`, `updates.check`, `version`.
+
+**Removed in 0.4.3:** `capture.*` family (5 keys) + `nudge.visible` were
+listed as valid but had no runtime effect. They're rejected now. See
+`docs/user/configuration.md` for equivalent `hooks.*` replacements.
 
 Every public setting is seeded into `.aide/config.json` on `aide-memory init`
 and on MCP-server auto-update, so you can `cat .aide/config.json` to see
@@ -406,25 +413,28 @@ derived files (`.ignore`, etc.) are in sync with `.aide/config.json`.
 
 ```bash
 # Read a value
-aide-memory config capture.enabled
+aide-memory config telemetry.enabled
 # Output: true
 
 # Set a boolean
-aide-memory config capture.enabled false
-# Output: Set capture.enabled = false
+aide-memory config telemetry.enabled false
+# Output: Set telemetry.enabled = false
 
 # Read a nested value
-aide-memory config capture.hooks.preToolUse
-# Output: true
+aide-memory config hooks.read.maxBlocks
+# Output: 1
 
-# Disable the Stop-hook correction prompt
+# Disable the correction-detection nudge
 aide-memory config hooks.correction.enabled false
 
-# Set a JSON array value
+# Set a JSON array value (e.g. custom Stop-hook schedule)
 aide-memory config hooks.stop.schedule '[{"every":5}]'
 
-# Disable telemetry
-aide-memory config telemetry.enabled false
+# Override contributor (default 'auto' uses git user.name)
+aide-memory config contributor "TeamBot"
+
+# Restore pre-0.4.3 narrow scope-matching behavior
+aide-memory config recall.minScopeDepth 1
 ```
 
 Values are auto-parsed: `true`/`false` become booleans, integers and

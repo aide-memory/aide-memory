@@ -51,11 +51,12 @@ describe('validateConfigKey', () => {
     }
   });
 
-  it('accepts legacy AideConfig keys like capture.enabled', () => {
-    expect(validateConfigKey('capture.enabled').ok).toBe(true);
-    expect(validateConfigKey('capture.hooks.preToolUse').ok).toBe(true);
+  it('accepts AideConfig keys like telemetry.enabled, contributor, embeddings.*', () => {
     expect(validateConfigKey('telemetry.enabled').ok).toBe(true);
     expect(validateConfigKey('contributor').ok).toBe(true);
+    expect(validateConfigKey('embeddings.backend').ok).toBe(true);
+    expect(validateConfigKey('embeddings.model').ok).toBe(true);
+    expect(validateConfigKey('updates.check').ok).toBe(true);
   });
 
   it('rejects unknown keys with a helpful message', () => {
@@ -98,11 +99,14 @@ describe('collectValidKeys', () => {
       'recall.limit',
       'recall.ensureLayerDiversity',
       'recall.layerDiversityMinLimit',
+      'recall.minScopeDepth',
       'injection.preferences',
+      'injection.excludeScopedPreferences',
       'injection.technical',
       'injection.area_context',
       'injection.guidelines',
       'injection.priorityAlwaysOverride',
+      'injection.maxChars',
       'memories.hideFromGrep',
       'memories.softening.threshold',
     ];
@@ -111,11 +115,12 @@ describe('collectValidKeys', () => {
     }
   });
 
-  it('includes legacy AideConfig leaves', () => {
+  it('includes AideConfig leaves (telemetry, contributor, embeddings)', () => {
     const keys = collectValidKeys();
-    expect(keys).toContain('capture.enabled');
-    expect(keys).toContain('capture.hooks.stop');
     expect(keys).toContain('telemetry.enabled');
+    expect(keys).toContain('contributor');
+    expect(keys).toContain('embeddings.backend');
+    expect(keys).toContain('embeddings.model');
   });
 
   it('returns a sorted list', () => {

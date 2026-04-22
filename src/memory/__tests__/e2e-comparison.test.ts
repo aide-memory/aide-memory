@@ -201,11 +201,15 @@ describe('E2E: AIDE Memory', () => {
       // Should include dashboard-specific area context (immediate parent)
       expect(text).toContain('Skeleton loading replaces ALL legacy loaders');
       expect(text).toContain('DashboardSkeleton is its own file');
-      // Should NOT include grandparent scope (src/components/** is 1 level
-      // above the immediate parent src/components/dashboard/**). Per the
-      // focused-recall design (memory #95/#96), grandparent scopes are
-      // already covered by SessionStart injection and excluded from recall.
-      expect(text).not.toContain('150 lines');
+      // SHOULD include mid-depth scope `src/components/**` ("150 lines" pref)
+      // — per the 0.4.3 `recall.minScopeDepth` relaxation (default 2), scopes
+      // with ≥2 fixed segments match descendants at any depth. `src/components/**`
+      // (depth 2) applies to everything under src/components/ including the
+      // dashboard subtree. Only single-segment scopes like `src/**` (depth 1)
+      // are still excluded as too broad. Supersedes the prior grandparent-
+      // exclusion rule (memory #95/#96) which was too strict for real
+      // feature-area conventions. See memory #312 for full design rationale.
+      expect(text).toContain('150 lines');
       // Should include project-wide
       expect(text).toContain('Vitest not Jest');
     });

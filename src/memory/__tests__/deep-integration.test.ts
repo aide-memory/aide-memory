@@ -763,21 +763,21 @@ describe('5. Config Edge Cases', () => {
     cleanupDir(projectRoot);
   });
 
-  it('gets deeply nested key: capture.hooks.preToolUse', () => {
+  it('gets deeply nested key: embeddings.backend', () => {
     const config = new AideConfig(projectRoot);
-    const value = config.get('capture.hooks.preToolUse');
-    expect(value).toBe(true);
+    const value = config.get('embeddings.backend');
+    expect(value).toBe('auto');
   });
 
   it('sets deeply nested boolean value', () => {
     const config = new AideConfig(projectRoot);
-    config.set('capture.hooks.preToolUse', false);
+    config.set('telemetry.enabled', false);
 
-    expect(config.get('capture.hooks.preToolUse')).toBe(false);
+    expect(config.get('telemetry.enabled')).toBe(false);
 
     // Reload from disk and verify persistence
     const config2 = new AideConfig(projectRoot);
-    expect(config2.get('capture.hooks.preToolUse')).toBe(false);
+    expect(config2.get('telemetry.enabled')).toBe(false);
   });
 
   it('unknown key returns error with valid key list', () => {
@@ -790,28 +790,28 @@ describe('5. Config Edge Cases', () => {
   it('wrong type returns error with expected type', () => {
     const config = new AideConfig(projectRoot);
 
-    // capture.enabled expects boolean
-    expect(() => config.set('capture.enabled', 'string-value')).toThrowError(/expected boolean/);
-    expect(() => config.set('capture.enabled', 42)).toThrowError(/expected boolean/);
+    // telemetry.enabled expects boolean
+    expect(() => config.set('telemetry.enabled', 'string-value')).toThrowError(/expected boolean/);
+    expect(() => config.set('telemetry.enabled', 42)).toThrowError(/expected boolean/);
   });
 
   it('multiple rapid set() calls do not corrupt the config file', () => {
     const config = new AideConfig(projectRoot);
 
     // Rapid successive sets
-    config.set('capture.enabled', false);
-    config.set('nudge.visible', true);
     config.set('telemetry.enabled', false);
+    config.set('embeddings.backend', 'transformers');
     config.set('contributor', 'rapid-tester');
-    config.set('capture.hooks.stop', false);
+    config.set('embeddings.model', 'custom-model');
+    config.set('updates.check', false);
 
     // Reload and verify all values persisted correctly
     const config2 = new AideConfig(projectRoot);
-    expect(config2.get('capture.enabled')).toBe(false);
-    expect(config2.get('nudge.visible')).toBe(true);
     expect(config2.get('telemetry.enabled')).toBe(false);
+    expect(config2.get('embeddings.backend')).toBe('transformers');
     expect(config2.get('contributor')).toBe('rapid-tester');
-    expect(config2.get('capture.hooks.stop')).toBe(false);
+    expect(config2.get('embeddings.model')).toBe('custom-model');
+    expect(config2.get('updates.check')).toBe(false);
 
     // Verify valid JSON
     const configPath = path.join(projectRoot, '.aide', 'config.json');
@@ -822,18 +822,18 @@ describe('5. Config Edge Cases', () => {
   it('config file with subset of keys fills missing ones from defaults', () => {
     // Write a partial config
     const configPath = path.join(projectRoot, '.aide', 'config.json');
-    const partial = { version: 1, capture: { enabled: false } };
+    const partial = { version: 1, telemetry: { enabled: false } };
     fs.writeFileSync(configPath, JSON.stringify(partial), 'utf-8');
 
     const config = new AideConfig(projectRoot);
 
     // Explicitly set value should be kept
-    expect(config.get('capture.enabled')).toBe(false);
+    expect(config.get('telemetry.enabled')).toBe(false);
 
     // Missing keys should be filled from defaults
-    expect(config.get('capture.hooks.preToolUse')).toBe(true);
-    expect(config.get('nudge.visible')).toBe(false);
-    expect(config.get('telemetry.enabled')).toBe(true);
+    expect(config.get('embeddings.backend')).toBe('auto');
+    expect(config.get('embeddings.model')).toBe('auto');
+    expect(config.get('updates.check')).toBe(true);
     expect(config.get('contributor')).toBe('auto');
   });
 });
@@ -1096,14 +1096,14 @@ describe('7. Full E2E Flow', () => {
       // Step 10: Config get/set -> verify roundtrip
       fs.mkdirSync(path.join(projectRoot, '.aide'), { recursive: true });
       const config = new AideConfig(projectRoot);
-      expect(config.get('capture.enabled')).toBe(true);
+      expect(config.get('telemetry.enabled')).toBe(true);
 
-      config.set('capture.enabled', false);
-      expect(config.get('capture.enabled')).toBe(false);
+      config.set('telemetry.enabled', false);
+      expect(config.get('telemetry.enabled')).toBe(false);
 
       // Reload from disk
       const config2 = new AideConfig(projectRoot);
-      expect(config2.get('capture.enabled')).toBe(false);
+      expect(config2.get('telemetry.enabled')).toBe(false);
 
       store2.close();
     } finally {

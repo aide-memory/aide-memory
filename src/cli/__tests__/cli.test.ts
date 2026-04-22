@@ -118,7 +118,7 @@ describe('aide-memory CLI', () => {
       expect(output).toMatch(/Technical Context|Preferences/);
     });
 
-    it('excludes grandparent scopes from recall (focused filter)', () => {
+    it('includes all matching scopes under default recall.minScopeDepth=1', () => {
       store.add({ layer: 'technical', what: 'WAL mode for SQLite', scope: 'src/memory/**' });
       store.add({ layer: 'preferences', what: 'Use vitest', scope: 'src/**' });
       store.close();
@@ -129,9 +129,13 @@ describe('aide-memory CLI', () => {
       runCli(['recall', 'src/memory/']);
 
       const output = getOutput();
+      // Under 0.4.3 default (minScopeDepth=1), both the narrow scope
+      // (src/memory/**) and the broader scope (src/**) surface per-file.
+      // Users who want the old "exclude broad grandparents" behavior can
+      // set `aide-memory config recall.minScopeDepth 2` — which pushes
+      // single-segment scopes like src/** out to SessionStart-only.
       expect(output).toContain('WAL mode');
-      // src/** is a grandparent of src/memory/ → excluded from focused recall
-      expect(output).not.toContain('Use vitest');
+      expect(output).toContain('Use vitest');
     });
   });
 
@@ -250,11 +254,12 @@ describe('aide-memory CLI', () => {
   // ---- 9. aide-memory config (get) ----
   describe('config', () => {
     it('prints value for a key', () => {
-      // Write a config file first
-      const config = { capture: { enabled: true } };
+      // Write a config file with a valid key. Previously used `capture.enabled`
+      // which was removed in 0.4.3 as part of dead-config cleanup (memory #304).
+      const config = { telemetry: { enabled: true } };
       fs.writeFileSync(project.configPath, JSON.stringify(config));
 
-      runCli(['config', 'capture.enabled']);
+      runCli(['config', 'telemetry.enabled']);
 
       const output = getOutput();
       expect(output).toContain('true');
@@ -262,14 +267,14 @@ describe('aide-memory CLI', () => {
 
     // ---- 10. aide-memory config (set) ----
     it('sets a value', () => {
-      runCli(['config', 'capture.enabled', 'false']);
+      runCli(['config', 'telemetry.enabled', 'false']);
 
       const output = getOutput();
-      expect(output).toContain('Set capture.enabled');
+      expect(output).toContain('Set telemetry.enabled');
 
       // Verify file was written
       const config = JSON.parse(fs.readFileSync(project.configPath, 'utf-8'));
-      expect(config.capture.enabled).toBe(false);
+      expect(config.telemetry.enabled).toBe(false);
     });
   });
 

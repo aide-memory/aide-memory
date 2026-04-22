@@ -32,27 +32,21 @@ describe('AideConfig', () => {
       const full = config.list() as any;
 
       expect(full.version).toBe(1);
-      expect(full.capture.enabled).toBe(true);
-      expect(full.capture.hooks.preToolUse).toBe(true);
-      expect(full.capture.hooks.stop).toBe(true);
-      expect(full.capture.hooks.userPromptSubmit).toBe(true);
-      expect(full.capture.hooks.preCompact).toBe(true);
-      expect(full.nudge.visible).toBe(false);
       expect(full.tags.presets).toEqual([
         'architecture', 'testing', 'security', 'style',
         'integration', 'config', 'migration', 'performance', 'api-contract',
       ]);
       expect(full.telemetry.enabled).toBe(true);
       expect(full.contributor).toBe('auto');
-      expect(full.embeddings.model).toBe('bge-small-en-v1.5');
-      expect(full.embeddings.backend).toBe('transformers');
+      expect(full.embeddings.model).toBe('auto');
+      expect(full.embeddings.backend).toBe('auto');
       expect(full.updates.check).toBe(true);
     });
 
     it('static defaults() returns the default config object', () => {
       const defaults = AideConfig.defaults() as any;
       expect(defaults.version).toBe(1);
-      expect(defaults.capture.enabled).toBe(true);
+      expect(defaults.contributor).toBe('auto');
       expect(defaults.tags.presets).toContain('architecture');
     });
 
@@ -71,20 +65,10 @@ describe('AideConfig', () => {
       fs.mkdirSync(aideDir, { recursive: true });
       const customConfig = {
         version: 1,
-        capture: {
-          enabled: false,
-          hooks: {
-            preToolUse: false,
-            stop: true,
-            userPromptSubmit: true,
-            preCompact: true,
-          },
-        },
-        nudge: { visible: true },
         tags: { presets: ['custom-tag'] },
         telemetry: { enabled: false },
         contributor: 'meky',
-        embeddings: { model: 'custom-model', backend: 'onnx' },
+        embeddings: { model: 'custom-model', backend: 'transformers' },
         updates: { check: false },
       };
       fs.writeFileSync(
@@ -94,22 +78,20 @@ describe('AideConfig', () => {
       );
 
       const config = new AideConfig(projectRoot);
-      expect(config.get('capture.enabled')).toBe(false);
-      expect(config.get('capture.hooks.preToolUse')).toBe(false);
-      expect(config.get('nudge.visible')).toBe(true);
       expect(config.get('tags.presets')).toEqual(['custom-tag']);
       expect(config.get('telemetry.enabled')).toBe(false);
       expect(config.get('contributor')).toBe('meky');
       expect(config.get('embeddings.model')).toBe('custom-model');
+      expect(config.get('embeddings.backend')).toBe('transformers');
       expect(config.get('updates.check')).toBe(false);
     });
 
     it('fills missing keys from defaults when loading partial config', () => {
       const aideDir = path.join(projectRoot, '.aide');
       fs.mkdirSync(aideDir, { recursive: true });
-      // Only override capture.enabled, everything else should come from defaults
+      // Only override telemetry.enabled, everything else should come from defaults
       const partialConfig = {
-        capture: { enabled: false },
+        telemetry: { enabled: false },
       };
       fs.writeFileSync(
         path.join(aideDir, 'config.json'),
@@ -118,12 +100,11 @@ describe('AideConfig', () => {
       );
 
       const config = new AideConfig(projectRoot);
-      expect(config.get('capture.enabled')).toBe(false);
+      expect(config.get('telemetry.enabled')).toBe(false);
       // These should come from defaults
-      expect(config.get('capture.hooks.preToolUse')).toBe(true);
-      expect(config.get('nudge.visible')).toBe(false);
-      expect(config.get('telemetry.enabled')).toBe(true);
       expect(config.get('contributor')).toBe('auto');
+      expect(config.get('embeddings.backend')).toBe('auto');
+      expect(config.get('updates.check')).toBe(true);
     });
   });
 
@@ -131,16 +112,16 @@ describe('AideConfig', () => {
   describe('set()', () => {
     it('sets a nested boolean value via dot notation', () => {
       const config = new AideConfig(projectRoot);
-      config.set('capture.enabled', false);
-      expect(config.get('capture.enabled')).toBe(false);
+      config.set('telemetry.enabled', false);
+      expect(config.get('telemetry.enabled')).toBe(false);
     });
 
     it('sets a deeply nested value via dot notation', () => {
       const config = new AideConfig(projectRoot);
-      config.set('capture.hooks.preToolUse', false);
-      expect(config.get('capture.hooks.preToolUse')).toBe(false);
-      // Other hooks should be unaffected
-      expect(config.get('capture.hooks.stop')).toBe(true);
+      config.set('embeddings.backend', 'transformers');
+      expect(config.get('embeddings.backend')).toBe('transformers');
+      // Other embedding fields should be unaffected
+      expect(config.get('embeddings.model')).toBe('auto');
     });
 
     it('sets a top-level string value via dot notation', () => {
@@ -157,13 +138,13 @@ describe('AideConfig', () => {
 
     it('persists set value to disk', () => {
       const config = new AideConfig(projectRoot);
-      config.set('capture.enabled', false);
+      config.set('telemetry.enabled', false);
 
       // Read from disk directly
       const filePath = path.join(projectRoot, '.aide', 'config.json');
       const raw = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(raw);
-      expect(parsed.capture.enabled).toBe(false);
+      expect(parsed.telemetry.enabled).toBe(false);
     });
   });
 
@@ -176,17 +157,17 @@ describe('AideConfig', () => {
 
     it('gets a nested boolean', () => {
       const config = new AideConfig(projectRoot);
-      expect(config.get('capture.enabled')).toBe(true);
+      expect(config.get('telemetry.enabled')).toBe(true);
     });
 
     it('gets a deeply nested boolean', () => {
       const config = new AideConfig(projectRoot);
-      expect(config.get('capture.hooks.preCompact')).toBe(true);
+      expect(config.get('updates.check')).toBe(true);
     });
 
     it('gets a string value', () => {
       const config = new AideConfig(projectRoot);
-      expect(config.get('embeddings.backend')).toBe('transformers');
+      expect(config.get('embeddings.backend')).toBe('auto');
     });
 
     it('gets an array value', () => {
@@ -198,9 +179,9 @@ describe('AideConfig', () => {
 
     it('gets an object value', () => {
       const config = new AideConfig(projectRoot);
-      const hooks = config.get('capture.hooks');
-      expect(typeof hooks).toBe('object');
-      expect(hooks.preToolUse).toBe(true);
+      const embeddings = config.get('embeddings');
+      expect(typeof embeddings).toBe('object');
+      expect(embeddings.backend).toBe('auto');
     });
 
     it('returns undefined for non-existent path', () => {
@@ -261,13 +242,13 @@ describe('AideConfig', () => {
   describe('reset()', () => {
     it('restores all defaults', () => {
       const config = new AideConfig(projectRoot);
-      config.set('capture.enabled', false);
+      config.set('telemetry.enabled', false);
       config.set('contributor', 'someone');
       config.addTag('custom-tag');
 
       config.reset();
 
-      expect(config.get('capture.enabled')).toBe(true);
+      expect(config.get('telemetry.enabled')).toBe(true);
       expect(config.get('contributor')).toBe('auto');
       expect(config.get('tags.presets')).not.toContain('custom-tag');
       expect(config.get('tags.presets')).toContain('architecture');
@@ -275,11 +256,11 @@ describe('AideConfig', () => {
 
     it('persists reset to disk', () => {
       const config = new AideConfig(projectRoot);
-      config.set('capture.enabled', false);
+      config.set('telemetry.enabled', false);
       config.reset();
 
       const config2 = new AideConfig(projectRoot);
-      expect(config2.get('capture.enabled')).toBe(true);
+      expect(config2.get('telemetry.enabled')).toBe(true);
     });
   });
 
@@ -292,12 +273,12 @@ describe('AideConfig', () => {
 
     it('rejects unknown nested key', () => {
       const config = new AideConfig(projectRoot);
-      expect(() => config.set('capture.bogus', true)).toThrow(/Unknown config key/);
+      expect(() => config.set('telemetry.bogus', true)).toThrow(/Unknown config key/);
     });
 
     it('rejects deeply unknown nested key', () => {
       const config = new AideConfig(projectRoot);
-      expect(() => config.set('capture.hooks.onSave', true)).toThrow(/Unknown config key/);
+      expect(() => config.set('embeddings.bogus.deeper', true)).toThrow(/Unknown config key/);
     });
 
     it('error message lists valid keys', () => {
@@ -305,8 +286,8 @@ describe('AideConfig', () => {
       try {
         config.set('bad.key', true);
       } catch (e: any) {
-        expect(e.message).toContain('capture.enabled');
         expect(e.message).toContain('contributor');
+        expect(e.message).toContain('telemetry.enabled');
       }
     });
   });
@@ -315,7 +296,7 @@ describe('AideConfig', () => {
   describe('value type validation', () => {
     it('rejects string where boolean expected', () => {
       const config = new AideConfig(projectRoot);
-      expect(() => config.set('capture.enabled', 'yes')).toThrow(/expected boolean, got string/);
+      expect(() => config.set('telemetry.enabled', 'yes')).toThrow(/expected boolean, got string/);
     });
 
     it('rejects number where boolean expected', () => {
@@ -335,7 +316,7 @@ describe('AideConfig', () => {
 
     it('accepts correct types without error', () => {
       const config = new AideConfig(projectRoot);
-      expect(() => config.set('capture.enabled', false)).not.toThrow();
+      expect(() => config.set('telemetry.enabled', false)).not.toThrow();
       expect(() => config.set('contributor', 'meky')).not.toThrow();
       expect(() => config.set('tags.presets', ['a', 'b'])).not.toThrow();
     });
@@ -358,7 +339,7 @@ describe('AideConfig', () => {
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Malformed JSON')
       );
-      expect(config.get('capture.enabled')).toBe(true);
+      expect(config.get('telemetry.enabled')).toBe(true);
       expect(config.get('version')).toBe(1);
 
       warnSpy.mockRestore();
@@ -376,7 +357,7 @@ describe('AideConfig', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const config = new AideConfig(projectRoot);
 
-      expect(config.get('capture.enabled')).toBe(true);
+      expect(config.get('telemetry.enabled')).toBe(true);
       warnSpy.mockRestore();
     });
   });
@@ -388,12 +369,12 @@ describe('AideConfig', () => {
       expect(fs.existsSync(configPath)).toBe(false);
 
       const config = new AideConfig(projectRoot);
-      config.set('capture.enabled', false);
+      config.set('telemetry.enabled', false);
 
       expect(fs.existsSync(configPath)).toBe(true);
       const raw = fs.readFileSync(configPath, 'utf-8');
       const parsed = JSON.parse(raw);
-      expect(parsed.capture.enabled).toBe(false);
+      expect(parsed.telemetry.enabled).toBe(false);
     });
 
     it('creates .aide directory if it does not exist', () => {
@@ -413,24 +394,24 @@ describe('AideConfig', () => {
       const config = new AideConfig(projectRoot);
       const configPath = path.join(projectRoot, '.aide', 'config.json');
 
-      config.set('capture.enabled', false);
       config.set('telemetry.enabled', false);
       config.set('contributor', 'meky');
       config.set('embeddings.model', 'custom-model');
-      config.set('capture.hooks.preToolUse', false);
+      config.set('embeddings.backend', 'ollama');
+      config.set('updates.check', false);
 
       // Read and validate the final file
       const raw = fs.readFileSync(configPath, 'utf-8');
       const parsed = JSON.parse(raw); // would throw if corrupted
 
-      expect(parsed.capture.enabled).toBe(false);
       expect(parsed.telemetry.enabled).toBe(false);
       expect(parsed.contributor).toBe('meky');
       expect(parsed.embeddings.model).toBe('custom-model');
-      expect(parsed.capture.hooks.preToolUse).toBe(false);
+      expect(parsed.embeddings.backend).toBe('ollama');
+      expect(parsed.updates.check).toBe(false);
       // Unchanged values should still be present
-      expect(parsed.capture.hooks.stop).toBe(true);
-      expect(parsed.nudge.visible).toBe(false);
+      expect(parsed.version).toBe(1);
+      expect(parsed.tags.presets).toContain('architecture');
     });
 
     it('interleaved add/remove tags produce correct result', () => {
@@ -457,18 +438,18 @@ describe('AideConfig', () => {
     it('set() followed by reset() followed by set() works correctly', () => {
       const config = new AideConfig(projectRoot);
 
-      config.set('capture.enabled', false);
-      expect(config.get('capture.enabled')).toBe(false);
+      config.set('telemetry.enabled', false);
+      expect(config.get('telemetry.enabled')).toBe(false);
 
       config.reset();
-      expect(config.get('capture.enabled')).toBe(true);
+      expect(config.get('telemetry.enabled')).toBe(true);
 
-      config.set('capture.enabled', false);
-      expect(config.get('capture.enabled')).toBe(false);
+      config.set('telemetry.enabled', false);
+      expect(config.get('telemetry.enabled')).toBe(false);
 
       // Verify on disk
       const config2 = new AideConfig(projectRoot);
-      expect(config2.get('capture.enabled')).toBe(false);
+      expect(config2.get('telemetry.enabled')).toBe(false);
     });
   });
 
@@ -479,8 +460,6 @@ describe('AideConfig', () => {
       const full = config.list() as any;
 
       expect(full.version).toBe(1);
-      expect(full.capture).toBeDefined();
-      expect(full.nudge).toBeDefined();
       expect(full.tags).toBeDefined();
       expect(full.telemetry).toBeDefined();
       expect(full.contributor).toBeDefined();
@@ -491,11 +470,11 @@ describe('AideConfig', () => {
     it('returns a copy — mutations do not affect internal state', () => {
       const config = new AideConfig(projectRoot);
       const full = config.list() as any;
-      full.capture.enabled = false;
+      full.telemetry.enabled = false;
       full.contributor = 'hacked';
 
       // Internal state should be unchanged
-      expect(config.get('capture.enabled')).toBe(true);
+      expect(config.get('telemetry.enabled')).toBe(true);
       expect(config.get('contributor')).toBe('auto');
     });
   });

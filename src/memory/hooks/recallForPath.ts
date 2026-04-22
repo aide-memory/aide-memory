@@ -109,7 +109,7 @@ export function computeRecallForPath(
   const store = new MemoryStore({ projectRoot });
   try {
     const allMemories = store.list();
-    const scoped = computeScopedForPath(allMemories, relativePath);
+    const scoped = computeScopedForPath(allMemories, relativePath, projectRoot);
 
     let project_count = 0;
     for (const m of allMemories) {

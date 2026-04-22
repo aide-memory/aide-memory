@@ -178,7 +178,12 @@ export class EmbeddingService {
    * Returns false if no backend is available (graceful degradation).
    */
   async initialize(): Promise<boolean> {
-    // Try preferred backend first
+    // If caller specified an explicit preferredBackend (via
+    // `embeddings.backend=transformers` or `=ollama` in config, constructed
+    // by MemoryStore at startup), use THAT and nothing else. Don't silently
+    // fall through to other backends — per spec (memory #309), explicit
+    // values should fail loudly so the user can tell semantic search isn't
+    // working because their chosen backend isn't installed/reachable.
     if (this.preferredBackend) {
       const ok = await this.preferredBackend.initialize();
       if (ok) {
@@ -186,9 +191,13 @@ export class EmbeddingService {
         this._ready = true;
         return true;
       }
+      // Preferred backend failed — stay un-ready. Semantic search will be
+      // disabled (keyword/FTS5 still works). Caller can check isReady().
+      this._ready = false;
+      return false;
     }
 
-    // Try Transformers.js
+    // 'auto' (no preferred backend): try the built-in chain.
     const transformers = new TransformersBackend();
     const transformersOk = await transformers.initialize();
     if (transformersOk) {
@@ -197,7 +206,6 @@ export class EmbeddingService {
       return true;
     }
 
-    // Fallback to Ollama
     const ollama = new OllamaBackend();
     const ollamaOk = await ollama.initialize();
     if (ollamaOk) {

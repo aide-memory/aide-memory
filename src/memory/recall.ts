@@ -38,12 +38,19 @@ export interface ScopedForPath {
  * @param memories - Candidate memories (typically store.list() result).
  * @param filePath - Query path (relative to project root preferred).
  */
-export function computeScopedForPath(memories: Memory[], filePath: string): ScopedForPath {
+export function computeScopedForPath(
+  memories: Memory[],
+  filePath: string,
+  projectRoot?: string,
+): ScopedForPath {
+  const minScopeDepth = projectRoot
+    ? Number(getSetting(projectRoot, 'recall.minScopeDepth') ?? 2)
+    : 2;
   const matching = memories.filter(m => {
     // Project-wide memories are NEVER scoped-for-blocking.
     if (!m.scope || m.scope === 'project') return false;
-    // Use focused matcher to exclude grandparent scopes.
-    return scopeMatchesPath(m.scope, filePath, { focused: true });
+    // Use focused matcher with min-scope-depth to exclude overly-broad scopes.
+    return scopeMatchesPath(m.scope, filePath, { focused: true, minScopeDepth });
   });
 
   const layers: Partial<Record<MemoryLayer, number>> = {};
@@ -71,6 +78,7 @@ function logRecallEvent(
   query: RecallQuery,
   results: Memory[],
   matchedScopes: string[],
+  normalizedPaths?: string[] | undefined,
 ): void {
   if (!logDir) return;
   try {
@@ -78,7 +86,10 @@ function logRecallEvent(
     const entry = {
       timestamp: new Date().toISOString(),
       query: {
-        paths: query.paths ?? [],
+        // Log normalized (relative) paths when available so recall-log.jsonl
+        // is consistent with how scopes are stored. Falls back to raw query
+        // paths when normalization isn't applicable (e.g., ids-only recall).
+        paths: normalizedPaths ?? query.paths ?? [],
         text: query.query ?? null,
         layers: query.layers ?? null,
         limit: query.limit ?? DEFAULT_LIMIT,
@@ -122,7 +133,11 @@ function logRecallEvent(
  *   - Project-wide (null scope)
  *   Excludes ancestor scopes above the immediate parent (e.g., src/** for src/api/routes.ts)
  */
-export function scopeMatchesPath(scope: string | null, filePath: string, options?: { focused?: boolean }): boolean {
+export function scopeMatchesPath(
+  scope: string | null,
+  filePath: string,
+  options?: { focused?: boolean; minScopeDepth?: number },
+): boolean {
   if (!scope || scope === 'project') return true;
 
   const normalizedScope = scope.replace(/\\/g, '/');
@@ -147,36 +162,33 @@ export function scopeMatchesPath(scope: string | null, filePath: string, options
 
   if (!isDescendant && !isChildScope) return false;
 
-  // Focused mode: exclude grandparent scopes
-  // Rule (from design memory #95/#96): only match scopes at the IMMEDIATE parent
-  // level or deeper. Scopes above the immediate parent (grandparent+) are too
-  // broad and are already handled by SessionStart injection.
+  // Focused mode: filter scopes by fixed-prefix depth.
   //
-  // Examples for query `src/api/routes.ts` (parent = `src/api`, parentDepth=2):
-  //   `src/api/routes.ts` (depth 3, exact file)   → INCLUDE (deeper/same)
-  //   `src/api/**`        (depth 2, immediate)    → INCLUDE (parent level)
-  //   `src/**`            (depth 1, grandparent)  → EXCLUDE
+  // The previous "grandparent exclusion" rule (`scopeDepth < parentDepth` →
+  // drop) was overly strict — it meant `src/api/**`-scoped memories didn't
+  // surface for files like `src/api/routes/routeA.ts` because the scope's
+  // depth (2) was less than the file's parent depth (3). Real-world
+  // mid-depth scopes like `src/api/**` or `src/auth/**` should reach deeper
+  // descendants at any depth.
   //
-  // Child scopes (e.g. `src/api/v2/**` for query `src/api/`) are always allowed
-  // — they are DESCENDANTS of the query, not ancestors.
+  // New rule (0.4.3+): a scope is "specific enough" when its fixed-prefix
+  // segment count meets `minScopeDepth` (default 2). Single-segment scopes
+  // (e.g. `src/**`) are always filtered out of focused mode — too broad to
+  // be actionable at the path-hook level, handled via SessionStart instead.
+  //
+  // Examples with minScopeDepth=2 for query `src/api/routes/routeA.ts`:
+  //   `src/api/routes/routeA.ts` (depth 4, exact file)    → INCLUDE
+  //   `src/api/routes/**`        (depth 3, narrow)        → INCLUDE
+  //   `src/api/**`               (depth 2, mid-scope)     → INCLUDE (new)
+  //   `src/**`                   (depth 1, broad)         → EXCLUDE
+  //
+  // Setting `minScopeDepth=1` restores the pre-0.4.3 behavior where
+  // single-segment scopes also matched; setting to 3+ enforces stricter
+  // scoping.
   if (options?.focused && isDescendant) {
-    // Get the query path's parent directory
-    const queryParent = normalizedPath.includes('/')
-      ? normalizedPath.replace(/\/$/, '').split('/').slice(0, -1).join('/')
-      : '';
-
-    // For directory queries (path ends with /), the "parent" is the path itself
-    const isDirectoryQuery = filePath.endsWith('/');
-    const effectiveParent = isDirectoryQuery
-      ? normalizedPath.replace(/\/$/, '')
-      : queryParent;
-
+    const minDepth = options.minScopeDepth ?? 2;
     const scopeDepth = scopeBase.split('/').length;
-    const parentDepth = effectiveParent ? effectiveParent.split('/').length : 0;
-
-    // Scope must be at immediate parent level or deeper.
-    // scopeDepth < parentDepth means scope is ABOVE the immediate parent — a grandparent.
-    if (scopeDepth < parentDepth) {
+    if (scopeDepth < minDepth) {
       return false;
     }
   }
@@ -229,6 +241,9 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
     ? (getSetting<number>(projectRoot, 'recall.layerDiversityMinLimit') ?? 5)
     : 5;
   const limit = query.limit ?? configuredLimit ?? DEFAULT_LIMIT;
+  const minScopeDepth = projectRoot
+    ? Number(getSetting(projectRoot, 'recall.minScopeDepth') ?? 2)
+    : 2;
 
   // No status filter — all memories in the store are active
   const listOptions: { contributor?: string } = {};
@@ -266,14 +281,14 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
     if (ids.length > 0) {
       store.recordRecall(ids);
     }
-    logRecallEvent(logDir ?? null, query, results, []);
+    logRecallEvent(logDir ?? null, query, results, [], normalizedPaths);
     return { memories: results, matched_scopes: [] };
   }
 
   if (normalizedPaths && normalizedPaths.length > 0) {
     candidates = candidates.filter(m => {
       for (const p of normalizedPaths) {
-        if (scopeMatchesPath(m.scope, p, { focused: true })) {
+        if (scopeMatchesPath(m.scope, p, { focused: true, minScopeDepth })) {
           if (m.scope) matchedScopes.add(m.scope);
           return true;
         }
@@ -374,7 +389,7 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
   }
 
   // Write detailed recall log for observability
-  logRecallEvent(logDir ?? null, query, results, Array.from(matchedScopes));
+  logRecallEvent(logDir ?? null, query, results, Array.from(matchedScopes), normalizedPaths);
 
   return {
     memories: results,

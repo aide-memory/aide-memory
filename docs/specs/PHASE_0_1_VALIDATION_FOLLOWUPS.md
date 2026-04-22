@@ -499,3 +499,67 @@ Same class of bug that was fixed in `aide_recall` per memory #42 — LLMs common
 Grep pattern: `z.number()` in server.ts near tool definitions — any `id` param should be `z.coerce.number()`.
 
 Fixed in `src/memory/server.ts` — every `z.number()` → `z.coerce.number()` across all 6 numeric params (aide_recall ids + limit, aide_update id, aide_forget id, aide_search limit, aide_memories limit). Regression test added in `src/memory/__tests__/server.test.ts` (aide_forget with string id). 654/654 tests pass.
+
+---
+
+## Follow-ups from 0.4.3 (Apr 22, 2026)
+
+Deferred from the 0.4.3 remediation bundle. Not critical; tracked here so they don't vanish.
+
+### 1. Stop-hook enable/disable boolean
+
+Currently the Stop hook has no dedicated on/off knob — you set `hooks.stop.schedule '[{"every":99999999}]'` for effective off. Other hooks all have clean toggles (`hooks.read.maxBlocks=0`, `hooks.correction.enabled=false`, etc.). For consistency: extend `hooks.stop.schedule` to accept `false`, or add `hooks.stop.enabled` boolean.
+
+**Priority:** Low — cosmetic UX polish.
+
+### 2. Smarter per-layer char allocation for SessionStart injection
+
+`injection.maxChars` does a dumb string-slice after sections concatenate. Works for the common case (most injections are well under the 1200-char cap). When over cap, later sections (guidelines) get partially chopped mid-content even though the Always-first reorder (shipped in 0.4.3) protects priority memories.
+
+Proposed: per-layer char budgets (e.g. `preferences=25%`, `always=20%`, `guidelines=35%`, `technical=10%`, `area_context=10%`). Each section clips within its share. More predictable on over-budget sessions.
+
+**Priority:** Low — 0.4.3's Always-first ordering already covers the critical case.
+
+### 3. Cloud embedding backends
+
+`embeddings.backend` accepts `auto / transformers / ollama / none` in 0.4.3. Phase 2+ adds `openai`, `cohere`, `voyage`. Requires:
+- API key config (`embeddings.apiKey` or env var lookup)
+- Cloud-specific model names + dimension handling
+- Network retry / rate-limit logic
+- Graceful degradation when cloud is down
+
+**Priority:** Phase 2 — local-only is intentional for the 0.4.x line.
+
+### 4. PreToolUse "blocking error" label softening (memory #310)
+
+`PreToolUse:Read hook returned blocking error` renders with alarming "error" framing in Claude Code TUI even when the block is intentional. Legacy `decision:"block"` shape renders this way; modern `permissionDecision:"deny"` shape with `hookSpecificOutput` may render differently. Needs empirical testing.
+
+**Test path:** swap one hook emit to `permissionDecision:"deny"`, verify render. Then migrate `emitBlockDecision` + refactor `reason` text to reframe in-place (per memory #316).
+
+**Priority:** Medium — real UX friction, cosmetic only.
+
+### 5. `nudge.visible` rewiring (hook output visibility UX)
+
+Per memory #307, user wants configurable hook-output visibility (verbosity control). `nudge.visible` key was removed in 0.4.3 as dead, but the UX need remains. Memory #316 captures user-directed design decisions on `hooks.output.visible`.
+
+**Scope:** Part of larger UX-exploration work, not a one-liner.
+
+### 6. Adaptive `recall.minScopeDepth` default
+
+Current default `1` (permissive) works across all project shapes. `aide-memory init` could peek at top-level folder structure — if `src/` exists, default to `2` (quieter for src-prefixed projects); otherwise stay at `1`. Zero-friction across project shapes.
+
+**Priority:** Low — current default is safe.
+
+### 7. Deep E2E test for backend selection with real deps installed
+
+`src/memory/__tests__/embeddings.test.ts` covers backend-selection wiring via `vi.spyOn` mocks (fast, hermetic). For fuller coverage, a nightly CI job could install `@huggingface/transformers` + start a local Ollama container, exercise semantic search with each backend explicitly configured.
+
+**Priority:** Low — mock coverage is sufficient for regression catches.
+
+### 8. Visuals for remaining config settings
+
+0.4.3 added bar-diagram visuals in `docs/user/configuration.md` for the high-value settings (`recall.minScopeDepth`, `hooks.stop.schedule`, `memories.softening.threshold`, `injection.maxChars`, SessionStart layer map, `hooks.search.mode`, `hooks.precompact.mode`, `hooks.read/edit.maxBlocks`). Remaining settings with plain text-only docs:
+- `recall.limit` / `recall.ensureLayerDiversity` / `recall.layerDiversityMinLimit` — ranking / diversity swap explainer
+- `contributor`, `embeddings.backend`/`.model`, `telemetry.enabled` — simple enough without visuals, but could add before/after for `contributor` override
+
+**Priority:** Low — diminishing return on visuals; current docs adequate.

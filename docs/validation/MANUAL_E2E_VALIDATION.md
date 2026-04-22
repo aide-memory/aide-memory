@@ -19,9 +19,12 @@ cd /Users/meky/code/aide-v0
 npm test -- --run 2>&1 | tail -5
 
 # 2. Bash smoke suites — each prints "PASS" at the end
-bash scripts/hooks/__tests__/count-parity.sh
+#    (count-parity smoke was removed after the 0.4.0 hook consolidation —
+#    its invariant is now covered by src/memory/__tests__/recall.test.ts
+#    + hooks.test.ts + the e2e-autonomous.sh suite below.)
 bash scripts/hooks/__tests__/settings-behavior.test.sh
 bash scripts/hooks/__tests__/detect-correction.test.sh
+bash scripts/hooks/__tests__/all-configs-behavior.test.sh
 
 # 3. End-to-end autonomous smokes — spawn real MCP against dirty state.
 #    Covers H (auto-update on stale settings), J (pending-memory ingest

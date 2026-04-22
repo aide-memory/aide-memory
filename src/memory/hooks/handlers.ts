@@ -123,14 +123,16 @@ function getSetting(projectRoot: string, key: string): any {
 // ---------------------------------------------------------------------------
 
 export async function preRead(input: HookInput): Promise<void> {
-  const filePath = input.tool_input?.file_path;
-  if (!filePath) return;
+  const rawFilePath = input.tool_input?.file_path;
+  if (!rawFilePath) return;
 
-  // Skip non-existent paths
-  if (!fs.existsSync(filePath)) return;
+  // Skip non-existent paths — check raw path before resolving so we don't
+  // surface confusing relative-vs-absolute errors when the file genuinely
+  // doesn't exist on disk.
+  if (!fs.existsSync(rawFilePath)) return;
 
   // Skip direct reads of .aide/memories/ files — nudge to use aide_recall
-  if (filePath.includes('.aide/memories/')) {
+  if (rawFilePath.includes('.aide/memories/')) {
     emitAdditionalContext(
       'PreToolUse',
       'memory_file_direct_read: You are reading a raw memory file. Use aide_recall for structured context.',
@@ -140,6 +142,13 @@ export async function preRead(input: HookInput): Promise<void> {
 
   const projectRoot = resolveProjectRoot(input);
   const sessionId = resolveSessionId(input);
+
+  // Resolve relative → absolute BEFORE downstream tracking / recall uses the
+  // path. Production Claude Code always sends absolute paths, but robustness
+  // matters for tests + future callers that might hand us a relative path.
+  const filePath = path.isAbsolute(rawFilePath)
+    ? rawFilePath
+    : path.resolve(projectRoot, rawFilePath);
 
   const maxBlocks = getSetting(projectRoot, 'hooks.read.maxBlocks');
   if (maxBlocks === 0 || maxBlocks === '0') return;
@@ -193,12 +202,18 @@ export async function preRead(input: HookInput): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function preEdit(input: HookInput): Promise<void> {
-  const filePath = input.tool_input?.file_path;
-  if (!filePath) return;
-  if (!fs.existsSync(filePath)) return;
+  const rawFilePath = input.tool_input?.file_path;
+  if (!rawFilePath) return;
+  if (!fs.existsSync(rawFilePath)) return;
 
   const projectRoot = resolveProjectRoot(input);
   const sessionId = resolveSessionId(input);
+
+  // Resolve relative → absolute BEFORE downstream tracking / recall uses the
+  // path. See preRead for rationale.
+  const filePath = path.isAbsolute(rawFilePath)
+    ? rawFilePath
+    : path.resolve(projectRoot, rawFilePath);
 
   const maxBlocks = getSetting(projectRoot, 'hooks.edit.maxBlocks');
   if (maxBlocks === 0 || maxBlocks === '0') return;
@@ -308,7 +323,7 @@ export async function preSearch(input: HookInput): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const CORRECTION_PATTERN = new RegExp(
-  '(no[, ]+(don\'?t|do not|can\'?t|won\'?t|isn\'?t|wasn\'?t|weren\'?t|shouldn\'?t|didn\'?t|couldn\'?t|wouldn\'?t|mustn\'?t|haven\'?t|hadn\'?t|aren\'?t|use|instead|that\'?s wrong)|actually[, ]|wrong[, ]|not like that|use .+ instead|don\'?t use|stop using|I told you|I said)',
+  '(no[, ]+(don\'?t|do not|can\'?t|won\'?t|isn\'?t|wasn\'?t|weren\'?t|shouldn\'?t|didn\'?t|couldn\'?t|wouldn\'?t|mustn\'?t|haven\'?t|hadn\'?t|aren\'?t|use|instead|that\'?s wrong)|no[, ]+(we|I|it|you)\\s+(use|go with|prefer|want|need|should)|no[, ]+try\\s+.+\\s+instead|actually[, ]|wrong[, ]|not like that|use .+ instead|don\'?t use|stop using|I told you|I said)',
   'i',
 );
 const DECISION_PATTERN = new RegExp(
@@ -319,8 +334,11 @@ const PREFERENCE_PATTERN = new RegExp(
   '(I prefer|always use|never use|I like|my style is|I want you to|don\'?t ever|make sure to always|I always)',
   'i',
 );
+// Narrow 'no I mean' filter so only reference-clarification phrasings skip
+// (e.g. "no I mean the other file", "no I mean that one"). Corrections like
+// "no I mean use X instead" fall through to CORRECTION_PATTERN.
 const FALSE_POSITIVE_PATTERN = new RegExp(
-  '^(no (I mean|but|actually I|I think|not sure)|I don\'?t (think|know|get|understand)|what I mean)',
+  '^(no I mean (the|that|this|it|a|an|one|those)\\s|no (but|actually I|I think|not sure)|I don\'?t (think|know|get|understand)|what I mean)',
   'i',
 );
 
@@ -478,16 +496,36 @@ export async function preCompact(input: HookInput): Promise<void> {
 // SessionStart — session-start-clear + session-inject
 // ---------------------------------------------------------------------------
 
-const MAX_INJECT_CHARS = 1200;
-
 function loadLayer(
   store: MemoryStore,
   layer: 'preferences' | 'technical' | 'area_context' | 'guidelines',
   setting: any,
+  projectRoot: string,
 ): Memory[] {
   if (setting === false || setting === 0) return [];
-  const all = store.list({ layer });
-  all.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  let all = store.list({ layer });
+
+  // Preferences layer sorts by recalled_count desc first (most-used prefs
+  // stay top of the injection budget), updated_at desc as tiebreaker. Other
+  // layers keep the existing updated_at-desc ordering.
+  if (layer === 'preferences') {
+    // excludeScoped: when true, drop scoped preferences from SessionStart —
+    // they surface via Read/Edit path hooks when the agent touches matching
+    // paths. Default false preserves the inject-all-prefs behavior.
+    const excludeScoped = getSetting(projectRoot, 'injection.excludeScopedPreferences') === true;
+    if (excludeScoped) {
+      all = all.filter(m => !m.scope || m.scope === 'project');
+    }
+    all.sort((a, b) => {
+      const ra = (a as any).recalled_count ?? 0;
+      const rb = (b as any).recalled_count ?? 0;
+      if (rb !== ra) return rb - ra;
+      return (b.updated_at || '').localeCompare(a.updated_at || '');
+    });
+  } else {
+    all.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  }
+
   if (setting === 'all') return all;
   if (typeof setting === 'number' && setting > 0) return all.slice(0, setting);
   return all;
@@ -513,14 +551,16 @@ export async function sessionStart(input: HookInput): Promise<void> {
   const guidelinesMode = getSetting(projectRoot, 'injection.guidelines') ?? 'all';
   const priorityOverride = getSetting(projectRoot, 'injection.priorityAlwaysOverride') ?? true;
 
+  const maxInjectChars = Number(getSetting(projectRoot, 'injection.maxChars') ?? 1200);
+
   const store = new MemoryStore({ projectRoot });
   let output = '';
   const allInjectedIds: (string | number)[] = [];
   try {
-    const preferences = loadLayer(store, 'preferences', prefLimit);
-    const technical = loadLayer(store, 'technical', techEnabled);
-    const areaContext = loadLayer(store, 'area_context', areaEnabled);
-    const guidelines = loadLayer(store, 'guidelines', guidelinesMode);
+    const preferences = loadLayer(store, 'preferences', prefLimit, projectRoot);
+    const technical = loadLayer(store, 'technical', techEnabled, projectRoot);
+    const areaContext = loadLayer(store, 'area_context', areaEnabled, projectRoot);
+    const guidelines = loadLayer(store, 'guidelines', guidelinesMode, projectRoot);
     const alwaysPriority = priorityOverride ? (store as any).list({ priority: 'always' }) : [];
 
     const seen = new Set<string>();
@@ -557,6 +597,14 @@ export async function sessionStart(input: HookInput): Promise<void> {
     if (total === 0) return;
 
     const lines: string[] = [];
+    // Always-priority section FIRST so user-marked priority memories survive
+    // the char cap even when other layers consume the budget. (Reorder added
+    // in 0.4.3 — was previously last, which meant priority memories got
+    // truncated on large projects.)
+    if (deduped.always.length > 0) {
+      lines.push('## Always');
+      for (const w of deduped.always) lines.push(`- ${w}`);
+    }
     if (deduped.preferences.length > 0) {
       lines.push('## Session Preferences');
       for (const w of deduped.preferences) lines.push(`- ${w}`);
@@ -573,12 +621,8 @@ export async function sessionStart(input: HookInput): Promise<void> {
       lines.push('## Guidelines');
       for (const w of deduped.guidelines) lines.push(`- ${w}`);
     }
-    if (deduped.always.length > 0) {
-      lines.push('## Always');
-      for (const w of deduped.always) lines.push(`- ${w}`);
-    }
     output = lines.join('\n');
-    if (output.length > MAX_INJECT_CHARS) output = output.slice(0, MAX_INJECT_CHARS) + '\n...truncated';
+    if (output.length > maxInjectChars) output = output.slice(0, maxInjectChars) + '\n...truncated';
   } finally {
     store.close();
   }

@@ -518,3 +518,156 @@ describe('EmbeddingService', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Store-level backend selection via config.embeddings.* (0.4.3+)
+// ---------------------------------------------------------------------------
+//
+// These tests verify that `.aide/config.json` settings for embeddings.backend
+// and embeddings.model actually drive which backend the MemoryStore constructs,
+// not just that the config round-trips through `aide-memory config`. Closes
+// the gap from all-configs-behavior.test.sh which only verifies roundtrip.
+// ---------------------------------------------------------------------------
+
+describe('MemoryStore — embeddings backend selection via config', () => {
+  const tmpProjectRoot = (): string => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-backend-config-'));
+    fs.mkdirSync(path.join(dir, '.aide'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.aide', 'memories'), { recursive: true });
+    return dir;
+  };
+
+  const writeConfig = (root: string, config: Record<string, unknown>): void => {
+    fs.writeFileSync(path.join(root, '.aide', 'config.json'), JSON.stringify(config, null, 2));
+  };
+
+  const cleanup = (root: string): void => {
+    // Also clean up ~/.aide/projects/<hash>/ side-effect
+    try {
+      fs.rmSync(root, { recursive: true, force: true });
+    } catch {
+      // best effort
+    }
+  };
+
+  it('embeddings.backend="none" → embeddingService is null', async () => {
+    // Lazy-require to avoid circular import at the top of the file.
+    const { MemoryStore } = await import('../store');
+    const root = tmpProjectRoot();
+    writeConfig(root, { embeddings: { backend: 'none' } });
+
+    const store = new MemoryStore({ projectRoot: root });
+    try {
+      // Backend is null when user explicitly disables — keyword/FTS5 only.
+      expect((store as any).embeddingService).toBeNull();
+    } finally {
+      store.close();
+      cleanup(root);
+    }
+  });
+
+  it('embeddings.backend="transformers" → constructs TransformersBackend (not Ollama)', async () => {
+    const { MemoryStore } = await import('../store');
+
+    // Spy on both backend initializers so we can tell which one got
+    // constructed + initialized. We don't run real init (optional dep may
+    // not be installed) — just prove the RIGHT class was instantiated.
+    const transformersInit = vi.spyOn(TransformersBackend.prototype, 'initialize').mockResolvedValue(false);
+    const ollamaInit = vi.spyOn(OllamaBackend.prototype, 'initialize').mockResolvedValue(false);
+
+    const root = tmpProjectRoot();
+    writeConfig(root, { embeddings: { backend: 'transformers', model: 'my-custom-model' } });
+
+    const store = new MemoryStore({ projectRoot: root });
+    try {
+      // embeddingService exists with a preferred backend set to Transformers.
+      const svc = (store as any).embeddingService;
+      expect(svc).not.toBeNull();
+      const preferred = (svc as any).preferredBackend;
+      expect(preferred).toBeInstanceOf(TransformersBackend);
+      // Model override propagated into the backend constructor.
+      expect((preferred as any).modelName).toBe('my-custom-model');
+
+      // Now trigger the service init so the spy runs.
+      await svc.initialize();
+      expect(transformersInit).toHaveBeenCalled();
+      // Ollama should NOT be tried when user forced transformers.
+      // (It only falls through to ollama if no preferredBackend was passed.)
+      expect(ollamaInit).not.toHaveBeenCalled();
+    } finally {
+      store.close();
+      cleanup(root);
+      transformersInit.mockRestore();
+      ollamaInit.mockRestore();
+    }
+  });
+
+  it('embeddings.backend="ollama" → constructs OllamaBackend (not Transformers)', async () => {
+    const { MemoryStore } = await import('../store');
+
+    const transformersInit = vi.spyOn(TransformersBackend.prototype, 'initialize').mockResolvedValue(false);
+    const ollamaInit = vi.spyOn(OllamaBackend.prototype, 'initialize').mockResolvedValue(false);
+
+    const root = tmpProjectRoot();
+    writeConfig(root, { embeddings: { backend: 'ollama', model: 'nomic-embed-text' } });
+
+    const store = new MemoryStore({ projectRoot: root });
+    try {
+      const svc = (store as any).embeddingService;
+      expect(svc).not.toBeNull();
+      const preferred = (svc as any).preferredBackend;
+      expect(preferred).toBeInstanceOf(OllamaBackend);
+      expect((preferred as any).model).toBe('nomic-embed-text');
+
+      await svc.initialize();
+      expect(ollamaInit).toHaveBeenCalled();
+      expect(transformersInit).not.toHaveBeenCalled();
+    } finally {
+      store.close();
+      cleanup(root);
+      transformersInit.mockRestore();
+      ollamaInit.mockRestore();
+    }
+  });
+
+  it('embeddings.backend="auto" → store leaves embeddingService null (MCP server attaches later)', async () => {
+    const { MemoryStore } = await import('../store');
+
+    const root = tmpProjectRoot();
+    writeConfig(root, { embeddings: { backend: 'auto' } });
+
+    const store = new MemoryStore({ projectRoot: root });
+    try {
+      // 'auto' mode: constructor doesn't attach a preferred backend.
+      // server.ts's startServer() calls `new EmbeddingService()` + setEmbeddingService()
+      // later so the fallback chain (transformers → ollama → keyword-only) runs
+      // at MCP startup. This separation keeps optional-dep init out of the
+      // sync constructor.
+      expect((store as any).embeddingService).toBeNull();
+
+      // Verify setEmbeddingService is the attachment point downstream callers use.
+      const { EmbeddingService } = await import('../embeddings');
+      const attached = new EmbeddingService();
+      store.setEmbeddingService(attached);
+      expect((store as any).embeddingService).toBe(attached);
+    } finally {
+      store.close();
+      cleanup(root);
+    }
+  });
+
+  it('missing embeddings config → same as explicit auto (null at construction)', async () => {
+    const { MemoryStore } = await import('../store');
+
+    const root = tmpProjectRoot();
+    writeConfig(root, { telemetry: { enabled: true } });  // no embeddings block at all
+
+    const store = new MemoryStore({ projectRoot: root });
+    try {
+      expect((store as any).embeddingService).toBeNull();
+    } finally {
+      store.close();
+      cleanup(root);
+    }
+  });
+});
