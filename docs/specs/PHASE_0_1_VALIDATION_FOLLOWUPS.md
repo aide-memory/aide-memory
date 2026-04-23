@@ -147,6 +147,24 @@ The directory trigger (block on first file read in a new directory) was removed 
 - Needs: new PostToolUse:Grep/Glob hook file + handler + pending-cache tracking
 - Deferred from this fast-follow because requires new hook infrastructure; current pre-search-nudge visibility covers the common case (user sees the nudge fired)
 
+### Config hot-reload verification (Phase 1 FOLLOW-UP, investigation)
+- User reported during Apr 22 validation that setting `memories.softening.threshold` mid-session did not appear to take effect for the next hook fire — required restarting Claude Code to see the change.
+- Expected behavior: each hook invocation is a fresh node process that reads `.aide/config.json` via `getSetting()` on every call. No in-process caching. Config changes SHOULD take effect immediately on next hook fire.
+- **Status unclear** — could be: (a) user's config write didn't land (stale state), (b) Claude Code caches some state between hook fires, (c) the config CLI wrote to a different path than the hook reads from.
+- **Investigation:** reproduce by `aide-memory config set <key> <value>` mid-session, then immediately trigger the hook path that reads that key. Compare vs a fresh restart. If caching is confirmed, document workaround (restart) and/or add live-reload signal.
+- **Related:** drift-repair mechanism (`resyncDerivedArtifacts`) already watches `.aide/config.json` mtime and re-syncs `.ignore` — same watcher could trigger a broader config re-read if we find any caching.
+
+### Grep/Glob hook rendering verification (Phase 1 FOLLOW-UP, investigation)
+- User reported during Apr 22 validation that pre-search-nudge's `systemMessage` line didn't appear inline under Grep tool calls — despite the hook firing correctly (confirmed via direct smoke test; output contains systemMessage).
+- Hypothesis: Claude Code collapses PreToolUse output for Grep/Glob into the `(ctrl+o to expand)` section, unlike Read/Edit where systemMessage renders inline below the tool call.
+- **Investigation:** reproduce in a clean scratch session, ctrl+o expand the Grep tool output, verify the systemMessage is inside the expanded view. If yes — no code fix needed, just doc the behavior in README.md scenario 5. If no — hook wiring issue to debug.
+
+### Bash-grep fallback coverage for pre-search-nudge (Phase 1 FOLLOW-UP)
+- User reported during Apr 22 validation: when asking Claude to "Search for 'token'", Claude selected `Bash(grep -rni "token" ...)` instead of the `Grep` tool. Our pre-search-nudge hook is wired only on `Grep|Glob` matchers so the Bash-grep invocation slips past — no nudge, no systemMessage.
+- Scope: extend the pre-search path to also match `Bash` with a command-content filter (grep / rg / ripgrep / find invocations), parse the search term out, and fire the same nudge logic. Non-trivial because bash command parsing is fiddly (quoted args, flags, piped commands).
+- Alternative: Anthropic-side improvement — make `Grep` tool the canonical path for all search, so Claude doesn't fall back to Bash+grep. File FR.
+- Impact: pre-search-nudge only covers some Claude-initiated searches today. For users who notice their `aide_search` opportunities aren't being surfaced when they ask for code search, this is the most likely cause.
+
 ### ~~Auto-Inject Recall Mode (Option G)~~ (Phase 1 FOLLOW-UP, separate spec)
 - Architectural alternative to agent-driven recall: hook queries SQLite directly and emits memory bodies as additionalContext, bypassing the "call aide_recall" step and avoiding the hardcoded PreToolUse "blocking error" label entirely
 - Opt-in via new `recall.mode: "agent" | "autoInject"` config (default `"agent"` preserves current behavior)

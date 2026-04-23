@@ -100,8 +100,21 @@ function isVisible(projectRoot: string): boolean {
   return getSetting(projectRoot, 'hooks.visible') !== false;
 }
 
-/** User-facing brand prefix for every systemMessage we emit. */
-const BRAND = 'aide-memory · ';
+/**
+ * User-facing brand prefix for every systemMessage we emit.
+ *
+ * Wrapped in a 24-bit ANSI colour escape matching the aide-memory CLI brand
+ * (`chalk.hex('#00c2cb')` in `src/cli/commands/memory/utils.ts`). Claude Code
+ * honors ANSI codes in systemMessage (verified empirical test Apr 22 2026).
+ * Colour is applied to the `aide-memory · ` mark only; the message text
+ * after the prefix stays terminal-default so it's readable on any theme.
+ *
+ * If Claude Code ever stops honoring ANSI in systemMessage, the escape just
+ * renders as plain text prefix — no functional regression.
+ */
+const BRAND_COLOUR_ON = '\u001b[38;2;0;194;203m';   // #00c2cb
+const BRAND_COLOUR_OFF = '\u001b[0m';
+const BRAND = `${BRAND_COLOUR_ON}aide-memory · ${BRAND_COLOUR_OFF}`;
 
 function getSetting(projectRoot: string, key: string): any {
   const entry = HOOK_DEFAULTS[key];
@@ -181,9 +194,22 @@ export async function preRead(input: HookInput): Promise<void> {
     else missingIds.push(String(sid));
   }
 
+  // Compute "encountered" BEFORE we self-track below, so the first block on
+  // a fresh file still goes hard (encountered=false); subsequent touches on
+  // the same file — even if new memories are added mid-session — see
+  // encountered=true and go soft. This fixes the repeat-hard-block case
+  // where the agent's aide_recall({ids:[…]}) response didn't mark the path
+  // as encountered (track-recall-post only writes IDs; paths are only
+  // written when aide_recall is called with {paths: [...]}).
+  const encountered = hasRecalledFile(projectRoot, sessionId, filePath);
+
+  // Self-track the path so future pre-read/pre-edit fires on this file see
+  // it as encountered. Done whether we're about to block, soft-nudge, or
+  // silent — the file has been touched by the agent either way.
+  appendRecalledPath(projectRoot, sessionId, 'file', filePath);
+
   if (coveredCount === result.scoped_ids.length) return;
 
-  const encountered = hasRecalledFile(projectRoot, sessionId, filePath);
   const missingCount = result.scoped_ids.length - coveredCount;
   const softeningThreshold = Number(getSetting(projectRoot, 'memories.softening.threshold') ?? 10);
   const forceSoft = result.total_memories < softeningThreshold;
@@ -261,9 +287,17 @@ export async function preEdit(input: HookInput): Promise<void> {
     else missingIds.push(String(sid));
   }
 
+  // Compute "encountered" BEFORE we self-track below — see preRead for
+  // rationale. First edit on a fresh file still goes hard; subsequent
+  // edits (even with new memories added mid-session) go soft.
+  const encountered = hasRecalledFile(projectRoot, sessionId, filePath);
+
+  // Self-track the path so future pre-read/pre-edit fires see it as
+  // encountered. Mirrors preRead's fix for the repeat-hard-block case.
+  appendRecalledPath(projectRoot, sessionId, 'file', filePath);
+
   if (coveredCount === result.scoped_ids.length) return;
 
-  const encountered = hasRecalledFile(projectRoot, sessionId, filePath);
   const missingCount = result.scoped_ids.length - coveredCount;
   const softeningThreshold = Number(getSetting(projectRoot, 'memories.softening.threshold') ?? 10);
   const forceSoft = result.total_memories < softeningThreshold;
