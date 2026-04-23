@@ -22,7 +22,6 @@ import {
 } from './stdio';
 import {
   appendRecalledPath,
-  appendRecalledScope,
   appendSearchedQuery,
   clearCorrectionPending,
   clearSessionTracking,
@@ -509,38 +508,6 @@ export async function trackRecallPost(input: HookInput): Promise<void> {
   if (ids.length === 0) return;
 
   mergeTrackedIds(projectRoot, sessionId, ids);
-
-  // Derive scopes from the returned memory IDs and track each as a
-  // "scope encountered" entry. This makes sibling files under the same
-  // scope — files the agent never touched directly — also be treated as
-  // encountered on future pre-read/pre-edit fires, routing them to the
-  // soft path instead of fresh hard blocks. Symmetric with how
-  // track-recall.sh writes paths when aide_recall is called with
-  // {paths:[...]}: in both cases, recalling context for a scope marks
-  // that scope's files as seen.
-  //
-  // Null / 'project' scopes are filtered out inside appendRecalledScope
-  // so project-wide recalls don't effectively disable hard-block
-  // project-wide.
-  try {
-    const store = new MemoryStore({ projectRoot });
-    try {
-      const tracked = new Set<string>();
-      for (const id of ids) {
-        const m = (store as any).get?.(Number(id)) as Memory | null | undefined;
-        if (m?.scope && !tracked.has(m.scope)) {
-          appendRecalledScope(projectRoot, sessionId, m.scope);
-          tracked.add(m.scope);
-        }
-      }
-    } finally {
-      store.close();
-    }
-  } catch {
-    // best-effort — if store query fails, fall back to id-only tracking
-    // (keeps the existing behavior intact; the scope-tracking is
-    // additive, not critical path).
-  }
 }
 
 // ---------------------------------------------------------------------------

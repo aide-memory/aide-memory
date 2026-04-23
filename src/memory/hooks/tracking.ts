@@ -6,9 +6,6 @@
  *
  * File contents:
  *   - recalled-paths-<sid>.txt: mixed lines of `file|<abs-path>`, `dir|<abs-path>/`,
- *     `scope|<glob>` (scope-level "encountered" for cross-file soft routing
- *     after aide_recall({ids:[...]}) — each memory's scope is recorded so
- *     sibling files under the same scope are also treated as encountered),
  *     and a single `ids|<id1>,<id2>,...` line tracking which memory IDs have
  *     been recalled this session.
  *   - searched-queries-<sid>.txt: one normalized keyword per line.
@@ -77,33 +74,6 @@ export function readRecalledIds(projectRoot: string, sessionId: string): string[
  * Check whether the given file path was already recalled this session
  * (recorded as `file|<abs-path>` in the tracking file).
  */
-/**
- * Match a project-relative path against a glob-ish scope pattern (same rule
- * aide-memory uses everywhere):
- *   - `foo/**` → matches `foo` and any descendant (foo/X, foo/X/Y)
- *   - `foo/*`  → matches immediate children only (foo/X, not foo/X/Y)
- *   - exact   → matches the literal path
- *
- * Null / 'project' scope is intentionally NOT matched here because a
- * project-wide recall should not flip every file to encountered (that would
- * effectively disable the first-touch hard block after any aide_recall).
- * Callers should filter those out before calling.
- */
-function matchesScope(relPath: string, scope: string): boolean {
-  if (!scope || scope === 'project') return false;
-  if (scope.endsWith('/**')) {
-    const base = scope.slice(0, -3);
-    return relPath === base || relPath.startsWith(base + '/');
-  }
-  if (scope.endsWith('/*')) {
-    const base = scope.slice(0, -2);
-    const slash = relPath.lastIndexOf('/');
-    const parent = slash >= 0 ? relPath.slice(0, slash) : '';
-    return parent === base;
-  }
-  return relPath === scope;
-}
-
 export function hasRecalledFile(
   projectRoot: string,
   sessionId: string,
@@ -113,21 +83,7 @@ export function hasRecalledFile(
   if (!fs.existsSync(p)) return false;
   try {
     const content = fs.readFileSync(p, 'utf8');
-    const lines = content.split('\n');
-    // Exact file match
-    if (lines.some((l) => l === `file|${absFilePath}`)) return true;
-    // Scope match — a scope tracked via aide_recall({ids}) or other
-    // scope-producing events covers all files that fall under that glob.
-    // This is how cross-file "encountered" works: if you recalled memories
-    // scoped `src/api/**` and later touch `src/api/orders.ts` (never read
-    // directly), hasRecalledFile returns true → soft path.
-    const relPath = path.relative(projectRoot, absFilePath);
-    for (const line of lines) {
-      if (!line.startsWith('scope|')) continue;
-      const scope = line.slice(6);
-      if (matchesScope(relPath, scope)) return true;
-    }
-    return false;
+    return content.split('\n').some((l) => l === `file|${absFilePath}`);
   } catch {
     return false;
   }
@@ -146,36 +102,6 @@ export function appendRecalledPath(
   const p = recalledPathsFile(projectRoot, sessionId);
   try {
     fs.appendFileSync(p, `${kind}|${absPath}\n`);
-  } catch {
-    // best-effort
-  }
-}
-
-/**
- * Append a `scope|<glob>` line for a scope whose memories were just recalled
- * (via aide_recall({ids:[…]}) or similar). Files falling under this scope
- * will be treated as "encountered" by hasRecalledFile — enabling cross-file
- * soft routing in the same scope after a scope-level recall.
- *
- * Skips null / 'project' scopes because project-wide recalls shouldn't
- * flip every file to encountered (would disable first-touch hard-block
- * project-wide).
- */
-export function appendRecalledScope(
-  projectRoot: string,
-  sessionId: string,
-  scope: string | null | undefined,
-): void {
-  if (!scope || scope === 'project') return;
-  ensureCacheDir(projectRoot);
-  const p = recalledPathsFile(projectRoot, sessionId);
-  try {
-    // Avoid duplicate scope lines — small perf + cleaner tracking file.
-    if (fs.existsSync(p)) {
-      const content = fs.readFileSync(p, 'utf8');
-      if (content.split('\n').some((l) => l === `scope|${scope}`)) return;
-    }
-    fs.appendFileSync(p, `scope|${scope}\n`);
   } catch {
     // best-effort
   }

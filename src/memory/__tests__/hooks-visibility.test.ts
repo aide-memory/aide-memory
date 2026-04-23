@@ -10,18 +10,10 @@
  * unchanged — this file focuses on the new contract.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import {
   emitAdditionalContext,
   emitBlockDecision,
 } from '../hooks/stdio';
-import {
-  appendRecalledPath,
-  appendRecalledScope,
-  hasRecalledFile,
-} from '../hooks/tracking';
 
 function captureStdout(fn: () => void): string {
   let buf = '';
@@ -156,71 +148,6 @@ describe('defaults.json — hooks.visible', () => {
     expect(defaults['hooks.visible'].public).toBe(true);
     expect(typeof defaults['hooks.visible'].description).toBe('string');
     expect(defaults['hooks.visible'].description.length).toBeGreaterThan(30);
-  });
-});
-
-describe('hasRecalledFile — scope-level encountered (Apr 23 2026 fix)', () => {
-  let tempDir: string;
-  const sessionId = 'scope-test';
-
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-scope-test-'));
-  });
-
-  afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it('returns false for a file with no tracking', () => {
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/api/routes.ts`)).toBe(false);
-  });
-
-  it('returns true for an exact file|<abs> match (pre-existing behavior)', () => {
-    appendRecalledPath(tempDir, sessionId, 'file', `${tempDir}/src/api/routes.ts`);
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/api/routes.ts`)).toBe(true);
-  });
-
-  it('returns true for a sibling file in a recalled src/api/** scope', () => {
-    // Recall memories for src/api/**, track scope only — never touched orders.ts directly
-    appendRecalledScope(tempDir, sessionId, 'src/api/**');
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/api/orders.ts`)).toBe(true);
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/api/v2/users.ts`)).toBe(true);
-  });
-
-  it('returns false for a file outside the recalled scope', () => {
-    appendRecalledScope(tempDir, sessionId, 'src/api/**');
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/auth/token.ts`)).toBe(false);
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/index.ts`)).toBe(false);
-  });
-
-  it('src/api/* (single-star) matches only immediate children', () => {
-    appendRecalledScope(tempDir, sessionId, 'src/api/*');
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/api/routes.ts`)).toBe(true);
-    // Deeper path doesn't match /* pattern
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/api/v2/users.ts`)).toBe(false);
-  });
-
-  it('filters project-wide null / "project" scope — never marks files encountered', () => {
-    appendRecalledScope(tempDir, sessionId, null as any);
-    appendRecalledScope(tempDir, sessionId, 'project');
-    // Neither should have been written — tracking file should still be empty or have no scope lines
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/anything.ts`)).toBe(false);
-  });
-
-  it('exact-path scope (specific file, no glob) only matches that exact file', () => {
-    appendRecalledScope(tempDir, sessionId, 'src/api/routes.ts');
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/api/routes.ts`)).toBe(true);
-    expect(hasRecalledFile(tempDir, sessionId, `${tempDir}/src/api/orders.ts`)).toBe(false);
-  });
-
-  it('dedupes identical scope entries', () => {
-    appendRecalledScope(tempDir, sessionId, 'src/api/**');
-    appendRecalledScope(tempDir, sessionId, 'src/api/**');
-    appendRecalledScope(tempDir, sessionId, 'src/api/**');
-    const trackingPath = path.join(tempDir, '.aide', 'cache', `recalled-paths-${sessionId}.txt`);
-    const content = fs.readFileSync(trackingPath, 'utf8');
-    const scopeLines = content.split('\n').filter((l) => l === 'scope|src/api/**');
-    expect(scopeLines.length).toBe(1);
   });
 });
 
