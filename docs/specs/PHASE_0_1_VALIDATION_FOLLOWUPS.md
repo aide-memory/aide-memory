@@ -247,6 +247,10 @@ These scenarios validate the ID-based blocking system that replaced block-once-t
 | IDB-7 | After SessionStart injection, read file where scoped IDs partially covered | BLOCK with ID message -- only IDs not injected at session start |
 | IDB-8 | After compact/clear/resume, re-read previously recalled file | BLOCK -- tracking cleared, IDs reset |
 | IDB-9 | aide_recall({ids: [specific IDs]}) | Returns exact memories by ID, those IDs tracked as recalled |
+| IDB-10 | aide_recall({ids: [...]}) followed by re-read of same file with a NEW memory added to the scope mid-session | SOFT on re-read — self-track-on-fire (commit b558f93) wrote file path on first hook fire, so `encountered=true` routes to soft even when the new memory is missing. Verifies the "path-tracked regardless of aide_recall shape" invariant. |
+| IDB-11 | aide_recall({ids: [...]}) followed by read of a DIFFERENT file in the same scope (never directly read) | HARD — the other file is a fresh path (encountered=false). Scope-level encountered was considered and reverted (commit 7cc56b8) as over-generalizing with broad scopes. Fresh-file hard-block is the conservative default per memory #324. |
+| IDB-12 | `minScopeDepth=1` (default) + memory scoped `src/**` + read any file under src/ | HARD — src/** (depth 1) qualifies under default minScopeDepth=1 (memory #318). Validates flat-project compatibility. |
+| IDB-13 | `minScopeDepth=2` override + memory scoped `src/**` + read file under src/ | SILENT — src/** excluded from per-file recall; memory surfaces at SessionStart only. Validates user opt-in-strict behavior. |
 
 ### Remaining:
 - ~~A2: Blocking permutations (block-once-then-soft, directory fix)~~ REPLACED by IDB-1 through IDB-9 above
