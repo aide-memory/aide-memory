@@ -29,6 +29,10 @@ export interface DefaultEntry {
   value: unknown;
   public: boolean;
   pro: boolean;
+  /** User-facing description surfaced by `aide-memory config list` and the
+   * auto-generated `.aide/config-reference.md` at init time. Present on every
+   * entry in `scripts/hooks/defaults.json` per memory #313 checklist. */
+  description?: string;
 }
 
 let _defaultsCache: Record<string, DefaultEntry> =

@@ -144,11 +144,11 @@ export function createProgram(): Command {
       runRecallLog(options);
     });
 
-  // aide-memory config <key> [value]
+  // aide-memory config <key> [value]  OR  aide-memory config list
   program
     .command('config')
-    .description('Get or set configuration (dot-notation keys)')
-    .argument('<key>', 'Configuration key (e.g. capture.enabled)')
+    .description('Get or set configuration (dot-notation keys). Use `aide-memory config list` to enumerate all public settings with current value + description.')
+    .argument('<key>', 'Configuration key (e.g. hooks.visible) or "list" to enumerate all public settings')
     .argument('[value]', 'Value to set (omit to read)')
     .action((key: string, value?: string) => {
       runConfig(key, value);

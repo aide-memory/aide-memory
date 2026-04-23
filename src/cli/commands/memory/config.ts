@@ -170,6 +170,13 @@ export function validateConfigKey(key: string): { ok: true } | { ok: false; mess
 }
 
 export function runConfig(key: string, value?: string): void {
+  // Special-case: `aide-memory config list` → enumerate every public
+  // setting with current value + description. Doesn't touch config.json.
+  if (key === 'list' && value === undefined) {
+    runConfigList();
+    return;
+  }
+
   const projectRoot = requireProjectRoot();
   const configPath = getConfigPath(projectRoot);
   const config = readConfig(configPath);
@@ -213,6 +220,68 @@ export function runConfig(key: string, value?: string): void {
  * for keys that actually have derived artifacts — other settings are
  * read on-demand by hooks and don't need an eager sync.
  */
+/**
+ * `aide-memory config list` — print every public setting from defaults.json
+ * with its current value (if overridden) + description. Useful for users
+ * who want to discover what's configurable without opening defaults.json.
+ *
+ * Output format (one block per setting):
+ *   <key>
+ *     current: <current value, or "(default)" if not overridden>
+ *     default: <defaults.json value>
+ *     <description>
+ *
+ * Only lists public settings (entry.public === true). Pro / internal
+ * settings are hidden from this surface.
+ */
+export function runConfigList(): void {
+  const projectRoot = requireProjectRoot();
+  const configPath = getConfigPath(projectRoot);
+  const userConfig = readConfig(configPath);
+  const defaults = loadDefaults();
+
+  const publicKeys = Object.keys(defaults)
+    .filter((k) => defaults[k].public === true)
+    .sort();
+
+  if (publicKeys.length === 0) {
+    console.log(chalk.gray('(no public settings registered)'));
+    return;
+  }
+
+  console.log(brand('aide-memory · configurable settings'));
+  console.log('');
+
+  for (const key of publicKeys) {
+    const entry = defaults[key];
+    const current = getNestedValue(userConfig, key);
+    const isOverridden = current !== undefined;
+    const defaultLabel =
+      typeof entry.value === 'object' ? JSON.stringify(entry.value) : String(entry.value);
+    const currentLabel = isOverridden
+      ? (typeof current === 'object' ? JSON.stringify(current) : String(current))
+      : chalk.gray('(default)');
+
+    console.log(chalk.bold(key));
+    console.log(`  current: ${isOverridden ? chalk.cyan(currentLabel) : currentLabel}`);
+    console.log(`  default: ${chalk.gray(defaultLabel)}`);
+    if (entry.description) {
+      const wrapped = entry.description
+        .split('\n')
+        .map((line) => `  ${line}`)
+        .join('\n');
+      console.log(chalk.dim(wrapped));
+    }
+    console.log('');
+  }
+
+  console.log(
+    chalk.gray(
+      'Set a value: aide-memory config <key> <value>     •     Read: aide-memory config <key>',
+    ),
+  );
+}
+
 function applySideEffects(projectRoot: string, key: string, _value: any): void {
   const KEYS_WITH_DERIVED_ARTIFACTS = new Set(['memories.hideFromGrep']);
   if (!KEYS_WITH_DERIVED_ARTIFACTS.has(key)) return;
