@@ -223,23 +223,48 @@ All 9 original items implemented. Items 2 and 3 replaced by ID-based blocking (i
 
 ## VALIDATION SCENARIOS (remaining)
 
-### Manual walkthrough for hook-visibility fast-follow (PR #1)
+### Validation Setup (shared fixture recipe)
 
-> Step-by-step scenarios with exact prompts + expected renders live in
-> **[docs/specs/VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md)**.
-> Covers scenarios 1-13 (including IDB-10 through IDB-13 added in PR #1)
-> with a cross-reference table mapping each to the A-G letter scenarios and
-> IDB matrix below. Moved into the repo so the walkthrough survives fixture
-> teardown.
+Every scenario below runs against a scratch project wired at the canonical
+`aide-memory init` flow. One-time setup:
+
+```bash
+# Recipe — idempotent:
+rm -rf /tmp/aide-validation && mkdir -p /tmp/aide-validation && cd /tmp/aide-validation
+git init -q && git config user.name test && git config user.email t@t.com
+node <feature-worktree>/dist/cli/aide-memory.js init
+
+# Override softening so hard-block paths fire with small seeded sets
+node <feature-worktree>/dist/cli/aide-memory.js config memories.softening.threshold 5
+
+# Seed 8 memories (2 prefs + 2 guidelines project-wide + 2 technical scoped
+# src/api/** + 2 area_context scoped src/auth/**). Create src/api/routes.ts
+# and src/auth/token.ts as trigger files. See /tmp/aide-hook-viz-validation/
+# setup.sh for the concrete seed blob shipped with PR #1.
+
+cd /tmp/aide-validation && claude
+```
+
+Approve hooks + MCP server on first prompt. Use `/permissions` to persist.
 
 ### Completed (A-F):
-- A: Hook + Recall ✅
-- B: Search ✅ (re-verified with systemMessage visibility in PR #1)
-- C: Correction ✅ (re-verified with systemMessage visibility in PR #1)
-- D: Compact ✅
-- E: Cross-session persistence ✅
-- F0: Empty project ✅
-- F: Softening (<10 mems) ✅ (manual force-soft variant at threshold=100 in Scenario 3b of the walkthrough)
+- **A: Hook + Recall** ✅ (re-verified with systemMessage visibility in PR #1)
+  - Trigger: `Read src/api/routes.ts` first time in session
+  - Expected: `PreToolUse:Read hook returned blocking error` + reason + `PreToolUse:Read says: aide-memory · prompting aide_recall for scoped memories (expected flow)`
+  - Claude calls `aide_recall` then retries Read
+  - Re-read same file → SILENT (IDs tracked) — validates IDB-2 path
+- **B: Search** ✅ (re-verified with systemMessage visibility in PR #1)
+  - Trigger: `Search the codebase for the word "token"`
+  - Expected: `PreToolUse:Grep says: aide-memory · prompting aide_search for "token" — N matching memories` (if Grep tool loads; may fall back to Bash+grep on CC 2.1.118 — see Bash-grep follow-up above)
+- **C: Correction** ✅ (re-verified with systemMessage visibility in PR #1)
+  - Trigger: `no, use typescript enums instead of string literals for the status values`
+  - Expected (before Claude's reply): `UserPromptSubmit says: aide-memory · correction detected — prompting aide_remember`
+- **D: Compact** ✅
+- **E: Cross-session persistence** ✅
+- **F0: Empty project** ✅
+- **F: Softening (<10 mems)** ✅
+  - Force-soft manual variant: `aide-memory config memories.softening.threshold 100` → read a fresh scoped file → soft-path systemMessage (`aide-memory · prompting aide_recall for scoped memories` WITHOUT `(expected flow)` tail) — validates the pure `forceSoft` branch
+  - Reset: `aide-memory config memories.softening.threshold 5`
 
 ### NEW: ID-Based Blocking Validation Scenarios
 
@@ -261,7 +286,27 @@ These scenarios validate the ID-based blocking system that replaced block-once-t
 | IDB-12 | `minScopeDepth=1` (default) + memory scoped `src/**` + read any file under src/ | HARD — src/** (depth 1) qualifies under default minScopeDepth=1 (memory #318). Validates flat-project compatibility. |
 | IDB-13 | `minScopeDepth=2` override + memory scoped `src/**` + read file under src/ | SILENT — src/** excluded from per-file recall; memory surfaces at SessionStart only. Validates user opt-in-strict behavior. |
 
-> All IDB scenarios have step-by-step walkthroughs in **[docs/specs/VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md)**.
+**IDB-10 walkthrough:**
+1. After IDB-1 fires on `src/api/routes.ts` (hard-blocked + recalled), session tracking has `file|routes.ts` + IDs for src/api/**
+2. Add new memory mid-session: `aide-memory remember --layer technical --scope "src/api/**" --what "mid-session test"`
+3. Re-read: `Read src/api/routes.ts again`
+4. Expected: soft path — `PreToolUse:Read says: aide-memory · prompting aide_recall for scoped memories` (no `(expected flow)` tail). Self-track-on-fire (b558f93) validated.
+
+**IDB-11 walkthrough:**
+1. After IDB-10, create a sibling file: `create src/api/orders.ts as a stub`
+2. Read it: `Read src/api/orders.ts`
+3. Expected: HARD block + `(expected flow)` line. orders.ts is a fresh path (encountered=false) even though aide_recall already covered its scope via routes.ts. Conservative "fresh file = fresh enforcement" per revert of fcf3e0b.
+
+**IDB-12 walkthrough:**
+1. `aide-memory remember --layer guidelines --scope "src/**" --what "IDB-12 broad-scope"`
+2. Read a fresh file in src/: `Read src/auth/token.ts` (if not yet touched)
+3. Expected: HARD block. `src/**` (depth 1) is INCLUDED at default `minScopeDepth=1`. Validates flat-project compat (memory #318).
+
+**IDB-13 walkthrough:**
+1. `aide-memory config recall.minScopeDepth 2`
+2. Read a file whose only covering scope is `src/**` (create `src/utils/helpers.ts`, read it)
+3. Expected: SILENT. `src/**` (depth 1 < threshold 2) excluded from per-file recall at `minScopeDepth=2`. Validates user opt-in-strict.
+4. Reset: `aide-memory config recall.minScopeDepth 1`
 
 ### Remaining:
 - ~~A2: Blocking permutations (block-once-then-soft, directory fix)~~ REPLACED by IDB-1 through IDB-9 above
@@ -270,10 +315,11 @@ These scenarios validate the ID-based blocking system that replaced block-once-t
 - I: .ignore grep exclusion
 - J: MCP server unavailable / graceful degradation
 - K: Plan persistence across sessions
-- L: Multiple corrections in one session — partially exercised by Scenario 7 in [VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md) (correction-pending branch of Stop hook)
+- L: Multiple corrections in one session — partially exercised: correction-pending Stop branch fires when a user submits a correction-shaped prompt and ends the turn without Claude calling aide_remember. Expected: `Stop says: aide-memory · correction from this turn was not saved — prompting aide_remember` + Stop hook feedback with reason text mentioning both `aide_remember` and `aide_update`.
 - M: Scope exclusion precision
-- N: SessionStart injection verification — manual smoke via Scenario 1 in [VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md)
-- O: Dynamic stop hook (updated for 3->5->10) — partially exercised by Scenario 8 in [VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md)
+- N: SessionStart injection verification — manual smoke: launch `claude` in fixture dir, observe `SessionStart says: aide-memory · injected 4 memories at session start` (2 prefs + 2 guidelines = 4; scoped layers surface via path hooks instead).
+- O: Dynamic stop hook (updated for 3->5->10) — partially exercised: run 3 plain prompts (no corrections, no hard blocks); on the 3rd turn Stop schedule branch fires. Expected: `Stop says: aide-memory · checkpoint — prompting aide_remember for anything critical (expected)` + Stop hook feedback with reason text.
+- V: hooks.visible toggle (NEW — added in PR #1) — `aide-memory config hooks.visible false` → repeat any scenario → `aide-memory · ...` lines vanish while block enforcement + systemMessage contract is otherwise unchanged. `aide-memory config hooks.visible true` → lines return.
 - U1: Pre-seeded context (without vs with)
 - U2: Correction learning loop
 - U3: Behavioral preferences
