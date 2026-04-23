@@ -12,7 +12,7 @@ Four hooks run automatically: **PreToolUse** (nudges you when memories exist for
 
 ## Usage
 
-Call `aide_recall` with file paths before working in an unfamiliar code area or after losing context. Call `aide_remember` when the developer corrects you, when a design decision is made, or when you discover something non-obvious. Do not store obvious facts, temporary state, or secrets.
+Call `aide_recall` with file paths before working in an unfamiliar code area or after losing context. Call `aide_remember` (or `aide_update` if an existing memory needs revision) when the developer corrects you, when a design decision is made, or when you discover something non-obvious. Do not store obvious facts, temporary state, or secrets.
 
 ## Layers
 

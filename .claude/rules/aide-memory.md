@@ -17,13 +17,13 @@ This project uses aide-memory, an MCP server that persists knowledge across conv
 Four hooks fire automatically. Respond to them as described:
 
 - **PreToolUse** -- Before you read/edit a file, the hook may inject: "N memories exist for this path." When you see this nudge, call `aide_recall` with those paths before proceeding.
-- **Stop** -- On task completion, the hook prompts: "Anything worth remembering?" Review what happened in the session. If a decision was made, a correction was given, or you discovered something non-obvious, call `aide_remember`. Otherwise, do nothing.
-- **UserPromptSubmit** -- Detects correction patterns ("no, use X instead", "don't do that"). When flagged, store the correction with `aide_remember` scoped to the relevant code area.
-- **PreCompact** -- Before context compaction, the hook prompts you to save important context. Store any active plans, decisions, or constraints via `aide_remember` immediately -- after compaction you will only have a summary.
+- **Stop** -- On task completion, the hook prompts: "Anything worth remembering?" Review what happened in the session. If a decision was made, a correction was given, or you discovered something non-obvious, call `aide_remember` (or `aide_update` if an existing memory needs revision). Otherwise, do nothing.
+- **UserPromptSubmit** -- Detects correction patterns ("no, use X instead", "don't do that"). When flagged, store the correction with `aide_remember` (or `aide_update` if an existing memory needs revision) scoped to the relevant code area.
+- **PreCompact** -- Before context compaction, the hook prompts you to save important context. Store any active plans, decisions, or constraints via `aide_remember` (or `aide_update` if an existing memory needs revision) immediately -- after compaction you will only have a summary.
 
 ## Proactive saving
 
-As conversations grow long, proactively call `aide_remember` for key decisions, constraints, and corrections -- don't wait for the Stop hook or compaction. If you've made important decisions or received corrections that haven't been stored yet, save them now. Context can be compacted at any time and detail will be lost.
+As conversations grow long, proactively call `aide_remember` (or `aide_update` if an existing memory needs revision) for key decisions, constraints, and corrections -- don't wait for the Stop hook or compaction. If you've made important decisions or received corrections that haven't been stored yet, save them now. Context can be compacted at any time and detail will be lost.
 
 ## When to call aide_recall
 
