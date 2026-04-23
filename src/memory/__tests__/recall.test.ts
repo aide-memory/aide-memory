@@ -49,7 +49,7 @@ describe('scopeMatchesPath', () => {
 
   describe('focused mode — minScopeDepth rule (0.4.3+)', () => {
     it('focused: immediate parent scope matches', () => {
-      // src/api/** for src/api/routes.ts → depth 2 ≥ default minScopeDepth=2 → INCLUDE
+      // src/api/** for src/api/routes.ts → depth 2 ≥ default minScopeDepth=1 → INCLUDE
       expect(scopeMatchesPath('src/api/**', 'src/api/routes.ts', { focused: true })).toBe(true);
     });
 
@@ -57,22 +57,27 @@ describe('scopeMatchesPath', () => {
       expect(scopeMatchesPath('src/api/routes.ts', 'src/api/routes.ts', { focused: true })).toBe(true);
     });
 
-    it('focused: single-segment scope (src/**) excluded by default minScopeDepth=2', () => {
-      // src/** has depth 1 < 2 → EXCLUDE (too broad)
-      expect(scopeMatchesPath('src/**', 'src/api/routes.ts', { focused: true })).toBe(false);
+    it('focused: single-segment scope (src/**) INCLUDED at default minScopeDepth=1 (permissive)', () => {
+      // src/** has depth 1 ≥ 1 → INCLUDE (default after memory #318 — flat-project compat)
+      expect(scopeMatchesPath('src/**', 'src/api/routes.ts', { focused: true })).toBe(true);
     });
 
-    it('focused: single-segment scope also excluded for deeper paths', () => {
-      expect(scopeMatchesPath('src/**', 'src/api/v2/routes.ts', { focused: true })).toBe(false);
+    it('focused: single-segment scope also INCLUDED for deeper paths at default', () => {
+      expect(scopeMatchesPath('src/**', 'src/api/v2/routes.ts', { focused: true })).toBe(true);
     });
 
-    it('focused: mid-depth scope reaches deep descendants (0.4.3 change)', () => {
-      // src/components/** (depth 2) for src/components/dashboard/Widget.tsx → INCLUDE
-      // Previously excluded as "grandparent"; now permitted because it meets minScopeDepth=2.
+    it('focused: minScopeDepth=2 excludes single-segment scope (user opt-in strictness)', () => {
+      // src/** has depth 1 < 2 → EXCLUDE (too broad when user bumps threshold)
+      expect(scopeMatchesPath('src/**', 'src/api/routes.ts', { focused: true, minScopeDepth: 2 })).toBe(false);
+      expect(scopeMatchesPath('src/**', 'src/api/v2/routes.ts', { focused: true, minScopeDepth: 2 })).toBe(false);
+    });
+
+    it('focused: mid-depth scope reaches deep descendants', () => {
+      // src/components/** (depth 2) for src/components/dashboard/Widget.tsx → INCLUDE at any minScopeDepth ≤ 2
       expect(scopeMatchesPath('src/components/**', 'src/components/dashboard/Widget.tsx', { focused: true })).toBe(true);
     });
 
-    it('focused: minScopeDepth=1 restores pre-0.4.3 permissive behavior', () => {
+    it('focused: explicit minScopeDepth=1 (same as default, kept as regression guard)', () => {
       expect(scopeMatchesPath('src/**', 'src/api/routes.ts', { focused: true, minScopeDepth: 1 })).toBe(true);
     });
 
@@ -131,11 +136,13 @@ describe('computeScopedForPath — focused-scope single source of truth', () => 
     mem({ id: 6, layer: 'technical',    scope: 'src/api/v2/**',      what: 'deeper nested' }),  // deeper — N/A for file
   ];
 
-  it('includes immediate parent + exact file, excludes grandparent + project-wide', () => {
+  it('includes immediate parent + exact file + grandparent (default minScopeDepth=1), excludes project-wide', () => {
+    // Default minScopeDepth=1 (permissive per memory #318) — src/** (depth 1) is INCLUDED.
+    // Excludes: null / 'project' scope (always, for per-file recall).
     const out = computeScopedForPath(memories, 'src/api/routes.ts');
-    expect(out.count).toBe(2);
-    expect(out.ids.sort()).toEqual([2, 4]);
-    expect(out.layers).toEqual({ technical: 1, area_context: 1 });
+    expect(out.count).toBe(3);
+    expect(out.ids.sort((a, b) => a - b)).toEqual([2, 3, 4]);
+    expect(out.layers).toEqual({ technical: 1, area_context: 1, preferences: 1 });
   });
 
   it('integer count equals sum of layer breakdown values (parity guarantee)', () => {
@@ -146,10 +153,11 @@ describe('computeScopedForPath — focused-scope single source of truth', () => 
 
   it('directory query includes child (deeper nested) scopes', () => {
     const out = computeScopedForPath(memories, 'src/api/');
-    // src/api/**, exact file, src/api/v2/** — all IN; src/auth sibling OUT; src/** grandparent OUT; project-wide OUT
+    // At default minScopeDepth=1 (memory #318): src/api/**, exact file,
+    // src/api/v2/**, AND src/** all IN; src/auth sibling OUT; project-wide OUT.
     const ids = out.ids.sort((a, b) => a - b);
-    expect(ids).toEqual([2, 4, 6]);
-    expect(out.count).toBe(3);
+    expect(ids).toEqual([2, 3, 4, 6]);
+    expect(out.count).toBe(4);
   });
 
   it('project-wide memories NEVER appear in scoped set (handled by SessionStart)', () => {
@@ -222,7 +230,7 @@ describe('recall', () => {
     expect(result.memories.length).toBe(6);
   });
 
-  it('filters by path — returns matching scopes with minScopeDepth=2 default (0.4.3)', () => {
+  it('filters by path — returns matching scopes at default minScopeDepth=1 (memory #318)', () => {
     const result = recall(store, {
       paths: ['src/components/dashboard/Sidebar.tsx'],
     });
@@ -230,11 +238,11 @@ describe('recall', () => {
     const whats = result.memories.map(m => m.what);
 
     // Should include: dashboard area_context (immediate parent),
-    // src/components/** (depth 2 meets minScopeDepth=2), project memories.
+    // src/components/** (depth 2), project-wide memories, and at default
+    // minScopeDepth=1 any depth-1 scopes (e.g. src/**) if present.
     expect(whats).toContain('Skeleton loading replaces ALL legacy loaders');
     expect(whats).toContain('Composition over conditionals for component variants');
     expect(whats).toContain('Vitest not Jest — use describe/it from vitest');
-    // src/components/** (depth 2) now matches descendants — 0.4.3 change.
     expect(whats).toContain('Keep components under 150 lines');
 
     // Should NOT include: sibling CLI commands or unrelated memory module
@@ -315,14 +323,14 @@ describe('recall', () => {
     expect(fresh.last_recalled_at).toBeTruthy();
   });
 
-  it('returns matched scopes (focused mode with minScopeDepth=2, 0.4.3)', () => {
+  it('returns matched scopes (focused mode, default minScopeDepth=1 per memory #318)', () => {
     const result = recall(store, {
       paths: ['src/components/dashboard/Sidebar.tsx'],
     });
 
     // Immediate parent scope is included.
     expect(result.matched_scopes).toContain('src/components/dashboard/**');
-    // src/components/** (depth 2) now included under minScopeDepth=2 default.
+    // src/components/** (depth 2) is included — would be at any minScopeDepth ≤ 2.
     expect(result.matched_scopes).toContain('src/components/**');
   });
 

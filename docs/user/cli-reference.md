@@ -430,6 +430,9 @@ aide-memory config hooks.correction.enabled false
 # Set a JSON array value (e.g. custom Stop-hook schedule)
 aide-memory config hooks.stop.schedule '[{"every":5}]'
 
+# Hide aide-memory's own systemMessage lines (hooks still function, agent behavior unchanged)
+aide-memory config hooks.visible false
+
 # Override contributor (default 'auto' uses git user.name)
 aide-memory config contributor "TeamBot"
 

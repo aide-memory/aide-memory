@@ -67,6 +67,7 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
 | `hooks.correction.enabled` | boolean | `true` | Detect correction phrasings in user messages (`no, use X instead`, etc.) and nudge `aide_remember`. |
 | `hooks.precompact.mode` | string | `"cleanup"` | `"off"` preserves tracking files across `/compact`; `"cleanup"` clears them so post-compact turns re-block cleanly. |
 | `hooks.stop.schedule` | array | _(see below)_ | Phased interval for Stop hook reflection nudge. Default ramps 3→5→10 turns. |
+| `hooks.visible` | boolean | `true` | Surface user-facing `aide-memory · …` systemMessage lines when hooks fire (soft recalls, correction detected, session-start injection, Stop checkpoints). Default `true` so users can see what aide-memory is doing. Set `false` to hide all aide-memory systemMessages — hooks still function (context injection + block enforcement unchanged). Does not affect what Claude sees. |
 
 ### Recall + scope matching
 
@@ -75,7 +76,7 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
 | `recall.limit` | number | `20` | Max memories per `aide_recall` call before layer-diversity balancing. |
 | `recall.ensureLayerDiversity` | boolean | `true` | Swap under-represented layers up into results when total is below `recall.layerDiversityMinLimit`. |
 | `recall.layerDiversityMinLimit` | number | `5` | Threshold below which diversity swap applies. |
-| `recall.minScopeDepth` | number | `2` | Minimum fixed-prefix segment count for a scope to match descendants at any depth. `2` means `src/api/**` matches `src/api/routes/routeA.ts`. Single-segment scopes like `src/**` are filtered as too-broad (handled via SessionStart instead). Set to `1` to restore pre-0.4.3 narrow behavior; `3+` for stricter scoping. |
+| `recall.minScopeDepth` | number | `1` | Minimum fixed-prefix segment count for a scope to be eligible for per-file recall. Default `1` is permissive — any scope with ≥1 segment qualifies. Works across project shapes (src-wrapped, flat Next.js `pages/**`, SvelteKit `routes/**`, deep monorepos). Bump to `2`+ for stricter scoping when you have many broad scopes. Broad scopes below the threshold are NOT excluded from memory entirely — they just surface via SessionStart injection instead of per-file. See the visualized breakdown below. |
 
 ### SessionStart injection
 
@@ -135,6 +136,18 @@ Single-segment scopes like `src/**` are treated as "too broad for per-file" and 
 Only very-narrow scopes surface per-file. Useful if you've accumulated hundreds of mid-specific memories and want only the most-scoped ones to nudge.
 
 **When to change:** start with default `1`. If per-file recall feels too chatty because you have many broad scopes, bump to `2`.
+
+### Performance notes for scope and recall breadth
+
+A few things to know when your project gets large or when you notice nudges firing more than you'd like:
+
+- **`recall.limit: 20` caps per-call returns.** If a file has 30 scope-matching memories, the first `aide_recall` call returns 20. The remaining 10 stay listed in `missingIds` on the next pre-read fire, and the agent is nudged to call `aide_recall({ids: [next batch]})`. This isn't truncation — it's bounded pagination via the id-based nudge path. Bump `recall.limit` if you consistently hit the cap.
+- **`memories.softening.threshold: 10` softens small projects.** Below 10 total memories, ALL pre-read/pre-edit blocks become soft additionalContext nudges. Helps new users not feel hostile-blocked before they have much context stored.
+- **`recall.minScopeDepth` is your primary "scope breadth" dial.** Use higher values (2 or 3) when you've accumulated many broad scopes and want per-file recall quieter. Narrower scopes (`src/api/routes/**`) still surface per-file; broad scopes (`src/**`) demote to SessionStart.
+- **Scope your memories precisely when storing.** Writing a memory with scope `src/**` applies it to every file under src/. Writing with scope `src/api/routes/**` narrows it to just the routes dir. Prefer specific scopes — they feel more relevant when they surface, and don't inflate per-file recall counts for unrelated files.
+- **No runtime stall** even with many scope matches — `recall.limit` is a hard cap per call. But you may see multiple soft nudges in succession until the agent has recalled all the ids. If that sequence feels excessive, narrow your scopes or bump `recall.minScopeDepth`.
+
+Rule of thumb: the more your memories scope broadly ("`src/**`", "`project`"), the louder per-file recall gets at `minScopeDepth: 1`. If you mostly use narrow scopes (file-specific or `src/api/**`-specific), the default is fine.
 
 ---
 
@@ -361,7 +374,7 @@ Setting values `2+` doesn't produce different behavior from `1` in practice — 
 | `embeddings.model` | string | `"auto"` | Model name for the active backend. `"auto"` uses backend defaults (`Xenova/bge-small-en-v1.5` for transformers, `nomic-embed-text` for ollama). Override with any model the backend supports. |
 | `updates.check` | boolean | `true` | Check for new npm versions after each command (non-blocking). |
 
-> **Note on removed keys (0.4.3):** `capture.*` family and `nudge.visible` were previously listed as valid but had no runtime effect. They're removed from the valid-keys list as of 0.4.3. If you had them in your config, they're now silently ignored. Replace `capture.hooks.preToolUse=false` with `hooks.read.maxBlocks=0` + `hooks.edit.maxBlocks=0`; replace `capture.hooks.stop=false` with `hooks.stop.schedule=[{"every":100}]` (effectively off); replace `capture.hooks.userPromptSubmit=false` with `hooks.correction.enabled=false`. `nudge.visible` will return (with real wiring) when the hook-output visibility UX lands.
+> **Note on removed keys (0.4.3):** `capture.*` family and `nudge.visible` were previously listed as valid but had no runtime effect. They're removed from the valid-keys list as of 0.4.3. If you had them in your config, they're now silently ignored. Replace `capture.hooks.preToolUse=false` with `hooks.read.maxBlocks=0` + `hooks.edit.maxBlocks=0`; replace `capture.hooks.stop=false` with `hooks.stop.schedule=[{"every":100}]` (effectively off); replace `capture.hooks.userPromptSubmit=false` with `hooks.correction.enabled=false`. The successor to `nudge.visible` has landed as **`hooks.visible`** (see the Hook behavior table above) — if you had `nudge.visible` set previously, migrate to `hooks.visible` with the same value.
 
 ## Reading config
 

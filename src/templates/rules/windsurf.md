@@ -12,7 +12,7 @@ Four hooks run automatically: **PreToolUse** (nudges you when memories exist for
 
 ## Usage
 
-Call `aide_recall` with file paths before working in an unfamiliar code area or after losing context. Call `aide_remember` when the developer corrects you, when a design decision is made, or when you discover something non-obvious. Do not store obvious facts, temporary state, or secrets.
+Call `aide_recall` with file paths before working in an unfamiliar code area or after losing context. Call `aide_remember` (or `aide_update` if an existing memory needs revision) when the developer corrects you, when a design decision is made, or when you discover something non-obvious. Do not store obvious facts, temporary state, or secrets.
 
 ## Layers
 
@@ -24,6 +24,8 @@ Call `aide_recall` with file paths before working in an unfamiliar code area or 
 Set `scope` to a glob pattern for the code area (e.g., `src/auth/**`). Omit for project-wide. Auto-assign tags from: `architecture`, `testing`, `security`, `style`, `integration`, `config`, `migration`, `performance`, `api-contract`.
 
 Set `contributor` to `{{contributor}}`. Set `tool` to `"windsurf"` in generated_by.
+
+Prefer `aide_search` FIRST for any concept/convention/decision search (e.g., "where do we handle tokens?", "api response pattern?") — stored memories often have the answer. Fall back to Grep/Bash+grep only for syntactic lookups or when aide_search is empty.
 
 Use `aide_update` when stored information changes. Use `aide_forget` to delete wrong information or archive outdated decisions.
 

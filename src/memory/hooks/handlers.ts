@@ -90,6 +90,32 @@ const HOOK_DEFAULTS = defaultsJson as Record<string, DefaultEntry>;
  * defaults.json keys are flat dot-paths ("hooks.stop.schedule"). We split the
  * flat key and walk the nested user config.
  */
+/**
+ * Resolve the `hooks.visible` config — governs whether user-facing
+ * systemMessage lines are emitted by hooks. Default true so users can see
+ * what aide-memory is doing. Set to false to hide all aide-memory
+ * systemMessages (hooks still function, agent behavior unchanged).
+ */
+function isVisible(projectRoot: string): boolean {
+  return getSetting(projectRoot, 'hooks.visible') !== false;
+}
+
+/**
+ * User-facing brand prefix for every systemMessage we emit.
+ *
+ * Wrapped in a 24-bit ANSI colour escape matching the aide-memory CLI brand
+ * (`chalk.hex('#00c2cb')` in `src/cli/commands/memory/utils.ts`). Claude Code
+ * honors ANSI codes in systemMessage (verified empirical test Apr 22 2026).
+ * Colour is applied to the `aide-memory · ` mark only; the message text
+ * after the prefix stays terminal-default so it's readable on any theme.
+ *
+ * If Claude Code ever stops honoring ANSI in systemMessage, the escape just
+ * renders as plain text prefix — no functional regression.
+ */
+const BRAND_COLOUR_ON = '\u001b[38;2;0;194;203m';   // #00c2cb
+const BRAND_COLOUR_OFF = '\u001b[0m';
+const BRAND = `${BRAND_COLOUR_ON}aide-memory · ${BRAND_COLOUR_OFF}`;
+
 function getSetting(projectRoot: string, key: string): any {
   const entry = HOOK_DEFAULTS[key];
   if (!entry) return undefined;
@@ -168,9 +194,22 @@ export async function preRead(input: HookInput): Promise<void> {
     else missingIds.push(String(sid));
   }
 
+  // Compute "encountered" BEFORE we self-track below, so the first block on
+  // a fresh file still goes hard (encountered=false); subsequent touches on
+  // the same file — even if new memories are added mid-session — see
+  // encountered=true and go soft. This fixes the repeat-hard-block case
+  // where the agent's aide_recall({ids:[…]}) response didn't mark the path
+  // as encountered (track-recall-post only writes IDs; paths are only
+  // written when aide_recall is called with {paths: [...]}).
+  const encountered = hasRecalledFile(projectRoot, sessionId, filePath);
+
+  // Self-track the path so future pre-read/pre-edit fires on this file see
+  // it as encountered. Done whether we're about to block, soft-nudge, or
+  // silent — the file has been touched by the agent either way.
+  appendRecalledPath(projectRoot, sessionId, 'file', filePath);
+
   if (coveredCount === result.scoped_ids.length) return;
 
-  const encountered = hasRecalledFile(projectRoot, sessionId, filePath);
   const missingCount = result.scoped_ids.length - coveredCount;
   const softeningThreshold = Number(getSetting(projectRoot, 'memories.softening.threshold') ?? 10);
   const forceSoft = result.total_memories < softeningThreshold;
@@ -190,10 +229,25 @@ export async function preRead(input: HookInput): Promise<void> {
     nudge = `${missingCount} memories for ${filePath} not yet recalled. Call aide_recall({ids: [${missingIds.join(',')}]}).`;
   }
 
+  // User-facing reassurance lines (gated on hooks.visible). The reason text
+  // above stays untouched — it's what Claude acts on. systemMessage is
+  // user-only reassurance that this is expected aide-memory behavior.
+  const visible = isVisible(projectRoot);
+  const softMessage = visible
+    ? `${BRAND}prompting aide_recall for scoped memories`
+    : undefined;
+  // Hard-path message includes "(expected flow)" because the platform renders
+  // a hardcoded "PreToolUse:Read hook returned blocking error" label above
+  // this line — can't override per Claude Code TUI render logic (see aide-
+  // memory mem #310). This reassurance counteracts the alarming label.
+  const hardMessage = visible
+    ? `${BRAND}prompting aide_recall for scoped memories (expected flow)`
+    : undefined;
+
   if (forceSoft || encountered) {
-    emitAdditionalContext('PreToolUse', nudge);
+    emitAdditionalContext('PreToolUse', nudge, softMessage);
   } else {
-    emitBlockDecision(nudge);
+    emitBlockDecision(nudge, hardMessage);
   }
 }
 
@@ -233,9 +287,17 @@ export async function preEdit(input: HookInput): Promise<void> {
     else missingIds.push(String(sid));
   }
 
+  // Compute "encountered" BEFORE we self-track below — see preRead for
+  // rationale. First edit on a fresh file still goes hard; subsequent
+  // edits (even with new memories added mid-session) go soft.
+  const encountered = hasRecalledFile(projectRoot, sessionId, filePath);
+
+  // Self-track the path so future pre-read/pre-edit fires see it as
+  // encountered. Mirrors preRead's fix for the repeat-hard-block case.
+  appendRecalledPath(projectRoot, sessionId, 'file', filePath);
+
   if (coveredCount === result.scoped_ids.length) return;
 
-  const encountered = hasRecalledFile(projectRoot, sessionId, filePath);
   const missingCount = result.scoped_ids.length - coveredCount;
   const softeningThreshold = Number(getSetting(projectRoot, 'memories.softening.threshold') ?? 10);
   const forceSoft = result.total_memories < softeningThreshold;
@@ -247,10 +309,21 @@ export async function preEdit(input: HookInput): Promise<void> {
     nudge = `${missingCount} memories for ${filePath} not yet recalled. Call aide_recall({ids: [${missingIds.join(',')}]}) before editing.`;
   }
 
+  // User-facing reassurance lines (gated on hooks.visible). See preRead
+  // for rationale — the reason text above stays untouched for agent
+  // consumption; systemMessage is user-only framing.
+  const visible = isVisible(projectRoot);
+  const softMessage = visible
+    ? `${BRAND}prompting aide_recall for scoped memories`
+    : undefined;
+  const hardMessage = visible
+    ? `${BRAND}prompting aide_recall for scoped memories (expected flow)`
+    : undefined;
+
   if (forceSoft || encountered) {
-    emitAdditionalContext('PreToolUse', nudge);
+    emitAdditionalContext('PreToolUse', nudge, softMessage);
   } else {
-    emitBlockDecision(nudge);
+    emitBlockDecision(nudge, hardMessage);
   }
 }
 
@@ -302,19 +375,25 @@ export async function preSearch(input: HookInput): Promise<void> {
   // Note: we deliberately do NOT write to tracking here. track-search handler
   // writes to tracking when aide_search is actually called (PostToolUse).
 
+  const visible = isVisible(projectRoot);
+  const userMessage = visible
+    ? `${BRAND}prompting aide_search for "${query}" — ${count} matching ${count === 1 ? 'memory' : 'memories'}`
+    : undefined;
+
   if (alreadySearched) {
     emitAdditionalContext(
       'PreToolUse',
       `${count} aide memories match '${query}' (${topStr}). Call aide_search({keyword: '${query}'}).`,
+      userMessage,
     );
     return;
   }
 
   const nudge = `${count} aide memories match '${query}' (${topStr}). Call aide_search({keyword: '${query}'}) if not already in context.`;
   if (searchMode === 'block') {
-    emitBlockDecision(nudge);
+    emitBlockDecision(nudge, userMessage);
   } else {
-    emitAdditionalContext('PreToolUse', nudge);
+    emitAdditionalContext('PreToolUse', nudge, userMessage);
   }
 }
 
@@ -343,7 +422,7 @@ const FALSE_POSITIVE_PATTERN = new RegExp(
 );
 
 const FALLBACK =
-  'If aide_remember unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server.';
+  'If aide_remember / aide_update unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server.';
 
 export async function detectCorrection(input: HookInput): Promise<void> {
   const message = input.prompt || '';
@@ -360,28 +439,42 @@ export async function detectCorrection(input: HookInput): Promise<void> {
   const enabled = getSetting(projectRoot, 'hooks.correction.enabled');
   if (enabled === false) return;
 
+  const visible = isVisible(projectRoot);
+
   if (CORRECTION_PATTERN.test(message)) {
+    const userMessage = visible
+      ? `${BRAND}correction detected — prompting aide_remember`
+      : undefined;
     emitAdditionalContext(
       'UserPromptSubmit',
-      `BEFORE doing anything else, store via aide_remember (layer: preferences or technical, source: hook). ${FALLBACK}`,
+      `BEFORE doing anything else, store via aide_remember (or aide_update if an existing memory needs revision) — layer: preferences or technical, source: hook. ${FALLBACK}`,
+      userMessage,
     );
     writeCorrectionPending(projectRoot, sessionId, 'correction');
     return;
   }
 
   if (DECISION_PATTERN.test(message)) {
+    const userMessage = visible
+      ? `${BRAND}decision detected — prompting aide_remember`
+      : undefined;
     emitAdditionalContext(
       'UserPromptSubmit',
-      `BEFORE doing anything else, store via aide_remember (layer: area_context or technical, source: hook). ${FALLBACK}`,
+      `BEFORE doing anything else, store via aide_remember (or aide_update if an existing memory needs revision) — layer: area_context or technical, source: hook. ${FALLBACK}`,
+      userMessage,
     );
     writeCorrectionPending(projectRoot, sessionId, 'decision');
     return;
   }
 
   if (PREFERENCE_PATTERN.test(message)) {
+    const userMessage = visible
+      ? `${BRAND}preference detected — prompting aide_remember`
+      : undefined;
     emitAdditionalContext(
       'UserPromptSubmit',
-      `BEFORE doing anything else, store via aide_remember (layer: preferences, source: hook). ${FALLBACK}`,
+      `BEFORE doing anything else, store via aide_remember (or aide_update if an existing memory needs revision) — layer: preferences, source: hook. ${FALLBACK}`,
+      userMessage,
     );
     writeCorrectionPending(projectRoot, sessionId, 'preference');
     return;
@@ -422,7 +515,10 @@ export async function trackRecallPost(input: HookInput): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_PROMPT =
-  'Any decisions, technical constraints, preferences, or guidelines worth persisting? Store in the right place — aide_remember for cross-session context, relevant project docs for plans and decisions. If nothing, stop.';
+  'Any decisions, technical constraints, preferences, or guidelines worth persisting? Call aide_remember (or aide_update if an existing memory needs revision) — cross-session context goes via these tools; plans and decisions go in project docs. If nothing, stop.';
+
+const CORRECTION_PENDING_PROMPT =
+  "A correction from this turn wasn't stored. Call aide_remember (or aide_update if an existing memory needs revision) for it. Also: any decisions, technical constraints, preferences, or guidelines worth persisting? Same tools — aide_remember / aide_update for cross-session context, project docs for plans and decisions. If nothing, stop.";
 
 export async function stop(input: HookInput): Promise<void> {
   if (input.stop_hook_active) return;
@@ -434,12 +530,15 @@ export async function stop(input: HookInput): Promise<void> {
   const newCount = currentCount + 1;
   writeStopCount(projectRoot, sessionId, newCount);
 
+  const visible = isVisible(projectRoot);
+
   // Correction-pending flag always blocks, regardless of interval.
   if (hasCorrectionPending(projectRoot, sessionId)) {
     clearCorrectionPending(projectRoot, sessionId);
-    emitBlockDecision(
-      "A correction from this turn wasn't stored. Call aide_remember for it. Also: any decisions, technical constraints, preferences, or guidelines worth persisting? Store in the right place — aide_remember for cross-session context, relevant project docs for plans and decisions. If nothing, stop.",
-    );
+    const userMessage = visible
+      ? `${BRAND}correction from this turn was not saved — prompting aide_remember`
+      : undefined;
+    emitBlockDecision(CORRECTION_PENDING_PROMPT, userMessage);
     return;
   }
 
@@ -473,7 +572,10 @@ export async function stop(input: HookInput): Promise<void> {
   }
 
   if (shouldBlock) {
-    emitBlockDecision(DEFAULT_PROMPT);
+    const userMessage = visible
+      ? `${BRAND}checkpoint — prompting aide_remember for anything critical (expected)`
+      : undefined;
+    emitBlockDecision(DEFAULT_PROMPT, userMessage);
   }
   // Non-block turns: silent (agent has proactive saving rule in rules file).
 }
@@ -634,10 +736,26 @@ export async function sessionStart(input: HookInput): Promise<void> {
     mergeTrackedIds(projectRoot, sessionId, allInjectedIds.map(String));
   }
 
-  // SessionStart historically emitted plain text to stdout, not the JSON
-  // additionalContext envelope, because Claude Code's session-start hook reads
-  // raw stdout as the initial context injection. Preserve that contract.
-  process.stdout.write(output);
+  // Emit via JSON envelope so we can attach a user-facing systemMessage line
+  // alongside the additionalContext Claude consumes. Claude Code accepts both
+  // plain stdout and JSON { hookSpecificOutput.additionalContext } for
+  // SessionStart (per hooks docs); switching to JSON lets us surface
+  // "aide-memory · injected N memories ..." to the user when hooks.visible
+  // is true.
+  const visible = isVisible(projectRoot);
+  const totalInjected = allInjectedIds.length;
+  const userMessage = visible && totalInjected > 0
+    ? `${BRAND}injected ${totalInjected} ${totalInjected === 1 ? 'memory' : 'memories'} at session start`
+    : undefined;
+
+  const payload: Record<string, unknown> = {
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext: output,
+    },
+  };
+  if (userMessage) payload.systemMessage = userMessage;
+  process.stdout.write(JSON.stringify(payload, null, 2));
 }
 
 // ---------------------------------------------------------------------------

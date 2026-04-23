@@ -43,9 +43,15 @@ export function computeScopedForPath(
   filePath: string,
   projectRoot?: string,
 ): ScopedForPath {
+  // Default aligned with `scripts/hooks/defaults.json` (value: 1). Prior
+  // fallback of 2 was the pre-0.4.3 default — now 1 per memory #318 (flat
+  // projects like Next.js `pages/**`, SvelteKit `routes/**` would silently
+  // miss all per-file recall at depth 2 because their natural feature
+  // scopes are depth 1). Tests that need depth-2 semantics pass
+  // `{ minScopeDepth: 2 }` explicitly.
   const minScopeDepth = projectRoot
-    ? Number(getSetting(projectRoot, 'recall.minScopeDepth') ?? 2)
-    : 2;
+    ? Number(getSetting(projectRoot, 'recall.minScopeDepth') ?? 1)
+    : 1;
   const matching = memories.filter(m => {
     // Project-wide memories are NEVER scoped-for-blocking.
     if (!m.scope || m.scope === 'project') return false;
@@ -186,7 +192,10 @@ export function scopeMatchesPath(
   // single-segment scopes also matched; setting to 3+ enforces stricter
   // scoping.
   if (options?.focused && isDescendant) {
-    const minDepth = options.minScopeDepth ?? 2;
+    // Default 1 matches `scripts/hooks/defaults.json` — see the
+    // computeScopedForPath comment for rationale (flat-project shape
+    // compatibility). Callers pass higher values explicitly.
+    const minDepth = options.minScopeDepth ?? 1;
     const scopeDepth = scopeBase.split('/').length;
     if (scopeDepth < minDepth) {
       return false;
@@ -241,9 +250,15 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
     ? (getSetting<number>(projectRoot, 'recall.layerDiversityMinLimit') ?? 5)
     : 5;
   const limit = query.limit ?? configuredLimit ?? DEFAULT_LIMIT;
+  // Default aligned with `scripts/hooks/defaults.json` (value: 1). Prior
+  // fallback of 2 was the pre-0.4.3 default — now 1 per memory #318 (flat
+  // projects like Next.js `pages/**`, SvelteKit `routes/**` would silently
+  // miss all per-file recall at depth 2 because their natural feature
+  // scopes are depth 1). Tests that need depth-2 semantics pass
+  // `{ minScopeDepth: 2 }` explicitly.
   const minScopeDepth = projectRoot
-    ? Number(getSetting(projectRoot, 'recall.minScopeDepth') ?? 2)
-    : 2;
+    ? Number(getSetting(projectRoot, 'recall.minScopeDepth') ?? 1)
+    : 1;
 
   // No status filter — all memories in the store are active
   const listOptions: { contributor?: string } = {};

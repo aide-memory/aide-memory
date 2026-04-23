@@ -124,15 +124,55 @@ The directory trigger (block on first file read in a new directory) was removed 
 - `--scan` was removed (see "Deferred: Auto-scan for Codebase Pattern Discovery" below).
 - Onboarding now uses `aide_import` against existing CLAUDE.md / README / docs.
 
-### UX Exploration Session
-- Collect all hook output samples (block, soft, silent, stop, precompact)
-- Compare labels/rendering across sessions
-- Determine what can be fixed vs Claude Code platform limitation
-- Stop hook "error" label
-- hookSpecificOutput only valid for PreToolUse/UserPromptSubmit/PostToolUse
-- Cursor compaction behavior investigation
-- Config mapping to Cursor's equivalent system
-- Audit hook usage patterns (are blocking/flag patterns correct practice?)
+### ~~UX Exploration Session~~ -- DONE (Apr 22 2026)
+- Ran empirical fixture tests against Claude Code 2.1.117 (stored under `/tmp/aide-ux-test/` during the session, since removed)
+- **Findings captured in memories** #175 (original asks), #300 (platform mechanisms), #303 (exit-code rules), #308 (empirical renders), #310 (blocking-error label hardcoded — binary decompile confirmed), #316 (final design), #320 (doc transparency requirement)
+- **Stop hook "error" label**: platform-resolved in current Claude Code — default renders as `Stop hook feedback:` (soft). No AIDE change needed.
+- **PreToolUse "blocking error" label**: hardcoded in Claude Code TUI, cannot override via any JSON field. Confirmed across legacy `decision:"block"` and modern `hookSpecificOutput.permissionDecision:"deny"` shapes — same label. Docs now call this out explicitly (see aide-memory-web FAQ).
+- **Soft-block visibility**: shipped via `systemMessage` field in hook JSON output. Every visible event now leads with `aide-memory · ...` so users see what's happening. Gated by new `hooks.visible` config (default `true`). See "What Shipped in Hook Visibility Fast-Follow" section below.
+- **Cursor compaction behavior** / **Config mapping to Cursor's equivalent system** / **Audit hook usage patterns** — deferred to separate UX exploration (not this fast-follow).
+
+### What Shipped in Hook Visibility Fast-Follow (Apr 22 2026)
+- New `hooks.visible` config (default `true`) — single global toggle for user-facing systemMessage output. Flipping to `false` hides all `aide-memory · ...` lines; hooks still function (additionalContext + block enforcement unchanged).
+- `systemMessage` wired on soft-inject paths: pre-read-recall, pre-edit-recall, pre-search-nudge, detect-correction, session-start-clear
+- `systemMessage` wired on hard-block paths: pre-read-recall (block branch), pre-edit-recall (block branch), stop-remember (correction-pending + schedule branches)
+- Agent-facing reason text updated everywhere `aide_remember` was prompted: now mentions `(or aide_update if an existing memory needs revision)` alongside — both in handlers.ts and all rules templates (claude-code, codex, copilot, cursor, windsurf)
+- `FALLBACK` message updated to reflect both tools
+- SessionStart switched from plain-stdout emit to JSON envelope so systemMessage can attach
+- New unit tests (`src/memory/__tests__/hooks-visibility.test.ts`, 12 tests) + behavior test in `all-configs-behavior.test.sh`
+- All 677 existing tests continue passing
+
+### ~~Search Tools Coverage — post-search-check hook~~ (Phase 1 FOLLOW-UP, deferred)
+- Idea: after Grep/Glob runs, if aide_search was nudged but not called, emit systemMessage reminder (`aide-memory · aide_search not used — N memories may be relevant for "{term}"`)
+- Needs: new PostToolUse:Grep/Glob hook file + handler + pending-cache tracking
+- Deferred from this fast-follow because requires new hook infrastructure; current pre-search-nudge visibility covers the common case (user sees the nudge fired)
+
+### Config hot-reload verification (Phase 1 FOLLOW-UP, investigation)
+- User reported during Apr 22 validation that setting `memories.softening.threshold` mid-session did not appear to take effect for the next hook fire — required restarting Claude Code to see the change.
+- Expected behavior: each hook invocation is a fresh node process that reads `.aide/config.json` via `getSetting()` on every call. No in-process caching. Config changes SHOULD take effect immediately on next hook fire.
+- **Status unclear** — could be: (a) user's config write didn't land (stale state), (b) Claude Code caches some state between hook fires, (c) the config CLI wrote to a different path than the hook reads from.
+- **Investigation:** reproduce by `aide-memory config set <key> <value>` mid-session, then immediately trigger the hook path that reads that key. Compare vs a fresh restart. If caching is confirmed, document workaround (restart) and/or add live-reload signal.
+- **Related:** drift-repair mechanism (`resyncDerivedArtifacts`) already watches `.aide/config.json` mtime and re-syncs `.ignore` — same watcher could trigger a broader config re-read if we find any caching.
+
+### Grep/Glob hook rendering verification (Phase 1 FOLLOW-UP, investigation)
+- User reported during Apr 22 validation that pre-search-nudge's `systemMessage` line didn't appear inline under Grep tool calls — despite the hook firing correctly (confirmed via direct smoke test; output contains systemMessage).
+- Hypothesis: Claude Code collapses PreToolUse output for Grep/Glob into the `(ctrl+o to expand)` section, unlike Read/Edit where systemMessage renders inline below the tool call.
+- **Investigation:** reproduce in a clean scratch session, ctrl+o expand the Grep tool output, verify the systemMessage is inside the expanded view. If yes — no code fix needed, just doc the behavior in README.md scenario 5. If no — hook wiring issue to debug.
+
+### Bash-grep fallback coverage for pre-search-nudge (Phase 1 FOLLOW-UP — ELEVATED PRIORITY)
+- User reported during Apr 22 validation: when asking Claude to "use the Grep tool to find 'token'", Claude responded with "The Grep tool isn't available in this session — it wasn't in the deferred tools list." Claude fell back to Bash+grep. Our pre-search-nudge hook is wired only on `Grep|Glob` matchers so it never fires.
+- **This is more than "Claude sometimes prefers Bash"** — in Claude Code 2.1.118 sessions, Grep appears to be a deferred tool that isn't loaded by default. Unless Claude explicitly fetches it via ToolSearch, Bash(grep) is the only search path available. Our matcher misses most/all Claude-initiated code searches in practice.
+- Scope options:
+  1. Extend matcher to `Bash` with command-content filter — parse grep/rg/ripgrep/find invocations out of the bash command, extract search term, fire same nudge logic. Fiddly (quoted args, flags, pipelines) but doable.
+  2. Anthropic FR: make `Grep` a default-loaded tool (not deferred), OR provide a unified "search" event matcher that catches both Grep tool and Bash-grep.
+  3. In AIDE's rules file (`.claude/rules/aide-memory.md`), instruct the agent to prefer `aide_search` + explicit Grep tool over Bash+grep for codebase search. Relies on agent compliance.
+- Impact: pre-search-nudge is effectively dead in current Claude Code versions without this fix. A user's `aide_search` opportunities go unsurfaced whenever they ask for code search.
+
+### ~~Auto-Inject Recall Mode (Option G)~~ (Phase 1 FOLLOW-UP, separate spec)
+- Architectural alternative to agent-driven recall: hook queries SQLite directly and emits memory bodies as additionalContext, bypassing the "call aide_recall" step and avoiding the hardcoded PreToolUse "blocking error" label entirely
+- Opt-in via new `recall.mode: "agent" | "autoInject"` config (default `"agent"` preserves current behavior)
+- Full design: `docs/specs/PHASE_1_FOLLOWUP_AUTO_INJECT_RECALL.md`
+- Deferred because it changes the agent-driven pattern that's core to current aide-memory UX — deserves dedicated validation session before shipping
 
 ### Context Usage Detection — Investigate for Pre-Compaction Saves
 - Claude Code's `/context` command shows exact token usage (e.g., 848k/1m = 85%)
@@ -207,6 +247,10 @@ These scenarios validate the ID-based blocking system that replaced block-once-t
 | IDB-7 | After SessionStart injection, read file where scoped IDs partially covered | BLOCK with ID message -- only IDs not injected at session start |
 | IDB-8 | After compact/clear/resume, re-read previously recalled file | BLOCK -- tracking cleared, IDs reset |
 | IDB-9 | aide_recall({ids: [specific IDs]}) | Returns exact memories by ID, those IDs tracked as recalled |
+| IDB-10 | aide_recall({ids: [...]}) followed by re-read of same file with a NEW memory added to the scope mid-session | SOFT on re-read — self-track-on-fire (commit b558f93) wrote file path on first hook fire, so `encountered=true` routes to soft even when the new memory is missing. Verifies the "path-tracked regardless of aide_recall shape" invariant. |
+| IDB-11 | aide_recall({ids: [...]}) followed by read of a DIFFERENT file in the same scope (never directly read) | HARD — the other file is a fresh path (encountered=false). Scope-level encountered was considered and reverted (commit 7cc56b8) as over-generalizing with broad scopes. Fresh-file hard-block is the conservative default per memory #324. |
+| IDB-12 | `minScopeDepth=1` (default) + memory scoped `src/**` + read any file under src/ | HARD — src/** (depth 1) qualifies under default minScopeDepth=1 (memory #318). Validates flat-project compatibility. |
+| IDB-13 | `minScopeDepth=2` override + memory scoped `src/**` + read file under src/ | SILENT — src/** excluded from per-file recall; memory surfaces at SessionStart only. Validates user opt-in-strict behavior. |
 
 ### Remaining:
 - ~~A2: Blocking permutations (block-once-then-soft, directory fix)~~ REPLACED by IDB-1 through IDB-9 above

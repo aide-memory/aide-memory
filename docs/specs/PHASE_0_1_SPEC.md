@@ -20,7 +20,26 @@
 | Sprint 3 | **COMPLETE** | P1.10 Sync, P1.12+P1.13 Analytics, P1.14+P1.15 Init+Scan | All merged. 478 tests. Sync: 20 tests, conflict detection. Analytics: 17 tests. Init: 11 tests, Scan: 8 tests. |
 | Sprint 4 | **COMPLETE** | P1.4 Embeddings, P1.16 Package | All merged. 533 tests. Embeddings: Transformers + Ollama backends, 34 tests. Package: npm setup, 21 tests. |
 | Sprint 5 | **COMPLETE** | P1.20 Update, mcp-smoke fix, integration polish | All merged. **544 tests passing, 0 controllable failures.** 4 remaining failures are external service connections (ConPort/mcp-memory-service). TypeScript clean. |
+| Fast-follow: Hook Visibility | **COMPLETE (Apr 22 2026)** | `hooks.visible` config, systemMessage on 5 hooks, reason-text unchanged, aide_update prompts, Option G spec | Branch: `feature/phase-1-hook-visibility`. 677 tests passing + 12 new + shell behavior test. Details below. |
 | Phase 0 | MANUAL | P0.1-P0.6 Domain, Legal, Repo, npm, Landing, Docs | Requires human action |
+
+### Fast-follow: Hook Visibility (Apr 22 2026) — What Shipped vs What Will Be Follow-Ups
+
+**Shipped on `feature/phase-1-hook-visibility`:**
+- New `hooks.visible` config (default `true`) — single global toggle. Flipping to `false` hides all user-facing `aide-memory · ...` systemMessage lines; hooks still function (agent behavior + block enforcement unchanged).
+- `systemMessage` wired on soft-inject paths: `pre-read-recall`, `pre-edit-recall`, `pre-search-nudge`, `detect-correction`, `session-start-clear`
+- `systemMessage` wired on hard-block paths: `pre-read-recall` (block branch), `pre-edit-recall` (block branch), `stop-remember` (correction-pending + schedule)
+- Every visible event leads with `aide-memory · ...` for brand consistency + mentions the relevant function name (`aide_recall` / `aide_search` / `aide_remember`)
+- Hard-block systemMessages include `(expected flow)` / `(expected)` reassurance to counteract Claude Code's hardcoded "PreToolUse:X hook returned blocking error" label (confirmed unfixable via binary decompile — mem #310)
+- Agent-facing reason text updated everywhere `aide_remember` is prompted: now says `(or aide_update if an existing memory needs revision)` — 6 handlers.ts locations + all 5 rules templates (claude-code, codex, copilot, cursor, windsurf) + `.claude/rules/aide-memory.md`
+- `SessionStart` switched from plain-stdout emit to JSON envelope to carry `systemMessage`
+
+**Deferred to Phase 1 follow-ups:**
+- **`recall.mode: "agent" | "autoInject"` (Option G)** — architectural alternative that bypasses the PreToolUse "blocking error" label entirely by having hooks inject memory bodies directly instead of prompting aide_recall. Full design at `docs/specs/PHASE_1_FOLLOWUP_AUTO_INJECT_RECALL.md`. Default will be `"agent"` when shipped (current behavior preserved).
+- **post-search-check hook** — PostToolUse:Grep/Glob emits `aide-memory · aide_search not used — N memories may be relevant` if aide_search was skipped after the pre-search nudge. Needs new hook file + cache-file tracking.
+- **Anthropic feature request** — request a non-alarming label option for intentional PreToolUse deny decisions (no FR exists today, we'd be first).
+
+**Platform transparency (per mem #320):** user-facing docs (external README + FAQ) explicitly explain that "PreToolUse:Read hook returned blocking error" is a Claude Code platform-rendered label that aide-memory cannot suppress, and list all configurable levers users have (`hooks.visible`, `hooks.read.maxBlocks`, `hooks.edit.maxBlocks`, `hooks.search.mode`, `hooks.correction.enabled`, `hooks.precompact.mode`, `memories.softening.threshold`, future `recall.mode`).
 
 ### Manual Intervention Guide
 

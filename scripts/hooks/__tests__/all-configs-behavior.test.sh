@@ -213,6 +213,42 @@ test_hooks_correction_enabled() {
   fi
 }
 
+# ---- 6b. hooks.visible ----------------------------------------------------
+test_hooks_visible() {
+  local key=hooks.visible
+  local dir
+  dir=$(new_project)
+
+  # true: systemMessage included in hook output
+  set_cfg "$dir" $key true
+  local o_true
+  o_true=$(fire_hook pre-prompt "{\"session_id\":\"v1\",\"cwd\":\"$dir\",\"prompt\":\"no dont do that use X instead\"}")
+
+  # false: systemMessage omitted; additionalContext still emitted
+  set_cfg "$dir" $key false
+  local o_false
+  o_false=$(fire_hook pre-prompt "{\"session_id\":\"v2\",\"cwd\":\"$dir\",\"prompt\":\"no dont do that use X instead\"}")
+
+  rm -rf "$dir"
+
+  local true_has_sysmsg=false false_has_sysmsg=false
+  echo "$o_true" | grep -q '"systemMessage"' && true_has_sysmsg=true
+  echo "$o_false" | grep -q '"systemMessage"' && false_has_sysmsg=true
+
+  local true_has_ctx=false false_has_ctx=false
+  echo "$o_true" | grep -q '"additionalContext"' && true_has_ctx=true
+  echo "$o_false" | grep -q '"additionalContext"' && false_has_ctx=true
+
+  if [ "$true_has_sysmsg" = "true" ] \
+     && [ "$false_has_sysmsg" = "false" ] \
+     && [ "$true_has_ctx" = "true" ] \
+     && [ "$false_has_ctx" = "true" ]; then
+    record_pass "$key" "true emits systemMessage; false omits it; additionalContext always emitted"
+  else
+    record_fail "$key" "true_sysmsg=$true_has_sysmsg false_sysmsg=$false_has_sysmsg true_ctx=$true_has_ctx false_ctx=$false_has_ctx"
+  fi
+}
+
 # ---- 6. hooks.precompact.mode ---------------------------------------------
 test_hooks_precompact_mode() {
   local key=hooks.precompact.mode
@@ -671,6 +707,7 @@ test_hooks_edit_maxBlocks
 test_hooks_stop_schedule
 test_hooks_search_mode
 test_hooks_correction_enabled
+test_hooks_visible
 test_hooks_precompact_mode
 test_recall_limit
 test_recall_diversity
