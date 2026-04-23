@@ -159,11 +159,14 @@ The directory trigger (block on first file read in a new directory) was removed 
 - Hypothesis: Claude Code collapses PreToolUse output for Grep/Glob into the `(ctrl+o to expand)` section, unlike Read/Edit where systemMessage renders inline below the tool call.
 - **Investigation:** reproduce in a clean scratch session, ctrl+o expand the Grep tool output, verify the systemMessage is inside the expanded view. If yes — no code fix needed, just doc the behavior in README.md scenario 5. If no — hook wiring issue to debug.
 
-### Bash-grep fallback coverage for pre-search-nudge (Phase 1 FOLLOW-UP)
-- User reported during Apr 22 validation: when asking Claude to "Search for 'token'", Claude selected `Bash(grep -rni "token" ...)` instead of the `Grep` tool. Our pre-search-nudge hook is wired only on `Grep|Glob` matchers so the Bash-grep invocation slips past — no nudge, no systemMessage.
-- Scope: extend the pre-search path to also match `Bash` with a command-content filter (grep / rg / ripgrep / find invocations), parse the search term out, and fire the same nudge logic. Non-trivial because bash command parsing is fiddly (quoted args, flags, piped commands).
-- Alternative: Anthropic-side improvement — make `Grep` tool the canonical path for all search, so Claude doesn't fall back to Bash+grep. File FR.
-- Impact: pre-search-nudge only covers some Claude-initiated searches today. For users who notice their `aide_search` opportunities aren't being surfaced when they ask for code search, this is the most likely cause.
+### Bash-grep fallback coverage for pre-search-nudge (Phase 1 FOLLOW-UP — ELEVATED PRIORITY)
+- User reported during Apr 22 validation: when asking Claude to "use the Grep tool to find 'token'", Claude responded with "The Grep tool isn't available in this session — it wasn't in the deferred tools list." Claude fell back to Bash+grep. Our pre-search-nudge hook is wired only on `Grep|Glob` matchers so it never fires.
+- **This is more than "Claude sometimes prefers Bash"** — in Claude Code 2.1.118 sessions, Grep appears to be a deferred tool that isn't loaded by default. Unless Claude explicitly fetches it via ToolSearch, Bash(grep) is the only search path available. Our matcher misses most/all Claude-initiated code searches in practice.
+- Scope options:
+  1. Extend matcher to `Bash` with command-content filter — parse grep/rg/ripgrep/find invocations out of the bash command, extract search term, fire same nudge logic. Fiddly (quoted args, flags, pipelines) but doable.
+  2. Anthropic FR: make `Grep` a default-loaded tool (not deferred), OR provide a unified "search" event matcher that catches both Grep tool and Bash-grep.
+  3. In AIDE's rules file (`.claude/rules/aide-memory.md`), instruct the agent to prefer `aide_search` + explicit Grep tool over Bash+grep for codebase search. Relies on agent compliance.
+- Impact: pre-search-nudge is effectively dead in current Claude Code versions without this fix. A user's `aide_search` opportunities go unsurfaced whenever they ask for code search.
 
 ### ~~Auto-Inject Recall Mode (Option G)~~ (Phase 1 FOLLOW-UP, separate spec)
 - Architectural alternative to agent-driven recall: hook queries SQLite directly and emits memory bodies as additionalContext, bypassing the "call aide_recall" step and avoiding the hardcoded PreToolUse "blocking error" label entirely
