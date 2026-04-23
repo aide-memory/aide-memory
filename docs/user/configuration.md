@@ -67,6 +67,7 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
 | `hooks.correction.enabled` | boolean | `true` | Detect correction phrasings in user messages (`no, use X instead`, etc.) and nudge `aide_remember`. |
 | `hooks.precompact.mode` | string | `"cleanup"` | `"off"` preserves tracking files across `/compact`; `"cleanup"` clears them so post-compact turns re-block cleanly. |
 | `hooks.stop.schedule` | array | _(see below)_ | Phased interval for Stop hook reflection nudge. Default ramps 3→5→10 turns. |
+| `hooks.visible` | boolean | `true` | Surface user-facing `aide-memory · …` systemMessage lines when hooks fire (soft recalls, correction detected, session-start injection, Stop checkpoints). Default `true` so users can see what aide-memory is doing. Set `false` to hide all aide-memory systemMessages — hooks still function (context injection + block enforcement unchanged). Does not affect what Claude sees. |
 
 ### Recall + scope matching
 
@@ -361,7 +362,7 @@ Setting values `2+` doesn't produce different behavior from `1` in practice — 
 | `embeddings.model` | string | `"auto"` | Model name for the active backend. `"auto"` uses backend defaults (`Xenova/bge-small-en-v1.5` for transformers, `nomic-embed-text` for ollama). Override with any model the backend supports. |
 | `updates.check` | boolean | `true` | Check for new npm versions after each command (non-blocking). |
 
-> **Note on removed keys (0.4.3):** `capture.*` family and `nudge.visible` were previously listed as valid but had no runtime effect. They're removed from the valid-keys list as of 0.4.3. If you had them in your config, they're now silently ignored. Replace `capture.hooks.preToolUse=false` with `hooks.read.maxBlocks=0` + `hooks.edit.maxBlocks=0`; replace `capture.hooks.stop=false` with `hooks.stop.schedule=[{"every":100}]` (effectively off); replace `capture.hooks.userPromptSubmit=false` with `hooks.correction.enabled=false`. `nudge.visible` will return (with real wiring) when the hook-output visibility UX lands.
+> **Note on removed keys (0.4.3):** `capture.*` family and `nudge.visible` were previously listed as valid but had no runtime effect. They're removed from the valid-keys list as of 0.4.3. If you had them in your config, they're now silently ignored. Replace `capture.hooks.preToolUse=false` with `hooks.read.maxBlocks=0` + `hooks.edit.maxBlocks=0`; replace `capture.hooks.stop=false` with `hooks.stop.schedule=[{"every":100}]` (effectively off); replace `capture.hooks.userPromptSubmit=false` with `hooks.correction.enabled=false`. The successor to `nudge.visible` has landed as **`hooks.visible`** (see the Hook behavior table above) — if you had `nudge.visible` set previously, migrate to `hooks.visible` with the same value.
 
 ## Reading config
 
