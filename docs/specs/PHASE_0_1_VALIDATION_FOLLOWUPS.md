@@ -223,14 +223,23 @@ All 9 original items implemented. Items 2 and 3 replaced by ID-based blocking (i
 
 ## VALIDATION SCENARIOS (remaining)
 
+### Manual walkthrough for hook-visibility fast-follow (PR #1)
+
+> Step-by-step scenarios with exact prompts + expected renders live in
+> **[docs/specs/VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md)**.
+> Covers scenarios 1-13 (including IDB-10 through IDB-13 added in PR #1)
+> with a cross-reference table mapping each to the A-G letter scenarios and
+> IDB matrix below. Moved into the repo so the walkthrough survives fixture
+> teardown.
+
 ### Completed (A-F):
 - A: Hook + Recall ✅
-- B: Search ✅
-- C: Correction ✅
+- B: Search ✅ (re-verified with systemMessage visibility in PR #1)
+- C: Correction ✅ (re-verified with systemMessage visibility in PR #1)
 - D: Compact ✅
 - E: Cross-session persistence ✅
 - F0: Empty project ✅
-- F: Softening (<10 mems) ✅
+- F: Softening (<10 mems) ✅ (manual force-soft variant at threshold=100 in Scenario 3b of the walkthrough)
 
 ### NEW: ID-Based Blocking Validation Scenarios
 
@@ -252,6 +261,8 @@ These scenarios validate the ID-based blocking system that replaced block-once-t
 | IDB-12 | `minScopeDepth=1` (default) + memory scoped `src/**` + read any file under src/ | HARD — src/** (depth 1) qualifies under default minScopeDepth=1 (memory #318). Validates flat-project compatibility. |
 | IDB-13 | `minScopeDepth=2` override + memory scoped `src/**` + read file under src/ | SILENT — src/** excluded from per-file recall; memory surfaces at SessionStart only. Validates user opt-in-strict behavior. |
 
+> All IDB scenarios have step-by-step walkthroughs in **[docs/specs/VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md)**.
+
 ### Remaining:
 - ~~A2: Blocking permutations (block-once-then-soft, directory fix)~~ REPLACED by IDB-1 through IDB-9 above
 - G: Concurrent sessions
@@ -259,10 +270,10 @@ These scenarios validate the ID-based blocking system that replaced block-once-t
 - I: .ignore grep exclusion
 - J: MCP server unavailable / graceful degradation
 - K: Plan persistence across sessions
-- L: Multiple corrections in one session
+- L: Multiple corrections in one session — partially exercised by Scenario 7 in [VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md) (correction-pending branch of Stop hook)
 - M: Scope exclusion precision
-- N: SessionStart injection verification
-- O: Dynamic stop hook (updated for 3->5->10)
+- N: SessionStart injection verification — manual smoke via Scenario 1 in [VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md)
+- O: Dynamic stop hook (updated for 3->5->10) — partially exercised by Scenario 8 in [VALIDATION_HOOK_VISIBILITY.md](./VALIDATION_HOOK_VISIBILITY.md)
 - U1: Pre-seeded context (without vs with)
 - U2: Correction learning loop
 - U3: Behavioral preferences
