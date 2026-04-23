@@ -41,6 +41,16 @@ Note: Cursor uses `agent_message` for hook responses rather than `additionalCont
 
 **Do NOT store:** obvious facts readable from code, temporary state, secrets, trivial observations.
 
+## When to call aide_search
+
+**Prefer `aide_search` FIRST for concept/convention/decision searches** — not just for specific strings. Stored memories often answer "how do we X?" questions directly.
+
+Examples: "where do we handle tokens?" → `aide_search({keyword: "token"})` BEFORE Grep/Bash. "API response pattern?" → aide_search first. Any search about a human concept (auth, errors, config, styling, etc.).
+
+Fall back to code-level search (Grep/Bash+grep/rg) ONLY for pure syntactic lookups (exact function name, specific literal) or when aide_search returns nothing relevant.
+
+This applies whether the Grep tool is natively available or you fall back to Bash+grep — run `aide_search` first regardless.
+
 ## When to call aide_update
 
 - A stored memory's content has changed (convention evolved, code moved)

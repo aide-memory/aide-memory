@@ -43,6 +43,23 @@ As conversations grow long, proactively call `aide_remember` (or `aide_update` i
 
 **Do NOT store:** obvious facts readable from the code, temporary/session-specific state, secrets or credentials, trivial observations (e.g., "this file uses TypeScript").
 
+## When to call aide_search
+
+**Prefer `aide_search` as your FIRST step for any codebase search that's about a concept, convention, decision, or pattern** — not just a specific string. Stored memories often already have the answer, and surfacing them first avoids grep/find dumps that miss the stored context.
+
+Examples:
+- "Where do we handle auth tokens?" → `aide_search({keyword: "token"})` BEFORE Grep/Glob/Bash
+- "What's the API response convention?" → `aide_search({keyword: "api response"})` FIRST
+- "How do we validate inputs?" → aide_search first
+- Any search driven by a human concept (auth, errors, migrations, config, styling, etc.)
+
+Fall back to code-level search tools (Grep, Glob, Bash+grep, rg) ONLY after aide_search:
+- For pure syntactic lookups (exact function name, specific string literal)
+- When aide_search returns nothing relevant for a concept-level query
+- When the user explicitly asks for a code search, not a knowledge search
+
+This matters whether the agent has the native Grep tool loaded or falls back to Bash+grep — `aide_search` should run first regardless.
+
 ## When to call aide_update
 
 - A stored memory's content has changed (e.g., a convention evolved)

@@ -25,6 +25,8 @@ Set `scope` to a glob pattern for the code area (e.g., `src/auth/**`). Omit for 
 
 Set `contributor` to `{{contributor}}`. Set `tool` to `"copilot"` in generated_by.
 
+Prefer `aide_search` FIRST for any concept/convention/decision search (e.g., "where do we handle tokens?", "api response pattern?") — stored memories often have the answer. Fall back to Grep/Bash+grep only for syntactic lookups or when aide_search is empty.
+
 Use `aide_update` when stored information changes. Use `aide_forget` to delete wrong information or archive outdated decisions.
 
 Memory management should be invisible to the user.
