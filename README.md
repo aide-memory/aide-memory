@@ -19,7 +19,7 @@ Two minutes. Zero config. No Docker, no cloud, no API keys.
 - **Git is the sync** -- memories are files, files are committed, git syncs them. No separate sync mechanism needed.
 - **Structured layers** -- preferences, technical, area context, guidelines. Recalled in priority order so the agent gets the most important context first.
 - **FTS5 search** -- BM25-ranked full-text search across all memories. Sub-millisecond path lookups.
-- **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both.
+- **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both. Rule templates also ship for Codex, Copilot, and Windsurf; see [docs/user/supported-editors.md](docs/user/supported-editors.md) for the full capability matrix.
 
 ---
 
@@ -226,18 +226,35 @@ All three tools solve the same core problem: AI agents forget between sessions. 
 
 ## Editor Setup
 
-### Claude Code
+### Claude Code (reference implementation)
 
 `aide-memory init` automatically:
 - Writes `.claude/rules/aide-memory.md` (agent instructions)
-- Configures hooks in Claude Code settings
-- Sets up the MCP server
+- Configures hooks in `.claude/settings.json` (6 event types)
+- Sets up the MCP server in `.mcp.json`
 
-### Cursor
+Full UX walkthrough: [docs/user/editors/claude-code.md](docs/user/editors/claude-code.md).
+
+### Cursor (~80% parity with Claude Code, 0.5.0)
 
 `aide-memory init` automatically:
-- Writes `.cursor/rules/aide-memory.mdc` (with MDC frontmatter)
+- Writes `.cursor/rules/aide-memory.mdc` (with MDC frontmatter, auto-regenerated on memory/config changes)
+- Configures hooks in `.cursor/hooks.json`
 - Configures MCP server in `.cursor/mcp.json`
+
+Five platform-level gaps are documented — soft-nudge channel, inline
+branded chrome, sessionStart-after-compact, in-turn correction detection,
+and Glob matcher are all missing upstream. Each gap is tracked against a
+Cursor forum thread. Restart Cursor after init for MCP to load. Full
+walkthrough: [docs/user/editors/cursor.md](docs/user/editors/cursor.md).
+
+### Codex, Copilot, Windsurf
+
+Rule template ships in 0.5.0. Hook + MCP config generation at init is
+tracked as a post-0.5.0 task — see
+[docs/user/supported-editors.md](docs/user/supported-editors.md) for the
+matrix and [docs/specs/EDITOR_ONBOARDING_GUIDE.md](docs/specs/EDITOR_ONBOARDING_GUIDE.md)
+for the onboarding playbook.
 
 ---
 
@@ -280,8 +297,11 @@ See [LICENSE](LICENSE) for details.
 
 ## Documentation
 
-- [CLI Reference](docs/user/cli-reference.md) -- all 11 commands with flags, examples, and error messages
-- [MCP Tools Reference](docs/user/mcp-tools.md) -- all 7 tools with parameters and example calls
+- [Docs landing page](docs/user/index.md) -- start here
+- [Concepts](docs/user/concepts.md) -- memories, layers, scopes, hooks, MCP tools
+- [Supported editors](docs/user/supported-editors.md) -- capability matrix: Claude Code, Cursor, Codex, Copilot, Windsurf
+- [CLI Reference](docs/user/cli-reference.md) -- every command with flags, examples, and error messages
+- [MCP Tools Reference](docs/user/mcp-tools.md) -- every MCP tool with parameters and example calls
 - [Architecture Guide](docs/user/architecture.md) -- storage, hooks, recall, and sync internals
 - [Configuration Guide](docs/user/configuration.md) -- all settings with defaults
-- [FAQ](docs/user/faq.md) -- common questions and troubleshooting
+- [Troubleshooting](docs/user/troubleshooting.md) -- common issues and solutions

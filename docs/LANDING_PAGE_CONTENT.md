@@ -22,7 +22,7 @@ npx aide-memory init
 
 ### Badge
 
-Zero cloud dependencies | Local-first | Works with Claude Code and Cursor
+Zero cloud dependencies | Local-first | Works with Claude Code (reference) and Cursor (~80% parity in 0.5.0); rule templates for Codex, Copilot, Windsurf
 
 ---
 
@@ -105,7 +105,7 @@ Four layers keep memories organized: `preferences` (your coding style), `technic
 ### 6. Cross-Tool Portability
 **Icon:** shuffle / arrows
 
-Claude Code and Cursor supported out of the box. Same memories, same hooks, same MCP server. Switch tools mid-task and your context follows you.
+Claude Code is the reference adapter — every feature works there. Cursor ships at ~80% parity in 0.5.0 (with five documented gaps tied to open Cursor forum threads). Codex, Copilot, and Windsurf get rule templates today and full adapters post-0.5.0. Same memories, same MCP server, same recall across every supported editor — switch tools mid-task and your context follows. See the [Supported editors matrix](./user/supported-editors.md) for the honest feature-by-feature breakdown.
 
 ### 7. Full-Text Search
 **Icon:** search / magnifying-glass
@@ -199,7 +199,11 @@ Yes. All features are free with no limits. No usage caps, no memory count limits
 
 ### Does it work with Cursor?
 
-Yes. aide-memory supports Claude Code and Cursor out of the box. The init command writes rules files for both editors and configures the MCP server. Same memories work across both tools.
+Yes. Cursor ships in aide-memory 0.5.0 at ~80% parity with Claude Code. `aide-memory init` writes `.cursor/hooks.json`, `.cursor/mcp.json`, and a dynamically regenerated `.cursor/rules/aide-memory.mdc`. Five platform-level gaps (no soft-nudge channel, no inline branded chrome, sessionStart doesn't re-fire post-compact, correction nudges land one turn late, no Glob matcher) are documented and tracked against open Cursor forum threads — when Cursor fixes one, aide-memory upgrades. **Restart Cursor after `aide-memory init`** — Cursor has no MCP hot-reload. See [supported-editors.md](./user/supported-editors.md) for the full matrix and [editors/cursor.md](./user/editors/cursor.md) for the UX walkthrough.
+
+### What about Codex, Copilot, Windsurf?
+
+Rule templates ship in 0.5.0 — the seven MCP tools work identically to Claude Code if you add aide-memory as an MCP server manually in each editor's config. Automatic hooks + init-time MCP config generation for these editors is tracked as a post-0.5.0 onboarding task.
 
 ### Does it send data anywhere?
 

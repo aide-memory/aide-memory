@@ -19,7 +19,7 @@ Two minutes. Zero config. No Docker, no cloud, no API keys.
 - **Git is the sync** -- memories are files, files are committed, git syncs them. No separate sync mechanism needed.
 - **Structured layers** -- preferences, technical, area context, guidelines. Recalled in priority order so the agent gets the most important context first.
 - **Multi-mode search** -- keyword (BM25-ranked), semantic (local embeddings, no API keys), or auto mode that picks the best strategy. Sub-millisecond path lookups.
-- **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both.
+- **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both. Rule templates also ship for Codex, Copilot, and Windsurf; see [docs/user/supported-editors.md](./user/supported-editors.md) for the full capability matrix.
 
 ---
 
@@ -217,18 +217,36 @@ Notes:
 
 ## Editor Setup
 
-### Claude Code
+### Claude Code (reference implementation)
 
 `aide-memory init` automatically:
 - Writes `.claude/rules/aide-memory.md` (agent instructions)
-- Configures hooks in Claude Code settings
-- Sets up the MCP server
+- Configures hooks in `.claude/settings.json` (6 event types)
+- Sets up the MCP server in `.mcp.json`
 
-### Cursor
+See [user/editors/claude-code.md](./user/editors/claude-code.md) for the
+full UX walkthrough.
+
+### Cursor (~80% parity, shipping in 0.5.0)
 
 `aide-memory init` automatically:
-- Writes `.cursor/rules/aide-memory.mdc` (with MDC frontmatter)
+- Writes `.cursor/rules/aide-memory.mdc` (with MDC frontmatter,
+  auto-regenerated on memory/config changes as a staff-endorsed workaround
+  for [forum bug #158452](https://forum.cursor.com/t/sessionstart-hook-additional-context-is-never-injected-into-agents-initial-system-context/158452))
+- Configures hooks in `.cursor/hooks.json`
 - Configures MCP server in `.cursor/mcp.json`
+
+Five platform gaps are documented — no soft-nudge channel, no inline
+branded chrome, sessionStart doesn't re-fire post-compact, correction
+nudges land one turn late, no Glob matcher. Each is tracked against a
+Cursor forum thread. Restart Cursor after init for MCP to load. See
+[user/editors/cursor.md](./user/editors/cursor.md) for the full walkthrough.
+
+### Codex, Copilot, Windsurf (rule template only)
+
+Rule template ships in 0.5.0. Hook + MCP config generation at init is a
+post-0.5.0 task. See
+[user/supported-editors.md](./user/supported-editors.md) for the matrix.
 
 ---
 

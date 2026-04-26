@@ -99,3 +99,13 @@ You do not need to remember to call `aide remember` manually. The hooks make cap
 - Read [Configuration](./configuration.md) to customize behavior
 - Read [Hooks](./hooks.md) to understand or disable specific hooks
 - Import existing documentation: use `aide_import` via MCP to turn a markdown file into memories
+
+## Editor-specific setup
+
+aide-memory's in-agent experience differs per editor. See:
+
+- **[Claude Code](./editors/claude-code.md)** — reference implementation; branded chrome, soft nudges, in-turn correction detection all work natively.
+- **[Cursor](./editors/cursor.md)** — ~80% parity with documented gaps. **Restart Cursor after `init`** so the MCP server registers (Cursor has no MCP hot-reload per upstream bug [#3887](https://github.com/cursor/cursor/issues/3887)). See the Cursor doc for the full gap list + workarounds.
+- **[Codex](./editors/codex.md) · [Copilot](./editors/copilot.md) · [Windsurf](./editors/windsurf.md)** — rule-template-only in 0.5.0. Full adapters tracked as post-0.5.0 onboarding tasks.
+
+Full capability matrix across editors: [supported-editors.md](./supported-editors.md).
