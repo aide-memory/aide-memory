@@ -2,11 +2,11 @@
 
 ## TL;DR
 
-Multi-day session validated Phase 1 scenarios A–G + U1–U3 + H/J/O end-to-end, discovered bugs during validation, **fixed them in the same session rather than filing as follow-ups**, then started the manual walk through `MANUAL_E2E_VALIDATION.md` (completed steps 0 through E including an ID-stability wipe test). 14 commits on `feature/phase-1`. 660 unit tests pass, 4 bash smoke suites pass, live smoke on `/tmp/aide-e2e` confirms every fix.
+Multi-day session validated Phase 1 scenarios A–G + U1–U3 + H/J/O end-to-end, discovered bugs during validation, **fixed them in the same session rather than filing as follow-ups**, then started the manual walk through the pre-consolidation `MANUAL_E2E_VALIDATION.md` runbook (now consolidated into `docs/validation/E2E_VALIDATION.md` as of Phase C7, 2026-04-23 — completed scenarios up to E including an ID-stability wipe test). 14 commits on `feature/phase-1`. 660 unit tests pass, 4 bash smoke suites pass, live smoke on `/tmp/aide-e2e` confirms every fix.
 
 **Still to run manually:** G (concurrent sessions), K (organic plan persistence), Settings toggle, Drift-repair in fresh project, MCP-down recovery.
 
-**Cross-branch note:** `minified-publish` is landing a bundling/release change with its own `HANDOFF_MINIFIED_PUBLISH.md`. Once that merges, re-run **every scenario** — automated via the bash smoke suites + unit tests, then the manual walk from step 0 — to confirm the minified bundle doesn't regress hook paths, schema coercions, or CLI behavior. Capture the re-run results in a new section of `PHASE_1_RESULTS.md` with the post-merge commit SHA.
+**Cross-branch note:** `minified-publish` is landing a bundling/release change with its own `HANDOFF_MINIFIED_PUBLISH.md`. Once that merges, re-run **every scenario** — automated via the bash smoke suites + unit tests, then the manual walk from Scenario F0 onward — to confirm the minified bundle doesn't regress hook paths, schema coercions, or CLI behavior. Capture the re-run results as new dated rows in the per-scenario Runs tables in `docs/validation/E2E_VALIDATION.md` with the post-merge commit SHA.
 
 ---
 
@@ -128,7 +128,7 @@ Marked DONE (fix shipped in-session, not deferred):
 
 ## What's Already Validated
 
-### Earlier in this session / previous sessions (captured in `PHASE_1_RESULTS.md`)
+### Earlier in this session / previous sessions (now inlined as dated Runs rows in `docs/validation/E2E_VALIDATION.md`)
 
 | Scenario | How | When |
 |---|---|---|
@@ -152,7 +152,7 @@ Marked DONE (fix shipped in-session, not deferred):
 | Settings framework | Bash smoke | Apr 21 |
 | IDB-1..8 (ID-based blocking permutations) | Direct hook invocation + live | Apr 21 |
 
-### Manual walk this session (`MANUAL_E2E_VALIDATION.md`)
+### Manual walk this session (runbook — now consolidated into `docs/validation/E2E_VALIDATION.md`)
 
 Completed steps 0 through E:
 
@@ -172,7 +172,7 @@ Completed steps 0 through E:
 
 ## Still To Validate (manual)
 
-Pick up from `docs/validation/MANUAL_E2E_VALIDATION.md`:
+Pick up from `docs/validation/E2E_VALIDATION.md` (former runbook steps 11-17 map to Scenarios G, K, O, Settings, I, J, and housekeeping):
 
 - **Step 11 (G concurrent sessions)** — open 2nd terminal `cd /tmp/aide-e2e && claude --debug`, read a file in session B, verify independent `recalled-paths-{session_id}.txt` + independent hard block
 - **Step 12 (K plan persistence organic)** — in a session, ask agent to draft a plan for a feature (pagination), watch whether agent proactively calls `aide_remember` with `layer: area_context`, `scope: src/api/**`. Exit, restart, ask to "continue the pagination work" — verify plan surfaces. This is the one scenario nothing has fully validated yet
@@ -215,7 +215,7 @@ Any refactor that touches the release path must respect:
 The original plan was "re-run everything after `minified-publish` merges." That already happened during the release validation (see `docs/VALIDATION_MINIFIED_PUBLISH.md`). **What still needs to run in a fresh session** is:
 
 1. **Re-read this handoff + `docs/HANDOFF_MINIFIED_PUBLISH.md` + `docs/RELEASING.md`** to get current on state.
-2. **Run the pre-flight block at the top of `docs/validation/MANUAL_E2E_VALIDATION.md`** (automated tests + bash smokes + build) against the current HEAD. If any fail, fix first.
+2. **Run the pre-flight block at the top of `docs/validation/E2E_VALIDATION.md`** (automated tests + bash smokes + build) against the current HEAD. If any fail, fix first.
 3. **Pick up the manual walk** from wherever it left off — last stopping point is between step 10 (E — cross-session correction, passed) and step 11 (G — concurrent sessions, next). See "What's Already Validated" + "Still To Validate (manual)" sections in this doc.
 4. **Periodically `git fetch` + check `git log HEAD..origin/feature/phase-1`** — per memory #170, the primary worktree may receive commits during parallel release activity and you should not assume origin is a fast-forward of your local HEAD.
 
@@ -262,8 +262,7 @@ The original plan was "re-run everything after `minified-publish` merges." That 
 **Docs:**
 - `docs/specs/PHASE_0_1_SPEC.md` — Phase 1 pro-gating update, public config defaults table rewritten
 - `docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md` — 7+ new follow-ups filed, 2 marked DONE
-- `docs/validation/PHASE_1_RESULTS.md` — re-verification pass + H/O/J results
-- `docs/validation/MANUAL_E2E_VALIDATION.md` — NEW manual walk, 17 steps mapped to A-G
+- `docs/validation/E2E_VALIDATION.md` — consolidated matrix (replaces former `PHASE_1_RESULTS.md` + `MANUAL_E2E_VALIDATION.md` as of Phase C7, 2026-04-23) — scenario actions + per-tool expected + Runs tables + inline resolved issues
 - `docs/user/cli-reference.md` — `.ignore` resync timing table, reconnect `/mcp` tip
 - `README.md`, `docs/PUBLIC_README.md` — propagation note added
 - `docs/user/architecture.md`, `quick-start.md`, `troubleshooting.md` — `--scan` removed
@@ -290,8 +289,8 @@ Live `/tmp/aide-e2e` fixture has 11 memories across 4 layers and has exercised p
 
 1. **Read this doc end-to-end.**
 2. **Check if `minified-publish` has merged to `feature/phase-1` yet.** If yes: read `docs/sessions/HANDOFF_MINIFIED_PUBLISH.md` as well, then run the full re-verification per "Cross-Branch: `minified-publish` Coordination" above before continuing.
-3. **If `minified-publish` hasn't merged yet:** pick up from manual step 11 (G — concurrent sessions) in `MANUAL_E2E_VALIDATION.md`. The `/tmp/aide-e2e` fixture project is already seeded and ready.
-4. **Before shipping anything user-visible**, confirm test parity with the last recorded count (660/660 unit + all bash smokes) and verify the manual checklist items completed so far haven't regressed — diff `MANUAL_E2E_VALIDATION.md` checkboxes against the "Manual walk this session" section above.
+3. **If `minified-publish` hasn't merged yet:** pick up from Scenario G (concurrent sessions) in `docs/validation/E2E_VALIDATION.md`. The `/tmp/aide-e2e` fixture project is already seeded and ready.
+4. **Before shipping anything user-visible**, confirm test parity with the last recorded count (660/660 unit + all bash smokes) and verify the manual scenarios completed so far haven't regressed — diff the Runs tables in `docs/validation/E2E_VALIDATION.md` against the "Manual walk this session" section above.
 
 ### User preferences locked in this session
 

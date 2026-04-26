@@ -1,0 +1,23 @@
+{
+  "id": 326,
+  "uuid": "72a01d8f-938a-4657-a5ad-7a20d27ba78f",
+  "layer": "technical",
+  "what": "`recall.minScopeDepth` default aligned across codebase (Apr 23 2026, commit e9624e5 on feature/phase-1-hook-visibility).\n\n**Now consistent everywhere: default = `1`** (permissive per memory #318 — works across flat projects like Next.js `pages/**` AND src-prefixed projects).\n\n**Aligned surfaces:**\n- `scripts/hooks/defaults.json` — `\"value\": 1` ✓\n- `src/memory/recall.ts:47` — `?? 1` fallback (was `?? 2`) ✓\n- `src/memory/recall.ts:48` — test-path default `: 1` (was `: 2`) ✓\n- `src/memory/recall.ts:189` — `options.minScopeDepth ?? 1` in scopeMatchesPath (was `?? 2`) ✓\n- `docs/user/configuration.md` — table row says default `1` ✓\n- `aide-memory-web/pages/docs/faq.mdx` — new FAQ entry says default `1` ✓\n- `src/memory/__tests__/recall.test.ts` — tests that needed depth-2 semantic now pass `{ minScopeDepth: 2 }` explicitly\n\n**Tests that required updating** (pattern for future default changes):\n- Tests using implicit defaults in their assertions break when the default shifts\n- Search pattern for the next time: `grep -n \"minScopeDepth=\\(1\\|2\\|3\\) default\" <test-files>` OR names like \"default minScopeDepth=N\"\n- Fix: either update expectations to match new default OR pass the tested value explicitly via options arg\n- Added a new regression guard: `focused: minScopeDepth=2 excludes single-segment scope (user opt-in strictness)` — keeps the old depth-2 semantic verified but detached from the \"default\" concept\n\n**`recall.limit` pagination behavior (still valid, not fixed — it's correct):**\n- aide_recall caps returned memories at the configured limit (default 20)\n- If a file has 30 scope-matching memories, first call returns 20, leaves 10 in missingIds on next pre-read fire\n- Not truncation — bounded pagination via the ids-based nudge path\n- Bump `recall.limit` if the cap is frequently hit on known-wide scopes\n\n**Lesson for future config-default changes:** when flipping a default, the full propagation list is:\n1. `scripts/hooks/defaults.json` (authoritative value)\n2. `src/memory/**` TypeScript fallbacks (often mirror for test-only paths)\n3. `docs/user/configuration.md` (table row + any visualization)\n4. `aide-memory-web/pages/docs/**` (user-facing mirror)\n5. Tests that reference the default value in names/assertions\n6. `scripts/hooks/__tests__/all-configs-behavior.test.sh` if the default changes observable behavior\n\n**File references:**\n- Default value: `scripts/hooks/defaults.json` (entry: `recall.minScopeDepth`)\n- Fallbacks: `src/memory/recall.ts:46-52, 189`\n- Docs: `docs/user/configuration.md` Recall + scope matching table + Performance notes subsection; aide-memory-web FAQ",
+  "why": "The previous version of this memory documented the default=1/2 mismatch as an open discrepancy. It's now fixed — memory updated to reflect aligned state and capture the checklist pattern for future default changes (which surfaces to touch, which tests commonly break, and how to fix them).",
+  "scope": "src/memory/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "recall",
+    "minScopeDepth",
+    "test-prod-mismatch",
+    "pagination"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T04:50:03.259Z",
+  "updated_at": "2026-04-23T05:01:23.784Z"
+}

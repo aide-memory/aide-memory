@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "aide-memory": {
-      "command": "npx",
-      "args": ["ts-node", "/Users/meky/code/aide-v0/src/memory/cli.ts", "/Users/meky/code/aide-v0"]
-    }
-  }
-}

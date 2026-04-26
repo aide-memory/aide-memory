@@ -1,0 +1,23 @@
+{
+  "id": 322,
+  "uuid": "80f6d9bb-162c-4689-adeb-c2c05bcac970",
+  "layer": "technical",
+  "what": "Validation-fixture authoring gotcha: `memories.softening.threshold` masks the hard-block path when seeding small memory sets.\n\n**Default behavior:** `memories.softening.threshold: 10` — if a project has <10 total memories, pre-read-recall and pre-edit-recall downgrade ALL hard blocks to soft additionalContext nudges (\"keeps small projects from feeling hostile\").\n\n**Impact on fixtures:** A validation fixture seeded with 8 memories (typical — a handful per layer) will never fire `decision: \"block\"` by default. Scenarios written around the hard-block render path will silently test the soft path instead. I hit this exactly once on 2026-04-22 while building the hook-visibility validation fixture — seeded 8 memories, expected hard block, saw soft inject.\n\n**Fix:** write a `.aide/config.json` in the fixture dir overriding the threshold:\n```json\n{\"memories\": {\"softening\": {\"threshold\": 5}}}\n```\nLower the threshold below the seeded count so forceSoft evaluates to false and the hard path fires. Applied to `/tmp/aide-hook-viz-validation/.aide/config.json`.\n\n**Alternative fix:** seed enough memories (≥ threshold+1) to naturally clear the bar. More realistic but needs bulk seeding.\n\n**Concrete reference:** `src/memory/hooks/handlers.ts` preRead/preEdit have:\n```ts\nconst softeningThreshold = Number(getSetting(projectRoot, 'memories.softening.threshold') ?? 10);\nconst forceSoft = result.total_memories < softeningThreshold;\n// ... if (forceSoft || encountered) soft else hard\n```\n\nFuture validation fixtures should decide up-front: small realistic fixture (accept soft-only paths, adjust scenario expectations) or large/threshold-overridden fixture (all paths exercisable).",
+  "why": "Hit this gotcha live while building /tmp/aide-hook-viz-validation. Took ~2 min to diagnose once the soft-path JSON came back from what I expected to be hard-block — obvious in hindsight but easy to miss when designing scenarios. Future session building a similar fixture will trip on the same thing without this note.",
+  "scope": "scripts/hooks/__tests__/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "validation-fixture",
+    "softening-threshold",
+    "gotcha"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T01:20:55.349Z",
+  "updated_at": "2026-04-23T01:20:55.349Z"
+}

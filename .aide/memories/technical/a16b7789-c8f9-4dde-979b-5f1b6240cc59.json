@@ -1,0 +1,21 @@
+{
+  "id": 339,
+  "uuid": "a16b7789-c8f9-4dde-979b-5f1b6240cc59",
+  "layer": "technical",
+  "what": "Adapter detection precedence pattern: when a new editor's onboarding requires disambiguation from existing editors' env-var signals.\n\n**Problem:** aide-memory's `detectActiveAdapter(env)` iterates ADAPTERS in registry order, picking the first whose `detectRuntime(env)` returns true. If two adapters both claim the runtime (because Editor B sets env vars that Editor A's legacy adapter also responds to, e.g. a `CLAUDE_PROJECT_DIR` alias), the earlier-registered one wins — which may not be the more specific match.\n\n**Concrete case from C3:** Cursor sets `CURSOR_VERSION` (its own signal) AND may set `CLAUDE_PROJECT_DIR` as an alias for Claude Code compat (memory #330). Test environments spawned under a Claude Code wrapper also get `CLAUDECODE=1` set globally. If cursor's adapter only checked `CURSOR_VERSION` AND claude-code's adapter only checked `CLAUDECODE`, both would match → first-in-registry (claude-code) wins → wrong.\n\n**Pattern: have the LESS-specific adapter yield when the MORE-specific adapter's signal is present.** In claude-code.ts:\n```ts\ndetectRuntime(env) {\n  // Yield to cursor when its signal present — real Cursor sessions +\n  // test envs with polluted CLAUDECODE both dispatch correctly.\n  if (env.CURSOR_VERSION || env.CURSOR_PROJECT_DIR) return false;\n  return Boolean(env.CLAUDECODE);\n}\n```\n\n**General guidance for future editor onboarding (windsurf, codex, copilot, cline, aider):**\n1. Research the editor's own env vars during Step 1 of EDITOR_ONBOARDING_GUIDE.md.\n2. Use the MOST-UNIQUE signal as the positive detection (e.g. `WINDSURF_VERSION` > generic `CODEIUM_*`).\n3. If the new editor may coexist with an existing one in the same environment (possible for editors that wrap `claude` or share aliases), update the LESS-SPECIFIC adapter's detectRuntime to yield on the new signal.\n4. Add a test to `src/memory/hooks/__tests__/cursor-envelope.test.ts` (or a follow-up envelope test for the new editor) verifying the yield works — pass an env with BOTH signals set and assert the correct adapter wins.\n5. Document the precedence in the adapter file's JSDoc so future readers understand why it yields.\n\n**When NOT to apply:** if the new adapter's env vars are GUARANTEED to be exclusive (never coexist with any other editor's env), plain positive detection is fine — no yield needed.\n\n**Counterpattern:** don't re-order ADAPTERS array to force precedence. The array order should be preserved for deterministic test fixtures + audit output. Detection precedence belongs in each adapter's detectRuntime logic, not registry order.\n\n**Reference implementation:** `src/memory/editors/claude-code.ts` `detectRuntime()` Phase C3 version. See also `src/memory/hooks/__tests__/cursor-envelope.test.ts` test \"prefers cursor when BOTH CURSOR_VERSION and CLAUDECODE are set\".",
+  "why": "Hit this during C3 live smoke testing — my test shell had CLAUDECODE=1 from the Claude Code wrapper, test-scoped CURSOR_VERSION=x, expected cursor detection → got claude-code. Defensive yield pattern fixed it cleanly. Future editor onboardings will face the same question: \"what if two signals coexist?\" This memory captures the answer (yield in less-specific adapter, not registry order) so future sessions don't rediscover it. Scoped to editors/** so it surfaces when anyone starts implementing a new adapter.",
+  "scope": "src/memory/editors/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "integration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-24T02:40:50.163Z",
+  "updated_at": "2026-04-24T02:40:50.163Z"
+}

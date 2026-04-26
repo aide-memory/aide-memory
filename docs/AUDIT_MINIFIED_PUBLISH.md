@@ -77,7 +77,7 @@ Complete tarball contents:
 
 - **Bundled JS (3):** `dist/cli/aide-memory.js`, `dist/memory/index.js`, `dist/memory/cli.js`
 - **Hook scripts (16):** all 11 `.sh`, all 4 `.js` helpers, `defaults.json`
-- **Rule templates (5):** `claude-code.md`, `codex.md`, `copilot.md`, `cursor.mdc`, `windsurf.md`
+- **Rule templates:** `shared/body.md` (canonical source) + `README.md` (architecture guide). Per-editor frontmatter + notes live inline on the adapter objects in `src/memory/editors/<editor>.ts` (`ruleFrontmatter`/`ruleNotes`/`ruleToolId` fields). Prior 5 per-editor template files (`claude-code.md`, `codex.md`, `copilot.md`, `cursor.mdc`, `windsurf.md`) were collapsed into the shared body during Phase C1.5c of the Cursor-support refactor (2026-04-23).
 - **Docs (3):** `README.md`, `README.npm.md`, `README.legacy.md`
 - **Manifest:** `package.json` (aide-memory publish manifest, renamed from `package.aide-memory.json` at publish time)
 - **LICENSE:** MISSING — `package.aide-memory.json` references it but no file exists. **Flagged for user.**

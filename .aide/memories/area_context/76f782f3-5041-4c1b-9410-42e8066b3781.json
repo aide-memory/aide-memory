@@ -1,0 +1,21 @@
+{
+  "id": 327,
+  "uuid": "76f782f3-5041-4c1b-9410-42e8066b3781",
+  "layer": "area_context",
+  "what": "Cursor support gap in `aide-memory init` (2026-04-23, core finding for CURSOR_ONBOARDING plan): `aide-memory init` today writes ONLY `.cursor/rules/aide-memory.mdc` for Cursor users. It does NOT generate `.cursor/hooks.json` (hook registrations) or `.cursor/mcp.json` (MCP server config). The repo's on-disk `.cursor/hooks.json` + `.cursor/mcp.json` are stale legacy artifacts from pre-0.4.0 (they reference the old bash `scripts/hooks/stop-remember.sh`, `detect-correction.sh`, `recall-for-path.js` paths that got consolidated into `dist/cli/aide-memory.js hook <name>` in the 0.4.0 hook consolidation). So Cursor users who run `aide-memory init` today get rules-only — no hook automation, no MCP tools surfaced. Compare to Claude Code which gets `.claude/settings.json` (hooks for SessionStart/PreCompact/Stop/UserPromptSubmit/PreToolUse/PostToolUse with matchers Read/Edit/Write/Grep/Glob + 5 aide-memory MCP tools) + `.mcp.json` (aide-memory server registration).\n\nCursor hook event names inferred from the stale on-disk file (needs confirmation from research agent + Cursor docs):\n- `stop` → Claude Code's `Stop`\n- `beforeSubmitPrompt` → `UserPromptSubmit`\n- `beforeReadFile` → `PreToolUse` matcher=Read\n- Schema shape: `{ \"version\": 1, \"hooks\": { \"<event>\": [{ \"command\": \"...\", \"type\": \"command\", \"timeout\": N }] } }`\n- Unknown equivalents: pre-edit, pre-search, pre-compact, session-start — research agent validating.\n\nDownstream work planned in `docs/specs/CURSOR_ONBOARDING.md` (to be created): add CursorAdapter to a new EditorAdapter interface that abstracts per-editor init file generation. Each adapter owns its editor's rule-file template, hook-config shape, MCP-config shape. Adding Windsurf/Codex/Cline/Aider/etc. later becomes a 1-file adapter + registration. Also: restructure MANUAL_E2E_VALIDATION.md into per-editor matrix (Claude Code column + Cursor column) so every validation scenario covers both editors. Unblocks PHASE_0_1_SPEC P1.9 (Cursor Validation) + P1.17 (5 scenarios in Cursor) which have been DEFERRED.",
+  "why": "Core product-gap finding — future sessions reading init.ts need to know the file generation is Claude-Code-first and Cursor-incomplete. Without this memory someone scanning init.ts sees the rules.mdc write and might reasonably assume \"Cursor support is done\" without realizing hooks + MCP aren't generated. Also captures the hook-event-name mapping inferred from the legacy on-disk file, saving a grep next time someone works on Cursor onboarding.",
+  "scope": "src/memory/init.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "integration",
+    "architecture"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T20:25:49.096Z",
+  "updated_at": "2026-04-23T20:25:49.096Z"
+}

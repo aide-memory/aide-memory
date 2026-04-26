@@ -1,0 +1,21 @@
+{
+  "id": 337,
+  "uuid": "8a8c4685-6fd7-4b39-a43f-e11dcaa5917d",
+  "layer": "preferences",
+  "what": "User directive 2026-04-23 on shared-content refactor evaluation: when deciding whether to unify near-duplicate source files (e.g., per-editor rule templates, rules skills, markdown fragments) into a shared body + per-variant overlay, evaluate NEUTRALLY — not lazily choosing \"keep separate\" to avoid work. Two-step test: (1) If easy to extract a shared source + lightweight per-variant overlay with consistent, predictable rendering → DO IT. (2) If it would be complex, error-prone, or cause inconsistency between variants → KEEP SEPARATE, but add explicit guidance somewhere (a README, header comment block, or doc section) naming the SOURCE-OF-TRUTH file + listing the derived/parallel files, so any teammate updating one knows which peers to sync. The outcome to avoid is silent drift — parallel files that slowly diverge because nobody knew they were meant to stay aligned. Applies beyond rule templates: any \"5 variations of the same doc/skill/config\" pattern.",
+  "why": "User corrected my framing of \"scope split\" as a one-way deferral. Real directive: pick the decision on technical merit (easy overlay = do it; complex = defer) but ALWAYS guard against drift by marking a source-of-truth when separating. This is a process-level preference that applies to many future judgment calls, not just the rule templates. Surfacing it at session start prevents the \"pick separation by default to avoid work\" anti-pattern.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "style"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-24T01:20:18.346Z",
+  "updated_at": "2026-04-24T01:20:18.346Z"
+}

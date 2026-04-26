@@ -1,0 +1,24 @@
+{
+  "id": 324,
+  "uuid": "8c927976-a875-4276-b3e0-d9648e88b7be",
+  "layer": "technical",
+  "what": "Pre-read/pre-edit block-decision semantics + encounter-tracking (final state after Apr 22-23 2026 deliberation on feature/phase-1-hook-visibility).\n\n**Message-branch trigger:** Which recall instruction the hook emits depends on `coveredCount`:\n- `coveredCount === 0` → path-based: `Call aide_recall({paths: ['<FILE PATH>']})` — exact file path, NOT the scope glob\n- `coveredCount > 0` → ID-based: `Call aide_recall({ids: [missing-ids]})`\n\n`coveredCount` = how many of `result.scoped_ids` are already in `recalled-ids-<session>.txt`. `scoped_ids` includes memories from any scope covering the file, subject to `recall.minScopeDepth` filter (scopes below threshold excluded from per-file recall; they surface only via SessionStart).\n\n**What gets stored in recalled-paths:**\n- Always the exact file path (`file|<abs-path>`), never a scope glob\n- Written by track-recall.sh (PreToolUse on aide_recall when called with {paths:[...]}) AND by the hook itself via self-track-on-fire (commit b558f93). Redundant but harmless.\n- When aide_recall is called with {ids:[...]}, NO path is written by track-recall-post — but self-track-on-fire has already written it when the hook originally fired.\n\n**encountered flag:** `hasRecalledFile(exactFilePath)` — checks ONLY exact `file|<abs>` match. Not scope-aware.\n\n**Fix #1 shipped (commit b558f93):** self-track-on-fire. preRead/preEdit write `file|<path>` to recalled-paths on every fire, after computing `encountered`. Enables the \"block first, soft after\" behavior described in `hooks.read.maxBlocks: 1` docs.\n\n**Fix #2 REVERTED (commit 7cc56b8 revert of fcf3e0b, Apr 23):** scope-level encountered tracking was shipped then reverted. The scope-tracking would have made reading a sibling file in an already-recalled scope route to soft — but:\n- Over-generalized with broad scopes (`src/**` would mark every file under src/ as encountered)\n- Compounded with `recall.minScopeDepth` in awkward ways (scope-tracking would need to respect the filter)\n- Contradicted the \"per file path\" framing in user-facing docs\n\n**User's final mental model (aligned with post-revert behavior):**\n- Each file read is independent\n- If never recalled and mems associated (even via 3-folders-up scope), hard block\n- After reading a file we track THAT FILE (not the scope) regardless of minScopeDepth\n- Future mems surfacing on same file → soft (encountered=true)\n- minScopeDepth only correlates to which mems we consider \"associated\" with a file at recall-compute time; doesn't touch tracking\n\n**Case outcomes (final):**\n- New file with uncovered mems → HARD block (first-touch enforcement)\n- Re-read same file after adding new mem → SOFT (self-tracked, encountered=true)\n- Read different file in same scope (case 5) → HARD block (conservative — fresh file = fresh enforcement)\n\n**Follow-up candidates (if revisited):**\n- `recall.crossFileEncounter: boolean` opt-in config. If true, enable scope-tracking BUT respect minScopeDepth filter (only track scopes at/above threshold). Default false to preserve current conservative semantics.\n\n**Code references (post-revert):**\n- `src/memory/hooks/handlers.ts` — preRead (~199-210), preEdit (~290-298) with self-track-on-fire. trackRecallPost is a simple mergeTrackedIds (no scope logic).\n- `src/memory/hooks/tracking.ts` — hasRecalledFile is file-only. No appendRecalledScope or matchesScope.\n\n**Test coverage:** 677/677 tests pass (back to pre-fcf3e0b count; 8 scope-matching tests removed with revert).\n\n**Relatedly (b558f93):** brand color via 24-bit ANSI `\\u001b[38;2;0;194;203m` matching CLI's `chalk.hex('#00c2cb')`.",
+  "why": "Final state after the Apr 23 revert of fcf3e0b. User confirmed their mental model aligns with file-level-only encountered tracking. The scope-tracking experiment is documented as a considered-and-rejected path, with the recall.crossFileEncounter opt-in as the right shape if we ever revisit. Future sessions reading this shouldn't re-ship scope-tracking without the opt-in config + minScopeDepth respect.",
+  "scope": "src/memory/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "hooks",
+    "blocking",
+    "idb",
+    "self-track",
+    "design-rationale"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T03:35:25.052Z",
+  "updated_at": "2026-04-23T04:42:12.746Z"
+}

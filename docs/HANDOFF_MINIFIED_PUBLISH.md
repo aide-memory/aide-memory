@@ -83,8 +83,7 @@ Two bugs caught in post-0.4.0 audit and fixed in 0.4.1:
 
 The automated pre-publish validation (`scripts/verify-package.sh`, unit tests, build/bundle/tarball checks) has passed. But **manual Phase 1 validation scenarios** against the now-published 0.3.0 have NOT been run this session. These live in:
 
-- `docs/validation/PHASE_1_RESULTS.md` (existing scenario results + methodology)
-- `docs/MANUAL_E2E_VALIDATION.md` if present (A-G + D/F/G/A7/gap-fill scenarios)
+- `docs/validation/E2E_VALIDATION.md` (consolidated scenario matrix + run history + resolved issues — replaced `PHASE_1_RESULTS.md` and `MANUAL_E2E_VALIDATION.md` in Phase C7, 2026-04-23)
 - `docs/specs/PHASE_0_1_SPEC.md` § validation criteria
 
 Expected flow: install `aide-memory@0.3.0` in a real project (not a scratch one), run the A-G scenarios + cross-session persistence + IDB-based blocking + concurrent sessions + session-start injection. Confirm:
@@ -93,7 +92,7 @@ Expected flow: install `aide-memory@0.3.0` in a real project (not a scratch one)
 - Hooks fire correctly in real Claude Code sessions (not just isolated stdin pipes)
 - MCP tool calls succeed from real client
 
-Log results to `docs/validation/PHASE_1_RESULTS.md` or a new `docs/validation/V0.3.0_RESULTS.md`.
+Log results as a new dated row in the per-scenario Runs tables in `docs/validation/E2E_VALIDATION.md` (or a new `docs/validation/V0.3.0_RESULTS.md` if scope warrants a version-specific doc).
 
 **If any scenario fails:** triage, fix, ship 0.3.1 patch. See `docs/RELEASING.md` for the patch-release process.
 

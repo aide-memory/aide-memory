@@ -1,0 +1,20 @@
+{
+  "id": 335,
+  "uuid": "4a8252bd-ff9e-44b4-96fb-30c259e4d795",
+  "layer": "preferences",
+  "what": "User preference (2026-04-23) on memory hygiene + resumption reliability: prefer explicit `aide_recall({ids: [...]})` at the top of a plan/spec doc over relying on `priority: \"always\"` auto-inject for critical post-compaction resumption context. Rationale: priority:always memories compete for `injection.maxChars` budget at SessionStart → truncation when there are many priority:always entries (observed directly: memory #334 got chopped to \"...sta\" in the session banner). Explicit recall from within the doc sidesteps the cap.\n\nCorollary: when information is canonical reference material (plan docs, specs, ADRs), keep the doc as the single source of truth. Use memories for (a) cross-cutting user preferences/directives that apply BEYOND one doc, (b) cross-session audit trail (who said what, when), (c) conversational decision history that would get lost in a third-person doc rewrite. Do NOT use memories as backup copies of doc content — creates duplicate-data maintenance burden + competes for SessionStart budget without adding value. This session over-stored backup memories (#328, #330, #331, #332, #333, #334) during a 10-iteration plan refinement; most are now redundant with docs/specs/CURSOR_ONBOARDING.md + docs/specs/EDITOR_ONBOARDING_GUIDE.md content. Future sessions: store sparingly, let docs be canonical, add explicit recall instructions to the TOP of plan docs for post-compaction resumption.",
+  "why": "Legitimate cross-cutting preference the user surfaced this turn — not a per-doc decision. Applies to every future plan doc + every future memory-save choice. Directly addresses the over-storage pattern that bit us in THIS session. Priority:always so it injects on every future SessionStart, reminding me not to over-duplicate doc content into memories.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture"
+  ],
+  "source": "agent_discovery",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-24T00:07:32.496Z",
+  "updated_at": "2026-04-24T00:07:32.496Z"
+}

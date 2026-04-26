@@ -231,7 +231,7 @@ Additional verifications:
 
 ### Bug 2: Templates reference non-existent `mode` parameter on aide_forget
 
-**Files:** `src/templates/rules/claude-code.md`, `src/templates/rules/cursor.mdc`
+**Files (historical — pre-C1.5c):** `src/templates/rules/claude-code.md`, `src/templates/rules/cursor.mdc`. Both files have since been collapsed into `src/templates/rules/shared/body.md` (canonical source). The fix described below now lives in the shared body.
 **Issue:** Templates told agents to use `mode: delete` and `mode: archive` with aide_forget, but the tool has no `mode` parameter -- it always permanently deletes.
 **Fix:** Removed `mode` references, added note that aide_forget permanently deletes.
 **Impact:** Medium -- agents following these instructions would pass invalid parameters. The MCP SDK likely ignores unknown parameters, but the documentation was misleading.

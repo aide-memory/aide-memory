@@ -1,0 +1,24 @@
+{
+  "id": 323,
+  "uuid": "9634545c-240f-46b8-92d1-7a51c8318a89",
+  "layer": "technical",
+  "what": "Canonical validation-fixture authoring pattern for aide-memory hook features (complements mem #322 on softening threshold).\n\n**Use `aide-memory init` from the feature-branch binary, don't hand-roll.**\n\nRecipe for a throwaway test project that exercises a feature-branch's hooks + MCP tools:\n\n```bash\nrm -rf /tmp/fixture && mkdir -p /tmp/fixture && cd /tmp/fixture\ngit init -q && git config user.name test && git config user.email t@t.com\nnode <feature-worktree>/dist/cli/aide-memory.js init\n```\n\nThis single init invocation generates:\n- `.mcp.json` → MCP server points at `<feature-worktree>/dist/memory/cli.js` — makes `aide_recall`/`aide_remember`/`aide_update`/`aide_forget`/`aide_search`/`aide_memories`/`aide_import` tools available in Claude Code sessions\n- `.claude/settings.json` (not `settings.local.json`) → all hook wirings at `<feature-worktree>/scripts/hooks/*.sh`\n- `.claude/rules/aide-memory.md` → rules template from the feature branch (includes any wording updates)\n- `.aide/config.json`, `.aide/config-reference.md` (new Apr 23), `.gitignore`, `.ignore` (with memories hidden from grep)\n\nWhy it works: `getPackageRoot()` in `src/memory/init.ts` uses `path.resolve(__dirname, '..', '..')` — when invoked via the bundled `dist/cli/aide-memory.js`, `__dirname` is `dist/cli/` and two levels up is the feature-worktree root. Init generates config paths absolute from that root, so every artifact points at the feature-branch code — not the globally-installed `aide-memory` package.\n\n**After init, add the fixture-specific overrides:**\n\n```bash\nnode <feature-worktree>/dist/cli/aide-memory.js config memories.softening.threshold 5  # per mem #322\n# Seed memories as JSON under .aide/memories/<layer>/ then:\nnode <feature-worktree>/dist/cli/aide-memory.js sync import\n# Create source files that match scoped memory globs\n```\n\n**Common pitfall (Apr 22 2026):** Hand-rolled fixture with only `.claude/settings.local.json` for hooks and no `.mcp.json`. Hooks fired correctly but Claude couldn't invoke `aide_recall`/`aide_remember` in response to block prompts — MCP tools were unavailable. Using `aide init` prevents this because it always writes both.\n\n**Preserve manual walkthroughs IN THE MASTER TRACKER DOC** (Apr 23 2026, corrected from earlier two-file pattern):\n- Do NOT create a separate `docs/specs/VALIDATION_<FEATURE>.md` alongside `PHASE_0_1_VALIDATION_FOLLOWUPS.md` — that duplicates the \"validation scenarios\" concept and scatters scenarios across files\n- Instead, INLINE the walkthrough steps directly into the letter scenarios (A-G) or IDB matrix rows in the master tracker doc\n- Add one shared \"Validation Setup\" subsection with the fixture recipe, referenced implicitly by all scenarios below\n- Each letter/IDB entry gets concrete `trigger:` and `expected:` bullets so anyone can reproduce without a separate walkthrough file\n- New visibility-specific scenarios (like Scenario 9 hooks.visible toggle) get their own letter (e.g. V) added to the Remaining list\n- Example done Apr 23 2026: consolidated /tmp/aide-hook-viz-validation/README.md scenarios into PHASE_0_1_VALIDATION_FOLLOWUPS.md by enriching A/B/C/F + IDB-10..13 + adding V; deleted the short-lived separate file (commit 52ebbd2)\n\n**Ephemeral fixture scripts (like /tmp/aide-hook-viz-validation/setup.sh) are fine to keep outside the repo** as long as the scenarios they exercise are preserved in the master tracker. The setup.sh itself is recoverable from the recipe above.\n\n**Reference implementation:** `docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md` after commit 52ebbd2 — single doc with A-F enriched, IDB-1..13 with inline walkthrough steps for 10-13, letter V added, shared Validation Setup section at top.",
+  "why": "Corrected guidance: the earlier \"preserve in separate VALIDATION_<FEATURE>.md\" pattern scattered scenarios across files. User wanted ONE source of truth — inline walkthrough steps into the master tracker's letter scenarios. This memory update reflects the final pattern: don't split, enrich in place.",
+  "scope": "scripts/hooks/__tests__/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "validation-fixture",
+    "init",
+    "mcp",
+    "hooks",
+    "pattern"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T02:10:15.730Z",
+  "updated_at": "2026-04-23T20:25:34.111Z"
+}

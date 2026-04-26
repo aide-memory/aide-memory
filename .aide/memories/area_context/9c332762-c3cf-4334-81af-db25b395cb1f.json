@@ -1,0 +1,21 @@
+{
+  "id": 331,
+  "uuid": "9c332762-c3cf-4334-81af-db25b395cb1f",
+  "layer": "area_context",
+  "what": "Cursor support scope — rejected approaches + chosen paths (locked 2026-04-23). Captures what DIDN'T make the plan so future sessions don't re-propose them.\n\n**REJECTED: First-pretool-use deferred SessionStart injection.** Earlier plan draft suggested emitting the SessionStart content as `additional_context` on the first `preToolUse` of a Cursor session (since `sessionStart.additional_context` is broken). User rejected because it requires a tool call to trigger — if user's first turn is just a question with no tool call, they miss session-start context.\n\n**CHOSEN: Regenerate `.cursor/rules/aide-memory.mdc` dynamically.** Rules file with `alwaysApply: true` is injected EVERY turn by Cursor's rules engine — no hook fire, no tool call, no broken `additional_context` channel. This is Cursor staff's officially-endorsed workaround (forum #157141 reply from staff member deanrie, 2026-04-09: \"duplicate the context in a `.cursor/rules` file if the instructions are fairly static\"). Triggers for regeneration: aide-memory init, config writes affecting session-start content (injection.*, memories.softening.threshold), aide_remember/update/forget on priority:\"always\" OR preferences/guidelines memories, sync import. `injection.maxChars=1200` cap respects the community best-practice ~2K token budget for cumulative `alwaysApply: true` rules.\n\n**REJECTED: stderr-to-\"Hooks\" Output panel for visibility.** Earlier plan draft suggested emitting `aide-memory · …` status messages to stderr so they'd show up in Cursor's View → Output → Hooks panel. User rejected because users don't want to open a debug panel to see normal tool operation; branded visibility should be inline like Claude Code.\n\n**CHOSEN: Accept the gap + document honestly.** No user-visible channel exists in Cursor for non-deny hook events. Confirmed absent via 3 research passes: no plugin/extension path (#115748, #121400, #1307), `agent_message` broken (regression #142589), `user_message` renders only on `permission: deny`. External docs (per-editor pages + supported-editors matrix) will state plainly: \"aide-memory runs invisibly in Cursor except on hard blocks. For visible soft nudges, use Claude Code.\" Feature request filed for inline `system_message` output field in Cursor hooks (tracked as follow-up).\n\n**REJECTED: Fighting broken `additional_context` delivery.** Cursor staff confirmed on 2026-04-20 (#158452) — \"there isn't a workaround\" for sessionStart.additional_context. Three separate events (sessionStart, postToolUse, beforeSubmitPrompt feature-request) all show the same delivery-pipeline issue. Don't build fragile workarounds that break when Cursor fixes the underlying bug.\n\n**CHOSEN: Scope down to ~80% parity, list 5 explicit gaps, monitor 7 bug threads for upstream fixes.** When fixes land, adapter switches from workarounds to native channels (e.g., SessionStart goes back to native hook injection + rules file narrows to static guidance).\n\n**REJECTED: Rolling Claude-Code marketplace + Cursor marketplace into 0.5.0.** User explicitly wants these filed as follow-ups for 1.0 scope (memory #329 point #9). Existing research in docs/specs/PLUGIN_STATUS.md covers both — submission work is well-scoped when ready.",
+  "why": "Future sessions reading the plan will notice \"first-pretool-use injection could solve the SessionStart bug\" and wonder why it's not in the plan. This memory explains the rejection + the chosen path (rules-file regeneration) with the exact staff endorsement quote. Same for stderr visibility — captured WHY we're not using the Output panel. Prevents re-litigating decisions the user has already made.",
+  "scope": "docs/specs/CURSOR_ONBOARDING.md",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "integration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T22:20:35.279Z",
+  "updated_at": "2026-04-24T00:10:01.942Z"
+}

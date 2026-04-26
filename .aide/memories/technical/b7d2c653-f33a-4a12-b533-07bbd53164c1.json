@@ -1,0 +1,24 @@
+{
+  "id": 321,
+  "uuid": "b7d2c653-f33a-4a12-b533-07bbd53164c1",
+  "layer": "technical",
+  "what": "Repo structure + build gotchas discovered during Apr 22 hook-visibility fast-follow:\n\n**aide-memory-web is a separate git repository, not a submodule**\n- Path: `/Users/meky/code/aide-v0/aide-memory-web/` (nested inside aide-v0 working tree but its own git repo with its own main branch)\n- Editing files there from within the aide-v0 feature branch does NOT put changes on that feature branch — changes land in aide-memory-web's working tree and need to be committed on aide-memory-web's own branch\n- Also means: when spinning up a new aide-v0 worktree (e.g. `feature/phase-1-hook-visibility`), the worktree's `aide-memory-web/` directory is the SAME shared aide-memory-web working copy as the main worktree sees (via the relative path) — not a separate checkout\n- Future sessions: if your fast-follow touches both aide-v0 code AND aide-memory-web docs, plan for TWO commits on TWO branches on TWO repos\n- aide-memory-web workflow: small repo, prior history shows direct-to-main commits, no feature-branch discipline needed for small doc edits\n\n**Build pipeline has two stages — both must run for shell tests to pick up TS changes:**\n- `npm run build` → runs `tsc` → produces unminified `dist/` for TypeScript unit tests (vitest)\n- `npm run build:dist` → runs three esbuild invocations → produces MINIFIED bundles in `dist/cli/aide-memory.js`, `dist/memory/index.js`, `dist/memory/cli.js`\n- Shell-level hook tests (scripts/hooks/__tests__/*.sh) exec `dist/cli/aide-memory.js` (the esbuild bundle) via the thin bash shims\n- After changing TS handler code, run BOTH `npm run build && npm run build:dist` before running any shell tests, or they'll test stale behavior\n- Sequence I used and confirmed: tsc → vitest → esbuild bundle → shell tests\n\n**Hook call-site extension pattern:**\n- `emitAdditionalContext` and `emitBlockDecision` in `src/memory/hooks/stdio.ts` accept an optional trailing `userMessage?: string` arg — adding this was fully backward-compat. No existing callers broke.\n- Pattern for future channel additions: optional trailing parameters that default to undefined behave-as-before.\n\n**SessionStart contract override justified:**\n- Prior comment in handlers.ts said \"SessionStart historically emitted plain text to stdout, not the JSON additionalContext envelope\". Changed to JSON envelope in Apr 22 2026 to carry systemMessage.\n- Claude Code accepts BOTH plain stdout and JSON `{hookSpecificOutput.additionalContext}` for SessionStart (per hooks docs), so the switch is safe.\n- If future session sees empty SessionStart injection after a Claude Code upgrade, check that `additionalContext` JSON path still works.",
+  "why": "Two workflow gotchas that would cost a future session significant time: (1) aide-memory-web is a separate repo — \"why didn't my doc edits end up on the feature branch?\" would be 15+ min to debug if unaware; (2) forgetting `build:dist` after TS changes means shell tests silently pass/fail against stale bundles. Plus the stdio extension pattern (useful precedent for future hook enhancements) and the SessionStart switch rationale (so future readers don't revert back assuming the original comment).",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "repo-structure",
+    "build-pipeline",
+    "workflow-gotcha",
+    "aide-memory-web",
+    "hooks"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T01:09:23.461Z",
+  "updated_at": "2026-04-23T01:09:23.461Z"
+}

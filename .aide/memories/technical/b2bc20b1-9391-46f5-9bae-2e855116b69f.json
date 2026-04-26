@@ -1,0 +1,24 @@
+{
+  "id": 325,
+  "uuid": "b2bc20b1-9391-46f5-9bae-2e855116b69f",
+  "layer": "technical",
+  "what": "Claude Code 2.1.118: Grep is a DEFERRED tool, not default-loaded.\n\n**Evidence (Apr 22 2026 validation):** User asked Claude in a scratch session to \"use the Grep tool (not Bash)\" — Claude responded \"The Grep tool isn't available in this session — it wasn't in the deferred tools list.\" Claude fell back to Bash+grep. Same pattern observed regardless of how the search was phrased.\n\n**Implication for AIDE hooks:** `pre-search-nudge` is wired on matchers `Grep|Glob`. If Grep is never loaded in a session, the hook effectively never fires for code searches. All of Claude's code searches go through Bash(grep) → our matcher misses → no nudge, no systemMessage, no track-search.\n\n**This is probably a regression or change of Anthropic defaults between Claude Code versions.** Earlier versions (or different model + version combos) likely had Grep as a default-loaded tool. The deferred-tools system (introduced around 2.1.x) optimizes context by not loading every tool by default — Grep got deferred, which breaks downstream hooks that relied on its use.\n\n**Workarounds for future dev:**\n1. Extend pre-search-nudge matcher to cover `Bash` with a command-content filter (grep/rg/ripgrep/find invocations). Parse search term from the bash command — fiddly but doable.\n2. In rules file (`.claude/rules/aide-memory.md` and templates), explicitly tell the agent: \"For codebase search, prefer aide_search or the Grep tool over Bash+grep\". Relies on agent compliance.\n3. Anthropic FR: make Grep default-loaded, OR provide a unified \"search\" event matcher that catches both Grep and Bash+grep.\n\n**Related:** PostToolUse hooks matching `mcp__aide-memory__aide_search` still work fine — users/Claude can still invoke aide_search directly. The gap is SPECIFICALLY in pre-search-nudge's ability to catch Grep/Glob-shaped searches.\n\n**Documentation:** captured in docs/specs/PHASE_0_1_VALIDATION_FOLLOWUPS.md as ELEVATED priority follow-up (commit f84c3e5).",
+  "why": "Non-obvious Claude Code platform behavior that materially affects hook-based coverage. Without knowing Grep is deferred, future sessions investigating \"why does pre-search-nudge never fire\" would assume a local bug and waste time debugging our code. The workaround options are also captured so the next session picking this up can jump straight to implementation.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "claude-code",
+    "deferred-tools",
+    "grep",
+    "pre-search-nudge",
+    "platform-behavior"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T03:46:49.115Z",
+  "updated_at": "2026-04-23T03:46:49.115Z"
+}

@@ -1,0 +1,20 @@
+{
+  "id": 333,
+  "uuid": "9e179734-5ac7-45cf-a037-0d74d6e6bb8c",
+  "layer": "guidelines",
+  "what": "Two cross-cutting insights from 2026-04-23 plan-finalization round that apply beyond the CURSOR_ONBOARDING plan itself:\n\n**(1) Claude Desktop auto-linking `#N` as GitHub issue URL — memory-link UX bug.** User noticed that aide-memory's text referencing \"memory #314\" gets rendered by Claude Desktop's Markdown as https://github.com/ahmedmmeky/aide-v0/issues/314 (auto-linked). That's wrong — #314 is a memory ID, not a GitHub issue. Affects user comprehension + adds noise.\n\n**Mitigation options (for future UI exploration, filed as follow-up):**\n- Change memory text format from `#314` / `#N` to `[mem 314]` / `memory(314)` / `mem:314` to avoid the auto-link pattern entirely. Lowest-effort, breaking-change-free.\n- Register OS URL scheme `aide-memory://314` that opens the memory in a local viewer.\n- Ship `aide-memory view <id>` CLI that pages the memory content.\n- Mini web UI at `http://localhost:PORT/mem/<id>` via `aide-memory serve`.\n\n**Immediate implication for any code path that composes memory text with ID references (hook reason strings, rules-file regen content, CLI output):** consider switching to a non-auto-linking format NOW as a \"fix at source\" step, independent of the viewer exploration. Cheapest mitigation, propagates everywhere automatically.\n\n**(2) Source-audit ordering before unpublish — don't unpublish pre-0.5.0 versions until audit passes.** Release-flow nuance not in RELEASING.md: if the Phase C9 source-audit (6 grep checks + bundle spot-check) finds ANY source leak in the 0.5.0 tarball, the correct action is ship a 0.5.1 with the leak fixed THEN proceed to unpublish priors. DO NOT unpublish priors first and leave 0.5.0 as the only shipping version if 0.5.0 itself has a packaging bug — users who upgrade would be exposed to the same leak while the fixed version catches up, and verify-package.sh's existing checks aren't exhaustive (they catch .ts/.map/sourceMappingURL/dev-manifest strings, but NOT readable original identifiers if minifier fails to mangle them).\n\n**Process:** 0.5.0 ship → audit → if pass, unpublish priors → if fail, fix + ship 0.5.1 → audit → unpublish priors. Priors remain a fallback install path during the fix window.\n\n**Future:** extend `scripts/verify-package.sh` with the readable-identifier grep (lines 5-6 of the audit checklist) so next releases catch these pre-publish in CI rather than post-publish via audit.",
+  "why": "Both insights are durable process/design rules that apply beyond the Cursor plan. (1) shapes how EVERY future memory text is composed — if we don't switch away from #N format, we keep generating content that Claude Desktop mis-renders. (2) is a release-flow ordering rule that applies to every major release going forward, not just 0.5.0 — \"never leave users without a working fallback version.\" Both are the kind of knowledge that would otherwise get lost in the plan doc's weeds.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "integration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-23T22:50:35.934Z",
+  "updated_at": "2026-04-24T00:10:03.067Z"
+}
