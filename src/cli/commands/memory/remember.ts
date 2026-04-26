@@ -6,6 +6,8 @@ import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
 import type { MemoryLayer } from '../../../memory/types';
 import { VALID_LAYERS, requireProjectRoot, brand } from './utils';
+import { shouldRegenForMemory, triggerRulesRegen } from '../../../memory/rulesGen';
+import { adaptersWithRules } from '../../../memory/editors';
 
 export interface RememberOptions {
   layer: string;
@@ -41,6 +43,18 @@ export function runRemember(what: string, options: RememberOptions): void {
     if (memory.why) console.log(`  Why:   ${memory.why}`);
     if (memory.contributor) console.log(`  From:  ${memory.contributor}`);
     if (memory.context_label) console.log(`  Tags:  ${memory.context_label}`);
+
+    // Phase C4: regenerate dynamic rule files if the memory affects
+    // session-start content. Mirrors the MCP server's aide_remember
+    // trigger — CLI-path writes need the same regen or rules files go
+    // stale. Fire-and-forget, swallows errors.
+    if (shouldRegenForMemory(memory)) {
+      try {
+        triggerRulesRegen(adaptersWithRules(), projectRoot);
+      } catch {
+        /* rules regen is convenience — never fail a CLI write because of it */
+      }
+    }
   } finally {
     store.close();
   }

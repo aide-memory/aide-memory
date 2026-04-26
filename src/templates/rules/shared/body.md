@@ -14,7 +14,7 @@ Four hooks fire automatically. Respond to them as described:
 - **Stop** -- On task completion, the hook prompts: "Anything worth remembering?" Review what happened in the session. If a decision was made, a correction was given, or you discovered something non-obvious, call `aide_remember` (or `aide_update` if an existing memory needs revision). Otherwise, do nothing.
 - **UserPromptSubmit** -- Detects correction patterns ("no, use X instead", "don't do that"). When flagged, store the correction with `aide_remember` (or `aide_update` if an existing memory needs revision) scoped to the relevant code area.
 - **PreCompact** -- Before context compaction, the hook prompts you to save important context. Store any active plans, decisions, or constraints via `aide_remember` (or `aide_update` if an existing memory needs revision) immediately -- after compaction you will only have a summary.
-
+{{editor_notes}}
 ## Proactive saving
 
 As conversations grow long, proactively call `aide_remember` (or `aide_update` if an existing memory needs revision) for key decisions, constraints, and corrections -- don't wait for the Stop hook or compaction. If you've made important decisions or received corrections that haven't been stored yet, save them now. Context can be compacted at any time and detail will be lost.
@@ -96,4 +96,4 @@ Set `contributor` to `{{contributor}}` (from git config). This is required for t
 
 ### generated_by
 
-Set `tool` to `"claude-code"`. Set `author_type` to `"ai"` when you decide to store a memory, `"human"` when the user explicitly asks you to remember something.
+Set `tool` to `"{{tool_id}}"`. Set `author_type` to `"ai"` when you decide to store a memory, `"human"` when the user explicitly asks you to remember something.

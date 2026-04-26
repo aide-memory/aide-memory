@@ -8,6 +8,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { readJsonStdin } from './stdio';
+import { detectActiveAdapter } from '../editors';
+import type { HookEventId } from './events';
 import {
   detectCorrection,
   preCompact,
@@ -93,18 +95,12 @@ function maybeTriggerDriftResync(input: { cwd?: string }): void {
   }
 }
 
-export type HookName =
-  | 'pre-read'
-  | 'pre-edit'
-  | 'pre-search'
-  | 'pre-prompt'
-  | 'post-tool-use-recall'
-  | 'stop'
-  | 'pre-compact'
-  | 'session-start'
-  | 'pre-recall'
-  | 'post-remember'
-  | 'post-search';
+// HookName is now an alias for HookEventId — the two types enumerated the
+// same 11 strings before Phase C6. Sourcing from the manifest file means
+// adding a new hook event is a one-place change (events.ts HOOK_EVENTS +
+// HookEventId union) and the dispatcher HANDLERS table below naturally
+// requires the new key via the Record<HookEventId, ...> type constraint.
+export type HookName = HookEventId;
 
 // Map of hook name → handler.
 const HANDLERS: Record<HookName, (input: any) => Promise<void>> = {
@@ -128,9 +124,18 @@ export async function dispatch(name: string): Promise<void> {
     return;
   }
   try {
-    const input = await readJsonStdin();
+    const raw = await readJsonStdin();
+    // Phase C3: detect which editor fired the hook via env vars, then run
+    // the raw stdin envelope through that adapter's translateInput. Claude
+    // Code's adapter is identity, so pre-C3 behavior is preserved byte-for-
+    // byte. Cursor's adapter remaps conversation_id → session_id etc. so
+    // handlers can stay editor-agnostic.
+    const adapter = detectActiveAdapter();
+    const input = adapter.translateInput(raw) as typeof raw;
     // Drift-repair runs on every hook fire (see maybeTriggerDriftResync
-    // doc for why). It's fire-and-forget and catches its own errors.
+    // doc for why). It's fire-and-forget and catches its own errors. Runs
+    // against the TRANSLATED input so `cwd` is populated regardless of
+    // editor envelope shape.
     maybeTriggerDriftResync(input);
     await handler(input);
   } catch {

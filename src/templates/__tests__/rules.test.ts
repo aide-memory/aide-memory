@@ -1,200 +1,222 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { ADAPTERS } from '../../memory/editors';
+import { buildRules, _resetBodyCache } from '../../memory/editors/rules';
 
-const RULES_DIR = path.join(__dirname, '..', 'rules');
+/**
+ * Post-C1.5c rule-template tests. Prior to the refactor there were 5
+ * standalone `<editor>.md` / `<editor>.mdc` template files; this suite tested
+ * them individually. After the refactor the canonical body lives at
+ * `src/templates/rules/shared/body.md` and each editor's rule file is
+ * composed from that shared body + adapter-specific frontmatter/notes/toolId.
+ *
+ * The assertions below now exercise `buildRules(adapter)` — i.e. the RENDERED
+ * per-editor content — so the guarantees ("must include agent_message note",
+ * "must include all 4 hooks", etc.) apply to what users actually get on disk.
+ */
 
-function readTemplate(name: string): string {
-  return fs.readFileSync(path.join(RULES_DIR, name), 'utf-8');
+const SHARED_BODY_PATH = path.join(__dirname, '..', 'rules', 'shared', 'body.md');
+
+const TOOLS_LIST = `- \`aide_recall\` — retrieve stored context for file paths you're about to work on
+- \`aide_remember\` — store discoveries, decisions, corrections, and preferences
+- \`aide_update\` — update an existing memory when information changes
+- \`aide_forget\` — remove outdated memories
+- \`aide_search\` — find memories by keyword
+- \`aide_import\` — seed knowledge from existing markdown docs
+- \`aide_memories\` — list all stored memories`;
+
+function render(adapterId: string): string {
+  const adapter = ADAPTERS.find((a) => a.id === adapterId);
+  if (!adapter) throw new Error(`Unknown adapter: ${adapterId}`);
+  return buildRules(adapter, { contributor: 'test-contributor', tools_list: TOOLS_LIST });
 }
 
-// Rough token estimate: word count * 1.3
+// Estimate tokens ~ word-count × 1.3. Matches the prior heuristic.
 function estimateTokens(text: string): number {
-  const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+  const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length;
   return Math.ceil(wordCount * 1.3);
 }
 
-const ALL_TEMPLATES = [
-  { name: 'claude-code.md', label: 'Claude Code' },
-  { name: 'cursor.mdc', label: 'Cursor' },
-  { name: 'copilot.md', label: 'Copilot' },
-  { name: 'windsurf.md', label: 'Windsurf' },
-  { name: 'codex.md', label: 'Codex' },
-];
-
-const FULL_TEMPLATES = ['claude-code.md', 'cursor.mdc'];
-const LIGHT_TEMPLATES = ['copilot.md', 'windsurf.md', 'codex.md'];
+const ALL_ADAPTER_IDS = ['claude-code', 'cursor', 'codex', 'copilot', 'windsurf'] as const;
 
 describe('Rules file templates', () => {
-  describe('all templates exist and are readable', () => {
-    for (const { name, label } of ALL_TEMPLATES) {
-      it(`${label} template exists`, () => {
-        const filePath = path.join(RULES_DIR, name);
-        expect(fs.existsSync(filePath)).toBe(true);
-        const content = readTemplate(name);
-        expect(content.length).toBeGreaterThan(100);
+  beforeEach(() => {
+    _resetBodyCache();
+  });
+
+  describe('shared body is the single source of truth', () => {
+    it('shared/body.md exists at the expected location', () => {
+      expect(fs.existsSync(SHARED_BODY_PATH)).toBe(true);
+      const content = fs.readFileSync(SHARED_BODY_PATH, 'utf-8');
+      expect(content.length).toBeGreaterThan(100);
+    });
+
+    it('shared body declares all 4 aide-memory layers', () => {
+      const content = fs.readFileSync(SHARED_BODY_PATH, 'utf-8');
+      for (const layer of ['preferences', 'technical', 'area_context', 'guidelines']) {
+        expect(content).toContain(layer);
+      }
+    });
+
+    it('shared body parameterizes tool_id via {{tool_id}}', () => {
+      const content = fs.readFileSync(SHARED_BODY_PATH, 'utf-8');
+      expect(content).toContain('{{tool_id}}');
+    });
+
+    it('shared body has {{editor_notes}} insertion point for per-editor caveats', () => {
+      const content = fs.readFileSync(SHARED_BODY_PATH, 'utf-8');
+      expect(content).toContain('{{editor_notes}}');
+    });
+
+    it('shared body does NOT claim aide_forget supports archive mode (regression guard)', () => {
+      // Prior per-editor drift: codex/copilot/windsurf templates used to say
+      // aide_forget could "archive outdated decisions" — incorrect, the tool
+      // permanently deletes. This assertion pins the correct behavior in the
+      // shared body so future edits don't re-introduce the drift.
+      const content = fs.readFileSync(SHARED_BODY_PATH, 'utf-8');
+      expect(content).not.toMatch(/archive outdated/i);
+      expect(content).toContain('permanently deletes');
+      expect(content).toContain('no archive mode');
+    });
+  });
+
+  describe('every adapter renders successfully', () => {
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} adapter renders non-empty content`, () => {
+        const rendered = render(id);
+        expect(rendered.length).toBeGreaterThan(500);
+      });
+
+      it(`${id} rendered content has no unresolved template variables`, () => {
+        const rendered = render(id);
+        expect(rendered).not.toMatch(/\{\{\w+\}\}/);
       });
     }
   });
 
-  describe('Claude Code template', () => {
-    it('is valid markdown (no MDC frontmatter)', () => {
-      const content = readTemplate('claude-code.md');
-      expect(content).not.toMatch(/^---\n/);
-      expect(content).toMatch(/^# /);
+  describe('claude-code adapter', () => {
+    it('renders without MDC frontmatter (plain markdown)', () => {
+      const rendered = render('claude-code');
+      expect(rendered).not.toMatch(/^---\n/);
+      expect(rendered).toMatch(/^# /);
     });
 
-    it('is under 2000 tokens', () => {
-      const content = readTemplate('claude-code.md');
-      const tokens = estimateTokens(content);
-      expect(tokens).toBeLessThan(2000);
+    it('rendered content is under 2000 tokens', () => {
+      expect(estimateTokens(render('claude-code'))).toBeLessThan(2000);
+    });
+
+    it('sets tool to "claude-code"', () => {
+      expect(render('claude-code')).toContain('"claude-code"');
     });
   });
 
-  describe('Cursor template', () => {
-    it('has valid MDC frontmatter', () => {
-      const content = readTemplate('cursor.mdc');
-      // MDC format: starts with --- frontmatter ---
-      expect(content).toMatch(/^---\n/);
-      const frontmatterEnd = content.indexOf('---', 4);
+  describe('cursor adapter', () => {
+    it('rendered content has valid MDC frontmatter', () => {
+      const rendered = render('cursor');
+      expect(rendered).toMatch(/^---\n/);
+      const frontmatterEnd = rendered.indexOf('---', 4);
       expect(frontmatterEnd).toBeGreaterThan(0);
 
-      const frontmatter = content.substring(4, frontmatterEnd);
+      const frontmatter = rendered.substring(4, frontmatterEnd);
       expect(frontmatter).toContain('description:');
       expect(frontmatter).toContain('globs:');
       expect(frontmatter).toContain('alwaysApply:');
     });
 
-    it('is under 2000 tokens', () => {
-      const content = readTemplate('cursor.mdc');
-      const tokens = estimateTokens(content);
-      expect(tokens).toBeLessThan(2000);
+    it('rendered content is under 2000 tokens', () => {
+      expect(estimateTokens(render('cursor'))).toBeLessThan(2000);
     });
 
-    it('mentions agent_message for Cursor-specific behavior', () => {
-      const content = readTemplate('cursor.mdc');
-      expect(content).toContain('agent_message');
+    it('mentions agent_message for Cursor-specific hook-response behavior', () => {
+      expect(render('cursor')).toContain('agent_message');
+    });
+
+    it('sets tool to "cursor"', () => {
+      expect(render('cursor')).toContain('"cursor"');
     });
   });
 
-  describe('all templates mention required tools', () => {
-    for (const { name, label } of ALL_TEMPLATES) {
-      it(`${label} mentions aide_recall`, () => {
-        expect(readTemplate(name)).toContain('aide_recall');
+  describe('all adapters render required tool names', () => {
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} mentions aide_recall`, () => {
+        expect(render(id)).toContain('aide_recall');
       });
 
-      it(`${label} mentions aide_remember`, () => {
-        expect(readTemplate(name)).toContain('aide_remember');
-      });
-    }
-  });
-
-  describe('all templates include layer selection guidance', () => {
-    for (const { name, label } of ALL_TEMPLATES) {
-      it(`${label} describes all 4 layers`, () => {
-        const content = readTemplate(name);
-        expect(content).toContain('preferences');
-        expect(content).toContain('technical');
-        expect(content).toContain('area_context');
-        expect(content).toContain('guidelines');
+      it(`${id} mentions aide_remember`, () => {
+        expect(render(id)).toContain('aide_remember');
       });
     }
   });
 
-  describe('template variables are present and properly formatted', () => {
-    for (const { name, label } of ALL_TEMPLATES) {
-      it(`${label} contains {{contributor}} variable`, () => {
-        expect(readTemplate(name)).toContain('{{contributor}}');
-      });
-
-      it(`${label} contains {{tools_list}} variable`, () => {
-        expect(readTemplate(name)).toContain('{{tools_list}}');
-      });
-    }
-  });
-
-  describe('no template references "status" field', () => {
-    for (const { name, label } of ALL_TEMPLATES) {
-      it(`${label} does not reference status field`, () => {
-        const content = readTemplate(name);
-        // Should not mention status as a memory field/parameter
-        // Allow "git status" or general prose use of the word, but not field references
-        expect(content).not.toMatch(/status['"]?\s*[:=]/i);
-        expect(content).not.toMatch(/\bstatus\b.*field/i);
-        expect(content).not.toMatch(/field.*\bstatus\b/i);
+  describe('all adapters describe the 4 layers', () => {
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} describes preferences, technical, area_context, guidelines`, () => {
+        const rendered = render(id);
+        for (const layer of ['preferences', 'technical', 'area_context', 'guidelines']) {
+          expect(rendered).toContain(layer);
+        }
       });
     }
   });
 
-  describe('all templates mention the 4 hooks', () => {
+  describe('all adapters mention the 4 hooks', () => {
     const HOOKS = ['PreToolUse', 'Stop', 'UserPromptSubmit', 'PreCompact'];
-
-    for (const { name, label } of ALL_TEMPLATES) {
-      it(`${label} mentions all 4 hooks`, () => {
-        const content = readTemplate(name);
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} mentions all 4 hooks`, () => {
+        const rendered = render(id);
         for (const hook of HOOKS) {
-          expect(content).toContain(hook);
+          expect(rendered).toContain(hook);
         }
       });
     }
   });
 
-  describe('token limits', () => {
-    for (const name of FULL_TEMPLATES) {
-      it(`${name} (full template) is under 2000 tokens`, () => {
-        const tokens = estimateTokens(readTemplate(name));
-        expect(tokens).toBeLessThan(2000);
-      });
-    }
-
-    for (const name of LIGHT_TEMPLATES) {
-      it(`${name} (lightweight template) is under 2000 tokens`, () => {
-        const tokens = estimateTokens(readTemplate(name));
-        expect(tokens).toBeLessThan(2000);
+  describe('all adapters fit under 2000-token soft limit', () => {
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} rendered content is under 2000 tokens`, () => {
+        expect(estimateTokens(render(id))).toBeLessThan(2000);
       });
     }
   });
 
-  describe('tool-specific generated_by values', () => {
-    it('Claude Code sets tool to "claude-code"', () => {
-      expect(readTemplate('claude-code.md')).toContain('"claude-code"');
-    });
-
-    it('Cursor sets tool to "cursor"', () => {
-      expect(readTemplate('cursor.mdc')).toContain('"cursor"');
-    });
-
-    it('Copilot sets tool to "copilot"', () => {
-      expect(readTemplate('copilot.md')).toContain('"copilot"');
-    });
-
-    it('Windsurf sets tool to "windsurf"', () => {
-      expect(readTemplate('windsurf.md')).toContain('"windsurf"');
-    });
-
-    it('Codex sets tool to "codex"', () => {
-      expect(readTemplate('codex.md')).toContain('"codex"');
-    });
-  });
-
-  describe('scope guidance', () => {
-    for (const { name, label } of ALL_TEMPLATES) {
-      it(`${label} includes glob pattern examples for scope`, () => {
-        const content = readTemplate(name);
-        expect(content).toMatch(/src\/\S+\*\*/);
+  describe('per-editor tool_id substitution', () => {
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} sets tool to "${id}"`, () => {
+        expect(render(id)).toContain(`"${id}"`);
       });
     }
   });
 
-  describe('tag presets', () => {
+  describe('all adapters mention required preset tags', () => {
     const PRESET_TAGS = ['architecture', 'testing', 'security', 'style', 'api-contract'];
-
-    for (const { name, label } of ALL_TEMPLATES) {
-      it(`${label} lists preset tags`, () => {
-        const content = readTemplate(name);
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} lists preset tags`, () => {
+        const rendered = render(id);
         for (const tag of PRESET_TAGS) {
-          expect(content).toContain(tag);
+          expect(rendered).toContain(tag);
         }
+      });
+    }
+  });
+
+  describe('all adapters show scope glob examples', () => {
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} includes glob pattern examples for scope`, () => {
+        expect(render(id)).toMatch(/src\/\S+\*\*/);
+      });
+    }
+  });
+
+  describe('no template references memory "status" field (regression guard)', () => {
+    // `status` was never a real memory field; it crept into early drafts.
+    // Guard against its return across all rendered editor outputs.
+    for (const id of ALL_ADAPTER_IDS) {
+      it(`${id} does not reference status field`, () => {
+        const rendered = render(id);
+        expect(rendered).not.toMatch(/status['"]?\s*[:=]/i);
+        expect(rendered).not.toMatch(/\bstatus\b.*field/i);
+        expect(rendered).not.toMatch(/field.*\bstatus\b/i);
       });
     }
   });

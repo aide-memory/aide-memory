@@ -5,6 +5,8 @@
 import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
 import { requireProjectRoot, brand } from './utils';
+import { shouldRegenForMemory, triggerRulesRegen } from '../../../memory/rulesGen';
+import { adaptersWithRules } from '../../../memory/editors';
 
 export interface UpdateOptions {
   what?: string;
@@ -52,6 +54,16 @@ export function runUpdate(idStr: string, options: UpdateOptions): void {
     console.log(`  What:  ${updated.what}`);
     if (updated.scope) console.log(`  Scope: ${updated.scope}`);
     if (updated.why) console.log(`  Why:   ${updated.why}`);
+
+    // Phase C4 regen trigger. Check BOTH pre- and post-update because
+    // the update could have changed priority (normal ↔ always).
+    if (shouldRegenForMemory(existing) || shouldRegenForMemory(updated)) {
+      try {
+        triggerRulesRegen(adaptersWithRules(), projectRoot);
+      } catch {
+        /* rules regen is convenience — never fail a CLI write because of it */
+      }
+    }
   } finally {
     store.close();
   }

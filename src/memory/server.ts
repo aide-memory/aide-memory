@@ -8,6 +8,8 @@ import { recall } from './recall';
 import { logStoreEvent } from './store-log';
 import { EmbeddingService } from './embeddings';
 import type { MemoryLayer, MemorySource } from './types';
+import { adaptersWithRules } from './editors';
+import { shouldRegenForMemory, triggerRulesRegen } from './rulesGen';
 
 const LAYER_VALUES: [string, ...string[]] = ['preferences', 'technical', 'area_context', 'guidelines'];
 const SOURCE_VALUES: [string, ...string[]] = ['conversation', 'import', 'agent_discovery', 'elevated', 'hook'];
@@ -54,6 +56,26 @@ const lenientBoolean = z.preprocess((v) => {
 
 export function createServer(store: MemoryStore, options?: { logDir?: string | null }): McpServer {
   const logDir = options?.logDir ?? null;
+
+  /**
+   * Trigger dynamic rule-file regeneration after a memory write if the
+   * memory affects session-start content. Fire-and-forget — errors do NOT
+   * propagate back to the MCP tool response. This is the C4 regen trigger
+   * for aide_remember / aide_update / aide_forget. See rulesGen.ts docstring.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const maybeRegenRules = (memory: any): void => {
+    if (!shouldRegenForMemory(memory)) return;
+    const projectRoot = store.getProjectRoot();
+    if (!projectRoot) return;
+    try {
+      triggerRulesRegen(adaptersWithRules(), projectRoot);
+    } catch {
+      // triggerRulesRegen already swallows its own errors; extra guard here
+      // for belt-and-suspenders — MCP tool responses must never be lost to
+      // a rules-regen issue.
+    }
+  };
   const server = new McpServer({
     name: 'aide-memory',
     // Read from the installed package.json (NOT hardcoded — the prior
@@ -152,6 +174,7 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       });
 
       logStoreEvent(logDir, 'memory_stored', memory);
+      maybeRegenRules(memory);
 
       return {
         content: [{
@@ -203,6 +226,12 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       const updated = store.update(id, changes);
 
       logStoreEvent(logDir, 'memory_updated', updated!);
+      // Check BOTH pre- + post-update memory since the update may have
+      // flipped priority (e.g. normal → always or vice versa). Regen if
+      // either version would have triggered it.
+      if (shouldRegenForMemory(existing) || shouldRegenForMemory(updated)) {
+        maybeRegenRules(updated);
+      }
 
       return {
         content: [{
@@ -232,6 +261,10 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
 
       store.remove(id);
       logStoreEvent(logDir, 'memory_deleted', existing);
+      // Use pre-delete `existing` memory to decide whether rules regen is
+      // needed — the memory no longer exists post-remove, but its former
+      // layer/priority tells us whether the session-start content changed.
+      maybeRegenRules(existing);
       return {
         content: [{ type: 'text' as const, text: `Deleted: "${existing.what}" (id: ${id})` }],
       };

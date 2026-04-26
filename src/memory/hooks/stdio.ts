@@ -19,7 +19,18 @@
  * paths we still emit `systemMessage` as user-facing reassurance alongside
  * the platform-rendered label, without changing the `reason` text that the
  * model consumes.
+ *
+ * Phase C3 (2026-04-23): emit helpers now route through the active editor
+ * adapter's `translateOutput()`. Claude Code is the canonical shape — its
+ * adapter produces byte-identical output to the pre-C3 hardcoded JSON.
+ * Cursor's adapter remaps block → `{permission: "deny", user_message}` and
+ * silences additionalContext/systemMessage emits (no channel in Cursor).
+ * Unsupported emits become no-ops rather than errors — aide-memory must
+ * never break a hook execution because of output-shape differences.
  */
+
+import { detectActiveAdapter } from '../editors';
+import { HookEmit } from '../editors/types';
 
 export async function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -51,10 +62,23 @@ type HookEventName =
   | 'PreCompact';
 
 /**
+ * Core emit — translates a canonical HookEmit descriptor through the active
+ * adapter and writes the result to stdout. Returns nothing (handlers return
+ * after calling an emit helper). Empty string from translateOutput → no
+ * stdout write (silent).
+ */
+function emit(descriptor: HookEmit): void {
+  const adapter = detectActiveAdapter();
+  const out = adapter.translateOutput(descriptor);
+  if (out) process.stdout.write(out);
+}
+
+/**
  * Emit an additionalContext (soft) output and exit 0.
  * Use for PreToolUse / UserPromptSubmit / SessionStart-style nudges.
  *
- * @param eventName - Claude Code hook event name
+ * @param eventName - Claude Code hook event name (for the hookSpecificOutput
+ *   wrapper; Cursor's adapter ignores this since it has no equivalent channel)
  * @param text - additionalContext payload (shown to the model, not the user)
  * @param userMessage - optional user-facing systemMessage line (caller gates
  *   on `hooks.visible` config; pass `undefined` when visibility is disabled)
@@ -64,30 +88,33 @@ export function emitAdditionalContext(
   text: string,
   userMessage?: string,
 ): void {
-  const payload: Record<string, unknown> = {
-    hookSpecificOutput: {
-      hookEventName: eventName,
-      additionalContext: text,
-    },
-  };
-  if (userMessage) payload.systemMessage = userMessage;
-  process.stdout.write(JSON.stringify(payload, null, 2));
+  emit({ kind: 'additionalContext', event: eventName, context: text, systemMessage: userMessage });
 }
 
 /**
  * Emit a block decision (hard stop) and exit 0 — Claude Code reads the
- * JSON payload, not the process exit code, for block decisions.
+ * JSON payload, not the process exit code, for block decisions. Cursor's
+ * adapter translates this to different shapes depending on which hook
+ * event fired the block:
+ *   - preToolUse (default) → `{permission: "deny", user_message}`
+ *   - stop                 → `{followup_message}` (Cursor reprompt channel)
+ *   - userPromptSubmit     → `{continue: false, user_message}`
  *
  * @param reason - block reason (shown to the model AND the user — do NOT
  *   change wording for UX reasons; change userMessage instead)
  * @param userMessage - optional user-facing systemMessage line for
  *   reassurance alongside the platform-rendered "blocking error" label
- *   (caller gates on `hooks.visible` config)
+ *   (caller gates on `hooks.visible` config; Cursor ignores this)
+ * @param event - source hook type. Defaults to 'preToolUse' for back-compat
+ *   with pre-C5 emit sites. Stop handler passes 'stop' so Cursor gets the
+ *   followup_message reprompt shape instead of a preToolUse deny.
  */
-export function emitBlockDecision(reason: string, userMessage?: string): void {
-  const payload: Record<string, unknown> = { decision: 'block', reason };
-  if (userMessage) payload.systemMessage = userMessage;
-  process.stdout.write(JSON.stringify(payload, null, 2));
+export function emitBlockDecision(
+  reason: string,
+  userMessage?: string,
+  event?: 'preToolUse' | 'stop' | 'userPromptSubmit',
+): void {
+  emit({ kind: 'block', reason, systemMessage: userMessage, event });
 }
 
 /**

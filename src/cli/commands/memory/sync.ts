@@ -10,6 +10,8 @@ import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
 import { MemorySync } from '../../../memory/sync';
 import type { SyncResult } from '../../../memory/sync';
+import { triggerRulesRegen } from '../../../memory/rulesGen';
+import { adaptersWithRules } from '../../../memory/editors';
 import { requireProjectRoot, brand } from './utils';
 
 function printSyncResult(action: string, result: SyncResult, exportMode: boolean = false): void {
@@ -43,6 +45,18 @@ export function runSyncImport(): void {
     const sync = new MemorySync(store);
     const result = sync.importFromFiles();
     printSyncResult('Import', result);
+
+    // Phase C4 trigger per plan §4.3: sync import may have added memories
+    // that affect session-start content. Regen whenever imports or updates
+    // happened — cheaper than scanning the result for trigger-worthy
+    // memories. Fire-and-forget.
+    if (result.imported > 0 || result.updated > 0) {
+      try {
+        triggerRulesRegen(adaptersWithRules(), projectRoot);
+      } catch {
+        /* rules regen is convenience — never fail a sync-import because of it */
+      }
+    }
   } finally {
     store.close();
   }

@@ -5,6 +5,8 @@
 import chalk from 'chalk';
 import { MemoryStore } from '../../../memory/store';
 import { requireProjectRoot, brand } from './utils';
+import { shouldRegenForMemory, triggerRulesRegen } from '../../../memory/rulesGen';
+import { adaptersWithRules } from '../../../memory/editors';
 
 export function runForget(idStr: string): void {
   const id = parseInt(idStr, 10);
@@ -25,6 +27,16 @@ export function runForget(idStr: string): void {
 
     store.remove(id);
     console.log(brand(`Deleted memory ${id}: "${existing.what}"`));
+
+    // Phase C4 regen trigger. Use pre-delete `existing` to decide since
+    // the memory no longer exists post-remove.
+    if (shouldRegenForMemory(existing)) {
+      try {
+        triggerRulesRegen(adaptersWithRules(), projectRoot);
+      } catch {
+        /* rules regen is convenience — never fail a CLI write because of it */
+      }
+    }
   } finally {
     store.close();
   }

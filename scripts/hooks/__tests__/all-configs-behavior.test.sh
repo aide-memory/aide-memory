@@ -344,6 +344,30 @@ test_recall_diversity() {
   fi
 }
 
+# ---- 9a. injection.enabled (master switch) -------------------------------
+test_injection_enabled() {
+  local key=injection.enabled
+  local dir
+  dir=$(new_project)
+  # Seed a preference so SessionStart would normally inject something.
+  seed_scoped_memory "$dir" preferences "project" "master-switch-token-PQR"
+  # Flip master switch OFF → handler should short-circuit before the preference
+  # layer loads. Output should NOT contain the token.
+  set_cfg "$dir" $key false
+  local o_off
+  o_off=$(fire_hook session-start "{\"session_id\":\"sxoff\",\"cwd\":\"$dir\",\"source\":\"startup\"}")
+  # Flip back ON → injection runs, token surfaces.
+  set_cfg "$dir" $key true
+  local o_on
+  o_on=$(fire_hook session-start "{\"session_id\":\"sxon\",\"cwd\":\"$dir\",\"source\":\"startup\"}")
+  rm -rf "$dir"
+  if ! echo "$o_off" | grep -q 'master-switch-token-PQR' && echo "$o_on" | grep -q 'master-switch-token-PQR'; then
+    record_pass "$key" "false short-circuits SessionStart injection; true re-enables"
+  else
+    record_fail "$key" "off='${o_off:0:60}' on='${o_on:0:60}'"
+  fi
+}
+
 # ---- 9. injection.preferences + technical + area_context + guidelines -----
 test_injection_preferences() {
   local key=injection.preferences
@@ -712,6 +736,7 @@ test_hooks_precompact_mode
 test_recall_limit
 test_recall_diversity
 test_recall_minScopeDepth
+test_injection_enabled
 test_injection_preferences
 test_injection_excludeScopedPreferences
 test_injection_technical

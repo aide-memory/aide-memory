@@ -26,6 +26,8 @@ import { requireProjectRoot, brand } from './utils';
 import { resyncDerivedArtifacts } from '../../../memory/init';
 import { loadDefaults } from '../../../memory/settings';
 import { AideConfig } from '../../../memory/config';
+import { triggerRulesRegen } from '../../../memory/rulesGen';
+import { adaptersWithRules } from '../../../memory/editors';
 
 function getConfigPath(projectRoot: string): string {
   return path.join(projectRoot, '.aide', 'config.json');
@@ -284,13 +286,33 @@ export function runConfigList(): void {
 
 function applySideEffects(projectRoot: string, key: string, _value: any): void {
   const KEYS_WITH_DERIVED_ARTIFACTS = new Set(['memories.hideFromGrep']);
-  if (!KEYS_WITH_DERIVED_ARTIFACTS.has(key)) return;
+  if (KEYS_WITH_DERIVED_ARTIFACTS.has(key)) {
+    // `resyncDerivedArtifacts` reads the current config from disk and
+    // rewrites every derived file. We just wrote the new value above, so
+    // this picks up the change.
+    const changed = resyncDerivedArtifacts(projectRoot);
+    for (const msg of changed) {
+      console.log(brand(msg));
+    }
+  }
 
-  // `resyncDerivedArtifacts` reads the current config from disk and
-  // rewrites every derived file. We just wrote the new value above, so
-  // this picks up the change.
-  const changed = resyncDerivedArtifacts(projectRoot);
-  for (const msg of changed) {
-    console.log(brand(msg));
+  // Phase C4: trigger Cursor rules-file regeneration when a key that
+  // affects session-start content changes. Mirrors the SessionStart
+  // handler's config reads (injection.* + memories.softening.threshold).
+  // Prefix match keeps this forward-compatible: new `injection.<foo>`
+  // keys added in later phases automatically pick up regen without
+  // needing to update this set.
+  const affectsSessionStart =
+    key.startsWith('injection.') || key === 'memories.softening.threshold';
+  if (affectsSessionStart) {
+    try {
+      const results = triggerRulesRegen(adaptersWithRules(), projectRoot);
+      for (const r of results) {
+        if (r.written) console.log(brand(`regenerated ${r.dest}`));
+        if (r.budgetWarning) console.warn(brand(r.budgetWarning));
+      }
+    } catch (err) {
+      console.warn(brand(`rules regen skipped: ${(err as Error).message}`));
+    }
   }
 }

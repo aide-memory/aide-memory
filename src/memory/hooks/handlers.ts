@@ -36,6 +36,7 @@ import {
   writeStopCount,
 } from './tracking';
 import { computeRecallForPath } from './recallForPath';
+import { buildSessionStartContent } from '../sessionStartContent';
 
 type HookInput = {
   tool_name?: string;
@@ -532,13 +533,19 @@ export async function stop(input: HookInput): Promise<void> {
 
   const visible = isVisible(projectRoot);
 
-  // Correction-pending flag always blocks, regardless of interval.
+  // Correction-pending flag always blocks, regardless of interval. This is
+  // the Cursor correction-delay endpoint: beforeSubmitPrompt detected a
+  // correction last turn, wrote the flag (Cursor dropped the additional_
+  // context channel silently per CURSOR_ONBOARDING.md §1 gap), so this Stop
+  // hook delivers the reminder. Passes event='stop' so Cursor's adapter
+  // renders `{followup_message}` instead of the preToolUse-style
+  // `{permission: "deny"}` shape.
   if (hasCorrectionPending(projectRoot, sessionId)) {
     clearCorrectionPending(projectRoot, sessionId);
     const userMessage = visible
       ? `${BRAND}correction from this turn was not saved — prompting aide_remember`
       : undefined;
-    emitBlockDecision(CORRECTION_PENDING_PROMPT, userMessage);
+    emitBlockDecision(CORRECTION_PENDING_PROMPT, userMessage, 'stop');
     return;
   }
 
@@ -575,7 +582,9 @@ export async function stop(input: HookInput): Promise<void> {
     const userMessage = visible
       ? `${BRAND}checkpoint — prompting aide_remember for anything critical (expected)`
       : undefined;
-    emitBlockDecision(DEFAULT_PROMPT, userMessage);
+    // Stop-scheduled nudge — same event='stop' routing as correction-pending
+    // branch above so Cursor emits followup_message rather than deny.
+    emitBlockDecision(DEFAULT_PROMPT, userMessage, 'stop');
   }
   // Non-block turns: silent (agent has proactive saving rule in rules file).
 }
@@ -598,40 +607,10 @@ export async function preCompact(input: HookInput): Promise<void> {
 // SessionStart — session-start-clear + session-inject
 // ---------------------------------------------------------------------------
 
-function loadLayer(
-  store: MemoryStore,
-  layer: 'preferences' | 'technical' | 'area_context' | 'guidelines',
-  setting: any,
-  projectRoot: string,
-): Memory[] {
-  if (setting === false || setting === 0) return [];
-  let all = store.list({ layer });
-
-  // Preferences layer sorts by recalled_count desc first (most-used prefs
-  // stay top of the injection budget), updated_at desc as tiebreaker. Other
-  // layers keep the existing updated_at-desc ordering.
-  if (layer === 'preferences') {
-    // excludeScoped: when true, drop scoped preferences from SessionStart —
-    // they surface via Read/Edit path hooks when the agent touches matching
-    // paths. Default false preserves the inject-all-prefs behavior.
-    const excludeScoped = getSetting(projectRoot, 'injection.excludeScopedPreferences') === true;
-    if (excludeScoped) {
-      all = all.filter(m => !m.scope || m.scope === 'project');
-    }
-    all.sort((a, b) => {
-      const ra = (a as any).recalled_count ?? 0;
-      const rb = (b as any).recalled_count ?? 0;
-      if (rb !== ra) return rb - ra;
-      return (b.updated_at || '').localeCompare(a.updated_at || '');
-    });
-  } else {
-    all.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-  }
-
-  if (setting === 'all') return all;
-  if (typeof setting === 'number' && setting > 0) return all.slice(0, setting);
-  return all;
-}
+// loadLayer + content-building logic moved to src/memory/sessionStartContent.ts
+// in Phase C4 so both sessionStart (this file) + rulesGen (for Cursor) share
+// one implementation. Single source of truth — no drift between Claude Code's
+// injected content and Cursor's rules-file dynamic section.
 
 export async function sessionStart(input: HookInput): Promise<void> {
   const projectRoot = resolveProjectRoot(input);
@@ -646,85 +625,17 @@ export async function sessionStart(input: HookInput): Promise<void> {
     clearSessionTracking(projectRoot, sessionId);
   }
 
-  // Inject preferences / guidelines / priority-always.
-  const prefLimit = getSetting(projectRoot, 'injection.preferences') ?? 15;
-  const techEnabled = getSetting(projectRoot, 'injection.technical') ?? false;
-  const areaEnabled = getSetting(projectRoot, 'injection.area_context') ?? false;
-  const guidelinesMode = getSetting(projectRoot, 'injection.guidelines') ?? 'all';
-  const priorityOverride = getSetting(projectRoot, 'injection.priorityAlwaysOverride') ?? true;
-
-  const maxInjectChars = Number(getSetting(projectRoot, 'injection.maxChars') ?? 1200);
-
+  // Injection content + priority:always + layer-caps logic lives in the
+  // shared buildSessionStartContent helper (extracted Phase C4). Same
+  // implementation drives Cursor's rules-file regeneration so the two
+  // channels never drift.
   const store = new MemoryStore({ projectRoot });
   let output = '';
-  const allInjectedIds: (string | number)[] = [];
+  let allInjectedIds: (string | number)[] = [];
   try {
-    const preferences = loadLayer(store, 'preferences', prefLimit, projectRoot);
-    const technical = loadLayer(store, 'technical', techEnabled, projectRoot);
-    const areaContext = loadLayer(store, 'area_context', areaEnabled, projectRoot);
-    const guidelines = loadLayer(store, 'guidelines', guidelinesMode, projectRoot);
-    const alwaysPriority = priorityOverride ? (store as any).list({ priority: 'always' }) : [];
-
-    const seen = new Set<string>();
-    const add = (memories: Memory[], bucket: string[]) => {
-      for (const m of memories) {
-        const key = (m as any).uuid || String(m.id);
-        if (!seen.has(key)) {
-          seen.add(key);
-          bucket.push(m.what);
-          allInjectedIds.push(m.id as any);
-        }
-      }
-    };
-
-    const deduped = {
-      preferences: [] as string[],
-      technical: [] as string[],
-      area_context: [] as string[],
-      guidelines: [] as string[],
-      always: [] as string[],
-    };
-    add(preferences, deduped.preferences);
-    add(technical, deduped.technical);
-    add(areaContext, deduped.area_context);
-    add(guidelines, deduped.guidelines);
-    add(alwaysPriority, deduped.always);
-
-    const total =
-      deduped.preferences.length +
-      deduped.technical.length +
-      deduped.area_context.length +
-      deduped.guidelines.length +
-      deduped.always.length;
-    if (total === 0) return;
-
-    const lines: string[] = [];
-    // Always-priority section FIRST so user-marked priority memories survive
-    // the char cap even when other layers consume the budget. (Reorder added
-    // in 0.4.3 — was previously last, which meant priority memories got
-    // truncated on large projects.)
-    if (deduped.always.length > 0) {
-      lines.push('## Always');
-      for (const w of deduped.always) lines.push(`- ${w}`);
-    }
-    if (deduped.preferences.length > 0) {
-      lines.push('## Session Preferences');
-      for (const w of deduped.preferences) lines.push(`- ${w}`);
-    }
-    if (deduped.technical.length > 0) {
-      lines.push('## Technical Context');
-      for (const w of deduped.technical) lines.push(`- ${w}`);
-    }
-    if (deduped.area_context.length > 0) {
-      lines.push('## Area Context');
-      for (const w of deduped.area_context) lines.push(`- ${w}`);
-    }
-    if (deduped.guidelines.length > 0) {
-      lines.push('## Guidelines');
-      for (const w of deduped.guidelines) lines.push(`- ${w}`);
-    }
-    output = lines.join('\n');
-    if (output.length > maxInjectChars) output = output.slice(0, maxInjectChars) + '\n...truncated';
+    const built = buildSessionStartContent(projectRoot, store);
+    output = built.content;
+    allInjectedIds = built.injectedIds;
   } finally {
     store.close();
   }
@@ -736,26 +647,18 @@ export async function sessionStart(input: HookInput): Promise<void> {
     mergeTrackedIds(projectRoot, sessionId, allInjectedIds.map(String));
   }
 
-  // Emit via JSON envelope so we can attach a user-facing systemMessage line
-  // alongside the additionalContext Claude consumes. Claude Code accepts both
-  // plain stdout and JSON { hookSpecificOutput.additionalContext } for
-  // SessionStart (per hooks docs); switching to JSON lets us surface
-  // "aide-memory · injected N memories ..." to the user when hooks.visible
-  // is true.
+  // Route through the active adapter's translateOutput so Claude Code gets
+  // its canonical hookSpecificOutput envelope (unchanged) and Cursor (when
+  // sessionStart.additional_context is ever fixed, forum #158452) can map
+  // to whatever shape it supports. Today Cursor's adapter returns '' here —
+  // session-start injection uses the rules-file workaround (Phase C4).
   const visible = isVisible(projectRoot);
   const totalInjected = allInjectedIds.length;
   const userMessage = visible && totalInjected > 0
     ? `${BRAND}injected ${totalInjected} ${totalInjected === 1 ? 'memory' : 'memories'} at session start`
     : undefined;
 
-  const payload: Record<string, unknown> = {
-    hookSpecificOutput: {
-      hookEventName: 'SessionStart',
-      additionalContext: output,
-    },
-  };
-  if (userMessage) payload.systemMessage = userMessage;
-  process.stdout.write(JSON.stringify(payload, null, 2));
+  emitAdditionalContext('SessionStart', output, userMessage);
 }
 
 // ---------------------------------------------------------------------------

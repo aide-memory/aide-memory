@@ -5,6 +5,12 @@ import { AideConfig } from './config';
 import { MemoryStore } from './store';
 import { syncIgnoreFile, readHideFromGrep } from './ignoreFile';
 import { listPublicDefaults, flatMapToNested, loadDefaults } from './settings';
+import { claudeCodeAdapter } from './editors/claude-code';
+import { adaptersWithRules, adaptersWithHooks, adaptersWithMcp } from './editors';
+import { buildRules } from './editors/rules';
+import { EditorAdapter } from './editors/types';
+import { regenerateAllRules, regenerateRulesForAdapter } from './rulesGen';
+import { HOOK_EVENTS } from './hooks/events';
 
 export interface InitResult {
   created: string[];
@@ -34,6 +40,14 @@ const GITIGNORE_ENTRIES = [
   '.aide/cache/',
   '.aide/recall-log.jsonl',
   '.aide/pending-memories.jsonl',
+  // Cursor rule file is a derived artifact. Static content today; Phase C4
+  // will make it regenerate from the SQLite store + config on memory/config
+  // writes (workaround for broken sessionStart.additional_context per
+  // CURSOR_ONBOARDING.md §4). Marking it gitignored now means teammates
+  // don't accidentally commit per-session state once C4 ships. Remove this
+  // entry when Cursor bug #158452 is fixed and we narrow the rules file
+  // back to static content.
+  '.cursor/rules/aide-memory.mdc',
 ];
 
 const HOOK_START_MARKER = '# >>> aide-memory post-checkout hook >>>';
@@ -58,157 +72,247 @@ function getPackageRoot(): string {
 }
 
 /**
- * Generate the Claude Code hook configuration with absolute paths to hook scripts.
+ * Write an editor adapter's hook config file. Handles three scenarios:
+ *   1. File doesn't exist → write fresh content with version stamp.
+ *   2. File exists, no aide-memory hooks yet → merge (preserve user's other
+ *      top-level settings, add our hooks + stamp).
+ *   3. File exists with aide-memory hooks already → skip unless `force`, in
+ *      which case merge/overwrite and re-stamp.
+ *
+ * Merge semantics: shallow-merge at top level. Our `hooks` key wins over any
+ * existing `hooks` key — aide-memory's hook set is our contract. Users who
+ * want to preserve other tools' hooks should configure them separately in
+ * their own hook config file (Claude Code's settings.local.json or Cursor's
+ * workspace-vs-project overrides).
+ *
+ * Collision warning for Cursor: if the existing file has hooks for events
+ * aide-memory ALSO claims, and the merged output will drop the user's
+ * (per Cursor forum #141996 "only first hook per event runs" quirk), we'd
+ * ideally warn. Not wired yet — Phase C2 minimum scope, follow-up for C6.
  */
-function generateHookConfig(packageRoot: string): object {
-  const h = (script: string) => `bash ${path.join(packageRoot, 'scripts', 'hooks', script)}`;
-  return {
-    hooks: {
-      SessionStart: [{ hooks: [{ type: 'command', command: h('session-start-clear.sh'), timeout: 10 }] }],
-      PreCompact: [{ hooks: [{ type: 'command', command: h('pre-compact-save.sh'), timeout: 30 }] }],
-      Stop: [{ hooks: [{ type: 'command', command: h('stop-remember.sh'), timeout: 30 }] }],
-      UserPromptSubmit: [{ hooks: [{ type: 'command', command: h('detect-correction.sh'), timeout: 5 }] }],
-      PreToolUse: [
-        { matcher: 'Read', hooks: [{ type: 'command', command: h('pre-read-recall.sh'), timeout: 10 }] },
-        { matcher: 'Edit', hooks: [{ type: 'command', command: h('pre-edit-recall.sh'), timeout: 10 }] },
-        { matcher: 'Write', hooks: [{ type: 'command', command: h('pre-edit-recall.sh'), timeout: 10 }] },
-        { matcher: 'Grep', hooks: [{ type: 'command', command: h('pre-search-nudge.sh'), timeout: 10 }] },
-        { matcher: 'Glob', hooks: [{ type: 'command', command: h('pre-search-nudge.sh'), timeout: 10 }] },
-        { matcher: 'mcp__aide-memory__aide_recall', hooks: [{ type: 'command', command: h('track-recall.sh'), timeout: 5 }] },
-      ],
-      PostToolUse: [
-        { matcher: 'mcp__aide-memory__aide_recall', hooks: [{ type: 'command', command: h('track-recall-post.sh'), timeout: 5 }] },
-        { matcher: 'mcp__aide-memory__aide_remember', hooks: [{ type: 'command', command: h('track-remember.sh'), timeout: 5 }] },
-        { matcher: 'mcp__aide-memory__aide_update', hooks: [{ type: 'command', command: h('track-remember.sh'), timeout: 5 }] },
-        { matcher: 'mcp__aide-memory__aide_forget', hooks: [{ type: 'command', command: h('track-remember.sh'), timeout: 5 }] },
-        { matcher: 'mcp__aide-memory__aide_search', hooks: [{ type: 'command', command: h('track-search.sh'), timeout: 5 }] },
-      ],
-    },
-  };
-}
-
-/**
- * Write .claude/settings.json with hook configuration.
- * If the file already exists and has hooks, merge (don't overwrite user's other settings).
- */
-function writeHookConfig(
+function writeHookConfigFor(
+  adapter: EditorAdapter,
   projectRoot: string,
   force: boolean,
-  stampVersion?: string
+  stampVersion?: string,
 ): { created: string[]; skipped: string[] } {
   const created: string[] = [];
   const skipped: string[] = [];
+  const relPath = adapter.hookConfigPath;
 
-  const settingsPath = path.join(projectRoot, '.claude', 'settings.json');
+  const settingsPath = path.join(projectRoot, relPath);
   const settingsDir = path.dirname(settingsPath);
-
-  if (!fs.existsSync(settingsDir)) {
-    fs.mkdirSync(settingsDir, { recursive: true });
-  }
+  if (!fs.existsSync(settingsDir)) fs.mkdirSync(settingsDir, { recursive: true });
 
   const packageRoot = getPackageRoot();
-  const hookConfig = generateHookConfig(packageRoot);
+  const hookConfig = adapter.buildHookConfig({ packageRoot }) as Record<string, unknown>;
+  const stamp = stampVersion ? { _aideMemoryVersion: stampVersion } : {};
 
-  if (fs.existsSync(settingsPath) && !force) {
-    // Merge: read existing, add hooks if not present
-    try {
-      const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      if (existing.hooks) {
-        skipped.push('.claude/settings.json (hooks already configured)');
-        return { created, skipped };
-      }
-      // No hooks yet — add them
-      const merged = { ...existing, ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
-      fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
-      created.push('.claude/settings.json (hooks added)');
-    } catch {
-      // Malformed JSON — overwrite
-      const stamped = { ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
-      fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
-      created.push('.claude/settings.json');
-    }
-  } else if (force && fs.existsSync(settingsPath)) {
-    // Force: merge hooks into existing settings, preserving user's other keys
-    try {
-      const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      const merged = { ...existing, ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
-      fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
-      created.push('.claude/settings.json (hooks force-updated)');
-    } catch {
-      const stamped = { ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
-      fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
-      created.push('.claude/settings.json');
-    }
-  } else {
-    const stamped = { ...hookConfig, ...(stampVersion ? { _aideMemoryVersion: stampVersion } : {}) };
-    fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
-    created.push('.claude/settings.json');
+  const writeFresh = (reason: string) => {
+    fs.writeFileSync(settingsPath, JSON.stringify({ ...hookConfig, ...stamp }, null, 2) + '\n', 'utf8');
+    created.push(`${relPath}${reason ? ` (${reason})` : ''}`);
+  };
+
+  if (!fs.existsSync(settingsPath)) {
+    writeFresh('');
+    return { created, skipped };
   }
 
+  // File exists. Read + detect whether aide-memory's hooks are already wired.
+  let existing: Record<string, unknown>;
+  try {
+    existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  } catch {
+    // Malformed JSON — overwrite rather than crash.
+    writeFresh('');
+    return { created, skipped };
+  }
+
+  const hasAideHooks = detectAideMemoryHooksInConfig(existing, packageRoot);
+  if (hasAideHooks && !force) {
+    skipped.push(`${relPath} (hooks already configured)`);
+    return { created, skipped };
+  }
+
+  // Per-event merge (Phase C6 fix). BEFORE: we replaced the top-level `hooks`
+  // key wholesale, clobbering any other tool's hook entries (e.g. a secret
+  // scanner registered under `preToolUse` on Cursor, or a formatter on
+  // Claude Code). NOW: filter OUR old entries out of each event array + add
+  // our FRESH entries, preserving every non-aide-memory entry in place.
+  //
+  // This is especially important for Cursor given quirk #141996 ("only first
+  // hook per event runs") — if we both claim preToolUse, clobbering drops
+  // the user's scanner silently. With per-event merge, the user's entry is
+  // preserved and Cursor's own "first hook" logic decides ordering.
+  const mergedHooks = mergeHooksByEvent(
+    (existing.hooks as Record<string, unknown[]> | undefined) ?? {},
+    (hookConfig.hooks as Record<string, unknown[]> | undefined) ?? {},
+    packageRoot,
+  );
+  const merged: Record<string, unknown> = { ...existing, ...hookConfig, hooks: mergedHooks, ...stamp };
+  fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+  created.push(`${relPath} (hooks ${force ? 'force-updated' : 'added'})`);
   return { created, skipped };
 }
 
 /**
- * Write .mcp.json with MCP server configuration.
- * This enables aide_recall, aide_remember, etc. tools in Claude Code sessions.
+ * Per-event merge: for every event name in EITHER existing or our hooks,
+ * concatenate (user's non-aide-memory entries) + (our fresh entries).
+ *
+ * `packageRoot` is used to identify aide-memory entries — an entry whose
+ * command references the aide-memory package's `scripts/hooks/` directory
+ * counts as ours and gets replaced with the fresh version. Any other entry
+ * is preserved untouched.
+ *
+ * Why this matters:
+ *   - Claude Code: user may have other tools' hooks in `.claude/settings.json`.
+ *     Clobbering them silently breaks those tools.
+ *   - Cursor: per forum quirk #141996 only the FIRST hook per event runs,
+ *     but entries from multiple tools can coexist in the array. If we
+ *     clobber, the user loses their hook. If we append after removing our
+ *     OLD entries, their hook stays intact + the "first hook" ordering is
+ *     up to them.
  */
-function writeMcpConfig(
+function mergeHooksByEvent(
+  existingHooks: Record<string, unknown>,
+  ourHooks: Record<string, unknown>,
+  packageRoot: string,
+): Record<string, unknown[]> {
+  // An entry counts as "ours" if it (a) points at the CURRENT packageRoot
+  // OR (b) references any of our known script filenames from the
+  // HOOK_EVENTS manifest. Combining both catches two scenarios:
+  //   - Fresh re-init at same install location: packageRoot path matches.
+  //   - User reinstalled aide-memory at a different location (e.g. global
+  //     → local dev path): old entries still recognized via script-name
+  //     signature + replaced with fresh ones. Without this, stale paths
+  //     from prior installs would linger as dead "user entries."
+  const packageRootNeedle = path.join(packageRoot, 'scripts', 'hooks');
+  const aideScriptNames = new Set(HOOK_EVENTS.map((e) => e.script));
+  const isAideEntry = (entry: unknown): boolean => {
+    const visit = (obj: unknown): boolean => {
+      if (typeof obj === 'string') {
+        if (obj.includes(packageRootNeedle)) return true;
+        // Script-name match: any command ending with /<known-script>.sh
+        // or the bare script name. Using includes() is loose enough to
+        // catch arbitrary paths.
+        for (const name of aideScriptNames) {
+          if (obj.includes(`/${name}`) || obj.endsWith(name)) return true;
+        }
+        return false;
+      }
+      if (Array.isArray(obj)) return obj.some(visit);
+      if (obj && typeof obj === 'object') return Object.values(obj).some(visit);
+      return false;
+    };
+    return visit(entry);
+  };
+
+  const out: Record<string, unknown[]> = {};
+  const allEventNames = new Set<string>([
+    ...Object.keys(existingHooks),
+    ...Object.keys(ourHooks),
+  ]);
+
+  for (const eventName of allEventNames) {
+    const existingArr = Array.isArray(existingHooks[eventName])
+      ? (existingHooks[eventName] as unknown[])
+      : [];
+    const ourArr = Array.isArray(ourHooks[eventName])
+      ? (ourHooks[eventName] as unknown[])
+      : [];
+
+    // Strip our OLD entries from existing (we'll re-add fresh copies from
+    // ourArr). Any non-aide entry is preserved verbatim.
+    const preserved = existingArr.filter((e) => !isAideEntry(e));
+
+    // Concatenate: user's entries FIRST (so Cursor's "first hook wins"
+    // quirk favors user's tools when they overlap with ours), then our
+    // fresh entries. Users who want aide-memory to run first can reorder
+    // the file manually post-init.
+    const combined = [...preserved, ...ourArr];
+    if (combined.length > 0) out[eventName] = combined;
+  }
+
+  return out;
+}
+
+/**
+ * Inspect a hook config file to detect aide-memory's presence. We can't just
+ * check `existing.hooks` because a user may have other hooks in there —
+ * instead we look for any command referencing the aide-memory package's
+ * scripts/hooks/ directory. If even one hook points at us, treat it as
+ * "aide-memory already wired" to avoid duplicating on non-forced init.
+ */
+function detectAideMemoryHooksInConfig(cfg: Record<string, unknown>, packageRoot: string): boolean {
+  const needle = path.join(packageRoot, 'scripts', 'hooks');
+  const visit = (obj: unknown): boolean => {
+    if (typeof obj === 'string') return obj.includes(needle);
+    if (Array.isArray(obj)) return obj.some(visit);
+    if (obj && typeof obj === 'object') return Object.values(obj).some(visit);
+    return false;
+  };
+  return visit(cfg.hooks);
+}
+
+
+/**
+ * Write an adapter's MCP config file. Same three-scenario logic as hooks:
+ *   1. File doesn't exist → write fresh.
+ *   2. File exists without `aide-memory` under `mcpServers` → merge (preserve
+ *      user's other MCP servers, add ours).
+ *   3. File exists WITH `aide-memory` → skip unless `force`.
+ *
+ * Unlike hook config which is shallow-merge at top level, MCP config is
+ * merged inside `mcpServers` so other servers stay. Matches the old Claude-
+ * Code-only logic behavior, now parametrized by adapter.
+ */
+function writeMcpConfigFor(
+  adapter: EditorAdapter,
   projectRoot: string,
-  force: boolean
+  force: boolean,
 ): { created: string[]; skipped: string[] } {
   const created: string[] = [];
   const skipped: string[] = [];
 
-  const mcpPath = path.join(projectRoot, '.mcp.json');
+  const mcpPath = path.join(projectRoot, adapter.mcpConfigPath);
+  const mcpDir = path.dirname(mcpPath);
+  if (!fs.existsSync(mcpDir)) fs.mkdirSync(mcpDir, { recursive: true });
+
   const packageRoot = getPackageRoot();
   const serverScript = path.join(packageRoot, 'dist', 'memory', 'cli.js');
 
-  const mcpConfig = {
-    mcpServers: {
-      'aide-memory': {
-        command: 'node',
-        args: [serverScript, projectRoot],
-      },
-    },
-  };
+  const built = adapter.buildMcpConfig({
+    serverEntry: serverScript,
+    projectRoot,
+  }) as { mcpServers: { 'aide-memory': object } };
 
-  if (fs.existsSync(mcpPath) && !force) {
-    try {
-      const existing = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
-      if (existing.mcpServers?.['aide-memory']) {
-        skipped.push('.mcp.json (aide-memory already configured)');
-        return { created, skipped };
-      }
-      // Merge: add aide-memory to existing servers
-      existing.mcpServers = existing.mcpServers || {};
-      existing.mcpServers['aide-memory'] = mcpConfig.mcpServers['aide-memory'];
-      fs.writeFileSync(mcpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
-      created.push('.mcp.json (aide-memory server added)');
-    } catch {
-      fs.writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf8');
-      created.push('.mcp.json');
-    }
-  } else if (force && fs.existsSync(mcpPath)) {
-    // Force: merge aide-memory into existing MCP config, preserving other servers
-    try {
-      const existing = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
-      existing.mcpServers = existing.mcpServers || {};
-      existing.mcpServers['aide-memory'] = mcpConfig.mcpServers['aide-memory'];
-      fs.writeFileSync(mcpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
-      created.push('.mcp.json (aide-memory force-updated)');
-    } catch {
-      fs.writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf8');
-      created.push('.mcp.json');
-    }
-  } else {
-    fs.writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf8');
-    created.push('.mcp.json');
+  if (!fs.existsSync(mcpPath)) {
+    fs.writeFileSync(mcpPath, JSON.stringify(built, null, 2) + '\n', 'utf8');
+    created.push(adapter.mcpConfigPath);
+    return { created, skipped };
   }
 
+  try {
+    const existing = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+    const hasAide = Boolean(existing.mcpServers?.['aide-memory']);
+    if (hasAide && !force) {
+      skipped.push(`${adapter.mcpConfigPath} (aide-memory already configured)`);
+      return { created, skipped };
+    }
+    existing.mcpServers = existing.mcpServers || {};
+    existing.mcpServers['aide-memory'] = built.mcpServers['aide-memory'];
+    fs.writeFileSync(mcpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
+    created.push(`${adapter.mcpConfigPath} (aide-memory ${force ? 'force-updated' : 'server added'})`);
+  } catch {
+    // Malformed JSON — overwrite rather than leave broken state.
+    fs.writeFileSync(mcpPath, JSON.stringify(built, null, 2) + '\n', 'utf8');
+    created.push(adapter.mcpConfigPath);
+  }
   return { created, skipped };
 }
 
-const MCP_TOOLS_LIST = `- \`aide_recall\` — retrieve stored context for file paths you're about to work on
+
+export const MCP_TOOLS_LIST = `- \`aide_recall\` — retrieve stored context for file paths you're about to work on
 - \`aide_remember\` — store discoveries, decisions, corrections, and preferences
 - \`aide_update\` — update an existing memory when information changes
 - \`aide_forget\` — remove outdated memories
@@ -290,7 +394,15 @@ function createDirectories(projectRoot: string, force: boolean): { created: stri
 }
 
 /**
- * Write rules files from templates.
+ * Write rules files. Iterates ADAPTERS with supportsRules=true (C1 default:
+ * claude-code + cursor), rendering each via buildRules() which composes the
+ * shared body at src/templates/rules/shared/body.md with adapter-specific
+ * frontmatter, notes, and tool_id.
+ *
+ * Adding a new editor's rule file: flip its supportsRules flag in
+ * src/memory/editors/<editor>.ts. Editing tool-use guidance that should
+ * apply to all editors: edit shared/body.md — all 5 (when wired) inherit
+ * automatically. See docs/specs/CURSOR_ONBOARDING.md §3.5.
  */
 function writeRulesFiles(
   projectRoot: string,
@@ -299,39 +411,31 @@ function writeRulesFiles(
 ): { created: string[]; skipped: string[] } {
   const created: string[] = [];
   const skipped: string[] = [];
-  const templatesDir = getTemplatesDir();
 
-  const vars: Record<string, string> = {
-    contributor,
-    tools_list: MCP_TOOLS_LIST,
-  };
+  for (const adapter of adaptersWithRules()) {
+    // Each adapter currently declares exactly one rule spec (destination).
+    // Multi-entry support is kept in the interface for future editors that
+    // install more than one rule file.
+    for (const rule of adapter.rules) {
+      const destPath = path.join(projectRoot, rule.dest);
 
-  const rules: Array<{ template: string; dest: string }> = [
-    { template: 'claude-code.md', dest: '.claude/rules/aide-memory.md' },
-    { template: 'cursor.mdc', dest: '.cursor/rules/aide-memory.mdc' },
-  ];
+      if (fs.existsSync(destPath) && !force) {
+        skipped.push(rule.dest);
+        continue;
+      }
 
-  for (const rule of rules) {
-    const destPath = path.join(projectRoot, rule.dest);
+      const destDir = path.dirname(destPath);
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
 
-    if (fs.existsSync(destPath) && !force) {
-      skipped.push(rule.dest);
-      continue;
+      const content = buildRules(adapter, {
+        contributor,
+        tools_list: MCP_TOOLS_LIST,
+      });
+      fs.writeFileSync(destPath, content, 'utf8');
+      created.push(rule.dest);
     }
-
-    const templatePath = path.join(templatesDir, rule.template);
-    if (!fs.existsSync(templatePath)) {
-      continue;
-    }
-
-    const destDir = path.dirname(destPath);
-    if (!fs.existsSync(destDir)) {
-      fs.mkdirSync(destDir, { recursive: true });
-    }
-
-    const content = renderTemplate(templatePath, vars);
-    fs.writeFileSync(destPath, content, 'utf8');
-    created.push(rule.dest);
   }
 
   return { created, skipped };
@@ -660,12 +764,26 @@ export async function initProject(
     warnings: [],
   };
 
-  // --update-rules mode: only refresh rules files
+  // --update-rules mode: refresh static rules content AND re-regenerate
+  // dynamic section. Full init's step 7 regen call wouldn't run on this
+  // early-return path, so we invoke it explicitly here.
   if (options?.updateRules) {
     const contributor = detectContributor(resolvedRoot);
     const rules = writeRulesFiles(resolvedRoot, contributor, true); // always overwrite in update-rules mode
     result.created.push(...rules.created);
     result.skipped.push(...rules.skipped);
+    try {
+      const regenResults = regenerateAllRules(adaptersWithRules(), resolvedRoot, {
+        contributor,
+        tools_list: MCP_TOOLS_LIST,
+      });
+      for (const r of regenResults) {
+        if (r.written) result.created.push(`${r.dest} (dynamic content regenerated)`);
+        if (r.budgetWarning) result.warnings.push(r.budgetWarning);
+      }
+    } catch (err) {
+      result.warnings.push(`rulesGen: ${(err as Error).message}`);
+    }
     return result;
   }
 
@@ -682,21 +800,29 @@ export async function initProject(
   result.created.push(...rules.created);
   result.skipped.push(...rules.skipped);
 
-  // 2.5. Install hook configuration (.claude/settings.json) with version stamp
+  // 2.5. Install hook configurations for each editor adapter whose
+  // supportsHooks flag is true. C1 default: claude-code only. C2 flip:
+  // cursor joins (writes .cursor/hooks.json). Adding a new editor's hooks
+  // = flip its supportsHooks flag in src/memory/editors/<editor>.ts.
   const packageRoot = getPackageRoot();
   let pkgVersion: string | undefined;
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
     pkgVersion = pkg.version;
   } catch { /* non-fatal */ }
-  const hooks = writeHookConfig(resolvedRoot, force, pkgVersion);
-  result.created.push(...hooks.created);
-  result.skipped.push(...hooks.skipped);
 
-  // 2.6. Install MCP server configuration (.mcp.json)
-  const mcp = writeMcpConfig(resolvedRoot, force);
-  result.created.push(...mcp.created);
-  result.skipped.push(...mcp.skipped);
+  for (const adapter of adaptersWithHooks()) {
+    const h = writeHookConfigFor(adapter, resolvedRoot, force, pkgVersion);
+    result.created.push(...h.created);
+    result.skipped.push(...h.skipped);
+  }
+
+  // 2.6. Install MCP server configurations for each editor with supportsMcp.
+  for (const adapter of adaptersWithMcp()) {
+    const m = writeMcpConfigFor(adapter, resolvedRoot, force);
+    result.created.push(...m.created);
+    result.skipped.push(...m.skipped);
+  }
 
   // 3. Write config
   const config = writeConfig(resolvedRoot, contributor, force);
@@ -725,6 +851,45 @@ export async function initProject(
   result.created.push(...hook.created);
   result.skipped.push(...hook.skipped);
   result.warnings.push(...hook.warnings);
+
+  // 7. Dynamic rules-file regeneration (Phase C4). For every adapter with
+  // supportsRules + a rule already written in step 2, re-render the file
+  // with shared body + current session-start content appended. Cursor's
+  // adapter uses this as the staff-endorsed workaround for broken
+  // sessionStart.additional_context (#158452); Claude Code benefits too
+  // (the content is identical to what its SessionStart hook injects, just
+  // delivered via rules file as a belt-and-suspenders channel).
+  //
+  // Runs LAST so memory store + config are finalized. Errors are swallowed
+  // per-adapter inside regenerateAllRules — we don't want a regen failure
+  // to mask the rest of init's successful work.
+  try {
+    const regenResults = regenerateAllRules(adaptersWithRules(), resolvedRoot, {
+      contributor,
+      tools_list: MCP_TOOLS_LIST,
+    });
+    for (const r of regenResults) {
+      if (r.written) result.created.push(`${r.dest} (dynamic content regenerated)`);
+      if (r.budgetWarning) result.warnings.push(r.budgetWarning);
+    }
+  } catch (err) {
+    result.warnings.push(`rulesGen: ${(err as Error).message}`);
+  }
+
+  // 8. Cursor MCP hot-reload reminder. Cursor has no MCP hot-reload
+  // (github.com/cursor/cursor/issues/3887, forum #55723). Users must
+  // restart Cursor for the aide-memory MCP server to become available
+  // after init. Only emit if the cursor adapter is active (supportsHooks
+  // or supportsMcp true — means we actually wrote Cursor files).
+  const cursorActive = adaptersWithHooks().some((a) => a.id === 'cursor') ||
+                       adaptersWithMcp().some((a) => a.id === 'cursor');
+  if (cursorActive) {
+    result.warnings.push(
+      'Cursor: restart the Cursor app for MCP tools (aide_recall, aide_remember, etc.) to register. ' +
+      'Cursor has no MCP hot-reload (cursor issue #3887). If tools still do not appear after restart, ' +
+      'toggle the aide-memory MCP server off/on in Cursor Settings (forum #122421).',
+    );
+  }
 
   return result;
 }
@@ -791,52 +956,44 @@ export function autoUpdateIfNeeded(projectRoot: string, currentVersion: string):
       // Non-fatal — a failed resync shouldn't block MCP startup.
     }
 
-    const settingsPath = path.join(projectRoot, '.claude', 'settings.json');
-
-    // Check version stamp
+    // Version-stamp check: scan every adapter's hook config file for a stale
+    // or missing `_aideMemoryVersion`. If ANY adapter's file needs updating,
+    // run the auto-update pass for all of them. (We could be smarter and
+    // only update stale ones, but keeping all adapter files in version sync
+    // is simpler and safer — prevents one editor being ahead of another.)
     let needsUpdate = false;
-    if (fs.existsSync(settingsPath)) {
+    for (const adapter of adaptersWithHooks()) {
+      const hookPath = path.join(projectRoot, adapter.hookConfigPath);
+      if (!fs.existsSync(hookPath)) {
+        needsUpdate = true;
+        break;
+      }
       try {
-        const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const existing = JSON.parse(fs.readFileSync(hookPath, 'utf8'));
         const installedVersion = existing._aideMemoryVersion;
         if (!installedVersion || isOlderVersion(installedVersion, currentVersion)) {
           needsUpdate = true;
+          break;
         }
       } catch {
-        needsUpdate = true; // Malformed JSON
+        needsUpdate = true; // Malformed JSON — re-write
+        break;
       }
-    } else {
-      needsUpdate = true; // No settings file at all
     }
 
     if (!needsUpdate) return updated;
 
-    // Update hooks (merge, don't overwrite)
-    const packageRoot = getPackageRoot();
-    const hookConfig = generateHookConfig(packageRoot);
-
-    if (fs.existsSync(settingsPath)) {
-      try {
-        const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-        const merged = { ...existing, ...hookConfig, _aideMemoryVersion: currentVersion };
-        fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
-        updated.push('.claude/settings.json (hooks auto-updated)');
-      } catch {
-        const stamped = { ...hookConfig, _aideMemoryVersion: currentVersion };
-        fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
-        updated.push('.claude/settings.json (created)');
-      }
-    } else {
-      const settingsDir = path.dirname(settingsPath);
-      if (!fs.existsSync(settingsDir)) fs.mkdirSync(settingsDir, { recursive: true });
-      const stamped = { ...hookConfig, _aideMemoryVersion: currentVersion };
-      fs.writeFileSync(settingsPath, JSON.stringify(stamped, null, 2) + '\n', 'utf8');
-      updated.push('.claude/settings.json (created)');
+    // Update every adapter's hook config + MCP config. Uses the same per-
+    // adapter writers as initProject, with force=true so they overwrite
+    // existing content while preserving user's other top-level keys.
+    for (const adapter of adaptersWithHooks()) {
+      const h = writeHookConfigFor(adapter, projectRoot, true, currentVersion);
+      for (const msg of h.created) updated.push(`${msg} (auto-updated)`);
     }
-
-    // Update MCP config (merge, don't overwrite)
-    const mcpResult = writeMcpConfig(projectRoot, true);
-    updated.push(...mcpResult.created);
+    for (const adapter of adaptersWithMcp()) {
+      const m = writeMcpConfigFor(adapter, projectRoot, true);
+      updated.push(...m.created);
+    }
 
     // Update rules files (only if they exist — don't create in projects that weren't init'd)
     const claudeRulesPath = path.join(projectRoot, '.claude', 'rules', 'aide-memory.md');
