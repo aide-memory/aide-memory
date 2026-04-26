@@ -7,7 +7,7 @@
 # `startServer()` to run against a real filesystem state. This script exercises
 # them in isolated /tmp projects so it's safe to re-run anywhere.
 #
-# Part of the pre-flight block in docs/validation/MANUAL_E2E_VALIDATION.md.
+# Part of the pre-flight block in docs/validation/E2E_VALIDATION.md.
 # All scenarios must pass before the manual walk begins.
 
 set -u

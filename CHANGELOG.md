@@ -48,7 +48,7 @@ Minor release: polish + correctness sweep. Fixes several latent bugs, expands co
 - New `scripts/hooks/__tests__/install-from-tarball.smoke.sh` — packs the published tarball, installs into a fresh temp dir, runs full CLI lifecycle + drift-repair. Catches packaging-shape regressions that dev-mode tests miss (per memory #163).
 - 660 unit tests + 4 bash smokes + 1 install-from-tarball smoke all pass.
 - `detect-correction.test.sh` expanded from 9 to 17 cases covering the new regex branches.
-- `MANUAL_E2E_VALIDATION.md` updated for the new configs + revised expected outputs for steps 3, 6, 8.
+- `docs/validation/E2E_VALIDATION.md` (formerly `MANUAL_E2E_VALIDATION.md` — consolidated Phase C7, 2026-04-23) updated for the new configs + revised expected outputs for steps 3, 6, 8.
 
 ### Upgrading from 0.4.2
 
@@ -74,7 +74,7 @@ Patch release restoring mid-session drift-repair for derived artifacts and fixin
 
 - 658 tests pass (3 new: two drift-repair tests + test of `internal-resync` subcommand).
 - Pre-flight bash smoke suites extended to cover the drift-repair path end-to-end.
-- `MANUAL_E2E_VALIDATION.md` step 15 exercises the drift-repair manually.
+- `docs/validation/E2E_VALIDATION.md` Scenario I (formerly `MANUAL_E2E_VALIDATION.md` step 15) exercises the drift-repair manually.
 - Hidden `aide-memory internal-resync <projectRoot>` subcommand added for the detached child spawn; not part of the user-facing CLI.
 
 No other changes from 0.4.1. All features, CLI commands, hooks, and MCP tools remain identical.
