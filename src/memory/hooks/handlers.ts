@@ -390,7 +390,13 @@ export async function preSearch(input: HookInput): Promise<void> {
     return;
   }
 
-  const nudge = `${count} aide memories match '${query}' (${topStr}). Call aide_search({keyword: '${query}'}) if not already in context.`;
+  // No "if not already in context" qualifier — the hook already gates on
+  // alreadySearched (line 374 + 384-391 branch). When this nudge fires, the
+  // keyword IS not in context by construction, so the qualifier was redundant
+  // defensive language that gave the agent an unnecessary out (memory #370 —
+  // 2026-04-27 user observation: agent ignored nudge because phrasing was
+  // permissive even when the literal-string exception didn't apply cleanly).
+  const nudge = `${count} aide memories match '${query}' (${topStr}). Call aide_search({keyword: '${query}'}).`;
   if (searchMode === 'block') {
     emitBlockDecision(nudge, userMessage);
   } else {

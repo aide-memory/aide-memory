@@ -917,7 +917,7 @@ _Same project. Tests search hooks — always soft, never blocks._
 
 | Step | Action | Expected | Metric |
 |------|--------|----------|--------|
-| B1 | Grep "auth" (scoped mems match the keyword) | **SOFT** — nudge: "N aide memories match 'auth' (...). Call aide_search({keyword: 'auth'}) if not already in context." Search hook is ALWAYS soft, never blocks. | search_always_soft |
+| B1 | Grep "auth" (scoped mems match the keyword) | **SOFT** — nudge: "N aide memories match 'auth' (...). Call aide_search({keyword: 'auth'})." Search hook is ALWAYS soft, never blocks. | search_always_soft |
 | B2 | Agent decides to call aide_search or not | Agent's choice — soft nudge is advisory. If agent calls aide_search, `searched-queries-{sid}.txt` updated. | agent_discretion |
 | B3 | Grep "zzz_nonexistent" (no memories match) | **SILENT** — search-preview.js returns count=0, hook exits early | silent_no_matches |
 
