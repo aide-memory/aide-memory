@@ -97,6 +97,7 @@ export class MemoryStore {
   private memoriesDir: string | null = null;
   private projectRoot: string | null = null;
   private defaultContributor: string;
+  private defaultShared: boolean = true;  // Per memory #373 + memories.defaultShared config key
 
   /**
    * Legacy constructor: SQLite-only mode (for tests using { dbPath }).
@@ -147,6 +148,14 @@ export class MemoryStore {
           // Telemetry
           if (configData.telemetry?.enabled === false) {
             this.telemetryEnabled = false;
+          }
+
+          // memories.defaultShared (added 2026-04-27 per memory #373).
+          // When false, aide_remember calls without an explicit `shared` param
+          // default to personal/ (gitignored) instead of shared/. Per-call
+          // shared:true|false in input always overrides.
+          if (configData.memories?.defaultShared === false) {
+            this.defaultShared = false;
           }
 
           // Contributor override: default 'auto' uses detectGitUser(); any
@@ -501,7 +510,7 @@ export class MemoryStore {
     const uuid = crypto.randomUUID();
     const contributor = input.contributor ?? this.defaultContributor;
     const tags = input.tags ?? [];
-    const shared = input.shared ?? true;
+    const shared = input.shared ?? this.defaultShared;
     const derivedJson = input.derived_from ? JSON.stringify(input.derived_from) : null;
     const generatedByJson = input.generated_by ? JSON.stringify(input.generated_by) : null;
     const priority = input.priority ?? 'normal';
