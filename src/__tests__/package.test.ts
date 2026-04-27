@@ -69,9 +69,13 @@ describe('package.aide-memory.json', () => {
 
   it('has only native-dep runtime dependencies (everything else bundled at publish time)', () => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    // better-sqlite3 must remain external — it's a native N-API addon that
-    // resolves a platform-specific .node file from the user's node_modules.
-    expect(pkg.dependencies['better-sqlite3']).toBeDefined();
+    // libsql must remain external — it's a native Node-API addon that resolves
+    // a platform-specific prebuilt binary from a sibling @libsql/<platform>
+    // package at runtime. (We migrated from better-sqlite3 in 0.5.0 because
+    // its V8-bound binding broke on Node version drift; libsql uses N-API which
+    // is ABI-stable across Node majors — see memories #348, #349, #354.)
+    expect(pkg.dependencies['libsql']).toBeDefined();
+    expect(pkg.dependencies['better-sqlite3']).toBeUndefined();
   });
 
   it('does NOT list pure-JS deps as runtime dependencies (they are bundled by esbuild)', () => {

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MemoryStore } from '../store';
 import { MemorySync } from '../sync';
 import type { MemoryFile } from '../types';
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';

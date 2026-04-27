@@ -34,7 +34,7 @@ describe('MemoryStore', () => {
     store.close();
     if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
     const dir = path.dirname(dbPath);
-    if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
   describe('add', () => {

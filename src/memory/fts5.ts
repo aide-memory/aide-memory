@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type Database from 'libsql';
 
 /**
  * FTS5 full-text search module for AIDE Memory.

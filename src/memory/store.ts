@@ -1,4 +1,5 @@
-import Database from 'better-sqlite3';
+import type Database from 'libsql';
+import { createDatabase } from './internal/binding-loader';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -128,7 +129,7 @@ export class MemoryStore {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    this.db = new Database(this.dbPath);
+    this.db = createDatabase(this.dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.init();

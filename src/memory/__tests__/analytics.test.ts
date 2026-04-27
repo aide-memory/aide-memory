@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Analytics } from '../analytics';
 import { MemoryStore } from '../store';
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import fs from 'fs';
 import crypto from 'crypto';
 import path from 'path';
@@ -31,7 +31,7 @@ describe('Analytics', () => {
     if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
     if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
     const dir = path.dirname(dbPath);
-    if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
   describe('table creation', () => {

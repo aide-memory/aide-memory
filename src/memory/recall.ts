@@ -3,6 +3,7 @@ import type { MemoryStore } from './store';
 import fs from 'fs';
 import path from 'path';
 import { getSetting } from './settings';
+import { debug } from './internal/debug';
 
 const LAYER_ORDER: MemoryLayer[] = ['area_context', 'technical', 'preferences', 'guidelines'];
 const DEFAULT_LIMIT = 20;
@@ -239,6 +240,12 @@ function keywordScore(memory: Memory, query: string): number {
  * 5. Cap at limit
  */
 export function recall(store: MemoryStore, query: RecallQuery, logDir?: string | null): RecallResult {
+  const t0 = performance.now();
+  debug(
+    'recall',
+    `enter paths=${JSON.stringify(query.paths ?? [])} ids=${JSON.stringify(query.ids ?? [])} query=${JSON.stringify(query.query ?? '')} layers=${JSON.stringify(query.layers ?? [])} limit=${query.limit ?? 'default'}`,
+  );
+
   // Resolve recall settings from user config (falls back to defaults.json).
   // Per-call `query.limit` still wins so MCP callers can override ad hoc.
   const projectRoot = store.getProjectRoot();
@@ -405,6 +412,11 @@ export function recall(store: MemoryStore, query: RecallQuery, logDir?: string |
 
   // Write detailed recall log for observability
   logRecallEvent(logDir ?? null, query, results, Array.from(matchedScopes), normalizedPaths);
+
+  debug(
+    'recall',
+    `exit  candidates=${candidates.length} matched_scopes=${matchedScopes.size} returned=${results.length} duration=${(performance.now() - t0).toFixed(1)}ms`,
+  );
 
   return {
     memories: results,

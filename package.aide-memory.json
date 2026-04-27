@@ -1,6 +1,6 @@
 {
   "name": "aide-memory",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "Persistent memory layer for AI coding agents — your agent remembers what you taught it",
   "main": "dist/memory/index.js",
   "bin": {
@@ -19,13 +19,13 @@
   "scripts": {
     "build": "tsc",
     "build:dist": "npm run build:dist:cli && npm run build:dist:lib && npm run build:dist:mcp",
-    "build:dist:cli": "esbuild src/cli/aide-memory.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/cli/aide-memory.js",
-    "build:dist:lib": "esbuild src/memory/index.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/memory/index.js",
-    "build:dist:mcp": "esbuild src/memory/cli.ts --bundle --platform=node --target=node18 --minify --external:better-sqlite3 --external:@huggingface/transformers --outfile=dist/memory/cli.js",
+    "build:dist:cli": "esbuild src/cli/aide-memory.ts --bundle --platform=node --target=node18 --minify --external:libsql --external:@huggingface/transformers --outfile=dist/cli/aide-memory.js",
+    "build:dist:lib": "esbuild src/memory/index.ts --bundle --platform=node --target=node18 --minify --external:libsql --external:@huggingface/transformers --outfile=dist/memory/index.js",
+    "build:dist:mcp": "esbuild src/memory/cli.ts --bundle --platform=node --target=node18 --minify --external:libsql --external:@huggingface/transformers --outfile=dist/memory/cli.js",
     "prepublishOnly": "npm run build && npm run build:dist && ./scripts/verify-package.sh"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "libsql": "^0.5.0"
   },
   "optionalDependencies": {
     "@huggingface/transformers": "^3.0.0"

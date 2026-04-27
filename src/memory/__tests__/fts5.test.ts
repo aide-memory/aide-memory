@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MemoryStore } from '../store';
 import { escapeFts5Query, isFts5Available, rebuildFts5Index } from '../fts5';
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -28,7 +28,7 @@ describe('FTS5 Search', () => {
       if (fs.existsSync(dbPath + '-wal')) fs.unlinkSync(dbPath + '-wal');
       if (fs.existsSync(dbPath + '-shm')) fs.unlinkSync(dbPath + '-shm');
       const dir = path.dirname(dbPath);
-      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
     } catch { /* cleanup best-effort */ }
   });
 

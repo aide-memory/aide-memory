@@ -33,7 +33,7 @@ describe('MCP Server', () => {
     store.close();
     if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
     const dir = path.dirname(dbPath);
-    if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('lists all 7 tools', async () => {

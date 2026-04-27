@@ -9,7 +9,7 @@ import {
   OllamaBackend,
   type EmbeddingBackend,
 } from '../embeddings';
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -163,7 +163,7 @@ describe('ensureEmbeddingsTable', () => {
     db.close();
     if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
     const dir = path.dirname(dbPath);
-    if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('creates the embeddings table', () => {
@@ -253,7 +253,7 @@ describe('EmbeddingService', () => {
       db.close();
       if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
       const dir = path.dirname(dbPath);
-      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
     });
 
     it('stores and retrieves a vector', () => {
@@ -313,7 +313,7 @@ describe('EmbeddingService', () => {
       db.close();
       if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
       const dir = path.dirname(dbPath);
-      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
     });
 
     it('removes an existing embedding', () => {
@@ -344,7 +344,7 @@ describe('EmbeddingService', () => {
       db.close();
       if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
       const dir = path.dirname(dbPath);
-      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
     });
 
     it('returns results sorted by similarity score (highest first)', () => {
@@ -445,7 +445,7 @@ describe('EmbeddingService', () => {
       db.close();
       if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
       const dir = path.dirname(dbPath);
-      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
     });
 
     it('generates embedding from text and searches', async () => {

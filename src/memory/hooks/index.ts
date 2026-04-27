@@ -9,6 +9,7 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import { readJsonStdin } from './stdio';
 import { detectActiveAdapter } from '../editors';
+import { debug, isDebugEnabled, loudError } from '../internal/debug';
 import type { HookEventId } from './events';
 import {
   detectCorrection,
@@ -120,26 +121,73 @@ const HANDLERS: Record<HookName, (input: any) => Promise<void>> = {
 export async function dispatch(name: string): Promise<void> {
   const handler = (HANDLERS as any)[name];
   if (!handler) {
-    // Unknown hook — silently exit 0 rather than crash the agent.
+    // Unknown hook event id. We exit 0 (never break the agent) but loudly
+    // surface this — silent no-ops on a wrong event name look identical to
+    // hooks not firing at all, which has historically caused hours of
+    // misdiagnosis (see memory #348).
+    loudError(`aide-memory hook: unknown event "${name}"`, 'check .claude/settings.json or .cursor/hooks.json command lines');
     return;
   }
+  const t0 = performance.now();
   try {
     const raw = await readJsonStdin();
-    // Phase C3: detect which editor fired the hook via env vars, then run
-    // the raw stdin envelope through that adapter's translateInput. Claude
-    // Code's adapter is identity, so pre-C3 behavior is preserved byte-for-
-    // byte. Cursor's adapter remaps conversation_id → session_id etc. so
-    // handlers can stay editor-agnostic.
     const adapter = detectActiveAdapter();
     const input = adapter.translateInput(raw) as typeof raw;
-    // Drift-repair runs on every hook fire (see maybeTriggerDriftResync
-    // doc for why). It's fire-and-forget and catches its own errors. Runs
-    // against the TRANSLATED input so `cwd` is populated regardless of
-    // editor envelope shape.
     maybeTriggerDriftResync(input);
-    await handler(input);
-  } catch {
-    // Never break the agent on hook errors.
+
+    debug(
+      'hooks',
+      `enter hook=${name} adapter=${adapter.id} cwd=${input.cwd ?? ''} session=${input.session_id ?? ''} file=${(input as any).tool_input?.file_path ?? ''}`,
+    );
+
+    // When AIDE_DEBUG=hooks (or legacy AIDE_DEBUG_HOOK=1), wrap stdout so we
+    // can report what the handler tried to write. Critical for diagnosing
+    // cases where the host editor reports empty OUTPUT but we believe we
+    // emitted a response — surfaces our intent independent of whether the
+    // host actually consumed stdout.
+    if (isDebugEnabled('hooks')) {
+      const origWrite = process.stdout.write.bind(process.stdout);
+      let captured = '';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (process.stdout.write as any) = (chunk: any, ...args: any[]) => {
+        try { captured += typeof chunk === 'string' ? chunk : String(chunk); } catch { /* ignore */ }
+        return origWrite(chunk, ...args);
+      };
+      try {
+        await handler(input);
+      } finally {
+        process.stdout.write = origWrite;
+        debug(
+          'hooks',
+          `exit  hook=${name} duration=${(performance.now() - t0).toFixed(1)}ms stdout-len=${captured.length} stdout-head=${JSON.stringify(captured.slice(0, 200))}`,
+        );
+      }
+    } else {
+      await handler(input);
+      debug('hooks', `exit  hook=${name} duration=${(performance.now() - t0).toFixed(1)}ms`);
+    }
+  } catch (err) {
+    // Hooks must never break the agent — top-level catch absorbs all throws
+    // (per memory #352 calibration). But silent absorption is what made the
+    // 0.5.0 binding bug invisible for hours, so EVERY swallowed throw now
+    // gets one [AIDE_ERROR] stderr line identifying the failure class. The
+    // hook still exits 0; the agent continues.
+    const e = err as Error;
+    const msg = e?.message ?? String(err);
+    if (/NODE_MODULE_VERSION|node-loader|wrong ELF class|invalid ELF header|dlopen/i.test(msg)) {
+      loudError(
+        `aide-memory hook=${name}: native binding load failed (${msg})`,
+        'reinstall aide-memory or run `npm rebuild libsql` in the install dir',
+      );
+    } else if (/ENOENT|MODULE_NOT_FOUND/i.test(msg)) {
+      loudError(
+        `aide-memory hook=${name}: missing file/module (${msg})`,
+        'reinstall aide-memory — dist/ may be incomplete',
+      );
+    } else {
+      loudError(`aide-memory hook=${name} threw: ${msg}`);
+    }
+    debug('hooks', `error hook=${name} duration=${(performance.now() - t0).toFixed(1)}ms class=${(e?.name ?? 'Error')}`);
   }
 }
 

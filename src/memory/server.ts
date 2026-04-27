@@ -10,6 +10,7 @@ import { EmbeddingService } from './embeddings';
 import type { MemoryLayer, MemorySource } from './types';
 import { adaptersWithRules } from './editors';
 import { shouldRegenForMemory, triggerRulesRegen } from './rulesGen';
+import { debug, loudError } from './internal/debug';
 
 const LAYER_VALUES: [string, ...string[]] = ['preferences', 'technical', 'area_context', 'guidelines'];
 const SOURCE_VALUES: [string, ...string[]] = ['conversation', 'import', 'agent_discovery', 'elevated', 'hook'];
@@ -452,6 +453,8 @@ function parseMarkdownItems(content: string): string[] {
 
 // CLI entry point
 export async function startServer(projectPath: string): Promise<void> {
+  debug('mcp', `startServer enter projectPath=${projectPath} node=${process.versions.node} abi=${process.versions.modules}`);
+
   const { checkForUpdates, printUpdateNotice, checkMinVersion, printRequiredUpdateNotice } = await import('./updater');
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
   const currentVersion: string = pkg.version;
@@ -479,7 +482,21 @@ export async function startServer(projectPath: string): Promise<void> {
     // Auto-update failure is non-fatal
   }
 
-  const store = new MemoryStore({ projectRoot: projectPath });
+  // MemoryStore construction triggers binding load via createDatabase. If
+  // the libsql binding fails to load, [AIDE_ERROR] is already emitted from
+  // the binding-loader; we surface a second line here for the MCP-startup
+  // context and exit cleanly so the host editor sees a clear failure
+  // (memories #348 + #352).
+  let store: MemoryStore;
+  try {
+    store = new MemoryStore({ projectRoot: projectPath });
+  } catch (err) {
+    loudError(
+      `aide-memory MCP server failed to initialize store for ${projectPath}: ${(err as Error)?.message ?? String(err)}`,
+      'see preceding [AIDE_ERROR] for the underlying binding/load failure',
+    );
+    process.exit(1);
+  }
 
   // Ingest any memories written to .aide/pending-memories.jsonl while MCP was unavailable.
   try {
@@ -508,7 +525,10 @@ export async function startServer(projectPath: string): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
+  debug('mcp', `startServer ready version=${currentVersion} logDir=${logDir}`);
+
   process.on('SIGINT', () => {
+    debug('mcp', 'startServer SIGINT — closing store');
     store.close();
     process.exit(0);
   });

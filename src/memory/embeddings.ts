@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type Database from 'libsql';
 
 const EMBEDDINGS_TABLE = `
 CREATE TABLE IF NOT EXISTS embeddings (
@@ -40,8 +40,16 @@ export function vectorToBuffer(vector: Float32Array): Buffer {
 
 /**
  * Convert a Buffer (from SQLite BLOB) back to Float32Array.
+ *
+ * libsql quirk: prepare().get() returns BLOBs as Buffer (better-sqlite3-
+ * compatible), but prepare().all() returns them as ArrayBuffer. Handle both
+ * shapes so the read path works regardless of which prepared-statement
+ * method was used.
  */
-export function bufferToVector(buf: Buffer): Float32Array {
+export function bufferToVector(buf: Buffer | ArrayBuffer | Uint8Array): Float32Array {
+  if (buf instanceof ArrayBuffer) {
+    return new Float32Array(buf.slice(0));
+  }
   const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   return new Float32Array(arrayBuffer);
 }

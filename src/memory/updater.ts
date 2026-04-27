@@ -102,7 +102,43 @@ function isNewer(current: string, latest: string): boolean {
  * @param currentVersion The currently installed version string (e.g. "0.2.0").
  * @returns The newer version string if available, or null if up-to-date/error.
  */
+/**
+ * Detect dev-tree execution. End users install from npm — they get
+ * `dist/` only (no `src/`). Developers run from a checked-out repo where
+ * BOTH `dist/cli/` and `src/cli/` exist alongside each other. Uses the
+ * presence of a sibling `src/cli/` directory relative to this module's
+ * dir as the dev signal. Skipping the registry check in dev mode avoids
+ * the persistent "v0.4.3 available (current: v0.2.0)" nag from the
+ * placeholder version in dev `package.json` (the publish manifest at
+ * `package.aide-memory.json` carries the real version — see memory #218
+ * + FOLLOWUPS §"Dev manifest version drift").
+ */
+function isDevTree(): boolean {
+  try {
+    // Test override — keep updater unit tests working even when running
+    // from the dev tree itself. Set AIDE_MEMORY_FORCE_REGISTRY_CHECK=1
+    // in test setup to bypass dev detection.
+    if (process.env.AIDE_MEMORY_FORCE_REGISTRY_CHECK === '1') return false;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const path = require('path');
+    // From dist/memory/updater.js up two levels = package root.
+    // Sibling src/cli/ exists in the dev tree, never in npm-installed copies.
+    const devSrcCli = path.resolve(__dirname, '..', '..', 'src', 'cli');
+    return fs.existsSync(devSrcCli);
+  } catch {
+    return false;
+  }
+}
+
 export async function checkForUpdates(currentVersion: string): Promise<string | null> {
+  // Skip the registry check entirely when running from a dev tree — the
+  // placeholder dev version (e.g. 0.2.0) is always behind the real
+  // shipped version, which would trigger a persistent nag during local
+  // development + validation runs.
+  if (isDevTree()) return null;
+
   try {
     // Check cache first
     const cache = readCache();

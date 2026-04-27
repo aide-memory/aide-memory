@@ -19,6 +19,13 @@ describe('updater', () => {
   let originalCache: string | null = null;
 
   beforeEach(() => {
+    // Bypass the dev-tree detection (which would short-circuit
+    // checkForUpdates and return null without calling https). Tests
+    // exercise the registry-check + cache logic, so we force the
+    // registry path here. End-user behavior (skip in dev) is covered
+    // implicitly by the absence of nag messages in scratch fixtures.
+    process.env.AIDE_MEMORY_FORCE_REGISTRY_CHECK = '1';
+
     // Preserve existing cache
     try {
       originalCache = fs.readFileSync(CACHE_PATH, 'utf-8');
@@ -30,6 +37,7 @@ describe('updater', () => {
   });
 
   afterEach(() => {
+    delete process.env.AIDE_MEMORY_FORCE_REGISTRY_CHECK;
     // Restore original cache
     if (originalCache) {
       fs.writeFileSync(CACHE_PATH, originalCache, 'utf-8');

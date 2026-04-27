@@ -5,7 +5,8 @@
  * Implements the unified ProjectGraph interface.
  */
 
-import Database from 'better-sqlite3';
+import type Database from 'libsql';
+import { createDatabase } from '../memory/internal/binding-loader';
 import { ProjectGraph } from './projectGraph';
 import {
   FileRecord,
@@ -28,7 +29,7 @@ export class SQLiteBrainStore implements ProjectGraph {
   private db: Database.Database;
 
   constructor(dbPath: string) {
-    this.db = new Database(dbPath);
+    this.db = createDatabase(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
   }
