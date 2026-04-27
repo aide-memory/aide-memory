@@ -548,6 +548,116 @@ describe('MemoryStore (file-per-memory mode)', () => {
     });
   });
 
+  describe('memories.defaultShared config (memory #373 + #374)', () => {
+    // These tests construct their own store with a pre-written config so
+    // the constructor's config-read path picks up memories.defaultShared.
+    // Each test cleans up its own projectRoot.
+
+    function withConfigStore(configContent: object): { store: MemoryStore; projectRoot: string } {
+      const root = tempProjectRoot();
+      const aideDir = path.join(root, '.aide');
+      fs.mkdirSync(aideDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(aideDir, 'config.json'),
+        JSON.stringify(configContent, null, 2)
+      );
+      return { store: new MemoryStore({ projectRoot: root }), projectRoot: root };
+    }
+
+    it('defaults to shared:true when no config + no explicit shared (preserves prior behavior)', () => {
+      // No memories.defaultShared in config → preference without explicit
+      // shared → stored in preferences/shared/
+      const { store: s, projectRoot: root } = withConfigStore({});
+      try {
+        const mem = s.add({ layer: 'preferences', what: 'baseline' });
+        const sharedPath = path.join(root, '.aide', 'memories', 'preferences', 'shared', `${mem.uuid}.json`);
+        const personalPath = path.join(root, '.aide', 'memories', 'preferences', 'personal', `${mem.uuid}.json`);
+        expect(fs.existsSync(sharedPath)).toBe(true);
+        expect(fs.existsSync(personalPath)).toBe(false);
+      } finally {
+        s.close();
+        cleanupDir(root);
+        cleanupDir(path.dirname((s as any).dbPath));
+      }
+    });
+
+    it('defaults to personal when memories.defaultShared:false + no explicit shared', () => {
+      // The 0.5.0 opt-in-personal use case: project sets the config, agent
+      // calls aide_remember without specifying shared, file lands in personal/.
+      const { store: s, projectRoot: root } = withConfigStore({
+        memories: { defaultShared: false },
+      });
+      try {
+        const mem = s.add({ layer: 'preferences', what: 'private pref' });
+        const sharedPath = path.join(root, '.aide', 'memories', 'preferences', 'shared', `${mem.uuid}.json`);
+        const personalPath = path.join(root, '.aide', 'memories', 'preferences', 'personal', `${mem.uuid}.json`);
+        expect(fs.existsSync(personalPath)).toBe(true);
+        expect(fs.existsSync(sharedPath)).toBe(false);
+      } finally {
+        s.close();
+        cleanupDir(root);
+        cleanupDir(path.dirname((s as any).dbPath));
+      }
+    });
+
+    it('per-call shared:true overrides memories.defaultShared:false', () => {
+      // Project default is personal; caller explicitly opts a memory back
+      // into shared/. The override must win.
+      const { store: s, projectRoot: root } = withConfigStore({
+        memories: { defaultShared: false },
+      });
+      try {
+        const mem = s.add({ layer: 'preferences', what: 'explicit shared', shared: true });
+        const sharedPath = path.join(root, '.aide', 'memories', 'preferences', 'shared', `${mem.uuid}.json`);
+        const personalPath = path.join(root, '.aide', 'memories', 'preferences', 'personal', `${mem.uuid}.json`);
+        expect(fs.existsSync(sharedPath)).toBe(true);
+        expect(fs.existsSync(personalPath)).toBe(false);
+      } finally {
+        s.close();
+        cleanupDir(root);
+        cleanupDir(path.dirname((s as any).dbPath));
+      }
+    });
+
+    it('per-call shared:false overrides default (when no config) — explicit personal opt-out still wins', () => {
+      // Sanity: confirm per-call shared:false honored even when default is true.
+      const { store: s, projectRoot: root } = withConfigStore({});
+      try {
+        const mem = s.add({ layer: 'preferences', what: 'explicit personal', shared: false });
+        const sharedPath = path.join(root, '.aide', 'memories', 'preferences', 'shared', `${mem.uuid}.json`);
+        const personalPath = path.join(root, '.aide', 'memories', 'preferences', 'personal', `${mem.uuid}.json`);
+        expect(fs.existsSync(personalPath)).toBe(true);
+        expect(fs.existsSync(sharedPath)).toBe(false);
+      } finally {
+        s.close();
+        cleanupDir(root);
+        cleanupDir(path.dirname((s as any).dbPath));
+      }
+    });
+
+    it('memories.defaultShared:false has NO folder effect on non-preferences layers (preferences-only per memory #374)', () => {
+      // Other layers (technical, area_context, guidelines) ignore the shared
+      // folder split — they always live directly under their layer dir.
+      // The config flag still flips the JSON `shared` metadata field but
+      // the file lands in the same location either way.
+      const { store: s, projectRoot: root } = withConfigStore({
+        memories: { defaultShared: false },
+      });
+      try {
+        const tech = s.add({ layer: 'technical', what: 'arch fact' });
+        const expectedPath = path.join(root, '.aide', 'memories', 'technical', `${tech.uuid}.json`);
+        expect(fs.existsSync(expectedPath)).toBe(true);
+        // JSON `shared` field on the saved record reflects the config default.
+        const content = JSON.parse(fs.readFileSync(expectedPath, 'utf-8')) as MemoryFile;
+        expect(content.shared).toBe(false);
+      } finally {
+        s.close();
+        cleanupDir(root);
+        cleanupDir(path.dirname((s as any).dbPath));
+      }
+    });
+  });
+
   describe('JSON file format', () => {
     it('JSON file has correct format without SQLite-only fields', () => {
       const mem = store.add({

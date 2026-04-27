@@ -19,7 +19,7 @@
     "lint": "tsc --noEmit",
     "test": "vitest run --exclude '**/.claude/worktrees/**' --exclude '**/.cursor/worktrees/**'",
     "test:watch": "vitest --exclude '**/.claude/worktrees/**' --exclude '**/.cursor/worktrees/**'",
-    "test:smoke": "bash scripts/hooks/__tests__/install-from-tarball.smoke.sh && bash scripts/hooks/__tests__/debug-output-smoke.test.sh",
+    "test:smoke": "bash scripts/hooks/__tests__/install-from-tarball.smoke.sh && bash scripts/hooks/__tests__/debug-output-smoke.test.sh && bash scripts/hooks/__tests__/memories-default-shared.smoke.test.sh",
     "test:full": "npm run build && npm run test && npm run build:dist && npm run test:smoke",
     "verify-tarball": "node scripts/verify-package.sh"
   },
