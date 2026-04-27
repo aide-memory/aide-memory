@@ -39,17 +39,13 @@ export interface RuleRenderVars {
 }
 
 /**
- * Locate src/templates/rules/ regardless of dev vs dist layout. Mirrors the
- * `getTemplatesDir()` logic in init.ts — kept duplicated here to avoid a
- * circular import between init.ts and editors/rules.ts.
+ * Templates directory resolution lives in `../internal/paths.ts` —
+ * package.json walk-up that's robust across tsc dist, esbuild bundle, and
+ * ts-node dev layouts. The earlier inline `__dirname/../...` math broke
+ * in the esbuild-bundled CLI (extra `..` injected during bundling) —
+ * caught by the install-from-tarball smoke 2026-04-27.
  */
-function resolveTemplatesDir(): string {
-  const fromSrc = path.resolve(__dirname, '..', '..', 'templates', 'rules');
-  if (fs.existsSync(fromSrc)) return fromSrc;
-  const fromDist = path.resolve(__dirname, '..', '..', '..', 'src', 'templates', 'rules');
-  if (fs.existsSync(fromDist)) return fromDist;
-  throw new Error('Cannot find templates directory (looked at ' + fromSrc + ' and ' + fromDist + ')');
-}
+import { getTemplatesDir } from '../internal/paths';
 
 /**
  * Load the shared rule body. Cached across calls within a single process —
@@ -58,7 +54,7 @@ function resolveTemplatesDir(): string {
 let cachedBody: string | null = null;
 function loadSharedBody(): string {
   if (cachedBody !== null) return cachedBody;
-  const bodyPath = path.join(resolveTemplatesDir(), 'shared', 'body.md');
+  const bodyPath = path.join(getTemplatesDir(), 'shared', 'body.md');
   cachedBody = fs.readFileSync(bodyPath, 'utf8');
   return cachedBody;
 }

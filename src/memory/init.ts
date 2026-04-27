@@ -355,21 +355,13 @@ function renderTemplate(templatePath: string, vars: Record<string, string>): str
   return content;
 }
 
-/**
- * Get the path to the templates directory.
- * Supports both dev (src/) and built (dist/) layouts.
- */
-function getTemplatesDir(): string {
-  // Try relative to this file: src/memory/init.ts -> src/templates/rules/
-  const fromSrc = path.resolve(__dirname, '..', 'templates', 'rules');
-  if (fs.existsSync(fromSrc)) return fromSrc;
-
-  // Try dist layout
-  const fromDist = path.resolve(__dirname, '..', '..', 'src', 'templates', 'rules');
-  if (fs.existsSync(fromDist)) return fromDist;
-
-  throw new Error('Cannot find templates directory');
-}
+// `getTemplatesDir()` lives in `./internal/paths.ts` — uses package.json
+// walk-up to find <pkg>/src/templates/rules reliably across the tsc dist
+// layout, the esbuild-bundled layout, and ts-node dev. The earlier inline
+// implementation here used `__dirname/../...` math that broke in the
+// bundled layout (esbuild rewrites the relative depth). Ship-blocker bug
+// caught by the install-from-tarball smoke 2026-04-27 — see memory #361
+// and the diagnostic surface for the rationale.
 
 /**
  * Create directory structure under .aide/
