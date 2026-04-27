@@ -120,6 +120,61 @@ describe('MCP Server', () => {
       const memories = store.list();
       expect(memories[0].source).toBe('hook');
     });
+
+    it('aide_remember accepts "content" as alias for "what" (memory #367)', async () => {
+      // Empirically observed in Cursor 3.2.11 validation 2026-04-27 — agents
+      // reach for `content` first (matches OpenAI/Anthropic tool-call
+      // convention), then introspect descriptor and retry with `what`.
+      // Accepting both eliminates the round-trip.
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          content: 'Stored via content alias',
+          layer: 'technical',
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('Stored');
+      expect(text).toContain('Stored via content alias');
+
+      const memories = store.list();
+      expect(memories[0].what).toBe('Stored via content alias');
+    });
+
+    it('aide_remember prefers "what" over "content" when both provided', async () => {
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          what: 'primary',
+          content: 'fallback',
+          layer: 'technical',
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('primary');
+      expect(text).not.toContain('fallback');
+
+      const memories = store.list();
+      expect(memories[0].what).toBe('primary');
+    });
+
+    it('aide_remember errors clearly when neither "what" nor "content" provided', async () => {
+      const result = await client.callTool({
+        name: 'aide_remember',
+        arguments: {
+          layer: 'technical',
+          // intentionally missing both what + content
+        },
+      });
+
+      const text = (result.content as any[])[0].text;
+      expect(text).toContain('aide_remember requires');
+      expect(text).toContain('what');
+      expect(text).toContain('content');
+      expect((result as any).isError).toBe(true);
+    });
   });
 
   describe('aide_forget', () => {

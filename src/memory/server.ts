@@ -145,11 +145,20 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
   );
 
   // aide_remember — store something worth keeping
+  //
+  // Field-name alias: `content` accepted as alias for `what` (memory #367).
+  // Empirically observed in Cursor 3.2.11 validation 2026-04-27 (memory #364):
+  // agents reach for `content` first (matches OpenAI/Anthropic tool-call
+  // convention), get a zod error, then introspect the tool descriptor and
+  // retry with `what`. Accepting both eliminates the round-trip for
+  // fresh-agent first calls. Either field works; if both are provided,
+  // `what` wins.
   server.tool(
     'aide_remember',
     'Store knowledge that should persist beyond this conversation. Call when the developer corrects your approach, makes a decision during planning, teaches you something about the codebase, or when you discover something relevant during exploration. Store the specific knowledge — do not over-generalize from a single instance.',
     {
-      what: z.string().describe('The specific knowledge to remember.'),
+      what: z.string().nullish().transform((v) => v ?? undefined).describe('The specific knowledge to remember. Alias: "content" (either field accepted).'),
+      content: z.string().nullish().transform((v) => v ?? undefined).describe('Alias for "what". Either field accepted; provided because LLMs often reach for "content" first.'),
       layer: z.enum(LAYER_VALUES).describe('preferences = how someone likes to work. technical = facts about the stack. area_context = decisions for a code area. guidelines = team principles.'),
       scope: z.string().nullish().transform((v) => v ?? undefined).describe('Glob pattern for the code area this applies to (e.g. "src/components/dashboard/**"). Omit for project-wide.'),
       why: z.string().nullish().transform((v) => v ?? undefined).describe('Context for why this is worth remembering.'),
@@ -161,9 +170,20 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
       priority: z.enum(['always', 'normal']).nullish().transform((v) => v ?? undefined).describe('always = auto-injected at session start. normal = standard recall.'),
     },
     async (params) => {
+      // Resolve the alias: prefer `what` if both are provided.
+      const text = params.what ?? params.content;
+      if (!text) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: 'aide_remember requires the "what" field (or its alias "content"). Provide the specific knowledge to store.',
+          }],
+          isError: true,
+        };
+      }
       const memory = store.add({
         layer: params.layer as MemoryLayer,
-        what: params.what,
+        what: text,
         why: params.why,
         scope: params.scope,
         context_label: params.context_label,
@@ -187,12 +207,17 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
   );
 
   // aide_update — update an existing memory
+  //
+  // Field-name alias: `content` accepted as alias for `what` (memory #367 +
+  // matches aide_remember). Either field works; if both are provided,
+  // `what` wins.
   server.tool(
     'aide_update',
     'Update an existing memory. Use when information has changed, scope needs adjusting, or context needs updating. You can only update your own memories.',
     {
       id: z.coerce.number().describe('ID of the memory to update.'),
-      what: z.string().nullish().transform((v) => v ?? undefined).describe('Updated knowledge text.'),
+      what: z.string().nullish().transform((v) => v ?? undefined).describe('Updated knowledge text. Alias: "content" (either field accepted).'),
+      content: z.string().nullish().transform((v) => v ?? undefined).describe('Alias for "what". Either field accepted; provided because LLMs often reach for "content" first.'),
       why: z.string().nullish().transform((v) => v ?? undefined).describe('Updated context.'),
       scope: z.string().nullish().transform((v) => v ?? undefined).describe('Updated scope pattern.'),
       context_label: z.string().nullish().transform((v) => v ?? undefined).describe('Updated feature label.'),
@@ -208,8 +233,11 @@ export function createServer(store: MemoryStore, options?: { logDir?: string | n
         };
       }
 
+      // Resolve the alias: prefer `what` if both are provided.
+      const updatedWhat = params.what ?? params.content;
+
       const changes: Record<string, string> = {};
-      if (params.what !== undefined) changes.what = params.what;
+      if (updatedWhat !== undefined) changes.what = updatedWhat;
       if (params.why !== undefined) changes.why = params.why;
       if (params.scope !== undefined) changes.scope = params.scope;
       if (params.context_label !== undefined) changes.context_label = params.context_label;
