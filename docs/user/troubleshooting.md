@@ -44,10 +44,11 @@ The CLI walks up from the current directory looking for `.aide/`. If your projec
    aide-memory init --update-rules
    ```
 
-4. **Build is stale.** Hook dispatch happens via `dist/cli/aide-memory.js` (bundled since 0.4.0). If you are developing locally, rebuild:
+4. **Build is stale (contributors only).** If you are developing aide-memory locally from a checkout (not using the published npm package), hook dispatch reads `dist/cli/aide-memory.js`. After pulling new code, rebuild:
    ```bash
    npm run build && npm run build:dist
    ```
+   End users on `npm install -g aide-memory` (or `npx aide-memory`) don't need this — the published package ships pre-built bundles.
 
 ---
 

@@ -8,11 +8,13 @@ This project uses aide-memory, an MCP server that persists knowledge across conv
 
 ## Hooks
 
-Four hooks fire automatically. Respond to them as described:
+Six hooks fire automatically. Respond to them as described:
 
-- **PreToolUse** -- Before you read/edit a file, the hook may inject: "N memories exist for this path." When you see this nudge, call `aide_recall` with those paths before proceeding.
-- **Stop** -- On task completion, the hook prompts: "Anything worth remembering?" Review what happened in the session. If a decision was made, a correction was given, or you discovered something non-obvious, call `aide_remember` (or `aide_update` if an existing memory needs revision). Otherwise, do nothing.
+- **SessionStart** -- When a session begins or resumes, the hook may inject preferences + guidelines + priority-always memories as additional context. Read them and let them shape your work.
+- **PreToolUse** -- Before you read/edit/grep a file, the hook may inject: "N memories exist for this path." When you see this nudge, call `aide_recall` with those paths before proceeding.
+- **PostToolUse** -- After you call `aide_recall` / `aide_remember` / `aide_search`, the hook records the recalled IDs so subsequent reads of the same path don't re-block. No agent action required.
 - **UserPromptSubmit** -- Detects correction patterns ("no, use X instead", "don't do that"). When flagged, store the correction with `aide_remember` (or `aide_update` if an existing memory needs revision) scoped to the relevant code area.
+- **Stop** -- On task completion, the hook prompts: "Anything worth remembering?" Review what happened in the session. If a decision was made, a correction was given, or you discovered something non-obvious, call `aide_remember` (or `aide_update` if an existing memory needs revision). Otherwise, do nothing.
 - **PreCompact** -- Before context compaction, the hook prompts you to save important context. Store any active plans, decisions, or constraints via `aide_remember` (or `aide_update` if an existing memory needs revision) immediately -- after compaction you will only have a summary.
 {{editor_notes}}
 ## Proactive saving
@@ -48,12 +50,15 @@ Examples:
 - "How do we validate inputs?" → aide_search first
 - Any search driven by a human concept (auth, errors, migrations, config, styling, etc.)
 
-Fall back to code-level search tools (Grep, Glob, Bash+grep, rg) ONLY after aide_search:
-- For pure syntactic lookups (exact function name, specific string literal)
+Fall back to code-level search tools (Grep, Glob, Bash+grep, rg, codebase_search) ONLY after aide_search:
+- For pure syntactic lookups (exact function name, specific string literal) — keyword Grep is fine
+- For semantic / fuzzy intent matches across the codebase (Cursor's `codebase_search`, IDE-native semantic indices) — fine when you've already checked aide_search and want to widen the net
 - When aide_search returns nothing relevant for a concept-level query
 - When the user explicitly asks for a code search, not a knowledge search
 
-This matters whether the agent has the native Grep tool loaded or falls back to Bash+grep — `aide_search` should run first regardless.
+Default order for concept queries: `aide_search` → keyword Grep → semantic `codebase_search`. Use judgment; this isn't a rigid pipeline.
+
+**Hook coverage caveat:** the aide-memory pre-search hook fires on the editor's `Grep` matcher only. `codebase_search` is NOT hook-covered. So on a `codebase_search` you won't get a pre-tool nudge — calling `aide_search` first is on you. The agent should still consider `aide_search` first for concept-level queries regardless of which downstream search tool is being used.
 
 ## When to call aide_update
 

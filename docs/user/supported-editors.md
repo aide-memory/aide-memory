@@ -7,10 +7,10 @@ canonical events and matchers into that editor's config shape and hook
 I/O contract. This page is the honest accounting of what each adapter
 ships today.
 
-**TL;DR.** Claude Code is the reference implementation — every feature
+**TL;DR.** Claude Code is the reference implementation: every feature
 below works there. Cursor ships at ~80% parity in 0.5.0 with five
 documented gaps caused by missing platform channels. Codex, Copilot,
-and Windsurf are **rule-template only** today — their adapters write a
+and Windsurf are **rule-template only** today: their adapters write a
 curated rules file but do not yet generate hooks or MCP config at
 `aide-memory init`.
 
@@ -18,7 +18,7 @@ curated rules file but do not yet generate hooks or MCP config at
 
 - ✅ supported
 - ❌ not supported
-- ⚠ partial support — see footnote
+- ⚠ partial support (see footnote)
 - 📝 rule template only (no hook / MCP wiring yet)
 
 ## Capability matrix
@@ -46,18 +46,18 @@ server manually in the editor's own MCP config, the seven tools work
 identically to Claude Code.
 
 [^cursor-soft]: Soft nudges are delivered via Cursor's `agent_message`
-field on `permission: "allow"` — the equivalent of Claude Code's
+field on `permission: "allow"`, the equivalent of Claude Code's
 `additionalContext` channel. The agent receives the same context payload
 (memory IDs + recommended tool call) on every fire. Verified empirically
 on Cursor 3.2.11 (2026-04-27). User-visible chrome on soft fires is the
-remaining partial gap — see `[^cursor-chrome]`.
+remaining partial gap (see `[^cursor-chrome]`).
 
 [^cursor-chrome]: On `permission: "deny"` (hard-block), Cursor renders
-`user_message` chrome inline in chat — the user sees `aide-memory · …`
+`user_message` chrome inline in chat: the user sees `aide-memory · …`
 status lines just like Claude Code. On `permission: "allow"` (soft fire),
 Cursor 3.2.11 logs `user_message` to the Hooks Output panel but does NOT
-render it inline in chat — users have to open the panel to see soft
-chrome. The agent still receives the soft context via `agent_message` on
+render it inline in chat (users have to open the panel to see soft
+chrome). The agent still receives the soft context via `agent_message` on
 every fire, so the safety net works; only the user-facing visibility for
 soft fires is missing. Filed as a feature request candidate for an
 inline `system_message` channel on `allow`. Extensions cannot inject
@@ -66,8 +66,8 @@ chat UI ([#115748](https://forum.cursor.com/t/webview-panel-keeps-being-automati
 which is why we don't fall back to a webview surface.
 
 [^cursor-read-editor-open]: Cursor 3.2.11's `preToolUse:Read` hook does
-NOT fire when the target file is already open in the editor pane —
-verified empirically 2026-04-27. The cause is unverified (could be
+NOT fire when the target file is already open in the editor pane
+(verified empirically 2026-04-27). The cause is unverified (could be
 editor-cached content serving, design intent, or bug). Files that are
 NOT open trigger the hook reliably. `preToolUse:Write` (Edit) fires
 regardless of editor-open state. Mitigation: per-Edit safety net stays

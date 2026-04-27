@@ -17,7 +17,7 @@ Two minutes. Zero config. No Docker, no cloud, no API keys.
 | Editor | Status | Details |
 |---|---|---|
 | [Claude Code](./editors/claude-code.md) | ✅ shipping | Reference adapter — every feature works here |
-| [Cursor](./editors/cursor.md) | 🚧 0.5.0 target | ~80% parity with Claude Code, five documented gaps |
+| [Cursor](./editors/cursor.md) | ✅ shipping in 0.5.0 | ~80% parity with Claude Code, five documented gaps |
 | [Windsurf](./editors/windsurf.md) | 📝 rule template only | MCP tools work if added manually; no hooks yet |
 | [Codex](./editors/codex.md) | 📝 rule template only | MCP tools work if added manually; no hooks yet |
 | [Copilot](./editors/copilot.md) | 📝 rule template only | MCP tools work if added manually; no hooks yet |

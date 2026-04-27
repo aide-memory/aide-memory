@@ -12,7 +12,7 @@ Two minutes. Zero config. No Docker, no cloud, no API keys.
 
 ## What It Does
 
-- **Hook-driven capture** -- 4 hooks fire automatically (PreToolUse, Stop, UserPromptSubmit, PreCompact). Your agent stores context without you asking it to. Tested: 0% voluntary adoption vs 100% hook-driven.
+- **Hook-driven capture** -- 6 hooks fire automatically (SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop, PreCompact). Your agent stores context without you asking it to. Tested: 0% voluntary adoption vs 100% hook-driven.
 - **Nudge, not dump** -- ~20 token nudge per file read instead of ~2,000 token system prompt injection. The agent decides what is relevant and recalls only that.
 - **Path-scoped recall** -- memories are tied to code paths via glob patterns. A memory about checkout code surfaces in checkout files, not everywhere.
 - **File-per-memory storage** -- each memory is a human-readable JSON file in `.aide/memories/`. Browsable, diffable, version-controlled.
@@ -31,7 +31,7 @@ Two minutes. Zero config. No Docker, no cloud, no API keys.
 npx aide-memory init
 ```
 
-Creates `.aide/memories/`, installs 4 hooks, writes editor rules, configures the MCP server.
+Creates `.aide/memories/`, installs 6 hooks, writes editor rules, configures the MCP server.
 
 ### 2. Store a memory
 
@@ -73,12 +73,14 @@ See totals by layer, most-recalled memories, capture source breakdown, and stale
 
 | Hook | When it fires | What it does | Token cost |
 |------|--------------|--------------|------------|
-| **PreToolUse** | Before file reads | Nudges: "N memories exist for this path" | ~20 tokens |
-| **Stop** | Task completion | Prompts agent to reflect and store learnings | Hidden |
+| **SessionStart** | Session begin / resume | Injects top-N preferences + guidelines + priority-always memories | Hidden |
+| **PreToolUse** | Before file reads / edits / Grep / aide_* MCP calls | Nudges: "N memories exist for this path" | ~20 tokens |
+| **PostToolUse** | After aide_recall / aide_remember / aide_search | Records recalled memory IDs so re-reads don't re-block | Hidden |
 | **UserPromptSubmit** | User corrects agent | Detects correction patterns, stores scoped memory | Hidden |
+| **Stop** | Task completion | Prompts agent to reflect and store learnings | Hidden |
 | **PreCompact** | Before context compaction | Extracts planning decisions before context is lost | Hidden |
 
-All hooks use `additionalContext` -- invisible to you. Memory management happens silently in the background.
+All hooks use `additionalContext` (Claude Code) or `agent_message` (Cursor) -- invisible to you. Memory management happens silently in the background.
 
 ### Storage: file-per-memory with SQLite cache
 
@@ -141,9 +143,11 @@ All commands use the `aide-memory` binary (aliased as `aide`).
 | `search <query>` | FTS5 keyword search with BM25 ranking |
 | `list` | List memories with `--layer`, `--scope`, `--contributor`, `--tag` filters |
 | `stats` | Show analytics: counts by layer, most recalled, stale candidates |
+| `recall-log` | Tail the recall-log to inspect recent recall events |
 | `config <key> [value]` | Get or set configuration (dot-notation keys) |
-| `sync import` | Rebuild SQLite cache from JSON memory files |
-| `sync export` | Ensure all memories have corresponding JSON files |
+| `sync import` / `sync export` | Rebuild SQLite cache from JSON memory files / ensure JSON exists for every memory |
+| `migrate` | (placeholder) Migrate from legacy DB format |
+| `cleanup [--older-than 7d]` | Remove stale session tracking files from `.aide/cache/` |
 
 ---
 
@@ -168,8 +172,8 @@ Seven tools exposed to your AI agent (~1,400 tokens total schema -- GitHub MCP i
 Configuration lives in `.aide/config.json`. Manage via CLI:
 
 ```bash
-aide-memory config capture.enabled          # read
-aide-memory config capture.enabled false    # write
+aide-memory config hooks.read.maxBlocks        # read
+aide-memory config hooks.read.maxBlocks 0      # write (disable pre-read hook)
 ```
 
 Changes via `aide-memory config` apply immediately. If you hand-edit
@@ -177,30 +181,40 @@ Changes via `aide-memory config` apply immediately. If you hand-edit
 fire (file read, edit, or prompt). For instant propagation across all
 open sessions, reconnect the MCP server in Claude Code via `/mcp` → reconnect.
 
+A few of the most-used keys (full reference in
+[docs/user/configuration.md](docs/user/configuration.md)):
+
 | Key | Default | Description |
 |-----|---------|-------------|
-| `capture.enabled` | `true` | Enable/disable all automatic hook capture |
-| `capture.hooks.preToolUse` | `true` | PreToolUse hook (nudge on file read) |
-| `capture.hooks.stop` | `true` | Stop hook (reflection on task completion) |
-| `capture.hooks.userPromptSubmit` | `true` | UserPromptSubmit hook (correction detection) |
-| `capture.hooks.preCompact` | `true` | PreCompact hook (save before compaction) |
-| `tags.presets` | `[architecture, testing, security, style, performance, api-contracts]` | Available tags for memory categorization |
+| `hooks.read.maxBlocks` | `1` | Max pre-read hard-blocks per file path per session. `0` disables the hook. |
+| `hooks.edit.maxBlocks` | `1` | Same as above, for the pre-edit hook. |
+| `hooks.search.mode` | `"soft"` | Pre-search hook: `"soft"`, `"block"`, or `"off"`. |
+| `hooks.correction.enabled` | `true` | Detect correction patterns in user messages. |
+| `hooks.visible` | `true` | Show user-facing `aide-memory · …` systemMessage lines. |
+| `recall.minScopeDepth` | `1` | Minimum scope segments for per-file recall. Bump to `2` to demote `src/**`-style broad scopes to SessionStart only. |
+| `memories.softening.threshold` | `10` | Below this total memory count, hard-blocks downgrade to soft nudges. |
+| `memories.defaultShared` | `true` | Default `shared` value for new `preferences` memories. Per-call `shared: true\|false` always wins. |
+| `tags.presets` | _(9 defaults)_ | Available tags for memory categorization. |
 
 ---
 
 ## Privacy & Telemetry
 
-aide-memory collects **anonymous usage telemetry by default** to help improve the product. Here's what you should know:
+**Code and memory content never leave your machine.** Memories are JSON files on your disk, the SQLite cache is local, and the MCP server runs over stdio.
 
-**What's collected:** Event types (remember, recall, search, etc.), platform, architecture, Node version. **What's NOT collected:** Memory content, file paths, code, or personal information. Machine identification is a SHA256 hash of hostname:username for deduplication only.
+aide-memory has two distinct analytics surfaces -- don't conflate them:
 
-**How to opt out:** Set the `AIDE_TELEMETRY=off` environment variable:
+**1. Local SQLite analytics (always local).** Tool-call counts and recall events drive `aide-memory stats`. Written to your local cache (`~/.aide/projects/<hash>/memory.db`) and never transmitted.
+
+**2. Anonymized event tallies to PostHog (opt-in).** Off by default. You opt in by exporting `AIDE_TELEMETRY=on`. When opted in, only event tallies are sent: event type (`remember`, `recall`, `search`, etc.), a SHA256-hashed `hostname:username` for deduplication, platform, and Node version. **What's never sent:** memory content, file paths, code, scope strings, query strings, contributor names, or anything else user-identifying.
+
 ```bash
-export AIDE_TELEMETRY=off
-npx aide-memory stats
-```
+# Default: nothing is sent. To opt in:
+export AIDE_TELEMETRY=on
 
-All telemetry is local-first — events are buffered in SQLite and sent to PostHog asynchronously. Your memories never leave your machine unless you commit them to git.
+# To stay opted out (or be explicit):
+export AIDE_TELEMETRY=off
+```
 
 ---
 
@@ -242,11 +256,24 @@ Full UX walkthrough: [docs/user/editors/claude-code.md](docs/user/editors/claude
 - Configures hooks in `.cursor/hooks.json`
 - Configures MCP server in `.cursor/mcp.json`
 
-Five platform-level gaps are documented — soft-nudge channel, inline
-branded chrome, sessionStart-after-compact, in-turn correction detection,
-and Glob matcher are all missing upstream. Each gap is tracked against a
-Cursor forum thread. Restart Cursor after init for MCP to load. Full
-walkthrough: [docs/user/editors/cursor.md](docs/user/editors/cursor.md).
+Verified gaps versus Claude Code (each tracked against a Cursor forum
+thread; adapter upgrades when upstream lands a fix):
+- Per-Read hard-block does not fire when the file is already open in the
+  editor pane (per-Edit safety net + rules-file injection cover it
+  functionally).
+- Inline visible chrome on **soft** fires lives in the Hooks Output
+  panel rather than chat (hard-block chrome renders inline as expected).
+- SessionStart context is delivered via the regenerated `.mdc` rules
+  file rather than a hook channel (Cursor staff's endorsed workaround
+  for an upstream sessionStart bug).
+- Correction detection arrives one turn later than in Claude Code
+  (Cursor's `beforeSubmitPrompt` has no in-turn additionalContext
+  channel; reminder ships via the next Stop hook's `followup_message`).
+- No Glob matcher in Cursor's vocabulary, so pre-search nudges fire on
+  Grep only.
+
+Restart Cursor after init for MCP to load. Full walkthrough:
+[docs/user/editors/cursor.md](docs/user/editors/cursor.md).
 
 ### Codex, Copilot, Windsurf
 
@@ -270,9 +297,9 @@ No Docker. No external databases. No API keys. No cloud accounts.
 
 ## Test Status
 
-- **544 tests passing** across 21 test files
+- **773 vitest tests passing** across 31 test files (plus 11/11 install-from-tarball smokes and 15/15 debug-output smokes via `npm run test:full`)
 - **0 TypeScript errors**
-- 7 MCP tools, 11 CLI commands, 4 hooks -- all verified end-to-end
+- 7 MCP tools, 13 CLI commands, 6 hooks -- all verified end-to-end
 
 ---
 

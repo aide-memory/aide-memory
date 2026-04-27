@@ -1,7 +1,7 @@
 # aide-memory in Cursor
 
 Cursor ships with aide-memory 0.5.0 at ~80% parity with Claude Code. The
-remaining 20% is not us being lazy — it is a set of five concrete gaps
+remaining 20% is not us being lazy. It is a set of five concrete gaps
 caused by missing platform channels, each tracked against an upstream
 Cursor bug or feature request. When Cursor fixes a thread, the aide-memory
 adapter upgrades and the workaround goes away.
@@ -18,21 +18,21 @@ for the capability matrix see [supported-editors.md](../supported-editors.md).
   MCP:aide_*, postToolUse)
 - `.cursor/mcp.json` — MCP server entry (`type: "stdio"`,
   `args: [<path>, "${workspaceFolder}"]`)
-- `.cursor/rules/aide-memory.mdc` — **dynamically regenerated** rules file
+- `.cursor/rules/aide-memory.mdc`: **dynamically regenerated** rules file
   with YAML frontmatter (`alwaysApply: true`, `globs: **/*`). Gitignored
   because it is a derived artifact that rewrites on memory and config
-  changes — see "Rules-file regeneration" below.
+  changes (see "Rules-file regeneration" below).
 - `.aide/config.json` and `.aide/memories/` — same as Claude Code
 - `.ignore` / `.gitignore` entries
 
 ### ⚠ ⚠ ⚠ First-time MCP enablement (read this — easy to miss)
 
 Cursor's MCP integration has **two enablement gates** you'll hit on first
-init. Neither is an aide-memory bug — both are Cursor security/UX
+init. Neither is an aide-memory bug; both are Cursor security/UX
 choices we have to live with:
 
 1. **Cursor must be restarted to pick up the MCP config.** Cursor reads
-   `.cursor/mcp.json` on startup only — there is no hot-reload
+   `.cursor/mcp.json` on startup only; there is no hot-reload
    ([#3887](https://github.com/cursor/cursor/issues/3887),
    [#55723](https://forum.cursor.com/t/refresh-mcp-server-via-command/55723)).
    `aide-memory init` prints a reminder, but if you skip it nothing
@@ -40,7 +40,7 @@ choices we have to live with:
    the window) and reopen.
 
 2. **The aide-memory MCP server is registered DISABLED by default.**
-   Cursor's design — every newly-discovered MCP server stays toggled
+   Cursor's design: every newly-discovered MCP server stays toggled
    off until the user explicitly opts in. We can't pre-enable from
    `.cursor/mcp.json` (no documented field for it; would also be a
    security gap). To turn it on:
@@ -52,11 +52,11 @@ choices we have to live with:
    You'll know it worked when the agent can call `aide_recall`,
    `aide_remember`, etc. without errors. If those calls fail, you're
    either still toggled off OR hitting Cursor bug
-   [#122421](https://forum.cursor.com/t/mcp-tool-list-only-updates-after-manually-toggling-server-off-on/122421)
-   — toggle off then back on to refresh the tool list.
+   [#122421](https://forum.cursor.com/t/mcp-tool-list-only-updates-after-manually-toggling-server-off-on/122421);
+   toggle off then back on to refresh the tool list.
 
 > **Until both gates clear, aide-memory's MCP tools are unavailable.**
-> Hooks (`.cursor/hooks.json`) still fire correctly — but the
+> Hooks (`.cursor/hooks.json`) still fire correctly, but the
 > hard-block messages tell the agent to "call aide_recall," and that
 > tool can't run if MCP isn't enabled.
 
@@ -78,8 +78,8 @@ retries. Same effect as Claude Code's hard-block.
 > fires for Reads where (a) the file is not already in Cursor's editor
 > pane, AND (b) scoped memories haven't been recalled this session.
 > Reads of files that are already open in your editor are **not seen by
-> the hook** — see "Per-Read coverage gap on Cursor" below for the
-> verified observation and the ideal-vs-current behavior gap.
+> the hook** (see "Per-Read coverage gap on Cursor" below for the
+> verified observation and the ideal-vs-current behavior gap).
 
 **On re-read of the same path — soft.** When the file has been
 encountered before but new memories exist (or some IDs are still
@@ -281,6 +281,14 @@ to regenerate.
 aide-memory does PID-file cleanup on server start, so leaks are bounded.
 If you see multiple `node dist/memory/cli.js` processes, `pkill -f
 dist/memory/cli.js` is safe.
+
+**Personal vs shared preferences.** `aide_remember` accepts a `shared`
+parameter (`true` writes to `preferences/shared/`, committed; `false`
+writes to `preferences/personal/`, gitignored). When the agent omits it,
+the default comes from `memories.defaultShared` in `.aide/config.json`
+(default `true`). Flip with `aide-memory config memories.defaultShared
+false` if you want new preferences to default to personal/private.
+Per-call `shared: true|false` always overrides this default.
 
 **Agent reads a file via @-attachment or Tab context and aide-memory
 doesn't nudge.** Expected — `@-file` attachments and Tab context pulls

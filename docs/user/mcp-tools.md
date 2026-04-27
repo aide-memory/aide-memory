@@ -61,7 +61,8 @@ Store knowledge that should persist beyond this conversation.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `what` | string | yes | -- | The specific knowledge to remember. |
+| `what` | string | yes [^remember-what] | -- | The specific knowledge to remember. |
+| `content` | string | yes [^remember-what] | -- | Alias for `what`. Either field is accepted; provided because LLMs frequently reach for `content` first (matches OpenAI/Anthropic tool-call conventions). If both are passed, `what` wins. |
 | `layer` | enum | yes | -- | `preferences`, `technical`, `area_context`, or `guidelines`. |
 | `scope` | string | no | project-wide | Glob pattern for the code area (e.g., `src/components/dashboard/**`). |
 | `why` | string | no | -- | Context for why this is worth remembering. |
@@ -69,7 +70,10 @@ Store knowledge that should persist beyond this conversation.
 | `contributor` | string | no | -- | Who this knowledge came from. |
 | `tags` | string[] | no | -- | Tags for categorization. |
 | `source` | enum | no | `conversation` | How captured: `conversation`, `import`, `agent_discovery`, `elevated`, `hook`. |
-| `shared` | boolean | no | true | Whether shared (committed to git) or personal (gitignored). Only affects `preferences` layer. |
+| `shared` | boolean | no | `memories.defaultShared` (default `true`) | Whether the memory is shared (committed to git) or personal (gitignored). Only affects `preferences` layer. When omitted, the project-level config key `memories.defaultShared` decides; flip with `aide-memory config memories.defaultShared false`. |
+| `priority` | enum | no | `normal` | `always` = auto-injected at session start. `normal` = standard recall. |
+
+[^remember-what]: Exactly one of `what` or `content` must be provided. Both fields point at the same underlying memory text — see `src/memory/server.ts:152-153` for the alias resolution.
 
 **Example call:**
 ```json
@@ -104,9 +108,11 @@ Update an existing memory's content, scope, or context.
 |-----------|------|----------|---------|-------------|
 | `id` | number | yes | -- | ID of the memory to update. |
 | `what` | string | no | -- | Updated knowledge text. |
+| `content` | string | no | -- | Alias for `what`. Either field is accepted; provided because LLMs frequently reach for `content` first. If both are passed, `what` wins. See `src/memory/server.ts:197-198`. |
 | `why` | string | no | -- | Updated context. |
 | `scope` | string | no | -- | Updated scope pattern. |
 | `context_label` | string | no | -- | Updated feature label. |
+| `priority` | enum | no | -- | Update priority: `always` or `normal`. |
 
 **Example call:**
 ```json

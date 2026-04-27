@@ -17,7 +17,7 @@ npx aide-memory init
 
 ## Privacy
 
-aide-memory collects anonymous telemetry by default (event types, platform, Node version) to help improve the product. Your memory content is never sent. Disable telemetry: `export AIDE_TELEMETRY=off`
+Code and memory content never leave your machine. Anonymized event tallies (event type, hashed machine id, platform, Node version) are sent to PostHog **only when you opt in** via `export AIDE_TELEMETRY=on`. Default is off. See [README §Privacy & Telemetry](https://github.com/aide-memory/aide-memory#privacy--telemetry) for the exact list.
 
 ## Documentation
 

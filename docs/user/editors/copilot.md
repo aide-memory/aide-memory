@@ -19,8 +19,12 @@ config files at `aide-memory init`.
 - Hook + MCP config generation at init — tracked in
   [`docs/specs/EDITOR_ONBOARDING_GUIDE.md`](../../specs/EDITOR_ONBOARDING_GUIDE.md)
   as a post-0.5.0 onboarding task.
-- Full per-editor behavioral parity matrix — filled when the adapter
-  matures. For now assume ~50% of Claude Code's in-editor experience.
+- Until the adapter ships, see the
+  [capability matrix](../supported-editors.md) for the honest accounting:
+  Copilot today can run the seven MCP tools (manual setup) and consume
+  the rule template, but has no automatic pre-read blocks, soft nudges,
+  correction detection, or session-start injection. Treat it as
+  rules-template-only for 0.5.0 planning purposes.
 
 ## Want to help?
 

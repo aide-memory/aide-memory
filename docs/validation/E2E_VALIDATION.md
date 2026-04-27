@@ -54,7 +54,7 @@ npm run test:full
 
 # Expected (as of 2026-04-27, 0.5.0):
 #   - tsc: clean exit, no output
-#   - vitest: 768/768 pass (count grows as regression tests are added)
+#   - vitest: 773/773 pass (count grows as regression tests are added)
 #   - esbuild build:dist: dist/cli/aide-memory.js + dist/memory/{index,cli}.js emitted
 #   - install-from-tarball.smoke.sh: 11/11 PASS (bundle integrity + init flow)
 #   - debug-output-smoke.test.sh: 15/15 PASS (AIDE_DEBUG + loudError surfaces)

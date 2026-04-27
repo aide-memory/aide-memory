@@ -86,20 +86,31 @@ matchers to what that editor can actually do.
 
 Compared to Cursor (0.5.0, ~80% parity):
 
-- **Soft additionalContext channel** exists on Claude Code's PreToolUse;
-  Cursor's does not. Re-reads on Cursor go silent after the first block.
-- **Inline branded chrome** (`systemMessage` field) is a Claude Code
-  primitive. Cursor has no equivalent — users see only the agent's natural
-  tool-call display.
+- **Soft-context channel.** Both editors expose a soft channel — Claude
+  Code via `hookSpecificOutput.additionalContext` on PreToolUse, Cursor
+  via `agent_message` on `permission: "allow"`. The agent receives the
+  same payload on every soft fire in either editor. The difference is
+  user-visible chrome (next bullet).
+- **Inline branded chrome.** Claude Code's `systemMessage` field renders
+  branded `aide-memory · …` lines inline in chat for both hard and soft
+  fires. Cursor renders inline chrome on hard-block (`permission: "deny"`)
+  reliably, but `user_message` on soft fires (`permission: "allow"`)
+  lives in the Hooks Output panel rather than chat. Agent context still
+  reaches the agent in both cases; only user-visible soft chrome differs.
+- **Per-Read coverage.** Claude Code's PreToolUse fires for every Read.
+  Cursor 3.2.11's `preToolUse:Read` does NOT fire when the target file
+  is already open in the editor pane (verified empirically 2026-04-27).
+  The per-Edit safety net is unaffected, and the rules-file injection
+  guides agents to call `aide_recall` on editor-cached reads.
 - **SessionStart context injection** is native in Claude Code. Cursor's
   `sessionStart.additional_context` is broken upstream, so aide-memory
   delivers the same content via a regenerated `alwaysApply: true` rules
   file (Cursor staff's endorsed workaround).
-- **In-turn correction detection**: Claude Code's UserPromptSubmit
+- **In-turn correction detection.** Claude Code's UserPromptSubmit
   injects the "store this" nudge in-turn. Cursor's `beforeSubmitPrompt`
   cannot inject context, so the reminder arrives one turn later on the
   next Stop hook via `followup_message`.
-- **Glob matcher coverage**: Claude Code fires PreToolUse for both Grep
+- **Glob matcher coverage.** Claude Code fires PreToolUse for both Grep
   and Glob. Cursor has no Glob matcher; only Grep triggers.
 
 See [editors/cursor.md](./cursor.md) for the full Cursor gap list, and
@@ -131,6 +142,15 @@ re-writes the rule file to the canonical template.
 (default `true`) and the per-layer knobs (`injection.preferences`,
 `injection.guidelines`). `aide-memory config list` dumps the full
 config. See [configuration.md](../configuration.md).
+
+**Personal vs shared preferences.** `aide_remember` accepts a `shared`
+parameter (`true` writes to `preferences/shared/`, committed; `false`
+writes to `preferences/personal/`, gitignored). When the agent omits it,
+the default comes from `memories.defaultShared` in `.aide/config.json`
+(default `true` so new prefs are team-visible by default). Flip with
+`aide-memory config memories.defaultShared false` if you'd rather have
+new prefs default to personal/private. Per-call `shared: true|false`
+always overrides this default.
 
 ## Platform capabilities we depend on
 

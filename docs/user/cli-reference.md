@@ -356,6 +356,38 @@ Memory Statistics
 
 ---
 
+## recall-log
+
+Tail the recall-log to see recent recall events. Useful for debugging what the agent fetched and when.
+
+```
+aide-memory recall-log [flags]
+```
+
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--limit` | number | 20 | Max log entries to show, most recent first |
+| `--since` | string | -- | ISO timestamp; only show entries after this point |
+
+**Example:**
+
+```bash
+aide-memory recall-log --limit 50
+```
+
+**Output:**
+```
+[2026-04-27T14:21:08Z] aide_recall paths=[src/api/routes.ts] returned 4 memories
+[2026-04-27T14:21:53Z] aide_recall paths=[src/auth/middleware.ts] returned 7 memories
+[2026-04-27T14:22:11Z] aide_search keyword="token" returned 3 memories
+```
+
+The recall-log is written by the MCP server alongside `memory.db` for diagnostic purposes. Safe to delete; recreated on the next recall event.
+
+---
+
 ## config
 
 Get or set configuration using dot-notation keys.
@@ -384,10 +416,13 @@ from two sources:
 - Hook/recall/injection knobs — see `scripts/hooks/defaults.json` (19 keys
   covering hook behavior, recall, scope-matching, SessionStart injection,
   and memory-storage visibility).
-- Integration schema — `telemetry.enabled` (default ON, local-only),
-  `contributor` (default `"auto"`, override with a team handle),
-  `embeddings.backend` / `embeddings.model` (auto / transformers / ollama /
-  none), `tags.presets`, `updates.check`, `version`.
+- Integration schema: `contributor` (default `"auto"`, override with a
+  team handle), `embeddings.backend` / `embeddings.model`
+  (auto / transformers / ollama / none), `tags.presets`,
+  `memories.defaultShared` (default `true`, controls per-preferences
+  shared-vs-personal default), `updates.check`, `version`. (The legacy
+  `telemetry.enabled` key only gates the local-only analytics writer —
+  PostHog opt-in is via the `AIDE_TELEMETRY` env var, default off.)
 
 **Removed in 0.4.3:** `capture.*` family (5 keys) + `nudge.visible` were
 listed as valid but had no runtime effect. They're rejected now. See
@@ -413,12 +448,12 @@ derived files (`.ignore`, etc.) are in sync with `.aide/config.json`.
 
 ```bash
 # Read a value
-aide-memory config telemetry.enabled
+aide-memory config memories.defaultShared
 # Output: true
 
-# Set a boolean
-aide-memory config telemetry.enabled false
-# Output: Set telemetry.enabled = false
+# Set a boolean — flip new preferences to default to personal/private
+aide-memory config memories.defaultShared false
+# Output: Set memories.defaultShared = false
 
 # Read a nested value
 aide-memory config hooks.read.maxBlocks
@@ -439,6 +474,8 @@ aide-memory config contributor "TeamBot"
 # Restore pre-0.4.3 narrow scope-matching behavior
 aide-memory config recall.minScopeDepth 1
 ```
+
+**Note on `memories.defaultShared`:** controls the default `shared` value for new `preferences` memories when the agent doesn't pass one. `true` (default) writes to `preferences/shared/` (committed); `false` writes to `preferences/personal/` (gitignored). Per-call `shared: true|false` always overrides this default.
 
 Values are auto-parsed: `true`/`false` become booleans, integers and
 floats become numbers, JSON objects and arrays (`{...}` / `[...]`) are

@@ -15,19 +15,6 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
 ```json
 {
   "version": 1,
-  "capture": {
-    "enabled": true,
-    "hooks": {
-      "preToolUse": true,
-      "stop": true,
-      "userPromptSubmit": true,
-      "preCompact": true,
-      "sessionStart": true
-    }
-  },
-  "nudge": {
-    "visible": false
-  },
   "tags": {
     "presets": [
       "architecture",
@@ -41,19 +28,21 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
       "api-contract"
     ]
   },
-  "telemetry": {
-    "enabled": true
+  "memories": {
+    "defaultShared": true
   },
   "contributor": "auto",
   "embeddings": {
-    "model": "bge-small-en-v1.5",
-    "backend": "transformers"
+    "model": "auto",
+    "backend": "auto"
   },
   "updates": {
     "check": true
   }
 }
 ```
+
+The `capture.*` and `nudge.visible` keys were removed in 0.4.3 (no runtime effect — see "Note on removed keys" below). Telemetry is configured via the `AIDE_TELEMETRY` env var (default off, opt in with `AIDE_TELEMETRY=on`); see [Telemetry](#telemetry-default-off--opt-in) below.
 
 ## All config keys
 
@@ -63,11 +52,11 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
 |-----|------|---------|-------------|
 | `hooks.read.maxBlocks` | number | `1` | Max hard-blocks per file path per session on pre-read hook. `0` disables the hook entirely. |
 | `hooks.edit.maxBlocks` | number | `1` | Same as `hooks.read.maxBlocks` but for pre-edit. |
-| `hooks.search.mode` | string | `"soft"` | Pre-search hook mode: `"off"`, `"soft"` (additionalContext), `"block"` (hard decision). |
+| `hooks.search.mode` | string | `"soft"` | Pre-search hook mode: `"off"`, `"soft"` (additionalContext), or `"block"` (hard decision). |
 | `hooks.correction.enabled` | boolean | `true` | Detect correction phrasings in user messages (`no, use X instead`, etc.) and nudge `aide_remember`. |
 | `hooks.precompact.mode` | string | `"cleanup"` | `"off"` preserves tracking files across `/compact`; `"cleanup"` clears them so post-compact turns re-block cleanly. |
 | `hooks.stop.schedule` | array | _(see below)_ | Phased interval for Stop hook reflection nudge. Default ramps 3→5→10 turns. |
-| `hooks.visible` | boolean | `true` | Surface user-facing `aide-memory · …` systemMessage lines when hooks fire (soft recalls, correction detected, session-start injection, Stop checkpoints). Default `true` so users can see what aide-memory is doing. Set `false` to hide all aide-memory systemMessages — hooks still function (context injection + block enforcement unchanged). Does not affect what Claude sees. |
+| `hooks.visible` | boolean | `true` | Surface user-facing `aide-memory · …` systemMessage lines when hooks fire (soft recalls, correction detected, session-start injection, Stop checkpoints). Default `true` so users can see what aide-memory is doing. Set `false` to hide all aide-memory systemMessages; hooks still function (context injection + block enforcement unchanged). Does not affect what Claude sees. |
 
 ### Recall + scope matching
 
@@ -76,7 +65,7 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
 | `recall.limit` | number | `20` | Max memories per `aide_recall` call before layer-diversity balancing. |
 | `recall.ensureLayerDiversity` | boolean | `true` | Swap under-represented layers up into results when total is below `recall.layerDiversityMinLimit`. |
 | `recall.layerDiversityMinLimit` | number | `5` | Threshold below which diversity swap applies. |
-| `recall.minScopeDepth` | number | `1` | Minimum fixed-prefix segment count for a scope to be eligible for per-file recall. Default `1` is permissive — any scope with ≥1 segment qualifies. Works across project shapes (src-wrapped, flat Next.js `pages/**`, SvelteKit `routes/**`, deep monorepos). Bump to `2`+ for stricter scoping when you have many broad scopes. Broad scopes below the threshold are NOT excluded from memory entirely — they just surface via SessionStart injection instead of per-file. See the visualized breakdown below. |
+| `recall.minScopeDepth` | number | `1` | Minimum fixed-prefix segment count for a scope to be eligible for per-file recall. Default `1` is permissive: any scope with ≥1 segment qualifies. Works across project shapes (src-wrapped, flat Next.js `pages/**`, SvelteKit `routes/**`, deep monorepos). Bump to `2`+ for stricter scoping when you have many broad scopes. Broad scopes below the threshold are NOT excluded from memory entirely; they just surface via SessionStart injection instead of per-file. See the visualized breakdown below. |
 
 ### SessionStart injection
 
@@ -84,7 +73,7 @@ Created by `aide-memory init`. If missing or malformed, defaults are used automa
 |-----|------|---------|-------------|
 | `injection.preferences` | number\|`"all"`\|`false` | `15` | Max preferences to inject, sorted by `recalled_count desc, updated_at desc`. |
 | `injection.excludeScopedPreferences` | boolean | `false` | If `true`, scoped preferences skip SessionStart and surface only via path hooks. Default `false` injects all. |
-| `injection.technical` | number\|boolean | `false` | Inject technical-layer memories at SessionStart? Default off — they surface via path hooks. |
+| `injection.technical` | number\|boolean | `false` | Inject technical-layer memories at SessionStart? Default off; they surface via path hooks. |
 | `injection.area_context` | number\|boolean | `false` | Same for area_context layer. |
 | `injection.guidelines` | `"all"`\|number\|`false` | `"all"` | Inject all guidelines regardless of scope. |
 | `injection.priorityAlwaysOverride` | boolean | `true` | Include any memory with `priority: "always"` regardless of layer gating. Rendered first (before other sections) so priority memories survive the char cap. |
@@ -361,6 +350,7 @@ Setting values `2+` doesn't produce different behavior from `1` in practice — 
 |-----|------|---------|-------------|
 | `memories.hideFromGrep` | boolean | `true` | Add `.aide/memories/` to an `aide-memory-managed` block in `.ignore` so grep/ripgrep skip it. Live-synced on config change. |
 | `memories.softening.threshold` | number | `10` | Below this total-memory count, pre-read/pre-edit hard blocks become soft nudges. Keeps small projects friendly. |
+| `memories.defaultShared` | boolean | `true` | Default `shared` value for new `preferences` memories when the caller doesn't pass one explicitly. `true` writes to `preferences/shared/` (committed). `false` writes to `preferences/personal/` (gitignored). Per-call `shared: true\|false` always overrides this default. Flip with `aide-memory config memories.defaultShared false` if you want new preferences to default to personal/private. Other layers (technical, area_context, guidelines) ignore this — they're always shared. |
 
 ### Integration + embeddings
 
@@ -368,9 +358,8 @@ Setting values `2+` doesn't produce different behavior from `1` in practice — 
 |-----|------|---------|-------------|
 | `version` | number | `1` | Config schema version |
 | `tags.presets` | string[] | _(see below)_ | Available tag presets surfaced by `aide_remember`. |
-| `telemetry.enabled` | boolean | **`true`** | **Default ON.** Analytics about tool-call counts + recall events are recorded to the LOCAL SQLite database (never leaves your machine — aide-memory has no phone-home channel). Set to `false` to skip recording. The name is a carryover; under the hood it only gates the local Analytics writer. |
-| `contributor` | string | `"auto"` | Contributor name attached to new memories. Default `"auto"` reads `git config user.name` at memory-creation time. Any other string overrides — useful for shared repos where humans contribute under a team handle. |
-| `embeddings.backend` | string | `"auto"` | Semantic-search backend. Values: `"auto"` (try transformers → ollama → keyword-only), `"transformers"` (force local, requires optional `@huggingface/transformers` dep), `"ollama"` (force local Ollama server at `localhost:11434`), `"none"` (disable semantic search). |
+| `contributor` | string | `"auto"` | Contributor name attached to new memories. Default `"auto"` reads `git config user.name` at memory-creation time. Any other string overrides; useful for shared repos where humans contribute under a team handle. |
+| `embeddings.backend` | string | `"auto"` | Semantic-search backend. Values: `"auto"` (try transformers, then ollama, then keyword-only), `"transformers"` (force local, requires optional `@huggingface/transformers` dep), `"ollama"` (force local Ollama server at `localhost:11434`), or `"none"` (disable semantic search). |
 | `embeddings.model` | string | `"auto"` | Model name for the active backend. `"auto"` uses backend defaults (`Xenova/bge-small-en-v1.5` for transformers, `nomic-embed-text` for ollama). Override with any model the backend supports. |
 | `updates.check` | boolean | `true` | Check for new npm versions after each command (non-blocking). |
 
@@ -384,8 +373,8 @@ aide-memory config hooks.read.maxBlocks
 # Output: 1
 
 # Read a nested key
-aide-memory config telemetry.enabled
-# Output: true
+aide-memory config recall.minScopeDepth
+# Output: 1
 
 # Read an object (returns JSON)
 aide-memory config tags.presets
@@ -396,7 +385,7 @@ aide-memory config tags.presets
 
 ```bash
 # Set a boolean
-aide-memory config telemetry.enabled false
+aide-memory config memories.defaultShared false
 
 # Set a string
 aide-memory config contributor "Ahmed Meky"
@@ -461,16 +450,36 @@ aide-memory config embeddings.backend none
 
 Embeddings are optional. The `@huggingface/transformers` package is NOT installed by default — semantic search works out of box only if you install it (or have Ollama running). Without either, search uses FTS5 (BM25 ranking) with a LIKE fallback, which works well for most use cases. `embeddings.model` accepts any model name the active backend supports; `"auto"` uses backend defaults.
 
-## Telemetry (default ON — opt-out)
+## Telemetry (default OFF — opt-in)
 
-AIDE Memory records LOCAL analytics about tool-call counts and recall events by default. This data never leaves your machine — there's no phone-home channel. It's written to the SQLite database at `~/.aide/projects/<hash>/memory.db` and shows up in `aide-memory stats`.
+aide-memory has two distinct analytics surfaces. Don't conflate them:
+
+**1. Local SQLite analytics (always on, never transmitted).** Tool-call counts and recall events are written to your local SQLite cache at `~/.aide/projects/<hash>/memory.db`. This drives `aide-memory stats`. It is purely local — nothing leaves your machine. There is no config flag to disable it because it has no privacy surface to manage.
+
+**2. Anonymized event tallies to PostHog (opt-in via env var).** When you opt in by exporting `AIDE_TELEMETRY=on`, aide-memory sends anonymized event tallies to PostHog so we can see which features are used. Off by default.
+
+**What's sent when opted in:**
+
+- Event type (`remember`, `recall`, `search`, etc.)
+- A SHA256-hashed machine identifier (`hostname:username`) for deduplication only
+- Platform (e.g. `darwin`, `linux`)
+- Node version
+
+**What's NEVER sent:** memory content, code, file paths, scope strings, project names, contributor names, query strings, search keywords, or any other user-identifying data. Code and memory content never leave your machine. Only anonymized event tallies are transmitted, and only when you opt in.
+
+**Opt in:**
 
 ```bash
-# Stop recording analytics (default is enabled = true)
-aide-memory config telemetry.enabled false
+export AIDE_TELEMETRY=on
 ```
 
-The "telemetry" name is a carryover from the original opt-in framing; under the hood it only gates the local Analytics writer in `store.ts`. There is no network transmission regardless of this flag.
+**Stay opted out (default):** do nothing. Or for explicitness:
+
+```bash
+export AIDE_TELEMETRY=off
+```
+
+The legacy `telemetry.enabled` config key in `.aide/config.json` only controls the LOCAL analytics writer (`store.ts`). It has no effect on PostHog transmission. PostHog transmission is gated entirely by the `AIDE_TELEMETRY` env var.
 
 ## Update checks
 
