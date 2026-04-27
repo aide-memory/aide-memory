@@ -1,33 +1,53 @@
 /**
  * CursorAdapter — Cursor IDE integration.
  *
- * Phase C1 scope (zero behavior change):
- *   - Rules metadata present (matches current behavior: init writes
- *     `.cursor/rules/aide-memory.mdc`).
- *   - `supportsHooks` + `supportsMcp` are FALSE in C1 — init skips
- *     hook/MCP generation for Cursor today. Translation maps + buildHookConfig
- *     / buildMcpConfig are defined so Phase C2 can flip the flags + start
- *     writing `.cursor/hooks.json` + `.cursor/mcp.json` without re-designing
- *     the adapter shape.
+ * Phase C1-C6: COMPLETE. Cursor support is feature-complete; we ship .cursor/
+ * hooks.json, .cursor/mcp.json, .cursor/rules/aide-memory.mdc on init, with
+ * runtime envelope translation in translateInput / translateOutput.
  *
- * Phase C2 activates:
- *   - Set supportsHooks = true, supportsMcp = true
- *   - Wire init.ts to call buildHookConfig + buildMcpConfig alongside claude-code
- *   - Add cursor-init-smoke.test.sh
+ * 0.5.0 update (2026-04-27): translateOutput now follows the audience-
+ * mapping pattern (memory #359) — `user_message` plays the same role on
+ * Cursor that Claude Code's `systemMessage` plays (user-visible chrome),
+ * and `agent_message` plays the same role as Claude Code's
+ * `additionalContext` (agent-only instruction). Earlier framing of
+ * "Cursor has no soft-nudge channel" was wrong (memory #358 — bias
+ * directive) — `agent_message` is the channel; we now use it.
  *
- * Scope gaps documented in docs/specs/CURSOR_ONBOARDING.md §1:
- *   - `glob` matcher not supported → matcherMap['glob'] = null
- *   - preToolUse has no soft-nudge additionalContext channel (handled at
- *     envelope/translateOutput layer, not in this file)
- *   - beforeReadFile is a separate event from preToolUse matcher=Read —
- *     mapped to pre-read for now; Phase C3 empirical testing decides final
- *     wiring
+ * Genuine platform gaps that survive after the audience-mapping fix:
+ *   - sessionStart `additional_context` is broken (forum #158452) — rules-
+ *     file regen with `alwaysApply: true` is the staff-endorsed workaround.
+ *   - `Glob` matcher undocumented (forum #138691) → matcherMap['glob'] = null.
+ *   - `MCP:<tool>` syntax has no server-name segment → collision risk if
+ *     two MCP servers expose same-named tools.
+ *   - No inline branded chrome equivalent to Claude Code's per-event
+ *     `systemMessage` rendering — `user_message` exists but renders as
+ *     normal chat content, not a styled "aide-memory · ..." badge line.
  *
- * References: memory #328 (hook semantics), #330 (operational quirks).
+ * References: memory #328 (hook semantics, corrected), #330 (operational
+ * quirks), #358 (bias directive — verify before claiming gaps), #359
+ * (audience-mapping pattern).
  */
 
 import { EditorAdapter, HookConfigArgs, McpConfigArgs, HookEmit } from './types';
 import { groupByEvent, translateEvents } from './build';
+
+/**
+ * Strip ANSI SGR escape sequences (the `[…m` color codes) from a
+ * string. Used when routing chrome text into Cursor's `user_message` /
+ * `followup_message` — Cursor's chat doesn't render terminal ANSI like
+ * Claude Code does, and leaving the codes in either renders them as
+ * literal garbage or hides the line entirely. Verified empirically in
+ * Cursor 3.2.11: with ANSI present, the chrome line did not surface in
+ * chat UI for the user; stripping makes the brand prefix render plainly.
+ *
+ * Claude Code's adapter does NOT strip — terminal ANSI is the right
+ * format for Claude Code's render path (per memory #324).
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_REGEX = /\[[0-9;]*m/g;
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_REGEX, '');
+}
 
 export const cursorAdapter: EditorAdapter = {
   id: 'cursor',
@@ -178,6 +198,12 @@ Note: Cursor uses \`agent_message\` for hook responses rather than \`additionalC
     // our handlers expect. Cursor differences (per memory #328):
     //   - sessionStart uses `conversation_id`; Claude Code uses `session_id`
     //   - sessionStart uses `workspace_roots[]`; Claude Code uses `cwd`
+    //   - postToolUse uses `tool_output`; Claude Code uses `tool_response`
+    //     (memory #364 — found via 4-cell file-open validation 2026-04-27;
+    //     handlers.ts:trackRecallPost reads `input.tool_response` to parse
+    //     [N] memory IDs from the recall response — without this remap
+    //     IDs never get tracked on Cursor and per-Read soft nudges fire
+    //     redundantly after the agent has already recalled)
     //   - preToolUse already has `cwd` + `tool_input` — no remap needed
     //   - beforeSubmitPrompt has `prompt` — matches Claude Code
     //
@@ -195,63 +221,115 @@ Note: Cursor uses \`agent_message\` for hook responses rather than \`additionalC
       if (typeof first === 'string') out.cwd = first;
     }
 
+    if (out.tool_response === undefined && raw.tool_output !== undefined) {
+      out.tool_response = raw.tool_output;
+    }
+
     return out;
   },
 
   translateOutput(emit: HookEmit): string {
-    // Cursor's hook output contract (per memory #328 + CURSOR_ONBOARDING.md
-    // §1 gap list):
-    //   - HARD BLOCK  → {permission: "deny", user_message} — shows reason in
-    //                   chat, blocks the tool call.
-    //   - additionalContext on preToolUse/sessionStart → NO CHANNEL EXISTS.
-    //                   Cursor's preToolUse has no additional_context field;
-    //                   sessionStart.additional_context is broken (forum
-    //                   #158452). Workaround: dynamic rules-file regen
-    //                   (Phase C4 ships that). For now, these emits fall
-    //                   silent in Cursor — return ''.
-    //   - systemMessage → no inline branded channel in Cursor. Return '' —
-    //                   gap documented in CURSOR_ONBOARDING.md §5.
-    //   - silent → '' (same as Claude Code).
+    // Cursor's hook output contract (verified against cursor.com/docs/hooks
+    // 2026-04-27 + empirical testing same day; per memory #359 audience-
+    // mapping pattern WITH revisions):
+    //
+    //   user_message  → user-visible chat content, but ONLY when paired with
+    //                   `permission:"deny"` or `continue:false`. Under
+    //                   `permission:"allow"` or events without permission
+    //                   (stop), Cursor accepts user_message in JSON but
+    //                   doesn't render it in chat. So we drop it on those
+    //                   paths and prefix chrome into the rendering field
+    //                   (followup_message for stop) instead.
+    //   agent_message → agent-context only (Claude Code's additionalContext
+    //                   equivalent). Reaches agent regardless of permission.
+    //   permission    → "allow" / "deny" — controls whether the tool runs.
+    //   followup_message → stop-hook reprompt channel; visible as next prompt.
+    //   continue + user_message → beforeSubmitPrompt block channel.
+    //
+    // ANSI handling: Claude Code renders 24-bit ANSI in systemMessage
+    // (memory #324 brand-color verified) but Cursor's chat doesn't. We
+    // strip ANSI from any text routed to Cursor's user-rendering fields
+    // so the chrome surfaces as plain text instead of garbage.
     switch (emit.kind) {
       case 'block': {
-        // Cursor's output shape depends on WHICH hook event fired the block.
-        // preToolUse → {permission: "deny", user_message}; stop →
-        // {followup_message} (reprompt channel); userPromptSubmit →
-        // {continue: false, user_message} (beforeSubmitPrompt block).
-        // event defaults to 'preToolUse' when omitted for back-compat with
-        // pre-C5 emit sites.
+        // Block shape depends on WHICH hook event fired the block.
         const event = emit.event ?? 'preToolUse';
         if (event === 'stop') {
-          // Stop hook: followup_message reprompts the agent with our nudge.
-          // See CURSOR_ONBOARDING.md §1 "Stop-hook reflection nudges via
-          // followup_message" + memory #328.
+          // Stop hook: followup_message is the only user-visible field on
+          // this event in Cursor 3.2.11 (empirically verified — user_message
+          // accepted but ignored). Prepend chrome into followup_message so
+          // the brand prefix surfaces in the user's next-turn prompt.
+          if (emit.systemMessage) {
+            return JSON.stringify({
+              followup_message: `${stripAnsi(emit.systemMessage)} — ${emit.reason}`,
+            }, null, 2);
+          }
           return JSON.stringify({ followup_message: emit.reason }, null, 2);
         }
         if (event === 'userPromptSubmit') {
           // beforeSubmitPrompt: continue:false + user_message BLOCKS the
-          // user's prompt submission. aide-memory rarely blocks here (we
-          // want corrections to flow through and be caught by the Stop
-          // hook via the one-turn-delay pattern), but the shape is here
-          // for completeness + future use.
+          // user's prompt submission. user_message renders here (continue
+          // is the rendering trigger like deny is on preToolUse). Prepend
+          // chrome if present so brand surfaces in chat.
+          const text = emit.systemMessage
+            ? `${stripAnsi(emit.systemMessage)} — ${stripAnsi(emit.reason)}`
+            : stripAnsi(emit.reason);
           return JSON.stringify({
             continue: false,
-            user_message: emit.reason,
+            user_message: text,
           }, null, 2);
         }
-        // Default: preToolUse block shape.
-        return JSON.stringify({
-          permission: 'deny',
-          user_message: emit.reason,
-        }, null, 2);
+        // preToolUse hard block — audience split renders correctly under
+        // permission:"deny":
+        //   user_message: branded chrome (if emit.systemMessage present)
+        //   agent_message: the call-aide_recall instruction
+        // If no systemMessage was emitted (legacy emit-sites), put the
+        // reason in user_message so the user always sees SOMETHING.
+        const out: Record<string, unknown> = { permission: 'deny' };
+        if (emit.systemMessage) {
+          out.user_message = stripAnsi(emit.systemMessage);
+          out.agent_message = emit.reason;
+        } else {
+          out.user_message = stripAnsi(emit.reason);
+        }
+        return JSON.stringify(out, null, 2);
       }
-      case 'additionalContext':
-        // Cursor has no equivalent channel. Content is lost — this is the
-        // documented 20% parity gap. Rules-file regeneration (Phase C4)
-        // covers the sessionStart case; other events (preToolUse soft
-        // nudges, userPromptSubmit correction hints) fall silent.
+      case 'additionalContext': {
+        // Cursor's preToolUse exposes `agent_message` for soft context
+        // injection (verified). Empirically (2026-04-27), Cursor 3.2.11
+        // does NOT render user_message in chat under permission:"allow"
+        // — only under "deny" or continue:false. So the chrome line
+        // doesn't surface to the user on soft preToolUse today.
+        //
+        // We STILL emit user_message on soft preToolUse anyway because:
+        //   1. It's visible in Cursor's Hooks Output panel as part of
+        //      the OUTPUT JSON — useful for diagnostic / dev-mode.
+        //   2. Forward-compat: if Cursor adds soft user_message
+        //      rendering later, chrome surfaces automatically without
+        //      an adapter update.
+        //   3. The cost is ~30 bytes per hook fire — negligible.
+        //
+        // sessionStart's additional_context is broken in Cursor (forum
+        // #158452) — rules-file regen handles that delivery; we emit
+        // empty here for sessionStart.
+        const evt = String(emit.event ?? '').toLowerCase();
+        if (evt === 'pretooluse') {
+          const out: Record<string, unknown> = {
+            permission: 'allow',
+            agent_message: emit.context,
+          };
+          if (emit.systemMessage) out.user_message = stripAnsi(emit.systemMessage);
+          return JSON.stringify(out, null, 2);
+        }
+        // postToolUse / sessionStart / other: no event-specific handling
+        // wired (tracking-only handlers don't emit content here today;
+        // rules-file regen covers sessionStart's static-content needs).
         return '';
+      }
       case 'systemMessage':
-        // Cursor has no inline branded channel for non-deny events.
+        // Standalone chrome line, no agent instruction, no associated
+        // event with a render path. Cursor has no general "show this in
+        // chat" channel for non-deny / non-continue:false events. Drop.
         return '';
       case 'silent':
         return '';

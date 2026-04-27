@@ -10,3 +10,5 @@ dist/
 .aide/cache/
 .aide/memories/preferences/personal/
 aide-memory-*.tgz
+
+.cursor/rules/aide-memory.mdc

@@ -96,6 +96,34 @@ describe('cursorAdapter.translateInput', () => {
     expect(out.cwd).toBeUndefined();
   });
 
+  it('copies tool_output → tool_response (Cursor postToolUse field-name remap)', () => {
+    // Regression test for memory #364: trackRecallPost reads
+    // input.tool_response to parse [N] memory IDs from the recall response,
+    // but Cursor sends the field as `tool_output`. Without this remap,
+    // IDs never get tracked on Cursor and per-Read soft nudges fire
+    // redundantly after the agent has already recalled.
+    const cursorPostToolUse = {
+      conversation_id: 'abc',
+      tool_name: 'MCP:aide_recall',
+      tool_input: { paths: ['src/api/routes.ts'] },
+      tool_output: '{"content":[{"type":"text","text":"## Technical Context\\n- [7] Rate limit\\n- [6] Error responses"}],"isError":false}',
+    };
+    const out = cursorAdapter.translateInput(cursorPostToolUse);
+    expect(out.tool_response).toBe(cursorPostToolUse.tool_output);
+    // Original tool_output is preserved (don't drop, just copy).
+    expect(out.tool_output).toBe(cursorPostToolUse.tool_output);
+  });
+
+  it('does NOT clobber tool_response if already present (Claude Code envelope passes through)', () => {
+    // Claude Code envelopes already have tool_response. Don't overwrite
+    // them with tool_output if both happen to be present (defensive).
+    const out = cursorAdapter.translateInput({
+      tool_response: 'canonical-shape',
+      tool_output: 'cursor-shape',
+    });
+    expect(out.tool_response).toBe('canonical-shape');
+  });
+
   it('claude-code adapter translateInput is identity', () => {
     const input = { session_id: 'x', cwd: '/y', tool_input: { file_path: '/z' } };
     expect(claudeCodeAdapter.translateInput(input)).toEqual(input);
@@ -123,14 +151,67 @@ describe('cursorAdapter.translateOutput', () => {
     expect(parsed.permission).toBe('deny');
   });
 
-  it('translates additionalContext → empty string (documented gap)', () => {
+  it('translates additionalContext for preToolUse → {permission:"allow", agent_message} (audience-mapping per memory #359)', () => {
+    // Cursor's preToolUse exposes `agent_message` as the agent-context
+    // channel — equivalent to Claude Code's hookSpecificOutput.additionalContext.
+    // Earlier framing of this as a "documented gap" was bias-driven (memory
+    // #358) — the channel exists; we just weren't using it.
     const emit: HookEmit = { kind: 'additionalContext', event: 'PreToolUse', context: 'nudge' };
+    const out = cursorAdapter.translateOutput(emit);
+    const parsed = JSON.parse(out);
+    expect(parsed.permission).toBe('allow');
+    expect(parsed.agent_message).toBe('nudge');
+    expect(parsed).not.toHaveProperty('user_message'); // no chrome → no user_message
+  });
+
+  it('additionalContext for preToolUse with systemMessage → emits user_message anyway (forward-compat + diagnostic, even though Cursor 3.2.11 doesn\'t render under allow)', () => {
+    // Empirically Cursor doesn't render user_message under permission:"allow"
+    // today (verified 2026-04-27). We still emit it because:
+    //   (a) It surfaces in Cursor's Hooks Output panel as part of the
+    //       OUTPUT JSON — useful for diagnostic / dev visibility.
+    //   (b) Forward-compat: if Cursor adds soft user_message rendering
+    //       later, chrome surfaces automatically without an adapter update.
+    const emit: HookEmit = {
+      kind: 'additionalContext',
+      event: 'PreToolUse',
+      context: 'Call aide_recall({paths: [...]}).',
+      systemMessage: 'aide-memory · prompting aide_recall for scoped memories',
+    };
+    const out = cursorAdapter.translateOutput(emit);
+    const parsed = JSON.parse(out);
+    expect(parsed.permission).toBe('allow');
+    expect(parsed.agent_message).toBe('Call aide_recall({paths: [...]}).');
+    expect(parsed.user_message).toBe('aide-memory · prompting aide_recall for scoped memories');
+  });
+
+  it('additionalContext for sessionStart → empty (Cursor additional_context is broken per forum #158452; rules-file regen is the workaround)', () => {
+    const emit: HookEmit = {
+      kind: 'additionalContext',
+      event: 'SessionStart',
+      context: 'project-wide preferences + guidelines',
+    };
     expect(cursorAdapter.translateOutput(emit)).toBe('');
   });
 
-  it('translates systemMessage → empty string (no inline branded channel)', () => {
+  it('translates standalone systemMessage → empty (no Cursor channel for non-deny chrome, per #359 revised)', () => {
+    // Cursor's user_message only renders when paired with permission:"deny"
+    // or continue:false. Standalone systemMessage emit has no event-anchored
+    // render path on Cursor — drop entirely. Compare to Claude Code, which
+    // surfaces standalone systemMessage as inline status chrome.
     const emit: HookEmit = { kind: 'systemMessage', text: 'aide-memory · hello' };
     expect(cursorAdapter.translateOutput(emit)).toBe('');
+  });
+
+  it('block with systemMessage on preToolUse → splits chrome (user_message) from instruction (agent_message)', () => {
+    const out = cursorAdapter.translateOutput({
+      kind: 'block',
+      reason: 'Call aide_recall({ids: [7,6]}).',
+      systemMessage: 'aide-memory · prompting aide_recall for scoped memories (expected flow)',
+    });
+    const parsed = JSON.parse(out);
+    expect(parsed.permission).toBe('deny');
+    expect(parsed.user_message).toBe('aide-memory · prompting aide_recall for scoped memories (expected flow)');
+    expect(parsed.agent_message).toBe('Call aide_recall({ids: [7,6]}).');
   });
 
   it('translates silent → empty string', () => {
@@ -182,7 +263,11 @@ describe('correction one-turn-delay flow (Phase C5)', () => {
   //      followup_message channel (NOT preToolUse-style deny).
   // This test validates step 3's emit shape is correct for Cursor.
 
-  it('Stop hook correction-pending branch emits followup_message under Cursor adapter', () => {
+  it('Stop hook with systemMessage prepends chrome into followup_message (per #359 revised — user_message not rendered on stop)', () => {
+    // Empirically verified 2026-04-27: Cursor accepts user_message on stop
+    // but does NOT render it in chat. Only followup_message renders (as
+    // the next-turn prompt). To surface chrome to the user we prepend it
+    // into followup_message: "<chrome> — <reason>".
     const reminder = "A correction from this turn wasn't stored. Call aide_remember...";
     const emitDescriptor = {
       kind: 'block' as const,
@@ -192,13 +277,38 @@ describe('correction one-turn-delay flow (Phase C5)', () => {
     };
     const out = cursorAdapter.translateOutput(emitDescriptor);
     const parsed = JSON.parse(out);
-    // Cursor's followup_message field reprompts the agent on the next turn.
-    expect(parsed.followup_message).toBe(reminder);
-    // Cursor ignores systemMessage (no channel for branded status).
-    expect(parsed).not.toHaveProperty('systemMessage');
-    // NOT the preToolUse deny shape — that would be wrong for Stop.
-    expect(parsed).not.toHaveProperty('permission');
+    expect(parsed.followup_message).toBe(`aide-memory · correction reminder — ${reminder}`);
+    // No user_message emitted — Cursor doesn't render it on stop.
     expect(parsed).not.toHaveProperty('user_message');
+    expect(parsed).not.toHaveProperty('permission');
+    expect(parsed).not.toHaveProperty('systemMessage');
+  });
+
+  it('Stop hook without systemMessage emits followup_message-only (back-compat)', () => {
+    const reminder = 'Something to consider.';
+    const out = cursorAdapter.translateOutput({
+      kind: 'block',
+      event: 'stop',
+      reason: reminder,
+    });
+    const parsed = JSON.parse(out);
+    expect(parsed.followup_message).toBe(reminder);
+    expect(parsed).not.toHaveProperty('user_message');
+  });
+
+  it('ANSI escape codes in systemMessage are stripped when routed to Cursor user_message (chat does not render terminal ANSI)', () => {
+    // Brand-color sequence per memory #324: [38;2;0;194;203m...[0m
+    const ansiChrome = '[38;2;0;194;203maide-memory · [0mprompting aide_recall';
+    const out = cursorAdapter.translateOutput({
+      kind: 'block',
+      event: 'preToolUse',
+      reason: 'Call aide_recall({ids: [7,6]}).',
+      systemMessage: ansiChrome,
+    });
+    const parsed = JSON.parse(out);
+    expect(parsed.user_message).toBe('aide-memory · prompting aide_recall');
+    expect(parsed.user_message).not.toContain('');
+    expect(parsed.user_message).not.toMatch(/\[\d/);
   });
 
   it('same Stop emit under Claude Code adapter produces decision:block (unchanged)', () => {
