@@ -52,11 +52,13 @@ OUT=$(node "$CLI" remember --layer preferences "test1: default shared" 2>&1)
 SHARED_FILES=$(find .aide/memories/preferences/shared -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
 PERSONAL_FILES=$(find .aide/memories/preferences/personal -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
 
-if [[ "$SHARED_FILES" -ge 1 && "$PERSONAL_FILES" -eq 0 ]]; then
-  echo "PASS  Test 1: default (no config) → preferences/shared/ (${SHARED_FILES} shared / ${PERSONAL_FILES} personal)"
+SHARED_JSON_FLAG=$(find .aide/memories/preferences/shared -name '*.json' -exec grep -h '"shared"' {} \; 2>/dev/null | head -1)
+
+if [[ "$SHARED_FILES" -ge 1 && "$PERSONAL_FILES" -eq 0 && "$SHARED_JSON_FLAG" == *'"shared": true'* ]]; then
+  echo "PASS  Test 1: default (no config) → preferences/shared/ (${SHARED_FILES} shared / ${PERSONAL_FILES} personal, JSON shared:true)"
   PASS=$((PASS+1))
 else
-  echo "FAIL  Test 1: expected 1+ in shared/ + 0 in personal/, got ${SHARED_FILES} shared / ${PERSONAL_FILES} personal"
+  echo "FAIL  Test 1: expected 1+ in shared/ + 0 in personal/ + JSON shared:true, got ${SHARED_FILES} shared / ${PERSONAL_FILES} personal / flag=${SHARED_JSON_FLAG}"
   echo "       remember output: $OUT"
   FAIL=$((FAIL+1))
 fi
@@ -76,11 +78,13 @@ OUT=$(node "$CLI" remember --layer preferences "test2: default personal" 2>&1)
 SHARED_FILES=$(find .aide/memories/preferences/shared -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
 PERSONAL_FILES=$(find .aide/memories/preferences/personal -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
 
-if [[ "$PERSONAL_FILES" -ge 1 && "$SHARED_FILES" -eq 0 ]]; then
-  echo "PASS  Test 2: defaultShared:false → preferences/personal/ (${PERSONAL_FILES} personal / ${SHARED_FILES} shared)"
+PERSONAL_JSON_FLAG=$(find .aide/memories/preferences/personal -name '*.json' -exec grep -h '"shared"' {} \; 2>/dev/null | head -1)
+
+if [[ "$PERSONAL_FILES" -ge 1 && "$SHARED_FILES" -eq 0 && "$PERSONAL_JSON_FLAG" == *'"shared": false'* ]]; then
+  echo "PASS  Test 2: defaultShared:false → preferences/personal/ (${PERSONAL_FILES} personal / ${SHARED_FILES} shared, JSON shared:false)"
   PASS=$((PASS+1))
 else
-  echo "FAIL  Test 2: expected 1+ in personal/ + 0 in shared/, got ${PERSONAL_FILES} personal / ${SHARED_FILES} shared"
+  echo "FAIL  Test 2: expected 1+ in personal/ + 0 in shared/ + JSON shared:false, got ${PERSONAL_FILES} personal / ${SHARED_FILES} shared / flag=${PERSONAL_JSON_FLAG}"
   echo "       remember output: $OUT"
   FAIL=$((FAIL+1))
 fi
