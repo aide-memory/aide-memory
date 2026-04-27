@@ -18,11 +18,18 @@ If you are starting this work after a context compaction or a new session, **do 
 
 **Status:** PLAN v2 (2026-04-23). Scoped to what Cursor reliably supports today + documented gaps for what it doesn't. Revised after 3 verification research passes confirmed platform limitations are real.
 
-**Phase status (2026-04-23 end-of-day):**
-- **C1 FUNCTIONALLY COMPLETE** — HOOK_EVENTS manifest + 5 adapters + shared-rules unification (C1.5c) + injection.enabled master switch + golden-fixture tests all landed. 698/698 unit tests + 23/23 bash smokes + npm build green. Only the manual Claude Code walk (scenarios 3/4/6/8) remains — needs user interaction.
-- **preToolUse:Read vs beforeReadFile decided** — `pre-read` routes to `preToolUse` matcher=Read (NOT beforeReadFile). Confirmed via deep research 2026-04-23: agent_message support, open beforeReadFile deny-bug #150520, "first hook per event" quirk all point to preToolUse. Rationale captured inline in `src/memory/editors/cursor.ts`.
-- **Shared-rules scope nuance** — `src/templates/rules/shared/body.md` is now canonical source (per-editor body unification shipped). Claude Code rendered output byte-identical to pre-refactor (verified via diff). Cursor.mdc gains detail (benign — inherits fuller body, all Cursor-specific nuance preserved via adapter fields). Bonus: fixed silent drift where the 3 compressed templates claimed `aide_forget` supports archive mode.
-- Nothing committed yet on `feature/phase-1-cursor-support`. Suggested commit split: plan docs first, then C1 code.
+**Phase status (2026-04-27 — 0.5.0 ship-ready):**
+- **C1–C6 COMPLETE** — adapter scaffolding, shared-rules, runtime dispatcher, envelope translation, dynamic rules-file regen, correction one-turn-delay flow, all bash smoke + unit tests green. See memory #336 + handoff `docs/sessions/HANDOFF_APRIL27_AUDIENCE_MAPPING_AND_READ_GAP.md`.
+- **C7–C8 (docs)** — IN PROGRESS as of 2026-04-27: this doc + `docs/validation/E2E_VALIDATION.md` + `docs/user/editors/cursor.md` updated to reflect verified findings. `docs/user/supported-editors.md` capability matrix update pending.
+- **C9 (release 0.5.0)** — pending docs closeout + commit split.
+- **0.5.0 critical adapter fixes (2026-04-27):**
+  - **libsql migration** (memory #354) — eliminated the Node ABI mismatch bug class that originally surfaced as "Cursor doesn't honor permission:deny" but was actually our better-sqlite3 binding silently failing across Node majors.
+  - **Audience-mapping translateOutput v3.1** (memory #358 + #359) — Cursor `preToolUse` HAS `agent_message` (soft) + `user_message` (chrome). The earlier "no soft channel" assertion was an adapter bias bug, fixed.
+  - **Per-Read editor-open coverage gap** (memory #363) — discovered + documented + mitigated via `body.md` rules-file injection. Verified empirically.
+  - **Templates path-resolution bug** — `__dirname/../...` math broke in esbuild bundle; fixed via `src/memory/internal/paths.ts` package.json walk-up.
+  - **Diagnostic surface** — `AIDE_DEBUG=hooks|mcp|binding|recall|all` env + `loudError()` always-on stderr for failure surfacing. Memory #355.
+- **preToolUse:Read vs beforeReadFile decided** — `pre-read` routes to `preToolUse` matcher=Read (NOT beforeReadFile). Confirmed via deep research 2026-04-23: agent_message support, open beforeReadFile deny-bug #150520, "first hook per event" quirk all point to preToolUse. Rationale captured inline in `src/memory/editors/cursor.ts`. Reconfirmed during 2026-04-27 verification — `beforeReadFile`-as-tracking-fallback was analyzed + rejected (would corrupt encountered-state semantic).
+- **Shared-rules scope nuance** — `src/templates/rules/shared/body.md` is now canonical source (per-editor body unification shipped). Claude Code rendered output byte-identical to pre-refactor. Cursor.mdc gains detail (benign — inherits fuller body, all Cursor-specific nuance preserved via adapter fields). Bonus: fixed silent drift where the 3 compressed templates claimed `aide_forget` supports archive mode. New 2026-04-27: added "Even when a file is visible to you, call aide_recall — UNLESS already recalled this session" bullet to mitigate the per-Read editor-open gap.
 
 
 
@@ -39,6 +46,30 @@ If you are starting this work after a context compaction or a new session, **do 
 
 **Goal: 0.5.0 ships Cursor at ~80% parity with Claude Code. Clear docs on the 20% gap. Ship when validation passes; 1.0 comes after real-user soak.**
 
+> **Status update 2026-04-27** (per memories #358, #359, #363) — the gap
+> table below was originally written under an adapter-bias bug. Empirical
+> verification on Cursor 3.2.11 found that:
+>
+> 1. **Cursor's `preToolUse` HAS a soft-context channel** —
+>    `agent_message` is the equivalent of Claude Code's `additionalContext`.
+>    The earlier "no soft channel" assertion was our adapter not using a
+>    field that was always available. Fixed in adapter v3.1
+>    (audience-mapping). See `src/memory/editors/cursor.ts` `translateOutput`.
+> 2. **Cursor `permission:"deny"` honors `user_message` for chat-visible
+>    chrome AND `agent_message` for agent-context.** We now emit both fields
+>    on every deny.
+> 3. **NEW gap discovered (replaces the old "no soft channel" gap):**
+>    `preToolUse:Read` does NOT fire when the file is already open in the
+>    Cursor editor pane — the per-Read hard-block + soft-nudge safety net
+>    has a coverage hole when the user has the file open. Verified
+>    empirically. `preToolUse:Write` (Edit) fires reliably regardless.
+>    Mitigated by: per-Edit safety net + rules-file injection
+>    (`src/templates/rules/shared/body.md` "Even when a file is visible to
+>    you, call aide_recall" bullet, added 2026-04-27).
+>
+> The §1 table below has been updated. Sections §3.3 + §5 carry the same
+> correction.
+
 ### What Cursor users WILL get (confident)
 
 - `aide-memory init` generates `.cursor/hooks.json` + `.cursor/mcp.json` + `.cursor/rules/aide-memory.mdc` (already working) alongside the existing Claude Code files.
@@ -53,13 +84,14 @@ If you are starting this work after a context compaction or a new session, **do 
 
 | Gap | Why | Claude Code alternative | Cursor behavior |
 |---|---|---|---|
-| Soft-nudge `additionalContext` on re-reads | `preToolUse` output has NO `additional_context` field (confirmed via docs + feature request #157231) | CC shows "N memories for path… call aide_recall" as a non-blocking nudge after first recall | Cursor re-reads go silent after first recall (hard-block-then-silent, no middle) |
-| Inline "aide-memory · …" branded status | No user-visible surface for non-deny hook events. `user_message` renders only on deny. `agent_message` is broken (regression #142589). Extensions can't inject chat UI (#115748, #121400). | CC shows branded status inline with ANSI color | Cursor shows nothing inline — users infer state from the agent's tool-call chrome |
+| ~~Soft-nudge `additionalContext` on re-reads~~ | ~~`preToolUse` output has NO `additional_context` field~~ — **CORRECTED 2026-04-27**: Cursor's `preToolUse` HAS `agent_message` for soft context; we now emit `{permission:"allow", agent_message:<reason>, user_message:<chrome>}`. Was an adapter bias bug, not a platform gap. | CC shows "N memories for path… call aide_recall" as a non-blocking nudge after first recall | **PASSES** — soft path delivered via `agent_message` (verified empirically). |
+| **Per-Read hook does not fire when file is open in editor pane** (NEW 2026-04-27) | Verified empirically (memory #363): when the target file is already open in the Cursor editor, `preToolUse:Read` does NOT fire. Cause unverified — could be editor-cache content serving, design, or bug. Filed as feature request candidate. `preToolUse:Write` fires regardless. | CC's Read tool always agent-mediated; hook always fires. | Hard-block coverage gap when user has file open. **Mitigation empirically verified** (memory #364, 4-cell matrix 2026-04-27): rules-file `body.md` bullet ("Even when a file is visible to you, call aide_recall") makes the agent call `aide_recall` proactively in 100% of file-open reads under typical prompts. Floor of coverage = file open AND user explicitly suppresses aide-memory tools — adversarial scenario only. |
+| Inline "aide-memory · …" branded status (under `permission:"allow"`) | `user_message` under allow is logged in the Hooks output panel but does NOT render in Cursor 3.2.11 chat (only renders inline on `permission:"deny"`). We keep emitting `user_message` on allow for forward-compat. ANSI escapes stripped for Cursor. | CC shows branded status inline on every fire (block + soft) with ANSI color | Cursor shows chrome inline ONLY on hard-block (`permission:"deny"`). On soft (allow), chrome lives in the Hooks output panel; agent context is delivered via `agent_message` so the user-doesn't-see-it doesn't break the safety net. |
 | Dynamic SessionStart context via hook | `sessionStart.additional_context` broken — staff confirmed "no workaround" (#158452, #157141) | CC injects top-15 prefs + guidelines as context at session start | Rules file reads every turn with `alwaysApply: true` — we regenerate it with current content so agent sees the same data, just via a different channel |
 | `Glob` + `codebase_search` nudge coverage | Cursor docs list matchers `Shell, Read, Write, Grep, Delete, Task, MCP:<tool>` only (no `Glob`, no `Search`, no `codebase_search`) | CC fires `PreToolUse` with matcher=Grep OR Glob | Only `Grep` triggers aide-memory search nudge in Cursor; Glob + semantic search go uncovered |
 | `beforeSubmitPrompt` in-turn correction nudge | Event accepts only `continue`+`user_message` — no context injection | CC's `UserPromptSubmit` injects "store this correction" nudge in-turn | Correction flag still gets written; user-visible nudge delivered next turn via Stop |
 
-**All 5 gaps are documented in external docs (§8). No fragile workarounds that break when Cursor fixes bugs.**
+**All gaps are documented in external docs (§8). No fragile workarounds that break when Cursor fixes bugs.**
 
 ---
 
@@ -239,15 +271,39 @@ export const cursorAdapter: EditorAdapter = {
   detectRuntime(env) { return Boolean(env.CURSOR_PROJECT_DIR && !env.CLAUDECODE); },
   translateInput(raw) { /* conversation_id -> session_id, workspace_roots[0] -> cwd, etc */ },
   translateOutput(emit) {
-    // Per user directive #3 + research Q1/Q2: DO NOT emit to stderr for visibility.
-    // Cursor has no reliable visibility surface for allow events. Accept silent
-    // operation + document the gap in external docs.
-    switch (emit.kind) {
-      case 'block':            return JSON.stringify({ permission: 'deny', user_message: emit.reason });
-      case 'additionalContext': return '';  // preToolUse has no such field
-      case 'systemMessage':    return '';   // no equivalent surface
-      case 'silent':           return '';
-    }
+    // ⚠ HISTORICAL SKELETON. The original draft (below as comments) reflected
+    // the bias bug corrected 2026-04-27 (memory #358). The actual adapter in
+    // `src/memory/editors/cursor.ts` uses AUDIENCE-MAPPING (v3.1):
+    //
+    //   - block (preToolUse:deny): { permission:"deny",
+    //       user_message: <chrome>,    // chat-visible
+    //       agent_message: <reason> }  // agent-context (was `decision:block` reason on CC)
+    //
+    //   - additionalContext (preToolUse:allow): { permission:"allow",
+    //       agent_message: <context>,  // agent receives the soft nudge
+    //       user_message: <chrome> }   // logged in Hooks panel; not currently
+    //                                  //   chat-rendered under allow on Cursor 3.2.11
+    //                                  //   but kept for forward-compat
+    //
+    //   - stop: { followup_message: "<chrome> — <reason>" }  // chrome prefixed
+    //                                                        //   inline because
+    //                                                        //   Cursor stop only
+    //                                                        //   accepts one field
+    //
+    //   - userPromptSubmit (deny path): { continue: false, user_message: <reason> }
+    //   - silent / systemMessage standalone: ""
+    //
+    // ANSI escape codes are stripped for Cursor (Cursor doesn't render terminal
+    // ANSI like Claude Code does). See cursor-envelope.test.ts for the full
+    // matrix (35 tests covering audience-mapping + ANSI strip + stop chrome).
+    //
+    // ORIGINAL bias-bug skeleton (kept as historical reference):
+    // switch (emit.kind) {
+    //   case 'block':            return JSON.stringify({ permission: 'deny', user_message: emit.reason });
+    //   case 'additionalContext': return '';  // ← WRONG: agent_message exists; use it
+    //   case 'systemMessage':    return '';   // ← partially-right: no anchored render path under allow
+    //   case 'silent':           return '';
+    // }
   },
 };
 ```
@@ -445,27 +501,57 @@ Implementation: adds ~5 lines to `src/memory/hooks/handlers.ts` sessionStart han
 
 ---
 
-## 5. Visibility in Cursor — accept the gap, document clearly
+## 5. Visibility in Cursor — partial parity, document clearly
 
-**User directive #3 rejected the stderr-to-Output-panel approach.**
+**User directive #3 rejected the stderr-to-Output-panel approach.** The
+goal is inline visibility on par with Claude Code where channels exist.
 
-**Confirmed via research:**
-- No plugin/extension path (webview broken #115748, no chat contribution API #121400, no AI-feature API #1307).
-- `agent_message` broken ([regression #142589](https://forum.cursor.com/t/regression-hook-response-fields-user-message-agent-message-still-ignored-in-windows-v2-0-77/142589)).
-- `user_message` renders only on `permission: deny`.
-- No other user-visible surface for hook fires on allow events.
+**Updated 2026-04-27 (memory #358 + #359):** the original "accept the gap"
+framing was based on an adapter-bias bug. Empirical verification on Cursor
+3.2.11 found:
 
-**What Cursor users see instead:**
+- **`user_message` on `permission:"deny"` renders inline in Cursor chat.**
+  We use this for hard-block chrome (e.g. `aide-memory · prompting aide_recall
+  for scoped memories (expected flow)`).
+- **`user_message` on `permission:"allow"` is logged in the Hooks Output
+  panel** but does NOT render inline in Cursor 3.2.11 chat. We still emit it
+  for forward-compat and panel observability.
+- **`agent_message` (both allow + deny) reaches the agent's context** —
+  equivalent to Claude Code's `additionalContext`. The earlier "agent_message
+  broken" claim was based on Windows 2.0.77 regression #142589; verified
+  working in Cursor 3.2.11 macOS. We use this as the agent-side soft channel.
+- **ANSI escape codes are stripped** for Cursor in the adapter (Cursor
+  doesn't render terminal ANSI like Claude Code does — chrome reads as
+  garbage if left intact).
+
+**Corrected research findings:**
+- No plugin/extension path (webview broken #115748, no chat contribution API #121400, no AI-feature API #1307). _Still true._
+- ~~`agent_message` broken~~ — that was the Windows 2.0.77 regression #142589; Cursor 3.2.11 macOS works correctly.
+- `user_message` renders inline only on `permission:"deny"`. _Still true._
+- No standalone systemMessage channel (not paired with a hook fire) — _still true._
+
+**What Cursor users see today:**
 - MCP tool-call chrome (when agent calls `aide_recall`, user sees the tool call in Cursor's standard chrome).
 - Agent's natural-language response (may reference what it recalled).
-- Hard-block `user_message` when pre-read fires on a file with scoped mems (one-time-per-file, shows count + path).
+- Hard-block `user_message` chrome inline when pre-read/pre-edit fires on a file with scoped mems.
+- Hooks Output panel shows `user_message` lines for soft fires (allow path) — observable, but the user has to open the panel to see them.
 
-**What's missing vs Claude Code:**
-- The branded `aide-memory · recalling scoped context before read` status lines. Cursor users don't see them.
+**What the agent sees on every fire (allow + deny):**
+- `agent_message` content — same payload Claude Code's `additionalContext`
+  carries (reason + IDs + recommended tool call).
+
+**What's still missing vs Claude Code:**
+- Inline chrome on `permission:"allow"` soft fires — chrome lives in the
+  Hooks Output panel, not in chat. Filed as Cursor FR (track in §2 bug list
+  if not already there).
+- **NEW gap (2026-04-27, memory #363):** `preToolUse:Read` does not fire
+  when the file is open in the Cursor editor pane. Mitigated via per-Edit
+  safety net + rules-file `body.md` injection.
 
 **External-docs treatment:**
-- `docs/user/editors/cursor.md` states plainly: "In Cursor, aide-memory runs invisibly except when it blocks a file read — you'll see a message like `N memories exist for this path, call aide_recall before proceeding`. For a more visible experience and soft nudges on re-reads, use Claude Code."
-- Feature request filed with Cursor for inline `system_message` output field (tracked as follow-up).
+- `docs/user/editors/cursor.md` states the corrected state: hard-block chrome inline (visible), soft-nudge agent context delivered via `agent_message` (agent receives, user doesn't see inline), per-Read editor-open coverage gap documented under "Per-Read coverage gap on Cursor".
+- Feature request filed with Cursor for inline `system_message` output field on `permission:"allow"` (tracked as follow-up).
+- Future work: when Cursor adds a chat-visible channel for allow fires, switch from "agent_message only" to "agent_message + chat-visible chrome" in the adapter.
 
 ---
 

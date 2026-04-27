@@ -14,8 +14,25 @@ lands (Windsurf, Codex, Copilot, Cline, Aider).
 
 **Cursor adapter notes** — the Cursor column is authoritative per
 `docs/specs/CURSOR_ONBOARDING.md` §1 (gap table) + `src/memory/editors/cursor.ts`.
-When Cursor lacks the channel (soft `additionalContext` on `preToolUse`, inline
-`systemMessage`, `sessionStart.additional_context`), we write the gap — not TBD.
+
+**Audience-mapping (post-2026-04-27, see memories #358 + #359):** Cursor's
+`preToolUse` envelope HAS two audience channels — `user_message` (chat-visible
+chrome) + `agent_message` (agent-context only, like Claude Code's
+`additionalContext`). The earlier "Cursor has no soft channel" claim was an
+adapter-bias bug, not a platform gap. We now emit BOTH fields on every fire:
+
+- Hard block (deny): `{permission:"deny", user_message:<chrome>, agent_message:<reason>}`
+- Soft (allow): `{permission:"allow", user_message:<chrome>, agent_message:<context>}`
+- Stop hook: single `followup_message` field — chrome prefixed inline (e.g.
+  `"aide-memory · checkpoint — Anything worth remembering?"`).
+- ANSI escape codes stripped for Cursor (Claude Code keeps them).
+
+Stale "Cursor lacks soft channel" / "no additionalContext" claims in tables
+below have been updated to reflect verified behavior. Remaining real gaps:
+inline `systemMessage` on `preToolUse:allow` user_message visibility (Cursor
+3.2.11 quirk — kept in envelope for forward-compat), `sessionStart.additional_context`
+(handled via rules-file regen), `beforeSubmitPrompt` additionalContext (handled
+via flag-file → next Stop hook).
 
 ---
 
@@ -29,38 +46,42 @@ agent session.
 ```bash
 cd /Users/meky/code/aide-v0
 
-# 1. Unit tests — expect 750/750 pass (as of 2026-04-23; number grows as
-#    regression tests are added). Includes:
-#      - src/memory/__tests__/hook-merge.test.ts (5 tests)
-#      - src/memory/hooks/__tests__/cursor-envelope.test.ts (30 tests)
-#      - src/memory/__tests__/rulesGen.test.ts (17 tests)
-#      - src/memory/__tests__/hooks-visibility.test.ts (12 tests)
-#    (count-parity smoke was removed after the 0.4.0 hook consolidation —
-#     its invariant is now covered by recall.test.ts + hooks.test.ts
-#     + the e2e-autonomous.sh suite below.)
-npm test -- --run 2>&1 | tail -5
+# Recommended: single command — runs tsc + vitest + esbuild bundle +
+# install-from-tarball smoke + debug-output smoke. Catches drift between
+# TypeScript-compiled and esbuild-bundled outputs (the 0.5.0 templates-path
+# bug was caught here, not in vitest).
+npm run test:full
 
-# 2. Bash smoke suites — each prints "PASS" at the end
+# Expected (as of 2026-04-27, 0.5.0):
+#   - tsc: clean exit, no output
+#   - vitest: 768/768 pass (count grows as regression tests are added)
+#   - esbuild build:dist: dist/cli/aide-memory.js + dist/memory/{index,cli}.js emitted
+#   - install-from-tarball.smoke.sh: 11/11 PASS (bundle integrity + init flow)
+#   - debug-output-smoke.test.sh: 15/15 PASS (AIDE_DEBUG + loudError surfaces)
+```
+
+If `test:full` is too heavy for an iterative cycle, run pieces individually:
+
+```bash
+# Unit tests only (fast)
+npm test 2>&1 | tail -5
+
+# Bash smoke suites — each prints "PASS" at the end
 bash scripts/hooks/__tests__/settings-behavior.test.sh          # 5 PASS
 bash scripts/hooks/__tests__/detect-correction.test.sh          # 17 PASS
 bash scripts/hooks/__tests__/all-configs-behavior.test.sh       # 23 PASS
 bash scripts/hooks/__tests__/cursor-init-smoke.test.sh          # 25 PASS
+bash scripts/hooks/__tests__/debug-output-smoke.test.sh         # 15 PASS
 
-# 3. End-to-end autonomous smokes — spawn real MCP against dirty state.
-#    Covers H (auto-update on stale settings), J (pending-memory ingest
-#    on MCP start), and drift-repair (config.json edit → hook fires
-#    resync). These can't be unit-tested because they need the real
-#    startServer() path + hook dispatcher running together.
+# End-to-end autonomous smokes — spawn real MCP against dirty state.
+# Covers H (auto-update), J (pending-memory ingest), drift-repair.
 bash scripts/hooks/__tests__/e2e-autonomous.sh
-
-# 4. Build is clean — tsc should exit 0 with no output
-npm run build 2>&1 | tail -3
 ```
 
-**All four MUST pass before starting any scenario.** If you're validating a
-freshly-published tarball (not dev-mode), also add the install-from-tarball
-smoke per `docs/RELEASING.md` §4 — dev-mode hides packaging-scoped bugs
-(missing bundles, dev-manifest leaks, etc.).
+**`test:full` MUST pass before starting any scenario.** If you're validating a
+freshly-published tarball (not dev-mode), the install-from-tarball smoke
+inside `test:full` covers it — dev-mode hides packaging-scoped bugs (missing
+bundles, dev-manifest leaks, etc.). Per `docs/RELEASING.md` §4.
 
 ---
 
@@ -134,7 +155,7 @@ read a file whose scope matches.
 
 | # | Expected (Claude Code) | Expected (Cursor) |
 |---|---|---|
-| F | Soft nudge — `additionalContext` with *"N memories for path… call aide_recall"*. Tool call not forcibly blocked; agent chooses to call `aide_recall`. | _Partial gap._ Cursor `preToolUse` has NO `additional_context` channel (gap #1 in CURSOR_ONBOARDING §1). Soft nudge is dropped silently — user sees nothing, agent doesn't get the context. Hard-block path DOES fire at/above threshold (same as Claude Code). Documented in `docs/user/editors/cursor.md`. |
+| F | Soft nudge — `additionalContext` with *"N memories for path… call aide_recall"*. Tool call not forcibly blocked; agent chooses to call `aide_recall`. | **✅ Soft nudge PASSes via `agent_message`** (audience-mapping fix 2026-04-27, #359). Hook emits `{permission:"allow", agent_message:"<nudge>", user_message:"<chrome>"}`. Agent receives the nudge in context. Hard-block path also works at/above threshold (same as Claude Code). Earlier "Cursor `preToolUse` has no soft channel" claim was an adapter-bias bug, not a platform gap (#358). Caveat: in Cursor 3.2.11 the Read hook does not fire when file is open in editor pane — see Scenario F-fileopen. |
 
 #### Runs
 
@@ -142,7 +163,7 @@ read a file whose scope matches.
 |---|---|---|---|---|
 | 1 | 2026-04-19 | Claude Code | ✅ PASS | F2 — soft delivered (debug line 242); agent proactively called `aide_recall`. F2b — agent acted on soft. F4 — search soft delivered (debug line 887); agent acknowledged. |
 | 2 | 2026-04-22 | Claude Code | ✅ PASS | Re-verified with `softening.threshold=100` manual variant → pure forceSoft branch validated. |
-| TBD | TBD | Cursor | — | Known-silent for soft path. Blocked on Phase C8 for hard-block path at threshold. |
+| 3 | 2026-04-27 | Cursor 3.2.11 | ✅ Soft path PASS via agent_message | Post-audience-mapping fix. Verified soft `preToolUse:Read` after proactive `aide_recall` (encountered=true path) emits `{"permission":"allow","agent_message":"2 memories not yet recalled. Call aide_recall({ids:[7,6]}).","user_message":"<ANSI>aide-memory · <reset>prompting aide_recall for scoped memories"}`. Memory #356. |
 
 #### Issues found (resolved inline)
 
@@ -165,13 +186,88 @@ Ask *"what do you know about this project?"*
 |---|---|---|---|---|
 | 1 | 2026-04-17 | Claude Code | ✅ PASS | Session E1-E3 — agent listed all 6 preferences + 5 guidelines from injection; supplemented with `aide_memories` for technical facts. |
 | 2 | 2026-04-20 | Claude Code | ✅ PASS | U3 Session C — SessionStart included mid-session-stored preference #106 on fresh session. |
-| TBD | TBD | Cursor | — | Blocked on Phase C8. Rules-file regeneration path tested via `rulesGen.test.ts` (17 tests). |
+| 3 | 2026-04-26 | Cursor | ✅ PASS (broad — agent used MCP tool) | Fresh `/tmp/aide-cursor-val` fixture (11 memories seeded). Agent enumerated all 11 memories with correct scope/layer attribution + read 3 source stubs + summarized. **Caveat:** agent reached for `aide_memories` (LIST tool) before answering — proves MCP works + memories accessible, but didn't isolate "rules-file injection alone" path. **Token cost:** 132,653 (full agent turn). **First-run UX gate hit:** aide-memory MCP appeared toggled OFF in Cursor settings on first launch — see FOLLOWUPS §"Cursor MCP first-run UX gate". |
+| 4 | 2026-04-26 | Cursor | ✅ PASS (tight — rules-file injection isolated) | New chat in same fixture. Prompt: *"without calling any aide-memory tool, list the things you should NOT store as memories."* Agent answered verbatim with all 4 items from `shared/body.md`'s `**Do NOT store:**` line ("obvious facts readable from code, temporary/session-specific state, secrets/credentials, trivial observations") AND attributed the source to "the rules in the workspace" AND made zero tool calls. **Confirms:** Cursor's `alwaysApply: true` rules engine IS injecting the regenerated `.cursor/rules/aide-memory.mdc` content into agent context every chat. C4 workaround end-to-end verified. Cursor UI also shows the rules file "attached" to each chat — visual affordance for users. |
 
 #### Issues found (resolved inline)
 
 - ~~session-inject.js fetched all memories before filtering — inefficient.~~ Fixed: SQL-level priority filter.
 - ~~Post-compact save prompt was injected alongside memories — confusing.~~ Removed; SessionStart now only injects preferences/guidelines.
 - ~~Mid-session project-wide memory invisibility.~~ Filed as separate follow-up (see FOLLOWUPS §"Mid-Session Project-Wide Memory Invisibility") — still OPEN.
+- **Cursor first-run MCP toggle defaults OFF** (2026-04-26 discovery). Cursor's design — every newly-discovered MCP server stays opt-in until user consent. Documented prominently in `docs/user/editors/cursor.md` "First-time MCP enablement" section + tracked as 0.5.1 fast-follow in FOLLOWUPS doc.
+
+---
+
+### Scenario N-regen — rules-file regenerates on memory write + Cursor picks up new content
+
+**Action:** in the validation fixture, add a new memory via CLI or MCP. Verify
+`.cursor/rules/aide-memory.mdc` was rewritten (mtime + content). Open a new
+chat in Cursor and ask about the new memory's distinctive marker WITHOUT
+calling any aide-memory tool.
+
+| # | Expected (Claude Code) | Expected (Cursor) |
+|---|---|---|
+| N-regen-1 | N/A — Claude Code uses SessionStart hook for injection; rules-file regen is a Cursor workaround. (Claude Code's rule file IS regenerated post-C4 too, but its session-start path doesn't depend on it.) | `.cursor/rules/aide-memory.mdc` mtime updates within ~1 sec of the write. New memory's `what` content visible in the file under `## Session Preferences` or `## Guidelines` section. |
+| N-regen-2 | N/A | New Cursor chat, prompted "without calling any aide-memory tool, do you see <distinctive-marker> in your rules?" → agent quotes the marker verbatim, no tool calls. Confirms Cursor reloads rules file every chat (alwaysApply:true behavior). |
+
+#### Walkthrough (preferred — MCP path, no shell needed)
+
+End-to-end test of the path real users hit: agent stores via MCP →
+`maybeRegenRules` in `server.ts` fires → atomic write → new Cursor
+chat reloads rules.
+
+1. **In current Cursor chat**, prompt:
+   *"remember `REGEN-MARKER-XYZ-9k3` as a guideline."*
+   - Agent calls `aide_remember({what: "REGEN-MARKER-XYZ-9k3", layer: "guidelines"})` via MCP.
+   - Behind the scenes: `store.add()` → `shouldRegenForMemory()` returns true (guidelines layer) → `triggerRulesRegen()` → atomic tmp+rename of `.cursor/rules/aide-memory.mdc`.
+2. **Open a NEW chat** in Cursor (Cmd+N — no carryover).
+3. **Prompt**: *"without calling any aide-memory tool, do you see `REGEN-MARKER-XYZ-9k3` in your guidelines?"*
+   - ✅ pass: agent confirms it sees the marker, no tool calls. Closes the regen-trigger + reload loop end-to-end.
+   - ❌ fail: agent doesn't know about it OR reaches for `aide_memories`. Means either MCP-trigger regen isn't firing OR Cursor isn't picking up new file content.
+
+#### Optional shell-side verification (if Step 3 fails, narrow the cause)
+
+```bash
+# Did regen actually write the file?
+stat -f '%m %N' /tmp/aide-cursor-val/.cursor/rules/aide-memory.mdc
+grep "REGEN-MARKER-XYZ-9k3" /tmp/aide-cursor-val/.cursor/rules/aide-memory.mdc
+```
+
+- Marker present in file → regen fired correctly; failure is on Cursor's side (didn't reload).
+- Marker absent → MCP-trigger path is broken (`maybeRegenRules` in `server.ts` not firing). Check server logs.
+
+#### Runs
+
+| Run | Date | Tool | Result | Notes |
+|---|---|---|---|---|
+| 1 | 2026-04-26 | Cursor | ✅ PASS (full chain) | Tested via MCP path per memory #342. **Step 1:** in original chat, prompted *"remember REGEN-MARKER-XYZ-9k3 as a guideline."* Agent called `aide_remember` via MCP. User confirmed `.cursor/rules/aide-memory.mdc` was updated on disk with the marker under `## Guidelines`. **Step 2:** opened new Cursor chat (Cmd+N), prompted *"without calling any aide-memory tool, do you see REGEN-MARKER-XYZ-9k3 in your guidelines?"* Agent confirmed seeing it as "the first bullet under ## Guidelines, right above 'Use async/await not callbacks'" with NO tool calls. **Validates:** (a) `maybeRegenRules` MCP-trigger fires correctly post-store.add, (b) atomic tmp+rename writes the new content, (c) Cursor's `alwaysApply: true` reload-every-chat behavior holds — new chats see the latest rules content. **Closes out C4 dynamic rules-file regeneration end-to-end.** |
+
+#### Issues found (resolved inline)
+
+_None yet._
+
+---
+
+### Scenario A0 — Cursor user-mentioned file path
+
+**Action:** in a fresh Cursor chat with empty tracking, type a prompt that
+mentions a file path explicitly (e.g. *"read src/utils/dates.ts"*).
+
+| # | Expected (Claude Code) | Expected (Cursor) |
+|---|---|---|
+| A0 | Same as A1 — Claude Code's Read tool is always agent-mediated regardless of how the user phrased the request. | **Same as A1 — Read tool fires + `preToolUse:Read` fires + `permission: deny` honored.** Cursor 3.2.11 invokes the Read tool for user-mentioned paths just like for autonomous discovery (verified 2026-04-27, see #345). The earlier hypothesis that Cursor auto-attaches file content and bypasses Read was WRONG — it was confounded with the Node ABI mismatch silent-failure that's now fixed by the libsql migration. |
+
+#### Runs
+
+| Run | Date | Tool | Result | Notes |
+|---|---|---|---|---|
+| 1 | 2026-04-26 | Cursor | ⚠ Inconclusive (superseded) | Earlier run reported "PASS via different mechanism — no preToolUse:Read fired." Now believed to have been confounded by the Node ABI mismatch (memory #348): hooks silently failed, agent proceeded via rules-file guidance, looked like auto-attach. Re-run on 2026-04-27 (post-libsql) shows Read tool DOES fire. |
+| 2 | 2026-04-27 | Cursor 3.2.11 | ✅ PASS | Post-libsql migration. Fresh chat. Prompt: *"read src/utils/dates.ts"*. Hooks panel: beforeSubmitPrompt (empty) → **preToolUse:Read fired** with `tool_input.file_path = /private/tmp/aide-cursor-val/src/utils/dates.ts` → `pre-read-recall.sh` returned `{"permission":"deny","user_message":"1 memories for ... (1 technical) — topics: timezone-aware. Call aide_recall({paths: [...]})."}` → Cursor honored deny → agent called `aide_recall({paths:[...]})` → Read retried successfully. **End-to-end indistinguishable from A1.** Memory #345 updated to reflect the corrected understanding. |
+
+#### Issues found (resolved inline)
+
+- ~~"Cursor auto-attaches mentioned files in chat — bypasses preToolUse:Read hook."~~ **Hypothesis was wrong** — disproven on 2026-04-27 with empirical evidence. The original "OUTPUT empty" symptoms were the Node ABI mismatch (memory #348), not auto-attach. Per memory #351, removed from external docs. Current truth: Read tool fires for user-mentioned paths in Cursor 3.2.11 just like for autonomous discovery.
+- **Same-session re-read may answer from chat history, not invoke Read.** Observed 2026-04-27: a follow-up prompt "read it again" on a file already in chat context did NOT invoke a fresh Read tool. Agent answered from prior-turn content. This is single-session context-reuse, not auto-attach — different file → Read fires fresh. Doesn't affect the first-time-read-of-file safety net.
 
 ---
 
@@ -182,7 +278,7 @@ different-scope file, read unscoped file. Covers IDB-1..IDB-8 inline.
 
 | # | Expected (Claude Code) | Expected (Cursor) |
 |---|---|---|
-| A1 / IDB-1 | First read: hard block. `decision: block` with path-based message *"N memories for src/api/routes.ts (L1, L2) — topics: ... Call aide_recall({paths: [...]})"*. | Hard block via `{permission: "deny", user_message: <reason>}`. User sees the deny message inline in Cursor chat. Same semantic effect as Claude Code. |
+| A1 / IDB-1 | First read: hard block. `decision: block` with path-based message *"N memories for src/api/routes.ts (L1, L2) — topics: ... Call aide_recall({paths: [...]})"*. | Hard block via `{permission:"deny", user_message:<chrome>, agent_message:<reason>}` (audience-mapped post-#359). User sees chrome (`aide-memory · …`) in Cursor chat, agent receives the reason+IDs in `agent_message` context. Same semantic effect as Claude Code. **Caveat:** verified only when file is NOT already open in the editor pane — see Scenario F-fileopen for the editor-cached Read coverage gap. |
 | A3 / IDB-2 | Re-read: SILENT. All scoped IDs already tracked. | _Same — silent._ `file\|` + `ids\|` tracking works identically (no emit required, writes flag files only). |
 | A4 / IDB-3 | Sibling file in same dir, IDs covered: SILENT. | _Same — silent._ |
 | A5 / IDB-5 | Different-dir file (e.g. `src/auth/middleware.ts`): hard block for auth-scoped mems. | Hard block via `permission: deny`. |
@@ -191,7 +287,7 @@ different-scope file, read unscoped file. Covers IDB-1..IDB-8 inline.
 | IDB-4 | Sibling read with some IDs missing: hard block listing only the missing IDs. | _Same — hard block via `permission: deny`._ |
 | IDB-7 | After SessionStart injection, read file where scoped IDs partially covered: hard block with missing IDs. | _Same_ — session-inject writes IDs before first turn (Claude Code) or rules-file injection IDs get written on read (Cursor variant). |
 | IDB-8 | After compact/clear/resume, re-read: hard block (tracking reset). | _Same — hard block._ PreCompact clears tracking identically. Cursor compact has a separate quirk (bug #158873) but tracking file clearing works. |
-| Scn1 / IDB-10 | Re-read of previously-encountered file with a NEW mid-session memory added: SOFT (`additionalContext`) — "1 memory not yet recalled. Call `aide_recall({ids: [N]})`". | _Silent_ (gap). Cursor has no `additionalContext` channel on `preToolUse`. Self-track-on-fire writes the flag file identically, but the user-visible nudge is dropped. Agent may proceed without calling `aide_recall({ids})`. Documented gap — see CURSOR_ONBOARDING §1, gap #1. |
+| Scn1 / IDB-10 | Re-read of previously-encountered file with a NEW mid-session memory added: SOFT (`additionalContext`) — "1 memory not yet recalled. Call `aide_recall({ids: [N]})`". | **✅ Soft path now PASSes** via `agent_message` (audience-mapping fix 2026-04-27, memory #359). Hook emits `{permission:"allow", agent_message:"<reason>", user_message:"<chrome>"}`. Agent receives the soft nudge in context. **Caveat:** in Cursor 3.2.11 this only fires when the file is NOT already open in the editor pane — see Scenario F-fileopen below for the editor-cached Read coverage gap. |
 | Scn2 / IDB-11 | Different sibling file (never directly read) in same scope, after `aide_recall`: HARD block on fresh path. | Hard block via `permission: deny`. Conservative "fresh file = fresh enforcement" per memory #324. |
 | IDB-9 | `aide_recall({ids: [N]})` returns exact memories, tracks those IDs as recalled. | _Same — MCP tool-call chrome shows the `aide_recall` invocation._ |
 | IDB-12 | `minScopeDepth=1` (default) + memory scoped `src/**` + read any file under src/: HARD block. | _Same — hard block._ |
@@ -206,7 +302,8 @@ See "Walkthroughs" appendix below for IDB-10/11/12/13 step-by-step procedures.
 | 1 | 2026-04-17 | Claude Code | ✅ A1/A3/A4/A5/A6/A7/A8-adj/Scn1/Scn2 all PASS | Session A (Round 2), 17 memories. Debug log `1ca3aeee-…`. |
 | 2 | 2026-04-21 | Claude Code (0.4.2) | ✅ IDB-1..13 PASS | Post-settings-framework re-verification with `softening.threshold=5`. |
 | 3 | 2026-04-22 | Claude Code (0.4.3) | ✅ PASS | Hook-visibility systemMessage attached on block + soft paths. |
-| TBD | TBD | Cursor | — | Blocked on Phase C8. |
+| 4 | 2026-04-26 | Cursor | ✅ PASS via proactive recall (soft path) | Fresh chat in `/tmp/aide-cursor-val`. Prompt: *"look at all the source files in this project and tell me what's there"* (autonomous discovery — no user-mentioned paths). Agent **proactively recalled** before reading per rules-file guidance, so `pre-read-recall.sh` correctly stayed silent (coveredCount === scoped_ids.length). Validates the proactive-recall path. **Did NOT exercise the hard-block adversarial path** — see Run 5 below. |
+| 5 | 2026-04-27 | Cursor 3.2.11 | ✅ A1 + A1-edit hard-block PASS | Post-libsql migration. Fresh chat in `/private/tmp/aide-cursor-val`. **A1 (autonomous Read with adversarial prompt):** *"Without calling any aide-memory tools first, use the Read tool directly to open src/api/routes.ts and tell me what's in it."* `preToolUse:Read` fired → `{"permission":"deny","user_message":"2 memories for src/api/routes.ts not yet recalled. Call aide_recall({ids:[7,6]})."}` → Cursor honored deny → agent called `aide_recall({ids:[7,6]})` → Read retried successfully. ID-based message branch (vs path-based) — coveredCount > 0 because rules-file injection had pre-tracked some scoped_ids; missing 2 of 5 src/api/** scoped IDs still triggered the block. **A1-edit (autonomous Write):** *"Add a JSDoc comment above the export in src/auth/middleware.ts using the Edit tool. Don't call aide_recall first."* `preToolUse:Write` fired → `{"permission":"deny","user_message":"2 memories for ...auth/middleware.ts. Call aide_recall({paths:[...]}) before editing."}` → deny honored → agent recalled → Edit succeeded. **Closes the deny-honored gap that confused Run 4 + the originally-suspected forum #154377 — Cursor honors deny correctly when our hook actually emits one.** |
 
 #### Issues found (resolved inline)
 
@@ -228,7 +325,7 @@ See "Walkthroughs" appendix below for IDB-10/11/12/13 step-by-step procedures.
 
 | # | Expected (Claude Code) | Expected (Cursor) |
 |---|---|---|
-| B1 | Soft nudge — *"N aide memories match 'rate'. Call aide_search..."*. Agent calls `aide_search({keyword: ...})`, then Grep. Summary includes both. | _Gap on soft path._ Cursor's Grep matcher IS supported (`matcherMap.search = 'Grep'`), but Cursor has no `additionalContext` on `preToolUse`. Nudge is dropped silently. Glob matcher is unsupported (null in matcherMap) → semantic/glob searches go uncovered. Agent may still call `aide_search` from rules-file guidance but won't get the per-query nudge. |
+| B1 | Soft nudge — *"N aide memories match 'rate'. Call aide_search..."*. Agent calls `aide_search({keyword: ...})`, then Grep. Summary includes both. | **✅ Soft nudge PASSes** via `agent_message` (audience-mapping fix 2026-04-27, memory #359). Hook emits `{permission:"allow", agent_message:"<nudge>", user_message:"<chrome>"}`. Cursor's Grep matcher IS supported (`matcherMap.search = 'Grep'`); Glob matcher unsupported (null in matcherMap) → semantic/glob searches go uncovered. |
 | B2 | Grep for unmatched term: SILENT. | _Same — silent._ |
 
 #### Runs
@@ -237,7 +334,8 @@ See "Walkthroughs" appendix below for IDB-10/11/12/13 step-by-step procedures.
 |---|---|---|---|---|
 | 1 | 2026-04-17 | Claude Code | ✅ B1/B2 PASS | Session B (Round 2) — 199-char additionalContext, agent called aide_search in 6ms. |
 | 2 | 2026-04-22 | Claude Code (0.4.3) | ⚠ PARTIAL | Grep tool appears deferred in CC 2.1.118 — Claude falls back to Bash+grep, which misses the matcher. See FOLLOWUPS §"Bash-grep fallback coverage" (still OPEN, ELEVATED priority). |
-| TBD | TBD | Cursor | — | Blocked on Phase C8. Expected partial — Grep covered, Glob + bash-grep uncovered. |
+| 3 | 2026-04-27 | Cursor 3.2.11 | ✅ PASS — ideal agent flow | Fresh chat. Prompt: *"search the codebase for \"JWT\""*. Agent acted on rules-file guidance ("prefer aide_search as FIRST step") and called `aide_search({keyword:"JWT"})` BEFORE Grep — found stored memory `[1] Use JWT for auth [src/auth/**]`. Then fell back to `Grep:JWT` for literal-string matching (none found). Hook timeline: postToolUse on `MCP:aide_search` → `track-search.sh` recorded the keyword in `.aide/cache/searched-queries-<session>.txt`. preToolUse on Grep:JWT → `pre-search-nudge.sh` fired → emitted EMPTY output (correctly silent — already covered via prior aide_search; nudge dedupes per memory #297). Agent's final answer correctly distinguished "stored context says X" from "code has no literal matches." **Picture-perfect end-to-end search flow.** |
+| 4 | 2026-04-27 | Cursor 3.2.11 | ✅ B+ adversarial PASS via agent_message | Post-audience-mapping fix. Adversarial prompt forced Grep before aide_search → `pre-search-nudge.sh` fired → emitted `{"permission":"allow","agent_message":"1 aide memories match 'Rate limit' (Rate limit 50 req/min per user). Call aide_search({keyword:'Rate limit'}) if not already in context.","user_message":"<ANSI>aide-memory · <reset>prompting aide_search for \"Rate limit\" — 1 matching memory"}`. Agent received the agent_message nudge in context. **The previously-documented "Cursor gap" was our adapter bug, not a platform limitation — confirmed bias-correction in #358.** Memory #356 has full empirical evidence. |
 
 #### Issues found (resolved inline)
 
@@ -296,13 +394,62 @@ file.
 |---|---|---|---|---|
 | 1 | 2026-04-13 | Claude Code | ✅ D2/D2b PASS (after fix) | Hook format initially wrong; PreCompact now cleanup-only exit 0. |
 | 2 | 2026-04-17 | Claude Code | ✅ D1-D3 PASS | Session D (Round 2) — tracking went from 11+2 IDs to 11 (injection-only) after PreCompact. Agent proactively called aide_recall post-compact. |
-| TBD | TBD | Cursor | — | Expected partial PASS — clear works, SessionStart:compact known-broken upstream. |
+| 3 | 2026-04-27 | Cursor 3.2.11 | ⚠ Platform-gap (not testable in Cursor's native flow) | **Cursor 3.2.11 has no manual `/compact` UI surface — only "clear" (chat reset, fires no preCompact event).** Cursor's hook event schema DOES include `preCompact`, so it likely fires on auto-compact when context fills, but reproducibly testing that requires flooding the context window — expensive and slow. Since the underlying mechanism (preCompact → cleanup → tracking reset) is verified end-to-end on Claude Code, this is recorded as a Cursor-platform gap rather than a regression. **Expected behavior on Cursor (untested): when Cursor's auto-compact does fire preCompact, our `pre-compact-save.sh` clears `.aide/cache/recalled-paths-<session>.txt` for the same session_id, and the next read re-blocks normally — same code path as Claude Code, only the trigger differs.** Documented as a known Cursor-platform limitation, not blocking 0.5.0. |
+
+**Note on `clear` vs `preCompact` (Cursor 3.2.11):**
+
+- **Clear** (chat reset button) starts a NEW session with a NEW `conversation_id` → tracking files are keyed by session_id → the new session has no tracking by construction (file just doesn't exist yet for the new ID). No preCompact fires; no special handling needed.
+- **preCompact** fires on auto-compact while session_id stays the same → tracking would be stale → our hook explicitly clears the file.
+
+So for Cursor we don't need a "clear" hook — the new-session-id mechanism handles clear implicitly. Same pattern works in Claude Code's `/clear` (new session) vs `/compact` (preCompact fires).
 
 #### Issues found (resolved inline)
 
 - ~~hookSpecificOutput format invalid for PreCompact — only top-level decision/reason/systemMessage accepted.~~ Fixed (confirmed architectural Claude Code constraint; PreCompact simplified to exit 0 cleanup-only).
 - ~~PreCompact two-phase blocking never actually blocked.~~ Refactored; PreCompact is cleanup-only.
 - ~~PreCompact didn't clear the current session's recalled-paths file.~~ Fixed in commit `6af5001`.
+
+---
+
+### Scenario N-mismatch — Node ABI version drift across install/runtime (per #350)
+
+**Background:** in 0.4.x and earlier, aide-memory used `better-sqlite3` which
+binds directly to V8 internals. The compiled `.node` binary is tied to a
+specific NODE_MODULE_VERSION (Node 18 = ABI 108, Node 22 = ABI 127, etc.).
+If the user's install-time Node and the editor's hook-execution Node had
+different ABIs, `require('better-sqlite3')` threw silently (absorbed by the
+hook dispatcher's top-level catch), and every hook produced empty output.
+This is the bug class documented in memory #348 — caused hours of
+mis-attribution to "Cursor doesn't honor permission:deny" before the root
+cause was found.
+
+**Fix (0.5.0):** migrated to `libsql` (Turso), which uses Node-API (N-API).
+N-API is a stable C ABI maintained by Node — modules built against N-API
+work unchanged across all supported Node majors. Same `.node` binary loads
+on Node 18, 20, 22, 24+. The bug class is eliminated by construction
+(memory #354 has the empirical proof from the spike).
+
+**Action:** verify that aide-memory works when install-time Node ≠ runtime
+Node ABI. Two complementary checks.
+
+| # | Expected (Claude Code) | Expected (Cursor) |
+|---|---|---|
+| N-mismatch-1 | `[AIDE_DEBUG/binding] loaded lib=libsql node=<v> abi=<n> ...` shows successful binding load with whatever Node Claude Code uses for hook execution. | _Same — observable in Cursor's Hooks output panel when `AIDE_DEBUG=binding` is set on a hook command in `.cursor/hooks.json` (or wrapped inline as `AIDE_DEBUG=binding bash ...`)._ |
+| N-mismatch-2 | After installing aide-memory under Node X (e.g. 18) and switching to Node Y at runtime (e.g. 22), hooks still fire correctly — no `NODE_MODULE_VERSION` errors, no silent empties. With libsql N-API, this is by construction. | _Same — Cursor bundles its own Node which can differ from the user's terminal Node. The original 0.5.0 bug surfaced precisely this case._ |
+| N-mismatch-3 (defense-in-depth) | If a binding load DOES fail for any reason (corrupt install, missing platform package), the hook dispatcher emits a single `[AIDE_ERROR]` line via `loudError()` with an actionable hint (e.g. `reinstall aide-memory or run \`npm rebuild libsql\``). Hook still exits 0; agent flow not interrupted. | _Same — error classification + hint are editor-agnostic._ |
+
+#### Runs
+
+| Run | Date | Tool | Result | Notes |
+|---|---|---|---|---|
+| 1 | 2026-04-27 | spike-libsql worktree | ✅ N-mismatch-2 PROVEN by construction | Same libsql `.node` binary built under Node 22 (ABI 127) loaded successfully under Node 18 (ABI 108) without rebuild. PRAGMA, FTS5, prepared statements all worked. Memory #354 captures the empirical evidence. This is the structural fix — re-running under varying Node majors is a sanity check, not a true verification because N-API guarantees the property. |
+| 2 | 2026-04-27 | Bash smoke (`debug-output-smoke.test.sh`) | ✅ N-mismatch-1 + N-mismatch-3 PASS | 15/15 checks. `AIDE_DEBUG=binding` produces `[AIDE_DEBUG/binding] loaded lib=libsql node=22.22.2 abi=127 platform=darwin-arm64` on store init. `AIDE_ERROR` lines emit when failures induced (unknown hook event tested as proxy for the error-classification path). |
+| TBD | TBD | Cursor (live) | — | Pending: enable `AIDE_DEBUG=binding` in one entry of `/private/tmp/aide-cursor-val/.cursor/hooks.json`, restart Cursor, fresh chat, trigger a Read. Hooks output panel should show `[AIDE_DEBUG/binding] loaded ...` line confirming Cursor's bundled Node version + that libsql loaded cleanly under it. ~2 minutes total. |
+| TBD | TBD | Claude Code | — | Same shape as Cursor — set `AIDE_DEBUG=binding` in `.claude/settings.json` env field for one hook + verify line surfaces in `claude --debug` output. |
+
+#### Issues found (resolved inline)
+
+- **0.5.0 binding ABI mismatch silent-fail (the bug that started all this)** — Fixed by migrating from better-sqlite3 (V8-bound) to libsql (N-API). Memory #348 captures the original silent-failure mode; #353 captures the N-API-as-standard-fix research; #354 captures the spike result; #355 captures the implementation choices in `src/memory/internal/` (binding-loader factory, debug helper, dispatcher error classification).
 
 ---
 
@@ -597,7 +744,7 @@ session. Submit correction. Toggle back.
 
 | # | Expected (Claude Code) | Expected (Cursor) |
 |---|---|---|
-| V | All `aide-memory · ...` branded systemMessage lines hidden when `hooks.visible=false`. Block enforcement + additionalContext contract unchanged. | _N/A — Cursor has no inline systemMessage channel_ (gap #2). `hooks.visible` is a no-op in Cursor because there's nothing user-visible to toggle. Block `user_message` still renders on deny (only non-configurable surface). Documented in CURSOR_ONBOARDING §5. |
+| V | All `aide-memory · ...` branded systemMessage lines hidden when `hooks.visible=false`. Block enforcement + additionalContext contract unchanged. | **Partial — partially toggleable on Cursor.** Cursor's `user_message` renders chrome on `permission:deny` (chat-visible) and is logged in the Hooks output panel under `permission:allow` (panel-visible only, not in chat per Cursor 3.2.11). When `hooks.visible=false`, the adapter omits chrome from `user_message`; `agent_message` (the agent-context channel) is unaffected. Effect: deny-line chrome disappears from chat; agent still receives the deny reason via `agent_message`. ANSI escapes are stripped for Cursor regardless (Cursor doesn't render terminal ANSI). |
 
 #### Runs
 
@@ -635,6 +782,79 @@ session. Submit correction. Toggle back.
 
 ---
 
+### Scenario F-fileopen — Cursor per-Read coverage with file-open + suppression
+
+**Background:** verified empirically 2026-04-27 (memory #363) — Cursor 3.2.11
+does NOT fire `preToolUse:Read` when the target file is already open in the
+editor pane. `preToolUse:Write` (Edit matcher) fires reliably regardless of
+editor state. This documents the floor of safety-net coverage and tests
+whether the rules-file injection (`body.md` "Even when a file is visible to
+you, call aide_recall…" bullet added 2026-04-27) compensates for the hook gap.
+
+**Setup:** fresh chat in `/private/tmp/aide-cursor-val` fixture (13+ memories
+seeded, `memories.softening.threshold=5`, Cursor 3.2.11). Pick a file with
+≥1 scoped memory NOT yet in the SessionStart-injected ID set so a hard-block
+COULD fire when hook engages. Regenerate the fixture rules file first so the
+new "even when visible to you" bullet is present:
+
+```bash
+cd /private/tmp/aide-cursor-val
+node /Users/meky/code/aide-v0/dist/cli/aide-memory.js init --update-rules
+grep "Even when a file" .cursor/rules/aide-memory.mdc   # confirm
+```
+
+**4-cell matrix (cross axes — file editor state × prompt suppression):**
+
+| # | File state | Prompt | What to verify | Why this matters |
+|---|---|---|---|---|
+| F-fo-1 | Closed (not in editor) | Normal — no suppression | Agent calls `aide_recall` per rules-file guidance; `preToolUse:Read` fires reliably; either hard-block (first read) or silent (already covered). | Best case — both safety nets engaged. |
+| F-fo-2 | Closed | Suppression: *"Without calling any aide-memory tools first, use the Read tool directly to open X"* | `preToolUse:Read` fires hard-block; chrome may render in Hooks panel; agent forced to recall via deny. | Tests hook safety net in isolation (rules-file overridden by prompt). |
+| F-fo-3 | Open in editor | Normal — no suppression | `preToolUse:Read` does NOT fire (verified gap, #363). Agent must rely on rules-file guidance — does it call `aide_recall` on its own per the new bullet? | Tests rules-file-only fallback path — the **NEW body.md bullet's value**. |
+| F-fo-4 | Open in editor | Suppression | `preToolUse:Read` does NOT fire AND agent told to skip — worst case; agent likely proceeds without memory awareness. | Documents the floor of safety-net coverage. |
+
+**Capture per cell:**
+- Conversation ID
+- Did agent call `aide_recall`? (Y/N — observable in MCP tool-call chrome OR transcript)
+- Did `preToolUse:Read` fire? (Y/N — Hooks output panel)
+- Did agent reference stored memories in its response? (Y/N qualitative — proves whether memory awareness reached the agent)
+- File-tracking state at end: `cat .aide/cache/recalled-paths-<sid>.txt`
+
+#### Runs
+
+| Run | Date | Tool | Cell | Result | Notes |
+|---|---|---|---|---|---|
+| 1 | 2026-04-27 | Cursor 3.2.11 | (proto F-fo-3 controlled experiment) | ⚠ Hook does not fire when file open in editor | Verified via brand-new file + editor-open variable. Memory #363. |
+| 2 | 2026-04-27 | Cursor 3.2.11 | **F-fo-1** (closed, no suppression) | ✅ PASS | conv `ef1768eb`. Agent's flow: `Grep:**/src/api/routes.ts` (silent) → **proactive `aide_recall({paths:["src/api/routes.ts"]})`** per rules-file guidance → soft `preToolUse:Read` fired `{permission:"allow", agent_message:"2 memories ... Call aide_recall({ids:[7,6]})", user_message:"aide-memory · …"}` → Read succeeded. Picture-perfect flow. |
+| 3 | 2026-04-27 | Cursor 3.2.11 | **F-fo-2** (closed, suppression) | ✅ PASS | conv `d2409c82`. Prompt suppressed aide-memory call. `preToolUse:Read` fired hard-block with audience-split: `{permission:"deny", user_message:"aide-memory · prompting aide_recall for scoped memories (expected flow)", agent_message:"2 memories ... Call aide_recall({ids:[7,6]})."}` → Cursor honored deny → agent recalled → Read retried successfully. **Hook safety net works in isolation.** |
+| 4 | 2026-04-27 | Cursor 3.2.11 | **F-fo-3** (open, no suppression) — **KEY CELL** | ✅ PASS via rules-file bullet | conv `a348d125`. `preToolUse:Read` did NOT fire for routes.ts (gap confirmed). Despite no hook, **agent followed the new body.md "Even when a file is visible to you, call aide_recall" bullet** and called `aide_recall({paths:["src/api/routes.ts"]})` proactively at 19:04:52. postToolUse returned 12 memories. **Memory awareness reached the agent with zero hook fires — rules-file guidance fully compensates for the editor-cached-Read coverage hole** when no suppression is present. Memory #364. |
+| 5 | 2026-04-27 | Cursor 3.2.11 | **F-fo-4** (open, suppression) | ❌ Floor of coverage (documented gap) | conv `9a5b9375`. `preToolUse:Read` does NOT fire AND agent told to skip aide-memory tools. Agent did NOT call aide_recall. Stop fired at 19:05:21 with no relevant hook fires. **Worst case** — requires deliberate adversarial prompt + file open. No further mitigation possible without upstream Cursor fix for editor-cached `preToolUse:Read` OR stronger override-resistant prompt language. Documented gap. |
+
+**Edit-equivalent confirmation (single row, low priority):**
+- Edit hard-block fires reliably regardless of file-open state (verified). The
+  suppression-vs-no-suppression axis on Edit only tests whether the agent
+  follows the hook deny vs prompt instruction — a less interesting case
+  because the Edit safety net is already empirically reliable.
+
+**What this scenario means for the product framing:**
+Cell F-fo-3 (file open, no suppression) is the realistic user workflow —
+developer has files open in their editor and asks the agent to do something.
+The new `body.md` bullet ("Even when a file's content is already visible to
+you, call aide_recall…") was added specifically to make this cell pass. If
+empirical testing shows the agent does NOT call `aide_recall` in F-fo-3, the
+rules-file guidance is insufficient and we need additional reinforcement
+(stronger prompt language, or accept the gap and document it as a Cursor
+platform limitation pending an upstream FR).
+
+#### Issues found (resolved inline)
+
+- **Cursor preToolUse:Read editor-open gap (NEW DISCOVERY 2026-04-27)** —
+  documented in `docs/user/editors/cursor.md` "Per-Read coverage gap on
+  Cursor" section + `body.md` rules-file injection. Mitigation:
+  per-Edit safety net + rules-file guidance. Memory #363 has the evidence
+  chain + ruled-out wrong hypotheses. Upstream FR pending (post-0.5.0).
+
+---
+
 ## Walkthroughs (extended procedures for complex scenarios)
 
 ### IDB-10 walkthrough (soft on re-read after mid-session new memory)
@@ -647,8 +867,13 @@ session. Submit correction. Toggle back.
 4. Expected (Claude Code): soft path — *"PreToolUse:Read says: aide-memory ·
    prompting aide_recall for scoped memories"* (no `(expected flow)` tail).
    Self-track-on-fire (commit b558f93) validated.
-5. Expected (Cursor): silent (gap #1 — no `additionalContext` on `preToolUse`).
-   Flag-file tracking still updates; agent may not see the nudge.
+5. Expected (Cursor 3.2.11, post-audience-mapping fix 2026-04-27): SOFT path
+   PASSes — hook emits `{permission:"allow", agent_message:"<reason>",
+   user_message:"<chrome>"}`. Agent receives the soft nudge in context via
+   `agent_message`. Chrome may not render in chat under `allow` but logs in
+   the Hooks output panel. **Caveat: only fires when the file is NOT open in
+   the editor pane** — see Scenario F-fileopen below for the editor-cached
+   Read coverage gap.
 
 ### IDB-11 walkthrough (hard on sibling file after recall)
 
@@ -682,25 +907,27 @@ session. Submit correction. Toggle back.
 | Scenario | Claude Code | Cursor | Notes |
 |---|---|---|---|
 | F0 (empty) | ✅ | Expected ✅ | Both silent when store empty. |
-| F (softening) | ✅ | ⚠ gap | Soft nudge path silent on Cursor (gap #1); hard-block path at/above threshold works. |
+| F (softening) | ✅ | ✅ | Soft nudge path NOW PASSes via `agent_message` (audience-mapping fix 2026-04-27, #359). Hard-block path at/above threshold works. |
 | N (SessionStart) | ✅ | Rules-file channel | Cursor via `.mdc` regen (bugs #157141/#158452). |
-| A / IDB-1..13 (recall) | ✅ | Expected ✅ hard / ⚠ soft | Hard block works; soft nudges dropped on Cursor. |
-| B (search) | ⚠ bash-grep gap | ⚠ gap | Grep matcher covered; Glob unsupported; soft nudge dropped on Cursor. |
-| C (correction) | ✅ | ⚠ one-turn delay | `beforeSubmitPrompt` can't inject context (gap #5). Next Stop delivers via `followup_message`. |
-| D (compact) | ✅ | Partial | Cursor sessionStart doesn't fire post-compact (bug #158873); rules-file bridges. |
+| A / IDB-1..13 (recall) | ✅ | ✅ hard / ✅ soft | Hard block works; soft nudges NOW PASS via `agent_message` (#359). Caveat: Read hook does not fire when file is open in editor — see F-fileopen. |
+| B (search) | ⚠ bash-grep gap | ✅ via agent_message | Grep matcher covered; Glob unsupported; soft nudge NOW PASSes via `agent_message` (B+ adversarial verified 2026-04-27, #356). |
+| C (correction) | ✅ | ⚠ one-turn delay | `beforeSubmitPrompt` can't inject context (gap #5). Next Stop delivers via `followup_message` (chrome prefixed inline post-#359). |
+| D (compact) | ✅ | ⚠ Not testable | Cursor 3.2.11 has no manual `/compact` UI. Auto-compact preCompact event likely fires but expensive to reproducibly trigger; recorded as platform gap, not regression. |
 | E (cross-session) | ✅ | Expected ✅ | Injection content identical; channel differs. |
 | G (concurrent) | ✅ | Expected ✅ | session_id-scoped tracking works identically. |
 | H (auto-update) | ✅ | Expected ✅ | Requires Cursor restart (bug #3887); init warns. |
 | J (MCP down + pending) | ✅ | Expected ✅ | Server-side logic editor-agnostic. |
 | K (plan persistence) | Pending | Pending | Behavioral; needs live session. |
-| O (dynamic Stop) | ✅ phase 1+2 | Expected ✅ | Delivered via `followup_message` on Cursor. |
+| O (dynamic Stop) | ✅ phase 1+2 | Expected ✅ | Delivered via `followup_message` on Cursor (chrome prefixed inline post-#359). |
 | U1 (team decisions) | ✅ 6/7 | Expected same | Agent judgment is ceiling. |
 | U2 (correction loop) | ✅ | Expected ✅ | One-turn delay on first detection. |
 | U3 (behavioral prefs) | ⚠ mid-session gap | ⚠ same gap | Project-wide mid-session invisibility still OPEN. |
 | M (scope precision) | ✅ | Expected ✅ | Editor-agnostic. |
 | I (.ignore) | ✅ | Expected ✅ | OS-level. |
 | Settings (toggle) | ✅ | Expected ✅ | Per-invocation re-read. |
-| V (hooks.visible) | ✅ | N/A | No visibility channel on Cursor. |
+| V (hooks.visible) | ✅ | ⚠ partial | Strips chrome from `user_message`; `agent_message` unaffected. ANSI escapes always stripped on Cursor. |
+| **F-fileopen** (new) | N/A | ✅ 3/4 cells PASS | preToolUse:Read does not fire when file open in editor. F-fo-1/2/3 PASS via rules-file mitigation + Edit safety net. F-fo-4 (open + adversarial suppression) is documented floor of coverage. Memory #363 (gap) + #364 (4-cell verification 2026-04-27). |
+| **N-mismatch** (new) | ✅ | ✅ by construction | libsql N-API ABI-stable across Node 18/20/22/24+. The bug class that started this is eliminated. Memory #354. |
 | init | ✅ | ✅ fixture | Live Cursor C8. |
 
 Legend: ✅ fully validated · ⚠ partial / known gap · Expected = adapter+test coverage but no live editor run yet · Pending = not yet executed · N/A = not applicable.

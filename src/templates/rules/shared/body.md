@@ -26,6 +26,7 @@ As conversations grow long, proactively call `aide_remember` (or `aide_update` i
 - After context compaction (you may have lost earlier memories)
 - When starting a new task involving different files
 - When a PreToolUse nudge tells you memories exist
+- Even when a file's content is already visible to you (open in your editor, attached, in a prior message), call aide_recall for that path — UNLESS you've already recalled memories for that path in this session. File content alone does not include stored conventions, constraints, or decisions for that path.
 
 ## When to call aide_remember
 

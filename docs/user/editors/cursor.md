@@ -25,32 +25,67 @@ for the capability matrix see [supported-editors.md](../supported-editors.md).
 - `.aide/config.json` and `.aide/memories/` — same as Claude Code
 - `.ignore` / `.gitignore` entries
 
-**⚠ Restart Cursor after init.** Cursor has no MCP hot-reload
-([#3887](https://github.com/cursor/cursor/issues/3887),
-[#55723](https://forum.cursor.com/t/refresh-mcp-server-via-command/55723)).
-MCP tools will not appear until Cursor restarts. `aide-memory init` prints
-a reminder in its output.
+### ⚠ ⚠ ⚠ First-time MCP enablement (read this — easy to miss)
 
-**⚠ MCP tool list may need a manual toggle.** If the aide-memory tools do
-not appear after restart, open Cursor → Settings → MCP and toggle the
-aide-memory server off then on ([#122421](https://forum.cursor.com/t/mcp-tool-list-only-updates-after-manually-toggling-server-off-on/122421)).
+Cursor's MCP integration has **two enablement gates** you'll hit on first
+init. Neither is an aide-memory bug — both are Cursor security/UX
+choices we have to live with:
 
-**On first read of a file with scoped memories.** The `preToolUse` hook
-returns:
+1. **Cursor must be restarted to pick up the MCP config.** Cursor reads
+   `.cursor/mcp.json` on startup only — there is no hot-reload
+   ([#3887](https://github.com/cursor/cursor/issues/3887),
+   [#55723](https://forum.cursor.com/t/refresh-mcp-server-via-command/55723)).
+   `aide-memory init` prints a reminder, but if you skip it nothing
+   else in this doc works. **Cmd+Q the Cursor app** (don't just close
+   the window) and reopen.
+
+2. **The aide-memory MCP server is registered DISABLED by default.**
+   Cursor's design — every newly-discovered MCP server stays toggled
+   off until the user explicitly opts in. We can't pre-enable from
+   `.cursor/mcp.json` (no documented field for it; would also be a
+   security gap). To turn it on:
+
+   - Cursor → **Settings** → **MCP**
+   - Find `aide-memory` in the list
+   - Flip the toggle **ON**
+
+   You'll know it worked when the agent can call `aide_recall`,
+   `aide_remember`, etc. without errors. If those calls fail, you're
+   either still toggled off OR hitting Cursor bug
+   [#122421](https://forum.cursor.com/t/mcp-tool-list-only-updates-after-manually-toggling-server-off-on/122421)
+   — toggle off then back on to refresh the tool list.
+
+> **Until both gates clear, aide-memory's MCP tools are unavailable.**
+> Hooks (`.cursor/hooks.json`) still fire correctly — but the
+> hard-block messages tell the agent to "call aide_recall," and that
+> tool can't run if MCP isn't enabled.
+
+**On first read of a file with scoped memories — when applicable.** The
+`preToolUse` hook returns:
 
 ```json
-{"permission": "deny", "user_message": "19 memories for src/auth/middleware.ts …"}
+{
+  "permission": "deny",
+  "user_message": "aide-memory · prompting aide_recall for scoped memories (expected flow)",
+  "agent_message": "2 memories for src/auth/middleware.ts not yet recalled. Call aide_recall({ids: [7,6]})."
+}
 ```
 
-Cursor renders the `user_message` inline as a denial reason. The agent
-reads that, calls `aide_recall({paths: [...]})`, and retries the read.
-Same effect as Claude Code's hard-block.
+The agent reads `agent_message` and calls `aide_recall({paths: [...]})`, then
+retries. Same effect as Claude Code's hard-block.
 
-**On re-read of the same path.** Silent — the tracking file
-(`.aide/cache/recalled-paths-<sid>.txt`) suppresses the block. But unlike
-Claude Code, there is **no soft-nudge middle tier**: Cursor's `preToolUse`
-has no `additionalContext` field, so re-reads after the first recall are
-fully silent. See gap [#157231](https://forum.cursor.com/t/add-additional-context-to-beforesubmitprompt-hook-output/157231).
+> **"When applicable" is doing real work in that sentence.** The hook
+> fires for Reads where (a) the file is not already in Cursor's editor
+> pane, AND (b) scoped memories haven't been recalled this session.
+> Reads of files that are already open in your editor are **not seen by
+> the hook** — see "Per-Read coverage gap on Cursor" below for the
+> verified observation and the ideal-vs-current behavior gap.
+
+**On re-read of the same path — soft.** When the file has been
+encountered before but new memories exist (or some IDs are still
+uncovered), `preToolUse` returns `{"permission": "allow", "agent_message":
+"<missing-ids nudge>"}`. The agent receives the nudge in context but the
+read isn't blocked.
 
 **When the agent calls `aide_recall` or `aide_remember`.** Standard Cursor
 chat chrome shows the MCP tool call — request + response — same as any
@@ -85,19 +120,62 @@ decision, correction, or non-obvious finding.
 
 `followup_message` is visible in chat and re-prompts the agent.
 
+## Per-Read coverage gap on Cursor
+
+**Observed behavior (verified empirically 2026-04-27 on Cursor 3.2.11):**
+when the file is already open in Cursor's editor pane, aide-memory's
+per-Read hook (`preToolUse:Read`) does **not** fire for subsequent Read
+tool calls on that file. Neither the hard-block path nor the soft-nudge
+path engages in this case.
+
+When the file is **not** open in the editor, the hook fires reliably and
+applies the appropriate gate (hard-block, soft-nudge, or silent) based
+on tracking state.
+
+**The per-Edit safety net is unaffected.** `preToolUse:Write` (which
+matches `Write`, `Edit`, and Cursor's `StrReplace`) fires reliably on
+every edit regardless of whether the file is open in the editor.
+
+**Memory context still reaches the agent** via the rules-file injection
+(`.cursor/rules/aide-memory.mdc` with `alwaysApply: true`), which is
+loaded on every agent turn. The rules-file guidance instructs the agent
+to call `aide_recall` for any file path it's reasoning about — even when
+the file content is already visible — so memory awareness is present
+whether or not the per-Read hook fires.
+
+**Empirical confirmation (verified 2026-04-27 across the 4-cell file-open
+matrix in `docs/validation/E2E_VALIDATION.md` Scenario F-fileopen):** in
+the realistic case (file open in editor, no adversarial prompt), the
+agent followed the rules-file guidance and called `aide_recall`
+proactively even though the per-Read hook didn't fire. The only failure
+case is when the user has the file open AND explicitly tells the agent
+to skip aide-memory tools — a deliberate suppression scenario, not a
+typical workflow. For typical use, memory awareness reaches the agent
+in 100% of observed file-open reads.
+
+**Ideal behavior (what we'd want):** the per-Read hard-block fires
+whenever applicable (i.e., scoped memories haven't been recalled), irrespective of how the
+agent obtained the file content (Read tool, editor cache, attachment).
+We have not yet identified a Cursor-side mechanism that lets us hook
+editor-cached reads — investigation tracked as a Phase 1 follow-up.
+
 ## What's different from Claude Code
 
-A deliberate, explicit gap list — not hedging, just the facts.
+A deliberate, explicit gap list — based on verified observations.
 
-1. **Soft `additionalContext` channel is missing.** Cursor's `preToolUse`
-   output has no `additionalContext` field. After the first
-   hard-block-and-recall on a file, re-reads are **silent** — no middle
-   tier. Claude Code's soft nudge is absent on Cursor.
+1. **Per-Read safety net is partial in Cursor.** The per-Read hook fires
+   only when the file is not already open in Cursor's editor pane.
+   See "Per-Read coverage gap on Cursor" above. Per-Edit safety net is
+   reliable. The rules-file injection covers the gap functionally —
+   memory context reaches the agent regardless of hook firing.
 
-2. **No inline branded chrome.** Cursor has no `systemMessage`-equivalent
-   field for non-deny hook events. The `aide-memory · …` status lines you
-   see in Claude Code do not appear in Cursor. Users infer state from the
-   agent's natural tool-call chrome and response.
+2. **Inline chrome rendering is inconsistent across hooks.** Cursor 3.2.11
+   renders `user_message` differently for different events: visible in
+   the Hooks Output panel for some "tool attempted" entries (e.g. Edit
+   attempted), not visible for others (e.g. Read attempted) even with
+   the same JSON shape. Soft `agent_message` reliably reaches the agent
+   regardless. The `aide-memory · …` brand chrome users see in Claude
+   Code does not consistently surface inline in Cursor.
 
 3. **SessionStart content ships via the rules file, not the hook.**
    Channel different, content the same. See "Rules-file regeneration"

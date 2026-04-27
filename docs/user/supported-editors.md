@@ -27,9 +27,11 @@ curated rules file but do not yet generate hooks or MCP config at
 |---|---|---|---|---|---|
 | `aide-memory init` generates editor config files | ✅ | ✅ | 📝 | 📝 | 📝 |
 | MCP tools available in agent sessions | ✅ | ✅ [^mcp-manual] | ⚠ [^mcp-manual] | ⚠ [^mcp-manual] | ⚠ [^mcp-manual] |
-| Hard-block on file read with scoped memories | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Soft nudge on re-read (additionalContext) | ✅ | ❌ [^cursor-soft] | ❌ | ❌ | ❌ |
-| Inline branded status lines ("aide-memory · …") | ✅ | ❌ [^cursor-chrome] | ❌ | ❌ | ❌ |
+| Hard-block on file read with scoped memories | ✅ | ✅ [^cursor-read-editor-open] | ❌ | ❌ | ❌ |
+| Hard-block on file edit with scoped memories | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Soft nudge on re-read (agent-context channel) | ✅ | ✅ [^cursor-soft] | ❌ | ❌ | ❌ |
+| Inline branded status on hard-block | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Inline branded status on soft-nudge | ✅ | ⚠ [^cursor-chrome] | ❌ | ❌ | ❌ |
 | Session-start dynamic context injection | ✅ | ⚠ [^cursor-session] | ❌ | ❌ | ❌ |
 | Session-start context after compaction | ✅ | ❌ [^cursor-compact] | ❌ | ❌ | ❌ |
 | Stop-hook reflection nudges | ✅ | ✅ [^cursor-followup] | ❌ | ❌ | ❌ |
@@ -43,17 +45,44 @@ Windsurf ship a rules template only — if you add aide-memory as an MCP
 server manually in the editor's own MCP config, the seven tools work
 identically to Claude Code.
 
-[^cursor-soft]: Cursor's `preToolUse` hook output has no
-`additionalContext` field (feature request [#157231](https://forum.cursor.com/t/add-additional-context-to-beforesubmitprompt-hook-output/157231)).
-After the first hard-block-and-recall on a file, subsequent re-reads are
-**silent** — no middle nudge. Claude Code's soft middle tier is missing.
+[^cursor-soft]: Soft nudges are delivered via Cursor's `agent_message`
+field on `permission: "allow"` — the equivalent of Claude Code's
+`additionalContext` channel. The agent receives the same context payload
+(memory IDs + recommended tool call) on every fire. Verified empirically
+on Cursor 3.2.11 (2026-04-27). User-visible chrome on soft fires is the
+remaining partial gap — see `[^cursor-chrome]`.
 
-[^cursor-chrome]: Cursor has no user-visible surface for non-deny hook
-events. `user_message` renders only on `permission: deny`; `agent_message`
-is broken in v2.0.77+ ([regression #142589](https://forum.cursor.com/t/regression-hook-response-fields-user-message-agent-message-still-ignored-in-windows-v2-0-77/142589));
-extensions cannot inject chat UI ([#115748](https://forum.cursor.com/t/webview-panel-keeps-being-automatically-closed-when-using-an-extension-that-uses-webviewpanel-api/115748),
-[#121400](https://forum.cursor.com/t/request-for-dedicated-ai-features-extension-api/121400)).
-Users infer state from the agent's natural tool-call chrome.
+[^cursor-chrome]: On `permission: "deny"` (hard-block), Cursor renders
+`user_message` chrome inline in chat — the user sees `aide-memory · …`
+status lines just like Claude Code. On `permission: "allow"` (soft fire),
+Cursor 3.2.11 logs `user_message` to the Hooks Output panel but does NOT
+render it inline in chat — users have to open the panel to see soft
+chrome. The agent still receives the soft context via `agent_message` on
+every fire, so the safety net works; only the user-facing visibility for
+soft fires is missing. Filed as a feature request candidate for an
+inline `system_message` channel on `allow`. Extensions cannot inject
+chat UI ([#115748](https://forum.cursor.com/t/webview-panel-keeps-being-automatically-closed-when-using-an-extension-that-uses-webviewpanel-api/115748),
+[#121400](https://forum.cursor.com/t/request-for-dedicated-ai-features-extension-api/121400))
+which is why we don't fall back to a webview surface.
+
+[^cursor-read-editor-open]: Cursor 3.2.11's `preToolUse:Read` hook does
+NOT fire when the target file is already open in the editor pane —
+verified empirically 2026-04-27. The cause is unverified (could be
+editor-cached content serving, design intent, or bug). Files that are
+NOT open trigger the hook reliably. `preToolUse:Write` (Edit) fires
+regardless of editor-open state. Mitigation: per-Edit safety net stays
+reliable, and the rules-file `body.md` injection includes "Even when a
+file is visible to you (open in your editor, attached, in a prior
+message), call aide_recall for that path" guidance so agents pick up
+memories on editor-cached reads. **The mitigation is empirically
+verified** — in the 4-cell file-open validation matrix
+(`docs/validation/E2E_VALIDATION.md` Scenario F-fileopen, 2026-04-27),
+the agent followed the rules-file bullet and called `aide_recall`
+proactively in 100% of file-open reads under typical (non-adversarial)
+prompts. The only failure case is when the user explicitly suppresses
+aide-memory tools AND the file is open — a deliberate adversarial
+scenario, documented as the floor of coverage. Filed as a feature
+request candidate for upstream Cursor.
 
 [^cursor-session]: `sessionStart.additional_context` is broken on Cursor
 ([#158452](https://forum.cursor.com/t/sessionstart-hook-additional-context-is-never-injected-into-agents-initial-system-context/158452)
@@ -94,13 +123,19 @@ is a static template.
 works as designed. aide-memory's development cadence validates against
 Claude Code first; other adapters catch up.
 
-**Cursor** ships with aide-memory 0.5.0 at ~80% parity with Claude Code.
+**Cursor** ships with aide-memory 0.5.0 at strong parity with Claude Code.
 `aide-memory init` writes `.cursor/hooks.json`, `.cursor/mcp.json`, and
 `.cursor/rules/aide-memory.mdc` (the last one auto-regenerates on memory
-and config changes). Five gaps are documented above; each maps to an
-upstream Cursor bug we are tracking in
-[editors/cursor.md](./editors/cursor.md) — when Cursor fixes a thread, we
-upgrade the adapter and remove the workaround.
+and config changes). Soft nudges reach the agent via `agent_message`,
+hard blocks render branded chrome inline. The two remaining gaps are:
+(a) inline visible chrome on **soft** fires (chrome lives in the Hooks
+Output panel — agent context still reaches the agent), and (b) the
+per-Read hook does not fire when the file is already open in the editor
+pane (mitigated via per-Edit safety net + rules-file guidance). Plus
+session-start delivery via rules file rather than native hook (staff-
+endorsed workaround). Each gap maps to an upstream Cursor bug or feature
+request tracked in [editors/cursor.md](./editors/cursor.md) — when Cursor
+fixes a thread, we upgrade the adapter and remove the workaround.
 
 **Codex, Copilot, Windsurf** ship a curated rule template (same canonical
 body as Claude Code and Cursor, plus editor-specific frontmatter) but
@@ -115,8 +150,9 @@ as a post-0.5.0 task.
 
 - [editors/claude-code.md](./editors/claude-code.md) — reference UX, branded
   chrome, in-turn correction detection, full hook parity
-- [editors/cursor.md](./editors/cursor.md) — hard-block then silent,
-  rules-file session context, one-turn-delay corrections, 7 bug threads
+- [editors/cursor.md](./editors/cursor.md) — hard-block + soft-via-`agent_message`,
+  rules-file session context, one-turn-delay corrections, per-Read editor-open
+  coverage gap, 7 bug threads
 - [editors/windsurf.md](./editors/windsurf.md) — rule template only
 - [editors/codex.md](./editors/codex.md) — rule template only
 - [editors/copilot.md](./editors/copilot.md) — rule template only

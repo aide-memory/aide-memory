@@ -39,6 +39,267 @@ Extra quirks (not bugs, but design-around behavior):
 
 ---
 
+## 0.5.0 Cursor validation — fast-follow tracker
+
+Items discovered during the 2026-04-26 manual Cursor validation walk
+(`/tmp/aide-cursor-val` fixture). Each entry has a triage call:
+**BLOCK 0.5.0** = must fix before publishing; **0.5.1 fast-follow** =
+ship in patch within days; **defer** = file but not urgent. NPM
+patch-version delivery: users on `^0.5.0` get 0.5.x updates on next
+`npm install`; for global installs (most aide-memory users today),
+they need `npm update -g aide-memory` so 0.5.1 reach is friction-y —
+prefer landing real BLOCKERS in 0.5.0.
+
+### Cursor MCP first-run UX gate (Scenario N validation, 2026-04-26)
+
+**Discovery:** After `aide-memory init` + Cursor restart, the
+`aide-memory` MCP server appears in Cursor's MCP settings list but is
+**toggled OFF by default**. User must manually flip it ON before any
+of the 7 MCP tools (`aide_recall`, `aide_remember`, etc.) are
+callable. Hooks still fire from `.cursor/hooks.json`, but they
+prompt the agent to call `aide_recall` — which fails until MCP is
+enabled.
+
+**Triage: 0.5.1 fast-follow (or defer).** This is Cursor's
+security/UX choice — every newly-discovered MCP server stays opt-in
+until explicit user consent. We can't pre-enable from
+`.cursor/mcp.json`; there's no documented field, and even if there
+were, it would be a security gap (users would lose the consent gate).
+
+**Mitigations attempted in 0.5.0:**
+- Init output prints a "restart Cursor" warning (active).
+- `docs/user/editors/cursor.md` now has a prominent "First-time MCP
+  enablement" section calling out BOTH gates (restart + toggle).
+
+**Mitigations to investigate post-validation:**
+1. **Test if any undocumented Cursor field auto-enables an MCP server**
+   on first registration (e.g. `enabled: true`, `autoEnable: true`,
+   `requiresApproval: false`). Spike: ~15 min to scan Cursor's MCP
+   settings schema + try fields. If ONE works → patch in 0.5.1.
+2. **File a Cursor feature request** for an opt-in field that
+   pre-authorizes specific MCP servers (would be useful for
+   aide-memory-like tools where user consents at install time, not
+   per-Cursor-launch).
+3. **Add to init output** a more specific instruction: "After Cursor
+   restarts, open Settings → MCP and toggle 'aide-memory' ON." (Today
+   the warning just says "restart" which is the FIRST gate; the
+   toggle is the SECOND gate not mentioned.)
+
+### `aide_import` — clarify intent + relationship to memories-vs-docs principle (Cursor validation, 2026-04-26)
+
+**Discovery + correction:** Initial framing of `aide_import` as a
+"hard anti-pattern that violates memory #335" was too strong (user
+pushback 2026-04-26). Looking at the actual implementation
+(`src/memory/server.ts:315-351`):
+
+- Takes a raw markdown CONTENT string (not a file path)
+- Parses into bullet/paragraph items via `parseMarkdownItems`
+- Creates one memory per item, all with `source: 'import'`, shared
+  layer + scope + context_label
+
+**Legitimate use cases that are NOT anti-patterns:**
+1. **One-time seed from a legacy doc you're DELETING.** The doc
+   goes away, the memory becomes the new home. Not a duplicate.
+2. **External material that doesn't live in repo docs.** E.g. paste
+   a Notion page section, an ADR template, a snippet of ChatGPT
+   output. The memory is the FIRST class storage, no original doc
+   to drift from.
+3. **Import → curate workflow.** Bring in raw bullets, then prune
+   the import-source memories down to the cross-cutting essentials,
+   `aide_forget`-ing the rest. Faster than typing each via
+   `aide_remember`.
+
+**Where it COULD become an anti-pattern:**
+- Repeated re-import of a maintained doc that still lives in repo →
+  every re-import creates duplicate memories with new IDs
+  (`source: 'import'` doesn't dedupe). This IS the "doc-content
+  duplicated into memories" problem #335 warns about.
+
+**Triage: defer / 0.5.1+ doc clarification.** Not a 0.5.0 BLOCKER.
+Tool works correctly; mental model just needs sharpening.
+
+**Options:**
+1. **Keep behavior, sharpen the docstring + per-editor docs.** Spell
+   out "appropriate uses" + "watch out for repeated imports of
+   live docs." Lowest effort.
+2. **Add idempotency to import** — dedupe on (what, layer, scope)
+   so repeated imports of the same doc don't create duplicates.
+   Mid effort.
+3. **Rework as "pointer-style import"** — create short pointer
+   memories (`"see docs/api-conventions.md §Auth"`) instead of
+   copying content. Most aligned with #335 + zero-drift, but
+   biggest work + might miss the "delete the source doc"
+   workflow.
+
+**Recommendation:** option 1 for 0.5.1 (10-line docstring change +
+per-editor doc update). Reconsider option 2/3 if real-world usage
+shows repeated re-import as the dominant pattern.
+
+### "Rules-file alone" vs "MCP tool retrieval" — Scenario N test ambiguity
+
+**Discovery:** Scenario N ("what do you know about this project?") in
+the Cursor validation walk passed, but the agent reached for
+`aide_memories` (the LIST tool) BEFORE relying on the
+`alwaysApply: true` rules file's baked-in content. Result: we proved
+MCP works AND memories are accessible AND rules file regenerates
+correctly — but we couldn't isolate "agent answers from rules-file
+injection alone, no tool calls."
+
+**Triage: 0.5.0 doc-only update; 0.5.1 add tighter test.**
+
+**Mitigation:** add a TIGHTER variant of Scenario N to
+`docs/validation/E2E_VALIDATION.md`:
+
+> **Scenario N-tight:** Type `write a getUser function in src/api/`.
+> Agent should APPLY the project guidelines (camelCase, async/await,
+> < 30 lines, no TODOs) WITHOUT calling any aide-memory tool — purely
+> from the rules-file content injected via `alwaysApply: true`.
+> Failing this test means the rules-file regen workaround for
+> sessionStart.additional_context is leaking — the agent has the
+> content but isn't using it as session-start context.
+
+This is the test that actually validates the C4 rules-file
+regeneration workaround end-to-end.
+
+### npm update enforcement — can it be retroactive? (validation Q, 2026-04-26)
+
+**Question:** Can we force users currently on 0.4.x to update to 0.5.0
+before they hit issues?
+
+**Answer:** No, not retroactively. npm has no mechanism to push
+updates to installed copies. What we have today + can add later:
+
+**Already wired (existing behavior):**
+- `updater.ts` — CLI/MCP startup checks the registry, prints
+  "aide-memory v0.X.Y available (current: v0.A.B). Run
+  `npm update -g aide-memory` to update." Soft nag every run.
+- Confirmed working — visible in scratch fixture init output today.
+
+**`npm deprecate aide-memory@0.4.X` — retroactive nag.** One-shot
+command we run from our publishing account. Adds a deprecation
+message to the registry; shown by `npm install` of that version +
+`npm outdated`. Doesn't break existing installs. Safe push.
+
+**Options for FUTURE-cohort enforcement (future-version users only —
+nothing helps users currently on 0.4.x except the soft nag above):**
+1. **Hard floor** — refuse to run if version is older than X
+   (e.g. 30 days). Aggressive; can break workflows. Add via flag,
+   not default.
+2. **Auto-update offer** — detect new version, prompt user to
+   `npm install -g aide-memory@latest`. Risky around perms/sudo.
+3. **Required-version registry** — package.json carries a
+   `_aideMemoryMinVersion` field; new releases bump it; old releases
+   refuse to run when peer-version is below the floor.
+
+**Triage: nothing for 0.5.0; consider option 3 for 0.6+.** Adding
+update-enforcement code in 0.5.0 only helps cohort 0.5.0+. The
+0.4.x users we want to push forward will only see the existing
+updater nag + (optionally) the new `npm deprecate` message.
+
+**Recommended action for 0.5.0 release:**
+- Run `npm deprecate aide-memory@"<0.5.0" 'urgent: upgrade to 0.5.x for Cursor support + bug fixes'` after publish.
+- Defer hard-floor / auto-update mechanism to 0.6+.
+
+### `aide_import` parsing detail in mcp-tools.md (doc clarity, 2026-04-26)
+
+**Discovery:** User asked "how is each item parsed, do we talk about it
+in external docs at all?" `docs/user/mcp-tools.md:242` covers the
+headline ("each bullet point, numbered item, or paragraph >20 chars
+becomes a separate memory") but doesn't mention the SKIP list:
+headings (lines starting `#`), code fences (` ``` `), tables (lines
+starting `|`), and minimum thresholds (>5 chars after bullet marker,
+>20 chars for non-bullet paragraphs).
+
+**Triage: 0.5.1 doc-only.** Easy 5-line addition to mcp-tools.md.
+Useful to set expectations — users importing a doc with mixed content
+(headings + code + bullets) need to know structural markdown gets
+dropped + only "content lines" become memories.
+
+### Dev manifest version drift — updater always nags during dev (Cursor validation, 2026-04-26)
+
+**Discovery:** Running `aide-memory init` (or any CLI command) from the
+dev tree always prints:
+```
+aide-memory v0.4.3 available (current: v0.2.0).
+Run `npm update -g aide-memory` to update.
+```
+
+Root cause: TWO package.json files in the repo:
+- `package.json` (dev) → version `0.2.0` (frozen placeholder)
+- `package.aide-memory.json` (publish) → version `0.4.3` (real shipped)
+
+Runtime reads `package.json` (dev) for the "current" version. Updater
+fetches npm registry's latest (0.4.3) and compares 0.2.0 < 0.4.3 → nag.
+
+**This isn't going away when we publish 0.5.0** — the dev manifest will
+still say 0.2.0. Persistent nag until fixed.
+
+**Triage: 0.5.1 fast-follow.** Two fix options:
+
+1. **Bump dev `package.json` to a pre-release suffix** like `0.5.0-dev`.
+   Updater's semver comparison treats pre-release as newer than base,
+   so 0.5.0-dev > 0.4.3 → no nag. Manual maintenance: bump the suffix
+   on each minor cut (`0.5.0-dev` → `0.6.0-dev` after 0.5.x ships).
+2. **Detect dev mode** in `updater.ts` — skip the registry check when
+   running from a path containing `dist/cli/` AND a sibling `src/cli/`
+   (clear dev-tree signal). End users install from npm, get the
+   compiled-only bundle without `src/`. Single-line check.
+
+**Recommendation: option 2** (dev-mode detection). Zero maintenance
+overhead per release. ~5 lines in `updater.ts`. Ship in 0.5.1.
+
+Side effect: stops the version nag from showing up in scratch fixtures
+that init from the dev binary (cleaner validation logs).
+
+### Cursor file auto-attach bypasses preToolUse:Read for user-mentioned paths (Cursor validation, 2026-04-26)
+
+**Discovery:** When a Cursor user types a prompt containing a file path
+(e.g. *"read src/api/routes.ts"* or *"the auth middleware file"*),
+Cursor auto-attaches the file content to the agent's context. The
+agent does NOT call the `Read` tool — it just references the
+auto-attached content. **Our `preToolUse:Read` hook never fires for
+these cases.**
+
+Confirmed via two attempts (2026-04-26):
+1. Plain prompt *"read src/api/routes.ts"* → no preToolUse:Read fired,
+   agent saw content via auto-attach.
+2. Explicit override *"use the Read tool directly on src/api/routes.ts"*
+   → still no preToolUse:Read fired. Agent acknowledged the override
+   but answered from auto-attached content anyway.
+
+**Triage: not a bug, document as Cursor design.** This is platform
+behavior — when user names a file, they've consented to the read; the
+hard-block exists for unintended/discovery-based reads. The hard-block
+DOES fire for autonomous Read calls (agent discovering files itself
+without user mention).
+
+**Documentation actions:**
+- Update `docs/user/editors/cursor.md` to make this explicit:
+  *"aide-memory's hard-block protection on file reads only applies to
+  AUTONOMOUS agent reads (when the agent discovers + reads a file the
+  user didn't mention). When you mention a file path in your prompt,
+  Cursor auto-attaches the content — agent gets it without calling the
+  Read tool, so no hard-block fires. The recall-via-rules-file
+  guidance still nudges the agent to call aide_recall before
+  responding, so memories still surface."*
+- Possibly add a "What you'll see" subsection to clarify the two
+  flows: user-mentioned-path (auto-attach + rules-guided recall) vs
+  autonomous-discovery (preToolUse:Read hard-block).
+
+**No code change needed.** This is Cursor UX; aide-memory's behavior
+is correct for what it can see.
+
+### Token-cost recording for validation runs (recordkeeping)
+
+For future cost-calibration / pricing work, record token counts in
+the E2E_VALIDATION runs table when feasible. **Scenario N first run
+(2026-04-26): 132,653 tokens** (Cursor agent, including MCP
+overhead, file reads, and rules-file injection on every turn). Can
+help us understand aide-memory's per-turn token cost vs
+non-aide-memory baseline at marketing/pricing decision time.
+
+---
+
 ## Open, non-validation follow-ups
 
 ### Bash-grep fallback coverage for pre-search-nudge (ELEVATED priority)
