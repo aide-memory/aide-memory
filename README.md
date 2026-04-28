@@ -222,19 +222,19 @@ export AIDE_TELEMETRY=off
 
 ### vs. claude-mem
 
-[claude-mem](https://github.com/nicobailon/claude-mem) dumps all memories into the system prompt on every interaction (~2,000 tokens of overhead regardless of relevance). No path scoping -- every memory surfaces everywhere. No hooks -- relies on the agent voluntarily saving context, which in testing has a 0% adoption rate without explicit prompting.
+[claude-mem](https://github.com/thedotmack/claude-mem) injects context from recent sessions at session start and exposes a 3-layer MCP search workflow (search → timeline → get_observations) so the agent fetches detail on demand. It scopes context at folder granularity via auto-generated Folder Context Files (per-project-folder/worktree CLAUDE.md activity timelines). Install is `npx claude-mem install`; the runtime uses Chroma (vector DB) plus a Bun-managed worker service. License: AGPL-3.0.
 
-aide-memory uses a ~20 token nudge per file read, path-scoped recall so only relevant memories surface, and hook-driven capture that works without agent cooperation.
+aide-memory takes a different approach: a ~20-token nudge per file read so the agent decides which memories to recall, glob-pattern scoping with inheritance (e.g. `src/auth/**` only surfaces in auth code), and hooks pre-wired across six lifecycle events at `aide-memory init`. Install is `npx aide-memory@latest init`; storage is local JSON files plus a SQLite cache, no extra runtime.
 
 ### vs. engram
 
-[engram](https://github.com/cline/engram) stores memories as flat key-value pairs with no structural awareness of your codebase. No glob-based path scoping, no layered priority (preferences vs. technical vs. guidelines), no hook integration for automatic capture. Memories are workspace-global -- you cannot scope a memory to `src/auth/**` and have it surface only when working in auth code.
+[engram](https://github.com/ayvazyan10/engram) models three memory types (Episodic, Semantic, Procedural) with a knowledge graph for the semantic layer and namespace isolation per project or agent (with opt-in cross-namespace recall). It offers an opt-in session-end hook script you copy in and configure. License: MIT.
 
-aide-memory provides four structured layers, path-scoped recall with glob inheritance, and automatic capture via editor hooks.
+aide-memory takes a different approach: four layers (preferences, technical, area_context, guidelines) with glob-based path scoping inside a single project, and hooks pre-wired across six lifecycle events at init. Engram scopes by namespace; aide-memory scopes by glob pattern within a project. The two tools use different mental models — pick the one that matches your workflow.
 
 ### What we share
 
-All three tools solve the same core problem: AI agents forget between sessions. The key architectural difference is **how memories are selected for recall**. Flat stores surface everything or nothing. Path-scoped stores surface what is relevant to the code you are working in right now.
+All three tools solve the same core problem: AI agents forget between sessions. The architectural differences are in **how context is selected for recall** (full-session injection vs. per-file nudge vs. namespace lookup) and **how memory is structured** (folder timelines vs. typed knowledge graph vs. layered glob scopes).
 
 ---
 
