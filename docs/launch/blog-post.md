@@ -112,7 +112,7 @@ A few coverage caveats worth flagging up front:
 
 - aide-memory's pre-search hook fires on the editor's `Grep` matcher. `Bash+grep` (shell-routed) and Cursor's built-in `codebase_search` are not hook-covered today. The agent should still call `aide_search` first on concept queries; the rules file reminds it to.
 - Cursor `@-file` attachments and Tab context bypass `preToolUse` hooks entirely. aide-memory's nudge is about agent-planned reads, not user-provided context.
-- Most of the manual end-to-end testing on this release exercised the FTS5 keyword path. The semantic-search path is contract-tested at unit level, has a smoke test against a real backend (Ollama) wired into `npm run test:smoke`, and works empirically; we are still doing more verification across embedding models, larger memory tables, and combined keyword + semantic queries. If you hit a semantic-search edge case, please file an issue.
+- Most of the manual end-to-end testing on this release exercised the FTS5 keyword path. The semantic-search path is contract-tested at unit level, has a smoke test against a real Ollama backend wired into `npm run test:smoke`, and works empirically against simple queries. Deeper coverage across embedding models, larger memory tables, and combined keyword + semantic queries is open work, not in flight. If you hit a semantic-search edge case, please file an issue.
 
 aide-memory is proprietary freeware. Free for everyone today, with some future enhancements expected to remain free and some that may ship as paid team or pro features.
 
