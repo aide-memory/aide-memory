@@ -536,7 +536,43 @@ test_memories_softening_threshold() {
   fi
 }
 
-# ---- 12-29. Roundtrip-only or SKIP-with-reason ----------------------------
+# ---- 12. memories.defaultShared --------------------------------------------
+# Verifies the 0.5.0 config-driven default for the `shared` flag on new
+# memories (memory #373). Per-call shared override is MCP-only and is
+# unit-tested in store.test.ts; this sweep exercises the CLI roundtrip
+# end-to-end (init → config → remember → file location).
+test_memories_default_shared() {
+  local key=memories.defaultShared
+
+  # Case A: defaultShared=true (default). New preference → preferences/shared/.
+  local dir_a
+  dir_a=$(mktemp -d)
+  init_project "$dir_a"
+  (cd "$dir_a" && node "$CLI" remember --layer preferences "ds-true sweep test") >/dev/null 2>&1
+  local shared_a personal_a
+  shared_a=$(find "$dir_a/.aide/memories/preferences/shared" -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+  personal_a=$(find "$dir_a/.aide/memories/preferences/personal" -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+  rm -rf "$dir_a"
+
+  # Case B: defaultShared=false. New preference → preferences/personal/.
+  local dir_b
+  dir_b=$(mktemp -d)
+  init_project "$dir_b"
+  set_cfg "$dir_b" $key false
+  (cd "$dir_b" && node "$CLI" remember --layer preferences "ds-false sweep test") >/dev/null 2>&1
+  local shared_b personal_b
+  shared_b=$(find "$dir_b/.aide/memories/preferences/shared" -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+  personal_b=$(find "$dir_b/.aide/memories/preferences/personal" -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+  rm -rf "$dir_b"
+
+  if [ "$shared_a" -ge 1 ] && [ "$personal_a" -eq 0 ] && [ "$personal_b" -ge 1 ] && [ "$shared_b" -eq 0 ]; then
+    record_pass "$key" "default-true → shared/, false → personal/ (CLI roundtrip)"
+  else
+    record_fail "$key" "case A: shared=$shared_a personal=$personal_a; case B: shared=$shared_b personal=$personal_b"
+  fi
+}
+
+# ---- 13-30. Roundtrip-only or SKIP-with-reason ----------------------------
 
 # These settings exist in the public config surface (exposed via
 # `aide-memory config KEY VALUE`) but aren't read by any hook or runtime
@@ -746,6 +782,7 @@ test_injection_priorityAlwaysOverride
 test_injection_maxChars
 test_memories_hideFromGrep
 test_memories_softening_threshold
+test_memories_default_shared
 
 test_contributor
 test_embeddings_backend
