@@ -556,7 +556,11 @@ export class MemoryStore {
         .generateEmbedding(embeddingText)
         .then((vec) => {
           if (vec && this.embeddingService) {
-            this.embeddingService.storeEmbedding(this.db, String(memory.id), vec);
+            // Store under memory.uuid (not memory.id). The embeddings table's
+            // key column is named `uuid` and searchWithEmbeddings later calls
+            // getByUuid(hit.uuid) — passing integer-as-string would never
+            // resolve through getByUuid. Bug found 2026-04-28 verification.
+            this.embeddingService.storeEmbedding(this.db, memory.uuid, vec);
           }
         })
         .catch(() => {
@@ -679,7 +683,7 @@ export class MemoryStore {
         .generateEmbedding(embeddingText)
         .then((vec) => {
           if (vec && this.embeddingService) {
-            this.embeddingService.storeEmbedding(this.db, String(updated.id), vec);
+            this.embeddingService.storeEmbedding(this.db, updated.uuid, vec);
           }
         })
         .catch(() => {
@@ -706,7 +710,7 @@ export class MemoryStore {
     // Clean up embedding if present
     if (result.changes > 0 && this.embeddingService) {
       try {
-        this.embeddingService.removeEmbedding(this.db, String(id));
+        this.embeddingService.removeEmbedding(this.db, existing.uuid);
       } catch {
         // Embedding cleanup failure is non-fatal
       }

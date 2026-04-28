@@ -230,7 +230,7 @@ aide-memory takes a different approach: a ~20-token nudge per file read so the a
 
 [engram](https://github.com/ayvazyan10/engram) models three memory types (Episodic, Semantic, Procedural) with a knowledge graph for the semantic layer and namespace isolation per project or agent (with opt-in cross-namespace recall). It offers an opt-in session-end hook script you copy in and configure. License: MIT.
 
-aide-memory takes a different approach: four layers (preferences, technical, area_context, guidelines) with glob-based path scoping inside a single project, and hooks pre-wired across six lifecycle events at init. Engram scopes by namespace; aide-memory scopes by glob pattern within a project. The two tools use different mental models — pick the one that matches your workflow.
+aide-memory takes a different approach: four layers (preferences, technical, area_context, guidelines) with glob-based path scoping inside a single project, and hooks pre-wired across six lifecycle events at init. Engram scopes by namespace; aide-memory scopes by glob pattern within a project. The two tools use different mental models, pick the one that matches your workflow.
 
 ### What we share
 
@@ -278,7 +278,7 @@ Restart Cursor after init for MCP to load. Full walkthrough:
 ### Codex, Copilot, Windsurf
 
 Rule template ships in 0.5.0. Hook + MCP config generation at init is
-tracked as a post-0.5.0 task — see
+tracked as a post-0.5.0 task, see
 [docs/user/supported-editors.md](docs/user/supported-editors.md) for the
 matrix and [docs/specs/EDITOR_ONBOARDING_GUIDE.md](docs/specs/EDITOR_ONBOARDING_GUIDE.md)
 for the onboarding playbook.

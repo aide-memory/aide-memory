@@ -671,3 +671,149 @@ describe('MemoryStore — embeddings backend selection via config', () => {
     }
   });
 });
+
+describe('MemoryStore — embedding key (regression: must be uuid, not String(id))', () => {
+  // Bug found 2026-04-28: store.add was calling
+  //   embeddingService.storeEmbedding(this.db, String(memory.id), vec)
+  // but searchWithEmbeddings later does
+  //   getByUuid(hit.uuid)
+  // which queries the memories table by the actual UUID hash. Storing
+  // under integer-as-string meant the lookup never resolved and semantic
+  // search returned empty. Fixed by passing memory.uuid as the key.
+  // This regression test pins the contract.
+
+  function tmpRoot(): string {
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'aide-embed-key-'));
+  }
+  function rm(p: string): void {
+    if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
+  }
+
+  it('store.add → storeEmbedding key is memory.uuid (not String(memory.id))', async () => {
+    const { MemoryStore } = await import('../store');
+
+    const root = tmpRoot();
+    fs.mkdirSync(path.join(root, '.aide'), { recursive: true });
+    const store = new MemoryStore({ projectRoot: root });
+
+    // Use a deterministic mock backend that stores per-text vectors so we
+    // can verify the storeEmbedding call ran AND used the right key.
+    const backend = new MockBackend(true);
+    backend.setVector('Test memory text', new Float32Array([1, 0, 0]));
+    const svc = new EmbeddingService(backend);
+    await svc.initialize();
+    store.setEmbeddingService(svc);
+
+    const memory = store.add({
+      layer: 'technical',
+      what: 'Test memory text',
+      scope: 'src/**',
+    });
+
+    // Wait for fire-and-forget embedding generation + storage.
+    await new Promise((r) => setTimeout(r, 50));
+
+    const db = (store as any).db;
+    const rows = db.prepare('SELECT uuid FROM embeddings').all() as { uuid: string }[];
+
+    // Key must be the actual UUID, not the integer id stringified.
+    expect(rows).toHaveLength(1);
+    expect(rows[0].uuid).toBe(memory.uuid);
+    expect(rows[0].uuid).not.toBe(String(memory.id));
+    expect(rows[0].uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
+    store.close();
+    rm(root);
+  });
+
+  it('store.update → storeEmbedding regenerates under memory.uuid', async () => {
+    const { MemoryStore } = await import('../store');
+
+    const root = tmpRoot();
+    fs.mkdirSync(path.join(root, '.aide'), { recursive: true });
+    const store = new MemoryStore({ projectRoot: root });
+
+    const backend = new MockBackend(true);
+    backend.setVector('Original text', new Float32Array([1, 0, 0]));
+    backend.setVector('Updated text', new Float32Array([0, 1, 0]));
+    const svc = new EmbeddingService(backend);
+    await svc.initialize();
+    store.setEmbeddingService(svc);
+
+    const memory = store.add({ layer: 'technical', what: 'Original text', scope: 'src/**' });
+    await new Promise((r) => setTimeout(r, 50));
+
+    store.update(memory.id, { what: 'Updated text' });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const db = (store as any).db;
+    const rows = db.prepare('SELECT uuid FROM embeddings').all() as { uuid: string }[];
+    expect(rows.find((r) => r.uuid === memory.uuid)).toBeDefined();
+    expect(rows.find((r) => r.uuid === String(memory.id))).toBeUndefined();
+
+    store.close();
+    rm(root);
+  });
+
+  it('store.remove → removeEmbedding deletes under memory.uuid', async () => {
+    const { MemoryStore } = await import('../store');
+
+    const root = tmpRoot();
+    fs.mkdirSync(path.join(root, '.aide'), { recursive: true });
+    const store = new MemoryStore({ projectRoot: root });
+
+    const backend = new MockBackend(true);
+    backend.setVector('Doomed memory', new Float32Array([1, 0, 0]));
+    const svc = new EmbeddingService(backend);
+    await svc.initialize();
+    store.setEmbeddingService(svc);
+
+    const memory = store.add({ layer: 'technical', what: 'Doomed memory', scope: 'src/**' });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const db = (store as any).db;
+    const before = db.prepare('SELECT COUNT(*) as n FROM embeddings WHERE uuid = ?').get(memory.uuid) as { n: number };
+    expect(before.n).toBe(1);
+
+    store.remove(memory.id);
+
+    const after = db.prepare('SELECT COUNT(*) as n FROM embeddings WHERE uuid = ?').get(memory.uuid) as { n: number };
+    expect(after.n).toBe(0);
+
+    store.close();
+    rm(root);
+  });
+
+  it('semantic search via searchWithEmbeddings actually returns the matching memory (end-to-end)', async () => {
+    // Pins the full lookup chain: store.add → embedding stored under uuid →
+    // searchWithEmbeddings → semanticSearch returns hit.uuid → getByUuid
+    // resolves to the memory. Pre-fix, this returned [].
+    const { MemoryStore } = await import('../store');
+
+    const root = tmpRoot();
+    fs.mkdirSync(path.join(root, '.aide'), { recursive: true });
+    const store = new MemoryStore({ projectRoot: root });
+
+    const backend = new MockBackend(true);
+    // Register identical vectors for both the store-time embedding text
+    // (memory.what with no why → just 'Rate limit middleware') and the
+    // query-time text. Cosine of identical vectors = 1.0, well over the
+    // 0.3 threshold in searchWithEmbeddings.
+    backend.setVector('Rate limit middleware', new Float32Array([1, 0, 0]));
+    backend.setVector('throttle policy', new Float32Array([1, 0, 0]));
+    const svc = new EmbeddingService(backend);
+    await svc.initialize();
+    store.setEmbeddingService(svc);
+
+    const memory = store.add({ layer: 'technical', what: 'Rate limit middleware', scope: 'src/api/**' });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const results = await store.searchWithEmbeddings('throttle policy', { mode: 'semantic', limit: 5 });
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe(memory.id);
+    expect(results[0].what).toBe('Rate limit middleware');
+
+    store.close();
+    rm(root);
+  });
+});
