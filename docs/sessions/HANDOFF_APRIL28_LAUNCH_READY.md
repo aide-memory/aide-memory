@@ -25,6 +25,7 @@ Submodule: `aide-memory-web` at `03bbbb1` on its own `main` branch.
 - install-from-tarball smoke: 11/11
 - debug-output smoke: 15/15
 - memories-default-shared smoke: 3/3
+- **semantic-search smoke**: PASS against real backend (Ollama or Transformers); SKIPs cleanly when neither is available so a CI runner without the embedding infra doesn't false-fail. Source: `scripts/hooks/__tests__/semantic-search.smoke.test.sh` wrapping `scripts/dev/verify-semantic-search.ts`. Wired into `npm run test:smoke`.
 - all-configs-behavior sweep: every public key, including `memories.defaultShared`, PASS
 
 `cd aide-memory-web && npm run build` at HEAD: passes. Vercel deploy should succeed on next push (the faq.mdx compile error that was breaking the deploy is fixed).
@@ -142,7 +143,25 @@ If you want me to iterate on any of them, point at the section. Per memory #378,
 
 These are queued; none are blocking until you approve.
 
-### Phase C9 publish (post-approval)
+### Merge sequence (per user direction 2026-04-27)
+
+Branch graph today:
+```
+main (lags) ─── workflows live here (claude-code-review.yml, claude.yml)
+  │
+  └─ feature/phase-1 ─── phase 0+1 spec + validation
+       │
+       └─ feature/phase-1-cursor-support  ← we are here, 16 commits ahead
+```
+
+Sequence:
+1. Merge `feature/phase-1-cursor-support` into `feature/phase-1` (NOT main; per user direction).
+2. From `feature/phase-1`: run Phase C9 publish flow below.
+3. Eventually `feature/phase-1` → `main` (whenever you're ready; not part of this launch).
+
+The PR check on `feature/phase-1-cursor-support` should now pass since commit `540b637` cherry-picked the workflow files from main onto the cursor branch.
+
+### Phase C9 publish (post-approval, post-merge)
 
 1. Update test counts in launch content from 778 to 782 (or whatever `npm test 2>&1 | tail -5` reports at publish time).
 2. `npm pack` against `package.aide-memory.json`. Inspect tarball.
@@ -214,6 +233,6 @@ These are stored as a priority:always memory and will auto-inject in future sess
 
 ## Honest things still untested
 
-- aide_search `mode: 'auto'` (the keyword-first, semantic-fallback path) is now plumbed correctly but I only verified `mode: 'semantic'` end-to-end. The auto path takes the same code branches and relies on the same key fix, so it should work, but I haven't run it against real keywords + real semantic supplementation in one query. Add to fast-follow.
-- Vercel deploy: I verified `npm run build` locally; Vercel itself runs in a slightly different environment (shallow clone, different Node version). The compile error itself was the load-bearing issue, so it should now ship, but if Vercel reports a fresh failure, the diagnostic path is the build log + searching for `Error compiling` lines.
-- Semantic search latency: not measured under load. Probably fine for 0.5.0 given the small embedding tables; revisit if anyone reports slow `aide_search` calls.
+- aide_search `mode: 'auto'` (keyword-first, semantic-fallback within one call) is plumbed correctly and depends on the same key fix that the semantic-only smoke now covers, so it should work; not exercised in a single combined-modes query. Add to fast-follow if observed flaky.
+- Vercel deploy: I verified `npm run build` locally; Vercel runs in a slightly different environment (shallow clone, possibly different Node version). The compile error that was breaking the deploy is fixed and the smoke build passes. If Vercel still fails on next push, the diagnostic path is the build log searching for "Error compiling" lines.
+- Semantic search latency under load: not measured. Probably fine for 0.5.0 given small embedding tables; revisit if anyone reports slow `aide_search` calls.
