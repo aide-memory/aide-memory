@@ -1,10 +1,10 @@
 # aide-memory in Cursor
 
-Cursor ships with aide-memory 0.5.0 at ~80% parity with Claude Code. The
-remaining 20% is not us being lazy. It is a set of five concrete gaps
-caused by missing platform channels, each tracked against an upstream
-Cursor bug or feature request. When Cursor fixes a thread, the aide-memory
-adapter upgrades and the workaround goes away.
+Cursor ships with aide-memory's full hook + MCP wiring. A handful of
+capabilities are tracked against upstream Cursor platform work — each
+maps to an open Cursor bug or feature request thread. When Cursor ships
+the corresponding change, the aide-memory adapter upgrades and the
+workaround goes away.
 
 For the editor-agnostic mental model see [concepts.md](../concepts.md);
 for the capability matrix see [supported-editors.md](../supported-editors.md).

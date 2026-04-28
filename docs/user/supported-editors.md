@@ -8,8 +8,9 @@ I/O contract. This page is the honest accounting of what each adapter
 ships today.
 
 **TL;DR.** Claude Code is the reference implementation: every feature
-below works there. Cursor ships at ~80% parity in 0.5.0 with five
-documented gaps caused by missing platform channels. Codex, Copilot,
+below works there. Cursor ships with full hook + MCP wiring; a handful
+of capabilities are tracked against upstream Cursor platform work and
+will upgrade as Cursor ships the corresponding changes. Codex, Copilot,
 and Windsurf are **rule-template only** today: their adapters write a
 curated rules file but do not yet generate hooks or MCP config at
 `aide-memory init`.
