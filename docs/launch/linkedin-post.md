@@ -16,7 +16,7 @@ aide-memory is an MCP server plus hook layer that gives agents path-scoped memor
 
 Available today for Claude Code and Cursor with full hook + MCP wiring. Codex, Copilot, and Windsurf get a curated rules template; full adapters ship next.
 
-7 MCP tools, 13 CLI commands, 6 hooks, 778 vitest tests.
+7 MCP tools, 13 CLI commands, 6 hooks, 782 vitest tests, plus install-tarball, debug-output, defaultShared, and semantic-search smokes.
 
 License: proprietary freeware. Free for everyone today; some future enhancements are expected to remain free, others may ship as paid team or pro features.
 

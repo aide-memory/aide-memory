@@ -56,6 +56,15 @@ Memories live as JSON files under `.aide/memories/` in your repo, organized by l
 
 Telemetry is **off by default and opt-in via `AIDE_TELEMETRY=on`**. When opted in, only anonymized event tallies (counts of recalls, remembers, hook fires) are sent. Memory content, file paths, code, and query strings never leave your machine, opted in or not.
 
+### Search backends
+
+`aide_search` runs FTS5 keyword search against the local SQLite cache by default. For semantic-similarity search, aide-memory ships with two optional backends:
+
+- `@huggingface/transformers` is listed under `optionalDependencies`. Default `npm install -g aide-memory` will attempt to install it (npm continues if it fails). When present, semantic search runs locally with no network calls; the model itself downloads from Hugging Face on first use.
+- A local Ollama server (default `http://localhost:11434`) with an embedding model loaded. Configure with `aide-memory config embeddings.backend ollama`.
+
+If neither backend is available, semantic search degrades to keyword-only and aide-memory continues to work.
+
 ## Editor support today
 
 aide-memory's core (the MCP server, the seven tools, the hook dispatcher) is editor-agnostic. Each editor integration is an adapter that translates aide-memory's canonical events into that editor's config shape and hook I/O contract.
@@ -99,11 +108,12 @@ Full docs at `/docs/user/`. Per-editor capability matrix at `/docs/user/editors/
 
 `/docs/user/editors/` is the per-editor capability matrix. It documents what each adapter ships today, plus the upstream platform threads tracked for capabilities we'd like to add.
 
-Two coverage caveats worth flagging up front:
+A few coverage caveats worth flagging up front:
 
 - aide-memory's pre-search hook fires on the editor's `Grep` matcher. `Bash+grep` (shell-routed) and Cursor's built-in `codebase_search` are not hook-covered today. The agent should still call `aide_search` first on concept queries; the rules file reminds it to.
 - Cursor `@-file` attachments and Tab context bypass `preToolUse` hooks entirely. aide-memory's nudge is about agent-planned reads, not user-provided context.
+- Most of the manual end-to-end testing on this release exercised the FTS5 keyword path. The semantic-search path is contract-tested at unit level, has a smoke test against a real backend (Ollama) wired into `npm run test:smoke`, and works empirically; we are still doing more verification across embedding models, larger memory tables, and combined keyword + semantic queries. If you hit a semantic-search edge case, please file an issue.
 
 aide-memory is proprietary freeware. Free for everyone today, with some future enhancements expected to remain free and some that may ship as paid team or pro features.
 
-Counts at launch: 7 MCP tools, 13 CLI commands, 6 hooks, 778 vitest tests.
+Counts at launch: 7 MCP tools, 13 CLI commands, 6 hooks, 782 vitest tests, plus install-from-tarball, debug-output, defaultShared, and semantic-search smokes.
