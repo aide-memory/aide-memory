@@ -1,99 +1,86 @@
 # aide-memory
 
-**Your AI coding agent forgets everything between sessions.** You correct it, it adjusts, you close the session, and next time it starts from zero. aide-memory fixes this -- persistent, path-scoped memory that captures context automatically via hooks and recalls it exactly when the agent needs it.
+**Layered, path-scoped, automatically-captured memory for AI coding agents and teams.**
+
+Static rules files (CLAUDE.md, .cursorrules) drift, miss area-specific context, and live as one giant file with no scoping. Every new session, your agent re-learns what you taught yesterday. Your teammates' agents re-learn the things your agent already learned. Switch from Claude Code to Cursor and the lesson is gone.
+
+aide-memory closes those gaps. It's a typed, scoped, auto-captured memory store with file-per-memory storage, six editor hooks, an MCP server, and git as the team-sync layer. Memories your agent stores travel with the repo so your teammates' agents pick them up on the next file read.
 
 ```bash
 npx aide-memory init
 ```
 
-Two minutes. Zero config. No Docker, no cloud, no API keys.
+Free. Local-first. No account required. Full docs at **https://aide-memory.dev**.
 
 ---
 
-## What It Does
+## What aide-memory uniquely combines
 
-- **Hook-driven capture** -- 6 hooks fire automatically (SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop, PreCompact). Your agent stores context without you asking it to. Tested: 0% voluntary adoption vs 100% hook-driven.
-- **Nudge, not dump** -- ~20 token nudge per file read instead of ~2,000 token system prompt injection. The agent decides what is relevant and recalls only that.
-- **Path-scoped recall** -- memories are tied to code paths via glob patterns. A memory about checkout code surfaces in checkout files, not everywhere.
-- **File-per-memory storage** -- each memory is a human-readable JSON file in `.aide/memories/`. Browsable, diffable, version-controlled.
-- **Git is the sync** -- memories are files, files are committed, git syncs them. No separate sync mechanism needed.
-- **Structured layers** -- preferences, technical, area context, guidelines. Recalled in priority order so the agent gets the most important context first.
-- **FTS5 search** -- BM25-ranked full-text search across all memories. Sub-millisecond path lookups.
-- **Cross-editor** -- works with Claude Code and Cursor. Same memories, same hooks, same recall across both. Rule templates also ship for Codex, Copilot, and Windsurf; see [docs/user/supported-editors.md](docs/user/supported-editors.md) for the full capability matrix.
+The differentiator is the combination, not any single piece:
+
+- **Layered + path-scoped recall.** Glob scopes (`src/auth/**`, `packages/api/**`) AND four typed layers (preferences / technical / area_context / guidelines). The agent gets only what's relevant for the file it's touching, ranked by how specific the layer is.
+- **Hook-driven auto-capture.** Six hooks fire across the session lifecycle (SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop, PreCompact). Capture happens because the editor invokes them, not because anyone remembers to.
+- **File-per-memory + git-synced.** One JSON file per memory under `.aide/memories/`. `git add`, `git push`, `git pull` is the team-sync path. Personal preferences stay gitignored; team-shared memories travel with the repo.
+- **Cross-tool out of the box.** Claude Code and Cursor read the same store today; more editor adapters in flight.
+- **Local-first.** SQLite cache + JSON files on your disk. Telemetry is opt-in; nothing is sent until you set `AIDE_TELEMETRY=on`.
+- **Uses your existing agent.** No LLM calls of aide-memory's own; the model in your editor does the reasoning, no extra inference cost.
 
 ---
 
 ## Quick Start
 
-### 1. Initialize
-
 ```bash
+# 1. Initialize
 npx aide-memory init
-```
 
-Creates `.aide/memories/`, installs 6 hooks, writes editor rules, configures the MCP server.
+# 2. Restart your editor so the MCP server registers
+#    Cursor: Cmd+Q to quit, then reopen, then enable in Settings → MCP
+#    Claude Code: start a fresh session in this project
 
-### 2. Store a memory
-
-```bash
+# 3. Store a memory (or just talk to your agent and let hooks capture it)
 aide-memory remember "API responses must use camelCase keys" --layer guidelines
-```
 
-Or let the hooks capture context automatically as you work -- corrections, planning decisions, and session reflections are stored without manual intervention.
-
-### 3. Recall by path
-
-```bash
+# 4. Recall context for a path
 aide-memory recall src/auth/
-```
 
-Returns memories scoped to that path, plus project-wide context. Your agent does this automatically via the PreToolUse hook whenever it reads a file.
-
-### 4. Search across memories
-
-```bash
+# 5. Search across memories
 aide-memory search "authentication"
+
+# 6. Share with your team
+git add .aide/memories/
+git commit -m "Capture team conventions"
+git push
 ```
 
-FTS5 BM25-ranked keyword search, grouped by layer.
-
-### 5. Inspect
-
-```bash
-aide-memory stats
-```
-
-See totals by layer, most-recalled memories, capture source breakdown, and stale candidates.
+Full walkthrough: https://aide-memory.dev/docs/quick-start.
 
 ---
 
-## How It Works
+## What's in the box
 
-### Hooks drive everything
+- **7 MCP tools** for the agent: `aide_recall`, `aide_remember`, `aide_update`, `aide_forget`, `aide_search`, `aide_memories`, `aide_import`
+- **13 CLI commands** for you: `init`, `recall`, `remember`, `update`, `forget`, `search`, `list`, `stats`, `recall-log`, `config`, `sync`, `migrate`, `cleanup`
+- **6 hooks** wired into the editor at `init`
+- **4 typed memory layers** with personal/shared split for preferences
+- **Local SQLite cache** rebuildable from JSON files at any time
+- **FTS5 keyword search** plus optional semantic search via Transformers.js or Ollama
+- **Configurable everything**: hook modes, scope-depth dial, recall caps, injection budgets, Stop schedule
 
-| Hook | When it fires | What it does | Token cost |
-|------|--------------|--------------|------------|
-| **SessionStart** | Session begin / resume | Injects top-N preferences + guidelines + priority-always memories | Hidden |
-| **PreToolUse** | Before file reads / edits / Grep / aide_* MCP calls | Nudges: "N memories exist for this path" | ~20 tokens |
-| **PostToolUse** | After aide_recall / aide_remember / aide_search | Records recalled memory IDs so re-reads don't re-block | Hidden |
-| **UserPromptSubmit** | User corrects agent | Detects correction patterns, stores scoped memory | Hidden |
-| **Stop** | Task completion | Prompts agent to reflect and store learnings | Hidden |
-| **PreCompact** | Before context compaction | Extracts planning decisions before context is lost | Hidden |
+---
 
-All hooks use `additionalContext` (Claude Code) or `agent_message` (Cursor) -- invisible to you. Memory management happens silently in the background.
-
-### Storage: file-per-memory with SQLite cache
+## Storage shape
 
 ```
 .aide/
 ├── memories/
 │   ├── preferences/
-│   │   ├── personal/          # gitignored -- your private preferences
-│   │   └── shared/            # tracked -- team-visible preferences
-│   ├── technical/             # tracked -- stack and integration facts
-│   ├── area_context/          # tracked -- decisions for specific code areas
-│   └── guidelines/            # tracked -- team and project principles
-├── config.json                # local configuration
+│   │   ├── personal/          # gitignored, your private prefs
+│   │   └── shared/            # tracked, team-shared prefs
+│   ├── technical/             # tracked, stack and integration facts
+│   ├── area_context/          # tracked, decisions for specific code areas
+│   └── guidelines/            # tracked, team and project principles
+├── config.json                # local configuration with every public knob
+├── config-reference.md        # auto-generated key/default/description listing
 └── cache/
     └── memory.db              # SQLite cache (rebuildable, gitignored)
 ```
@@ -104,184 +91,97 @@ Each memory is a single JSON file:
 {
   "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "layer": "technical",
-  "what": "Apollo needs useGraphQLGateway: true for federation",
-  "why": "Without this flag, subgraph queries silently fail",
+  "what": "Apollo client uses persisted query hashes; raw queries 404 in prod",
+  "why": "Discovered when the staging-vs-prod query mismatch broke checkout",
   "scope": "src/graphql/**",
   "contributor": "ahmed",
-  "tags": ["api-contracts", "graphql"],
+  "tags": ["api-contract", "graphql"],
   "shared": true
 }
 ```
 
-SQLite is a rebuildable cache. Delete it and it reconstructs from the JSON files. The JSON files are the source of truth.
-
-### Recall: three tiers
-
-1. **Path match** -- glob pattern lookup (sub-millisecond, deterministic)
-2. **FTS5** -- BM25-ranked keyword search for cross-cutting queries
-3. **Embeddings** -- cosine similarity via local model for semantic fallback (no API keys)
-
-Path inheritance: a memory scoped to `src/**` surfaces for `src/checkout/CartSummary.tsx`. A memory scoped to `src/checkout/**` surfaces only in checkout code.
-
-### Sync via git
-
-Memories are files. Commit them, push them, pull them. A `post-checkout` hook automatically imports new or changed memories after `git pull` or branch switches. Conflicts resolve by timestamp -- newer wins.
+JSON files are the source of truth. SQLite is a rebuildable cache; delete `.aide/cache/memory.db` and it reconstructs from the JSON on the next run.
 
 ---
 
-## CLI Commands
+## How recall works
 
-All commands use the `aide-memory` binary (aliased as `aide`).
+When the agent calls `aide_recall({paths: [...]})`, the engine:
 
-| Command | Description |
-|---------|-------------|
-| `init [--update-rules]` | Create `.aide/`, install hooks, write editor rules, configure MCP |
-| `recall <path>` | Recall memories scoped to a file or directory path |
-| `remember <what>` | Store a memory with `--layer`, `--scope`, `--tags`, `--why` |
-| `update <id>` | Update an existing memory's content, scope, or context |
-| `forget <id>` | Permanently delete a memory |
-| `search <query>` | FTS5 keyword search with BM25 ranking |
-| `list` | List memories with `--layer`, `--scope`, `--contributor`, `--tag` filters |
-| `stats` | Show analytics: counts by layer, most recalled, stale candidates |
-| `recall-log` | Tail the recall-log to inspect recent recall events |
-| `config <key> [value]` | Get or set configuration (dot-notation keys) |
-| `sync import` / `sync export` | Rebuild SQLite cache from JSON memory files / ensure JSON exists for every memory |
-| `migrate` | (placeholder) Migrate from legacy DB format |
-| `cleanup [--older-than 7d]` | Remove stale session tracking files from `.aide/cache/` |
+1. Loads memories whose scope matches at least one of the requested paths (with parent inheritance, so querying `src/` returns memories scoped under `src/`).
+2. Sorts by **scope match first** (scoped beats project-wide), then **layer priority** (`area_context` > `technical` > `preferences` > `guidelines`), then **scope specificity** (deeper scopes rank higher) and keyword relevance.
+3. Caps at `recall.limit` (default 20) before returning.
+4. **Layer-diversity rebalance**: when the total result set is below `recall.layerDiversityMinLimit` (default 5), under-represented layers swap up so each enabled layer is at least represented.
+
+For conceptual searches ("where do we handle auth tokens?"), prefer `aide_search` over `aide_recall` since keyword + semantic search surfaces memories that path-scoping alone would miss.
 
 ---
 
-## MCP Tools
+## Privacy and telemetry
 
-Seven tools exposed to your AI agent (~1,400 tokens total schema -- GitHub MCP is 54K for comparison):
+**Code and memory content never leave your machine.** Memories are JSON files on your disk, the SQLite cache is local, and the MCP server runs over stdio.
 
-| Tool | Description |
-|------|-------------|
-| `aide_recall` | Path-scoped memory retrieval with glob inheritance |
-| `aide_remember` | Store a new memory with layer, scope, tags, and context |
-| `aide_update` | Edit an existing memory's content or scope |
-| `aide_forget` | Permanently delete a memory |
-| `aide_search` | FTS5 keyword search, results grouped by layer |
-| `aide_memories` | List memories with count and filter support |
-| `aide_import` | Import from markdown bullet/numbered lists into any layer |
+Telemetry is **opt-in**: until you set `AIDE_TELEMETRY=on` in your environment, aide-memory makes zero telemetry network calls. When you opt in, only anonymized event tallies are sent (event type, a SHA256-hashed `hostname:username` for deduplication, platform, Node version). Memory content, file paths, query strings, and any other user-identifying data are never sent.
+
+```bash
+# Default: nothing is sent
+# To opt in:
+export AIDE_TELEMETRY=on
+```
+
+---
+
+## Editor support
+
+| Editor | Status |
+|---|---|
+| **Claude Code** | Reference adapter, every capability works as designed. Restart your session after `init` so the MCP server registers. |
+| **Cursor** | Full hook + MCP wiring. Cmd+Q the app and reopen after `init`, then toggle the aide-memory MCP server ON in Settings → MCP. Some capabilities are tracked against upstream Cursor platform work and will upgrade as Cursor ships fixes. |
+| **Windsurf, Codex, Copilot** | Curated rules template at launch; full hook + MCP adapters in flight. |
+
+Capability matrix: https://aide-memory.dev/docs/supported-editors.
 
 ---
 
 ## Configuration
 
-Configuration lives in `.aide/config.json`. Manage via CLI:
+`aide-memory init` seeds `.aide/config.json` with every public setting in one place so you can see and edit every knob with your normal editor.
 
 ```bash
-aide-memory config hooks.read.maxBlocks        # read
-aide-memory config hooks.read.maxBlocks 0      # write (disable pre-read hook)
+aide-memory config <key>           # read
+aide-memory config <key> <value>   # write
 ```
 
-Changes via `aide-memory config` apply immediately. If you hand-edit
-`.aide/config.json`, running sessions pick up the change on the next hook
-fire (file read, edit, or prompt). For instant propagation across all
-open sessions, reconnect the MCP server in Claude Code via `/mcp` → reconnect.
+Or hand-edit `.aide/config.json`; the JSON file is the source of truth. Hooks re-read it on every fire so changes propagate without restarting anything.
 
-A few of the most-used keys (full reference in
-[docs/user/configuration.md](docs/user/configuration.md)):
+A few of the most-used keys:
 
 | Key | Default | Description |
-|-----|---------|-------------|
+|---|---|---|
 | `hooks.read.maxBlocks` | `1` | Max pre-read hard-blocks per file path per session. `0` disables the hook. |
-| `hooks.edit.maxBlocks` | `1` | Same as above, for the pre-edit hook. |
+| `hooks.edit.maxBlocks` | `1` | Same for the pre-edit hook. |
 | `hooks.search.mode` | `"soft"` | Pre-search hook: `"soft"`, `"block"`, or `"off"`. |
 | `hooks.correction.enabled` | `true` | Detect correction patterns in user messages. |
-| `hooks.visible` | `true` | Show user-facing `aide-memory · …` systemMessage lines. |
-| `recall.minScopeDepth` | `1` | Minimum scope segments for per-file recall. Bump to `2` to demote `src/**`-style broad scopes to SessionStart only. |
-| `memories.softening.threshold` | `10` | Below this total memory count, hard-blocks downgrade to soft nudges. |
-| `memories.defaultShared` | `true` | Default `shared` value for new `preferences` memories. Per-call `shared: true\|false` always wins. |
-| `tags.presets` | _(9 defaults)_ | Available tags for memory categorization. |
+| `hooks.visible` | `true` | Show user-facing `aide-memory · ...` lines in the terminal. |
+| `recall.minScopeDepth` | `1` | How specific a scope must be to surface per-file. Bump to `2` to demote `src/**`-style broad scopes to SessionStart only. |
+| `memories.softening.threshold` | `10` | Below this total-memory count, hard blocks downgrade to soft nudges. |
+| `memories.defaultShared` | `true` | Default `shared` value for new `preferences` memories. Per-call always overrides. |
+
+Full reference: https://aide-memory.dev/docs/configuration.
 
 ---
 
-## Privacy & Telemetry
+## Comparison with alternatives
 
-**Code and memory content never leave your machine.** Memories are JSON files on your disk, the SQLite cache is local, and the MCP server runs over stdio.
+aide-memory, [claude-mem](https://github.com/thedotmack/claude-mem), and [engram](https://github.com/ayvazyan10/engram) all attempt to give AI coding agents persistent memory, but they take meaningfully different shapes.
 
-aide-memory has two distinct analytics surfaces -- don't conflate them:
+**aide-memory** combines layered + path-scoped recall, hook-driven auto-capture, file-per-memory storage with personal/shared split, git-as-sync for teams, cross-tool support, and uses-your-existing-agent (no LLM calls of its own).
 
-**1. Local SQLite analytics (always local).** Tool-call counts and recall events drive `aide-memory stats`. Written to your local cache (`~/.aide/projects/<hash>/memory.db`) and never transmitted.
+**claude-mem** injects context from recent sessions at session start and exposes a 3-layer MCP search workflow (search → timeline → get_observations) for on-demand detail. Folder Context Files give per-folder activity timelines. Storage: Chroma + Bun-managed worker. License: AGPL-3.0.
 
-**2. Anonymized event tallies to PostHog (opt-in).** Off by default. You opt in by exporting `AIDE_TELEMETRY=on`. When opted in, only event tallies are sent: event type (`remember`, `recall`, `search`, etc.), a SHA256-hashed `hostname:username` for deduplication, platform, and Node version. **What's never sent:** memory content, file paths, code, scope strings, query strings, contributor names, or anything else user-identifying.
+**engram** models three memory types (Episodic, Semantic, Procedural) with a knowledge graph for the semantic layer and namespace isolation per project or agent. License: MIT.
 
-```bash
-# Default: nothing is sent. To opt in:
-export AIDE_TELEMETRY=on
-
-# To stay opted out (or be explicit):
-export AIDE_TELEMETRY=off
-```
-
----
-
-## Comparison with Alternatives
-
-### vs. claude-mem
-
-[claude-mem](https://github.com/thedotmack/claude-mem) injects context from recent sessions at session start and exposes a 3-layer MCP search workflow (search → timeline → get_observations) so the agent fetches detail on demand. It scopes context at folder granularity via auto-generated Folder Context Files (per-project-folder/worktree CLAUDE.md activity timelines). Install is `npx claude-mem install`; the runtime uses Chroma (vector DB) plus a Bun-managed worker service. License: AGPL-3.0.
-
-aide-memory takes a different approach: a ~20-token nudge per file read so the agent decides which memories to recall, glob-pattern scoping with inheritance (e.g. `src/auth/**` only surfaces in auth code), and hooks pre-wired across six lifecycle events at `aide-memory init`. Install is `npx aide-memory@latest init`; storage is local JSON files plus a SQLite cache, no extra runtime.
-
-### vs. engram
-
-[engram](https://github.com/ayvazyan10/engram) models three memory types (Episodic, Semantic, Procedural) with a knowledge graph for the semantic layer and namespace isolation per project or agent (with opt-in cross-namespace recall). It offers an opt-in session-end hook script you copy in and configure. License: MIT.
-
-aide-memory takes a different approach: four layers (preferences, technical, area_context, guidelines) with glob-based path scoping inside a single project, and hooks pre-wired across six lifecycle events at init. Engram scopes by namespace; aide-memory scopes by glob pattern within a project. The two tools use different mental models, pick the one that matches your workflow.
-
-### What we share
-
-All three tools solve the same core problem: AI agents forget between sessions. The architectural differences are in **how context is selected for recall** (full-session injection vs. per-file nudge vs. namespace lookup) and **how memory is structured** (folder timelines vs. typed knowledge graph vs. layered glob scopes).
-
----
-
-## Editor Setup
-
-### Claude Code (reference implementation)
-
-`aide-memory init` automatically:
-- Writes `.claude/rules/aide-memory.md` (agent instructions)
-- Configures hooks in `.claude/settings.json` (6 event types)
-- Sets up the MCP server in `.mcp.json`
-
-Full UX walkthrough: [docs/user/editors/claude-code.md](docs/user/editors/claude-code.md).
-
-### Cursor (~80% parity with Claude Code, 0.5.0)
-
-`aide-memory init` automatically:
-- Writes `.cursor/rules/aide-memory.mdc` (with MDC frontmatter, auto-regenerated on memory/config changes)
-- Configures hooks in `.cursor/hooks.json`
-- Configures MCP server in `.cursor/mcp.json`
-
-Verified gaps versus Claude Code (each tracked against a Cursor forum
-thread; adapter upgrades when upstream lands a fix):
-- Per-Read hard-block does not fire when the file is already open in the
-  editor pane (per-Edit safety net + rules-file injection cover it
-  functionally).
-- Inline visible chrome on **soft** fires lives in the Hooks Output
-  panel rather than chat (hard-block chrome renders inline as expected).
-- SessionStart context is delivered via the regenerated `.mdc` rules
-  file rather than a hook channel (Cursor staff's endorsed workaround
-  for an upstream sessionStart bug).
-- Correction detection arrives one turn later than in Claude Code
-  (Cursor's `beforeSubmitPrompt` has no in-turn additionalContext
-  channel; reminder ships via the next Stop hook's `followup_message`).
-- No Glob matcher in Cursor's vocabulary, so pre-search nudges fire on
-  Grep only.
-
-Restart Cursor after init for MCP to load. Full walkthrough:
-[docs/user/editors/cursor.md](docs/user/editors/cursor.md).
-
-### Codex, Copilot, Windsurf
-
-Rule template ships in 0.5.0. Hook + MCP config generation at init is
-tracked as a post-0.5.0 task, see
-[docs/user/supported-editors.md](docs/user/supported-editors.md) for the
-matrix and [docs/specs/EDITOR_ONBOARDING_GUIDE.md](docs/specs/EDITOR_ONBOARDING_GUIDE.md)
-for the onboarding playbook.
+Full comparison table: https://aide-memory.dev/docs/comparison.
 
 ---
 
@@ -289,46 +189,34 @@ for the onboarding playbook.
 
 - **Node.js 18+**
 - **npm or npx**
-- **Claude Code or Cursor** (for hook integration)
+- **Claude Code or Cursor** (for hook + MCP integration)
 
 No Docker. No external databases. No API keys. No cloud accounts.
 
 ---
 
-## Test Status
-
-- **773 vitest tests passing** across 31 test files (plus 11/11 install-from-tarball smokes and 15/15 debug-output smokes via `npm run test:full`)
-- **0 TypeScript errors**
-- 7 MCP tools, 13 CLI commands, 6 hooks -- all verified end-to-end
-
----
-
-## Contributing
-
-Contributions welcome. Please open an issue first to discuss what you would like to change.
-
-```bash
-git clone https://github.com/aide-memory/aide-memory.git
-cd aide-memory
-npm install
-npm test
-```
-
----
-
 ## License
 
-See [LICENSE](LICENSE) for details.
+aide-memory is **proprietary freeware**: free to use today; source not public; not open source, not FSL, not MIT. See [LICENSE](LICENSE) for the exact terms.
+
+The plan: keep core memory features free for solo developers, add more free enhancements over time, potentially layer paid team / pro features in the future.
 
 ---
 
 ## Documentation
 
-- [Docs landing page](docs/user/index.md) -- start here
-- [Concepts](docs/user/concepts.md) -- memories, layers, scopes, hooks, MCP tools
-- [Supported editors](docs/user/supported-editors.md) -- capability matrix: Claude Code, Cursor, Codex, Copilot, Windsurf
-- [CLI Reference](docs/user/cli-reference.md) -- every command with flags, examples, and error messages
-- [MCP Tools Reference](docs/user/mcp-tools.md) -- every MCP tool with parameters and example calls
-- [Architecture Guide](docs/user/architecture.md) -- storage, hooks, recall, and sync internals
-- [Configuration Guide](docs/user/configuration.md) -- all settings with defaults
-- [Troubleshooting](docs/user/troubleshooting.md) -- common issues and solutions
+Full docs at https://aide-memory.dev. Page directory:
+
+- [Quick Start](https://aide-memory.dev/docs/quick-start)
+- [Concepts](https://aide-memory.dev/docs/concepts), the editor-agnostic mental model
+- [Features](https://aide-memory.dev/docs/features), what's in the box
+- [Configuration](https://aide-memory.dev/docs/configuration), every knob and what it does
+- [Reference](https://aide-memory.dev/docs/reference), MCP tools + CLI commands side-by-side
+- [Hooks](https://aide-memory.dev/docs/hooks), per-hook walkthrough
+- [Architecture](https://aide-memory.dev/docs/architecture), how storage, hooks, and recall work
+- [Supported Editors](https://aide-memory.dev/docs/supported-editors), capability matrix
+- [Comparison](https://aide-memory.dev/docs/comparison), aide-memory vs claude-mem vs engram
+- [FAQ](https://aide-memory.dev/docs/faq), common questions
+- [Troubleshooting](https://aide-memory.dev/docs/troubleshooting), fix something broken
+
+The repo's `docs/user/` tree carries short pointers to each canonical page on the website.

@@ -1,6 +1,10 @@
 # aide-memory
 
-Persistent memory layer for AI coding agents -- your agent remembers what you taught it.
+**Layered, path-scoped, automatically-captured memory for AI coding agents and teams.**
+
+Static rules files (CLAUDE.md, .cursorrules) drift. Every new session, your agent re-learns what you taught yesterday. Your teammates' agents re-learn the things your agent already learned. Switch tools and the lesson is gone.
+
+aide-memory fixes this with a typed, scoped, auto-captured memory store, six editor hooks, an MCP server, and git as the team-sync layer.
 
 ## Install
 
@@ -8,21 +12,24 @@ Persistent memory layer for AI coding agents -- your agent remembers what you ta
 npx aide-memory init
 ```
 
+After init, restart your editor so the MCP server registers. On Cursor, also enable the aide-memory MCP server in Settings → MCP.
+
 ## What it does
 
-- **Remembers corrections and preferences** across sessions -- teach your agent once, it remembers forever.
-- **Path-scoped recall** -- memories are tied to the files they apply to, surfaced automatically when relevant files are opened.
-- **Works with Claude Code and Cursor** -- installs as an MCP server, integrating natively with your coding tools.
-- **Zero-config setup** -- one command creates the memory directory, installs hooks, and configures your editor.
+- **Layered + path-scoped recall**: glob scopes (`src/auth/**`) AND four typed layers (preferences / technical / area_context / guidelines)
+- **Hook-driven auto-capture**: six editor hooks prompt the agent to recall and remember at the right moments
+- **Git-synced for teams**: memories are JSON files; commit, push, pull, your teammates' agents pick them up
+- **Cross-tool**: Claude Code and Cursor today; more editor adapters in flight
+- **Local-first**: SQLite cache + JSON files on your disk; uses your existing agent (no extra LLM calls)
 
 ## Privacy
 
-Code and memory content never leave your machine. Anonymized event tallies (event type, hashed machine id, platform, Node version) are sent to PostHog **only when you opt in** via `export AIDE_TELEMETRY=on`. Default is off. See [README §Privacy & Telemetry](https://github.com/aide-memory/aide-memory#privacy--telemetry) for the exact list.
-
-## Documentation
-
-Full documentation: [https://aide-memory.dev](https://aide-memory.dev)
+Code and memory content never leave your machine. Telemetry is opt-in: until you set `AIDE_TELEMETRY=on`, no telemetry network calls happen. When opted in, only anonymized event tallies are sent (event type, hashed machine id, platform, Node version). See https://aide-memory.dev/docs/configuration#telemetry-opt-in-nothing-sent-unless-you-turn-it-on for the exact list.
 
 ## License
 
-See LICENSE file for details.
+Proprietary freeware: free to use today, source not public, not open source.
+
+## Documentation
+
+Full documentation: **https://aide-memory.dev**

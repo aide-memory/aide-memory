@@ -1,27 +1,31 @@
 # LinkedIn announcement (zero em-dashes)
 
-Launching aide-memory: a persistent memory layer for AI coding agents.
+Launching aide-memory: layered, path-scoped, auto-captured memory for AI coding agents AND teams.
 
-The problem: every new session, the agent forgets your stack, your conventions, the corrections you gave it yesterday. You re-explain. It re-suggests the thing you already rejected.
+The problem: every new session, your agent re-learns what you taught yesterday. Your teammates' agents re-learn the things your agent already learned. Switch from Claude Code to Cursor and the lesson is gone. CLAUDE.md and .cursorrules help, but they're flat files; they drift; they don't scope to areas; they don't auto-capture.
 
-aide-memory is an MCP server plus hook layer that gives agents path-scoped memory across sessions. What it does:
+aide-memory closes those gaps. It's the layer between your editor's hooks, your agent's MCP tools, and the persistent knowledge of your codebase.
 
-- **Path-scoped recall.** Memories attach to glob scopes (`src/auth/**`, `packages/api/**`) and surface when the agent reads or edits matching files. Four layers: preferences, technical, area_context, guidelines.
+What's unique is the combination:
 
-- **Automatic capture.** Six hooks fire across the session lifecycle. When you correct the agent ("no, use X"), it stores the correction. When a turn ends with a real decision, it offers to save it. When a session starts, preferences and guidelines inject into context.
+- **Layered + path-scoped recall.** Glob scopes (`src/auth/**`, `packages/api/**`) AND four typed layers (preferences, technical, area_context, guidelines). The agent gets only what's relevant for the file it's touching.
 
-- **Search-first nudge.** Before the agent reaches for grep on a concept query ("where do we handle auth?"), a soft nudge points it at `aide_search` first. Stored answers surface before code dumps do.
+- **Hook-driven auto-capture.** Six hooks fire across the session lifecycle. When you correct the agent, it stores the correction. When a turn ends with a real decision, it offers to save it. When a session starts, top preferences and guidelines inject automatically.
 
-- **Local SQLite, opt-in telemetry.** Memories live as JSON files in `.aide/memories/`, your repo stays clean. Telemetry is opt-in via `AIDE_TELEMETRY=on`. When on, only anonymized event tallies leave your machine. Memory content, file paths, and queries never do.
+- **Git-synced for teams.** Memories are JSON files in `.aide/memories/`. Commit them, push them, your teammates pull them. Their agents pick up the lessons you stored, on the next file read in the relevant area. Personal preferences stay gitignored; team conventions travel with the repo.
 
-Available today for Claude Code and Cursor with full hook + MCP wiring. Codex, Copilot, and Windsurf get a curated rules template; full adapters ship next.
+- **Cross-tool.** Claude Code and Cursor read the same store. More editor adapters in flight.
 
-7 MCP tools, 13 CLI commands, 6 hooks, 782 vitest tests, plus install-tarball, debug-output, defaultShared, and semantic-search smokes.
+- **Uses your existing agent.** aide-memory is a typed store + dispatcher, no LLM calls of its own. The model in the editor you already pay for does all the reasoning. No extra inference cost.
 
-License: proprietary freeware. Free for everyone today; some future enhancements are expected to remain free, others may ship as paid team or pro features.
+- **Local-first, opt-in telemetry.** Memories live as JSON files on your disk plus a local SQLite cache. Until you set `AIDE_TELEMETRY=on`, aide-memory makes zero telemetry network calls. When opted in, only anonymized event tallies are sent; never content.
 
-Install: `npm i -g aide-memory && aide-memory init`
-Docs: [link]
+7 MCP tools, 13 CLI commands, 6 hooks, plus FTS5 keyword search and optional semantic search via Transformers.js or Ollama.
+
+License: proprietary freeware. Free to use today; potentially paid team / pro features later.
+
+Install: `npx aide-memory init`
+Docs: https://aide-memory.dev
 Demo: [video link]
 
-Per-editor capability matrix: /docs/user/editors/
+Per-editor capability matrix: https://aide-memory.dev/docs/supported-editors
