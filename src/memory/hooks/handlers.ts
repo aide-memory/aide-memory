@@ -653,18 +653,21 @@ export async function sessionStart(input: HookInput): Promise<void> {
   let versionUserMsg = '';
   try {
     const { findPackageRoot } = require('../internal/paths');
-    const pkgPath = path.join(findPackageRoot(), 'package.json');
-    const currentVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
-    const cachePath = path.join(os.homedir(), '.aide', 'update-check.json');
-    if (fs.existsSync(cachePath)) {
-      const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-      if (cache.latestVersion && cache.latestVersion !== currentVersion) {
-        const cv = currentVersion.replace(/^v/, '').split('.').map(Number);
-        const lv = cache.latestVersion.replace(/^v/, '').split('.').map(Number);
-        const isNewer = lv[0] > cv[0] || (lv[0] === cv[0] && lv[1] > cv[1]) || (lv[0] === cv[0] && lv[1] === cv[1] && lv[2] > cv[2]);
-        if (isNewer) {
-          versionNotice = `aide-memory v${cache.latestVersion} is available (current: v${currentVersion}). Run \`npm update -g aide-memory\` to upgrade.`;
-          versionUserMsg = `${BRAND}update available: v${cache.latestVersion}`;
+    const root = findPackageRoot();
+    if (!fs.existsSync(path.resolve(root, 'src', 'cli'))) {
+      const pkgPath = path.join(root, 'package.json');
+      const currentVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
+      const cachePath = path.join(os.homedir(), '.aide', 'update-check.json');
+      if (fs.existsSync(cachePath)) {
+        const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+        if (cache.latestVersion && cache.latestVersion !== currentVersion) {
+          const cv = currentVersion.replace(/^v/, '').split('.').map(Number);
+          const lv = cache.latestVersion.replace(/^v/, '').split('.').map(Number);
+          const isNewer = lv[0] > cv[0] || (lv[0] === cv[0] && lv[1] > cv[1]) || (lv[0] === cv[0] && lv[1] === cv[1] && lv[2] > cv[2]);
+          if (isNewer) {
+            versionNotice = `aide-memory v${cache.latestVersion} is available (current: v${currentVersion}). Run \`npm update -g aide-memory\` to upgrade.`;
+            versionUserMsg = `${BRAND}update available: v${cache.latestVersion}`;
+          }
         }
       }
     }
