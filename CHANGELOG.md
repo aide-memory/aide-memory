@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3 — 2026-04-29
+
+- npm license field now links to the correct LICENSE file on GitHub (was referencing LICENSE.md which doesn't exist on the public repo).
+- Install instructions updated across all surfaces to recommend `npm install -g aide-memory`.
+
 ## 0.5.2 — 2026-04-29
 
 - Init detects when running from the npx cache and warns that paths may break on Node version changes or cache cleans. Recommends `npm install -g aide-memory`.
