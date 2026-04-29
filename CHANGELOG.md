@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.5 — 2026-04-29
+
+- Init warning simplified: "Restart your editor (or start a fresh session) to ensure the MCP server is picked up." No editor-specific details.
+
 ## 0.5.4 — 2026-04-29
 
 - README formatting: website/docs/install each on their own line.
