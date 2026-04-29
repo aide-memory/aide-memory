@@ -16,11 +16,11 @@ That's what aide-memory is.
 
 The starting point most teams reach for is `CLAUDE.md` or `.cursorrules`. These are real and useful, but they have known limits:
 
-- **They drift.** One flat file, no scoping. The agent reads stale guidance because nobody updates the file when reality changes.
+- **They drift.** One flat file, no scoping, manual to update. The agent can read stale guidance when reality moves and the file doesn't.
 - **No layered structure.** A team-wide guideline, a personal preference, a decision-for-this-area, and a fact about the stack all blur into a 200-line wall of text.
 - **No team handoff for live knowledge.** What you teach Claude Code in your session is gone the moment your teammate opens their session. Domain knowledge stays trapped in your conversation history.
 - **Tool lock-in.** What you teach Claude Code doesn't carry to Cursor. Switch tools, lose the lesson. "Works on my agent" is the new "works on my machine."
-- **Manual capture has zero adoption.** The window for storing a correction is right after it happens. No agent calls a "remember" tool unprompted; humans don't either, in practice.
+- **Capture without auto-recall.** Even if you do capture corrections in a rules file, nothing prompts the agent to recall the relevant subset when it opens a file. Everything gets injected globally on every turn, even when most of it isn't relevant to the file the agent is touching.
 
 aide-memory does not replace your rules files. They coexist. aide-memory adds the scoped, layered, auto-captured, git-synced layer on top.
 
@@ -156,6 +156,6 @@ A few coverage caveats worth flagging up front:
 - Cursor `@-file` attachments and Tab context bypass `preToolUse` hooks entirely. aide-memory's nudge is about agent-planned reads, not user-provided context.
 - Most of the manual end-to-end testing on this release exercised the FTS5 keyword path. The semantic-search path is contract-tested at unit level, has a smoke test against a real Ollama backend wired into `npm run test:smoke`, and works empirically against simple queries. Deeper coverage across embedding models, larger memory tables, and combined keyword + semantic queries is open work, not in flight. If you hit a semantic-search edge case, please file an issue.
 
-aide-memory is **proprietary freeware**: free to use today; source not public; not open source, not FSL, not MIT. The plan is to keep core memory features free for solo developers, add more free enhancements over time, and potentially layer paid team / pro features in the future.
+aide-memory is **proprietary freeware**: free to use today; source not public; not open source, not FSL, not MIT. Free for individuals today. Future enhancements may stay free, or some may ship as separate tiers as the project grows.
 
 Counts at launch: 7 MCP tools, 13 CLI commands, 6 hooks. The website docs at https://aide-memory.dev are the canonical reference; the GitHub repo's `docs/user/` tree carries short pointers to each canonical page.

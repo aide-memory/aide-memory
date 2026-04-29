@@ -199,7 +199,7 @@ No Docker. No external databases. No API keys. No cloud accounts.
 
 aide-memory is **proprietary freeware**: free to use today; source not public; not open source, not FSL, not MIT. See [LICENSE](LICENSE) for the exact terms.
 
-The plan: keep core memory features free for solo developers, add more free enhancements over time, potentially layer paid team / pro features in the future.
+Free for individuals today. Future enhancements may stay free, or some may ship as separate tiers as the project grows. We're not promising specific things free forever, and we're not gating anything additional today.
 
 ---
 
