@@ -9,6 +9,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 // Inlined at bundle time by esbuild (resolveJsonModule=true in tsconfig).
 // This is the single source of truth for hook defaults — same schema the
@@ -644,6 +645,28 @@ export async function sessionStart(input: HookInput): Promise<void> {
     }
   } catch {
     // Non-fatal — don't break session start over a health check.
+  }
+
+  // Version update check — read cached result synchronously so the agent sees it.
+  try {
+    const { findPackageRoot } = require('../internal/paths');
+    const pkgPath = path.join(findPackageRoot(), 'package.json');
+    const currentVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
+    const cachePath = path.join(os.homedir(), '.aide', 'update-check.json');
+    if (fs.existsSync(cachePath)) {
+      const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+      if (cache.latestVersion && cache.latestVersion !== currentVersion) {
+        const cv = currentVersion.replace(/^v/, '').split('.').map(Number);
+        const lv = cache.latestVersion.replace(/^v/, '').split('.').map(Number);
+        const isNewer = lv[0] > cv[0] || (lv[0] === cv[0] && lv[1] > cv[1]) || (lv[0] === cv[0] && lv[1] === cv[1] && lv[2] > cv[2]);
+        if (isNewer) {
+          const msg = `aide-memory v${cache.latestVersion} is available (current: v${currentVersion}). Run \`npm update -g aide-memory\` to upgrade.`;
+          emitAdditionalContext('SessionStart', msg, `${BRAND}update available: v${cache.latestVersion}`);
+        }
+      }
+    }
+  } catch {
+    // Non-fatal
   }
 
   // Cleanup: clear/compact/resume → drop THIS session's tracking. start → no-op.

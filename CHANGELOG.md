@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.8 — 2026-04-29
+
+- **Version update notification surfaces via the agent.** SessionStart hook checks cached npm registry result and tells the agent if a newer version is available, so the agent can inform the user.
+- **Post-checkout hook boundary guard.** Walk-up to find `.git/` now stops if it encounters a different project's `.aide/` directory, preventing hook installation in the wrong repo.
+
 ## 0.5.7 — 2026-04-29
 
 - **Fix: post-checkout hook installs correctly in monorepo subdirectories.** Init now walks up to find `.git/` instead of only looking in the project root.

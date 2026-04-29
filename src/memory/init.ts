@@ -700,7 +700,9 @@ function installPostCheckoutHook(
   const skipped: string[] = [];
   const warnings: string[] = [];
 
-  // Walk up to find .git/ (handles monorepo subdirectories)
+  // Walk up to find .git/ (handles monorepo subdirectories).
+  // Stop at filesystem root or if we leave the project boundary
+  // (a directory with its own .aide/ or package.json that isn't our project root).
   let gitDir = '';
   let searchDir = projectRoot;
   for (let i = 0; i < 20; i++) {
@@ -711,6 +713,11 @@ function installPostCheckoutHook(
     }
     const parent = path.dirname(searchDir);
     if (parent === searchDir) break;
+    // Don't walk past a directory that looks like a different project root
+    if (searchDir !== projectRoot) {
+      const hasOwnAide = fs.existsSync(path.join(parent, '.aide'));
+      if (hasOwnAide) break;
+    }
     searchDir = parent;
   }
   if (!gitDir) {
