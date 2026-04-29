@@ -18,7 +18,7 @@ What's unique is the combination:
 
 - **Uses your existing agent.** aide-memory is a typed store + dispatcher, no LLM calls of its own. The model in the editor you already pay for does all the reasoning. No extra inference cost.
 
-- **Local-first, opt-in telemetry.** Memories live as JSON files on your disk plus a local SQLite cache. Until you set `AIDE_TELEMETRY=on`, aide-memory makes zero telemetry network calls. When opted in, only anonymized event tallies are sent; never content.
+- **Local-first.** Memories live as JSON files on your disk plus a local SQLite cache. Anonymized usage counts ship to PostHog by default so we can see which features are used; disable any time with `AIDE_TELEMETRY=off`. Memory content, code, file paths, and queries never leave your machine.
 
 7 MCP tools, 13 CLI commands, 6 hooks, plus FTS5 keyword search and optional semantic search via Transformers.js or Ollama.
 

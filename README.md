@@ -22,7 +22,7 @@ The differentiator is the combination, not any single piece:
 - **Hook-driven auto-capture.** Six hooks fire across the session lifecycle (SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop, PreCompact). Capture happens because the editor invokes them, not because anyone remembers to.
 - **File-per-memory + git-synced.** One JSON file per memory under `.aide/memories/`. `git add`, `git push`, `git pull` is the team-sync path. Personal preferences stay gitignored; team-shared memories travel with the repo.
 - **Cross-tool out of the box.** Claude Code and Cursor read the same store today; more editor adapters in flight.
-- **Local-first.** SQLite cache + JSON files on your disk. Telemetry is opt-in; nothing is sent until you set `AIDE_TELEMETRY=on`.
+- **Local-first.** SQLite cache + JSON files on your disk. Anonymized usage counts ship to PostHog by default; disable with `AIDE_TELEMETRY=off`. Memory content, code, file paths, and queries never leave your machine.
 - **Uses your existing agent.** No LLM calls of aide-memory's own; the model in your editor does the reasoning, no extra inference cost.
 
 ---
@@ -185,7 +185,7 @@ Full comparison table: https://aide-memory.dev/docs/comparison.
 
 ## Requirements
 
-- **Node.js 20+** (current LTS; Node 18 reached end-of-life April 2026)
+- **Node.js 18 or later**
 - **npm or npx**
 - **Claude Code or Cursor** (for hook + MCP integration)
 

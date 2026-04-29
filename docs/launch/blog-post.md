@@ -53,7 +53,7 @@ Six hooks fire across the session lifecycle. You don't manage them; they're inst
 - **PreToolUse** intercepts file reads, edits, and grep calls. When scoped memories exist for the target path, the hook hard-blocks the first read or edit per session and tells the agent to call `aide_recall`. After recall, subsequent reads of the same path are silent or soft-nudged. Configurable: flip to `0` to disable, or `block` mode for grep too.
 - **UserPromptSubmit** detects correction patterns ("no, use X instead", "actually...") and prompts the agent to call `aide_remember` with the correction stored against the relevant scope.
 - **Stop** prompts a reflection nudge ("anything worth remembering?") on a configurable schedule (default ramps every 3 turns through turn 9, every 5 through turn 29, every 10 afterwards) so noise stays low on long sessions.
-- **PreCompact** prompts the agent to save active plans/decisions before context compaction, then clears session tracking so post-compact reads re-prompt cleanly.
+- **PreCompact** clears session tracking before context compaction so post-compact reads re-prompt cleanly. The rules file written at init also nudges the agent to call `aide_remember` for any active decisions worth keeping.
 - **PostToolUse** records which memory IDs were recalled so the same path doesn't re-prompt within a session.
 
 The result: capture happens because the editor invokes the hook, not because anyone remembers to call a tool. Studies put voluntary "remember this" adoption near zero; hooks bring it to one hundred percent of the moments that matter.
@@ -88,7 +88,7 @@ When the agent reaches for grep on a concept-level query ("where do we handle au
 
 Memories live as JSON files under `.aide/memories/` in your repo, organized by layer (preferences, technical, area_context, guidelines), with a local SQLite cache at `~/.aide/projects/<hash>/memory.db` (WAL mode) for fast lookups. The JSON files are the source of truth; the cache rebuilds from them.
 
-Telemetry is **opt-in: until you set `AIDE_TELEMETRY=on`, aide-memory makes zero telemetry network calls.** When you opt in, only anonymized event tallies (counts of recalls, remembers, hook fires; a hashed machine id; platform; Node version) are sent. Memory content, file paths, code, and query strings never leave your machine, opted in or not.
+Anonymized usage counts ship to PostHog by default so we can see which features are used: event type, a SHA256-hashed `hostname:username` for deduplication, platform, Node version. Memory content, file paths, code, query strings, and the number of memories you have are never sent. Disable any time with `export AIDE_TELEMETRY=off`.
 
 ### Search backends
 
@@ -103,9 +103,9 @@ If neither backend is available, semantic search degrades to keyword-only and ai
 
 aide-memory is a typed store + hook dispatcher + MCP server. It does no LLM calls of its own. The agent in the editor you already use does all the reasoning, so there's no extra inference cost: aide-memory's surface is just the tools the agent calls and the hooks the editor fires.
 
-### Configurable everything
+### Configurable
 
-Defaults capture the common case. The point of the config surface is that every part of the flow is tunable: every hook mode, scope dial, recall cap, injection budget, Stop schedule, contributor identity, embedding backend. If you don't like one piece of the flow, you flip one knob. `aide-memory init` seeds `.aide/config.json` with every public setting in one place so you can see and edit every knob with your normal editor.
+Defaults aim at a common-case workflow. Many parts are tunable: hook modes, the scope-depth dial, recall caps, injection budgets, the Stop schedule, contributor identity, embedding backend. `aide-memory init` seeds `.aide/config.json` with every public setting in one place so you can see and edit each knob with your normal editor.
 
 ## Editor support today
 
