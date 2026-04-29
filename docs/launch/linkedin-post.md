@@ -1,14 +1,18 @@
 # LinkedIn launch post
 
-We always want the best models, the best tools, a better AI-assisted workflow. But the bottleneck I keep hitting isn't any of those. It's context. What lives in your head, your team's domain knowledge, what isn't captured in documentation or rules files, what lives and dies inside agent sessions.
+AI has changed how we build software. We want the best models, the best tools, the best workflow. But the bottleneck I keep hitting isn't any of those.
 
-I've been coding with AI agents for a while now and they've made me so much more productive. But they've also made me repeat myself. I explain how the feature I'm building ties into the rest of the system, the way I like to structure my code, the patterns to follow in this area. The agent gets it. We ship great work together. Next session, it's a blank slate. I re-explain the same things.
+It's context.
+
+What lives in your head. Your team's domain knowledge. What isn't captured in documentation or rules files. What lives and dies inside agent sessions.
+
+I've been coding with agents for a while now and they've made me so much more productive. But they've also made me repeat myself. I explain how the feature I'm building ties into the rest of the system, the way I like to structure my code, the patterns to follow in this area. The agent gets it. We ship great work together. Next session, it's a blank slate. I re-explain the same things.
 
 Critical decisions being made during conversations aren't being captured. Preferences, corrections, area knowledge, guidelines. So much valuable context doesn't persist, doesn't flow to the next session, to a different tool, or to a teammate's agent when they pick up work in the same area.
 
 Rules files help, but corrections and area knowledge from conversations don't make it back into the file on their own. And the whole file gets injected globally, even when most of it might not be relevant to the area the agent is working in.
 
-I built aide-memory to close that gap, and I'm proud to announce it today.
+That's why I built aide-memory, and I'm proud to announce it today.
 
 aide-memory (https://aide-memory.dev) is auto-captured, auto-recalled, path-scoped memory for AI coding agents and teams.
 
