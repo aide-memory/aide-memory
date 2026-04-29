@@ -153,7 +153,8 @@ describe('README.npm.md', () => {
   it('contains install command', () => {
     const readmePath = path.join(ROOT, 'README.npm.md');
     const content = fs.readFileSync(readmePath, 'utf-8');
-    expect(content).toContain('npx aide-memory init');
+    expect(content).toContain('npm install -g aide-memory');
+    expect(content).toContain('aide-memory init');
   });
 
   it('contains aide-memory name', () => {
