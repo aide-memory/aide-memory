@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.6 — 2026-04-29
+
+- **Fix: `telemetry.enabled: false` in config.json now disables PostHog remote telemetry too.** Previously only stopped local SQLite logging while PostHog kept sending. Now both are controlled by the config key. `AIDE_TELEMETRY=off` env var still works as an override.
+- All config keys audited and confirmed wired to runtime behavior.
+
 ## 0.5.5 — 2026-04-29
 
 - Init warning simplified: "Restart your editor (or start a fresh session) to ensure the MCP server is picked up." No editor-specific details.
