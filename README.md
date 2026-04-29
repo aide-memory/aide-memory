@@ -6,7 +6,7 @@
 
 ## TL;DR
 
-aide-memory is a categorized, scoped, auto-captured-and-recalled memory layer for AI coding agents. It runs locally, plugs into Claude Code and Cursor via hooks + an MCP server, and uses git for team sync. It's not a replacement for `CLAUDE.md` or `.cursorrules`; those cover always-on guidance, aide-memory covers the dynamic, area-specific knowledge that should only surface when it's relevant.
+aide-memory is an auto-captured, auto-recalled, path-scoped memory layer for AI coding agents. It runs locally, plugs into Claude Code and Cursor via hooks + an MCP server, and uses git for team sync. It sits alongside `CLAUDE.md` and `.cursorrules`, not above or below; those cover always-on guidance, aide-memory covers the dynamic, area-specific knowledge that should only surface when it's relevant.
 
 What this means in practice: when the agent opens a file in a code area you've taught aide-memory about, it gets prompted to recall what's been learned there. When you correct it or surface a non-obvious finding, hooks prompt it to remember. Memories live as JSON files in `.aide/memories/`, so `git add` / `git push` / `git pull` is the team-sync path. Personal preferences stay gitignored; team-shared memories travel with the repo.
 
@@ -22,10 +22,10 @@ Free. Local-first. No account required.
 
 Static rules files (CLAUDE.md, .cursorrules) and skills are useful for always-on guidance, but they have four real limits:
 
-- **One flat file, no categorization, no scoping.** A team-wide guideline, a personal style preference, an area-specific decision, and a stack fact all blur into one file. The whole file is injected on every turn, even when most of it isn't relevant to the file the agent just opened.
-- **Manual capture.** Capturing a correction means typing it into the file. In practice, almost no one does this consistently.
-- **Tool-specific by default.** Conventions you teach in Claude Code don't carry to Cursor unless you copy the file over manually. Same for teammates on different tools.
-- **No prompting on the way in.** Even when context is captured somewhere, nothing prompts the agent to look it up when it opens a relevant file. Either everything is injected globally (rules-file approach), or nothing is.
+- **No unified convention or structure.** A team-wide guideline, a personal style preference, an area-specific decision, and a stack fact all blur into one file. The whole file gets injected on every turn, even when most of it might not be relevant to the area the agent is working in.
+- **Manual capture.** Corrections and area knowledge from conversations don't make it back into the file on their own.
+- **Tool-specific by default.** What you teach your agent in Claude Code doesn't carry to Cursor unless you copy the file over manually.
+- **Unscoped recall.** Even when context is captured, nothing prompts the agent to look up what's relevant when it opens a specific file. The whole file lands in context, or nothing does.
 
 aide-memory adds the layer those gaps leave open: scoped, layered, auto-captured-and-recalled memory with git as the team-sync substrate. Coexists with rules files; doesn't replace them.
 
@@ -38,9 +38,9 @@ The differentiator is the combination, not any single piece:
 - **Layered + path-scoped recall.** Glob scopes (`src/auth/**`, `packages/api/**`) AND four typed layers (preferences / technical / area_context / guidelines). The agent gets only what's relevant for the file it's touching, ranked by how specific the layer is.
 - **Hook-driven auto-capture.** Six hooks fire across the session lifecycle (SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop, PreCompact). Capture happens because the editor invokes them, not because anyone remembers to.
 - **File-per-memory + git-synced.** One JSON file per memory under `.aide/memories/`. `git add`, `git push`, `git pull` is the team-sync path. Personal preferences stay gitignored; team-shared memories travel with the repo.
-- **Cross-tool out of the box.** Claude Code and Cursor read the same store today; more editor adapters in flight.
-- **Local-first.** SQLite cache + JSON files on your disk. Anonymized usage counts ship to PostHog by default; disable with `AIDE_TELEMETRY=off`. Memory content, code, file paths, and queries never leave your machine.
-- **Uses your existing agent.** No LLM calls of aide-memory's own; the model in your editor does the reasoning, no extra inference cost.
+- **Cross-tool.** Claude Code and Cursor read the same store today. Deeper integration for other editors may come based on user feedback.
+- **Local-first.** SQLite cache + JSON files on your disk. Memory content stays on your machine. Anonymized usage counts ship to PostHog by default; disable with `AIDE_TELEMETRY=off`.
+- **Uses your existing agent.** No LLM calls of its own. The model in your editor does the reasoning.
 
 ---
 
@@ -150,17 +150,17 @@ export AIDE_TELEMETRY=off
 
 | Editor | Status |
 |---|---|
-| **Claude Code** | Reference adapter, every capability works as designed. Restart your session after `init` so the MCP server registers. |
+| **Claude Code** | Reference adapter. Restart your session after `init` so the MCP server registers. |
 | **Cursor** | Full hook + MCP wiring. Cmd+Q the app and reopen after `init`, then toggle the aide-memory MCP server ON in Settings → MCP. |
-| **Windsurf, Codex, Copilot** | Curated rules template at launch; full hook + MCP adapters in flight. |
+| **Windsurf, Codex, Copilot** | Rules template at launch. Deeper integration may come based on user feedback. |
 
-Capability matrix: https://aide-memory.dev/docs/supported-editors.
+Per-editor support: https://aide-memory.dev/docs/supported-editors.
 
 ---
 
 ## Configuration
 
-`aide-memory init` seeds `.aide/config.json` with every public setting in one place so you can see and edit every knob with your normal editor.
+`aide-memory init` seeds `.aide/config.json` with all public settings so you can see and edit them in one place.
 
 ```bash
 aide-memory config <key>           # read
@@ -223,7 +223,7 @@ Full docs at https://aide-memory.dev. Page directory:
 - [Quick Start](https://aide-memory.dev/docs/quick-start)
 - [Concepts](https://aide-memory.dev/docs/concepts), the editor-agnostic mental model
 - [Features](https://aide-memory.dev/docs/features), what's in the box
-- [Configuration](https://aide-memory.dev/docs/configuration), every knob and what it does
+- [Configuration](https://aide-memory.dev/docs/configuration), all config keys and what they do
 - [Reference](https://aide-memory.dev/docs/reference), MCP tools + CLI commands side-by-side
 - [Hooks](https://aide-memory.dev/docs/hooks), per-hook walkthrough
 - [Architecture](https://aide-memory.dev/docs/architecture), how storage, hooks, and recall work
