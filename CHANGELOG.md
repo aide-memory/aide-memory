@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.12 — 2026-04-29
+
+- **Fix: version notice + Cursor rules work on empty projects.** Both SessionStart and Cursor rules file now show the update notice even when no memories exist.
+- **Fix: dev-tree detection.** Version check skips in dev trees so the placeholder 0.2.0 version doesn't trigger false positives.
+
+## 0.5.11 — 2026-04-29
+
+- **Fix: version update notice shows even when no memories are stored yet.** Previously the notice was skipped on empty projects because the early return checked for memory content only.
+- Added smoke tests for version notification + telemetry config.
+
 ## 0.5.10 — 2026-04-29
 
 - **Cursor: version update notice in rules file.** When a newer version is cached, the dynamically regenerated `.cursor/rules/aide-memory.mdc` includes an "Update available" section so the Cursor agent tells the user.
