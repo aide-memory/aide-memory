@@ -69,7 +69,7 @@ jobs:
             --title "$TAG" \
             --notes "aide-memory $VERSION published to npm. See [CHANGELOG.md](https://github.com/aide-memory/aide-memory/blob/main/CHANGELOG.md) for details."
         env:
-          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_SECRET }}
 
       - name: Sync CHANGELOG to public repo
         if: startsWith(github.ref, 'refs/tags/')
@@ -88,4 +88,4 @@ jobs:
           APIJSON
           fi
         env:
-          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_SECRET }}
