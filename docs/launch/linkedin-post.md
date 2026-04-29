@@ -27,7 +27,7 @@ aide-memory (https://aide-memory.dev) is auto-captured, auto-recalled, path-scop
 **Local-first.** Memories stay on your machine. Free to use.
 
 ```
-npx aide-memory init
+npm install -g aide-memory && aide-memory init
 ```
 
 Docs + quick start: https://aide-memory.dev

@@ -93,7 +93,8 @@ Memories are JSON files on your disk plus a local SQLite cache. Memory content s
 ## Try it
 
 ```bash
-npx aide-memory init
+npm install -g aide-memory
+aide-memory init
 ```
 
 Creates `.aide/`, installs hooks, configures the MCP server, writes rules files for Claude Code and Cursor. Start a fresh editor session after init so the MCP server registers.
