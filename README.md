@@ -192,7 +192,7 @@ aide-memory, [claude-mem](https://github.com/thedotmack/claude-mem), and [engram
 
 **aide-memory** is the new entrant. It combines layered + scoped recall, hook-driven auto-capture, file-per-memory storage with personal/shared split, a single shared store across Claude Code + Cursor, and git as the team-sync substrate. Uses your existing agent's inference budget; no LLM calls of its own.
 
-**claude-mem** (the established project in the space, ~70k stars, multi-editor support across Claude Code / Cursor / Gemini CLI / OpenCode / OpenClaw): continuous capture via PostToolUse hook + session-summary at Stop; SessionStart injection of compressed recent-sessions context; 3-tool MCP search workflow for on-demand detail. Storage is SQLite (FTS5) primary with optional Chroma for semantic search; runtime uses a Bun-managed worker. Per-folder timelines via Folder Context Files are opt-in (`CLAUDE_MEM_FOLDER_CLAUDEMD_ENABLED`), default-off. License: AGPL-3.0.
+**claude-mem** is the more established project in the space, with editor support across Claude Code, Cursor, Gemini CLI, OpenCode, and OpenClaw. Continuous capture via PostToolUse hook + session-summary at Stop; SessionStart injection of compressed recent-sessions context; 3-tool MCP search workflow for on-demand detail. Storage is SQLite (FTS5) primary with optional Chroma for semantic search; runtime uses a Bun-managed worker. Per-folder timelines via Folder Context Files are opt-in (`CLAUDE_MEM_FOLDER_CLAUDEMD_ENABLED`), default-off. License: AGPL-3.0.
 
 **engram** is a cognitive-architecture-style memory system: three typed memory types (Episodic, Semantic, Procedural) on a knowledge graph, with graph-expansion at recall and contradiction detection. Storage is SQLite or Postgres + HNSW vector index; surface is MCP-first plus REST / CLI / webhooks / Ollama proxy. License: MIT.
 
@@ -227,7 +227,7 @@ Full docs at https://aide-memory.dev. Page directory:
 - [Reference](https://aide-memory.dev/docs/reference), MCP tools + CLI commands side-by-side
 - [Hooks](https://aide-memory.dev/docs/hooks), per-hook walkthrough
 - [Architecture](https://aide-memory.dev/docs/architecture), how storage, hooks, and recall work
-- [Supported Editors](https://aide-memory.dev/docs/supported-editors), capability matrix
+- [Supported Editors](https://aide-memory.dev/docs/supported-editors), per-editor table
 - [Comparison](https://aide-memory.dev/docs/comparison), aide-memory vs claude-mem vs engram
 - [FAQ](https://aide-memory.dev/docs/faq), common questions
 - [Troubleshooting](https://aide-memory.dev/docs/troubleshooting), fix something broken
