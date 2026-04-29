@@ -21,7 +21,9 @@
     "test:watch": "vitest --exclude '**/.claude/worktrees/**' --exclude '**/.cursor/worktrees/**'",
     "test:smoke": "bash scripts/hooks/__tests__/install-from-tarball.smoke.sh && bash scripts/hooks/__tests__/debug-output-smoke.test.sh && bash scripts/hooks/__tests__/memories-default-shared.smoke.test.sh && bash scripts/hooks/__tests__/semantic-search.smoke.test.sh",
     "test:full": "npm run build && npm run test && npm run build:dist && npm run test:smoke",
-    "verify-tarball": "node scripts/verify-package.sh"
+    "verify-tarball": "node scripts/verify-package.sh",
+    "dev:install": "bash scripts/dev/install-dev-global.sh",
+    "dev:restore": "npm install -g aide-memory@latest && aide-memory --version"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
