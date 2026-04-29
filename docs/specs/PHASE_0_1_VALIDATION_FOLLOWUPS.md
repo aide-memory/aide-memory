@@ -607,6 +607,17 @@ your agent knows your stack") independent of Cursor work.
 
 ---
 
+---
+
+## Post-0.5.10 follow-ups (2026-04-29)
+
+- **Fix PUBLIC_REPO_SECRET token scope.** CI release workflow creates releases on aide-memory/aide-memory but the token gets 403. Needs `repo` scope on the aide-memory org, not just ahmedmmeky repos. Until fixed, public repo releases + changelog sync are done manually after each publish.
+- **Buttondown newsletter.** Account under review. Swap homepage subscribe form from local API (Vercel logs) back to Buttondown when approved.
+- **`boolean@3.2.0` deprecated warning.** Upstream from `@huggingface/transformers` → `onnxruntime-node` → `global-agent` → `boolean`. Cosmetic, can't fix on our end. Goes away when upstream updates.
+- **Session handoff features.** Carrying context from one session to the next without manual capture. Mentioned in comparison page as roadmap item. User wants to explore (memory #391).
+
+---
+
 *Validation run results for every scenario live in
 [`../validation/E2E_VALIDATION.md`](../validation/E2E_VALIDATION.md). This
 doc is deliberately scoped to non-scenario parked work.*

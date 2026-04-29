@@ -693,7 +693,7 @@ export async function sessionStart(input: HookInput): Promise<void> {
     store.close();
   }
 
-  if (!output) return;
+  if (!output && !versionNotice) return;
 
   // Write injected IDs to tracking so Read/Edit hooks don't redundantly block.
   if (allInjectedIds.length > 0) {
