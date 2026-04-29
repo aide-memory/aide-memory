@@ -4,7 +4,7 @@
 
 > **Website:** https://aide-memory.dev
 > **Docs:** https://aide-memory.dev/docs
-> **Install:** `npx aide-memory init`
+> **Install:** `npm install -g aide-memory && aide-memory init`
 
 ---
 
@@ -68,8 +68,9 @@ Claude Code and Cursor read the same `.aide/memories/` directory. A memory captu
 ## Quick start
 
 ```bash
-# 1. Initialize
-npx aide-memory init
+# 1. Install and initialize
+npm install -g aide-memory
+aide-memory init
 
 # 2. Restart your editor so the MCP server registers
 #    Claude Code: start a fresh session
