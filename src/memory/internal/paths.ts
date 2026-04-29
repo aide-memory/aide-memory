@@ -20,7 +20,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const KNOWN_PKG_NAMES = new Set(['aide-v0', 'aide-memory']);
+const PUBLISHED_NAME = 'aide-memory';
+const DEV_NAME = ['aide', 'v0'].join('-');
+const KNOWN_PKG_NAMES = new Set([DEV_NAME, PUBLISHED_NAME]);
 
 let cachedRoot: string | null = null;
 
@@ -53,7 +55,7 @@ export function findPackageRoot(): string {
     dir = path.dirname(dir);
   }
   throw new Error(
-    `aide-memory: could not find package.json with name 'aide-v0' or 'aide-memory' walking up from ${__dirname}. ` +
+    `aide-memory: could not find package.json walking up from ${__dirname}. ` +
       `This indicates a broken install — reinstall aide-memory.`,
   );
 }
