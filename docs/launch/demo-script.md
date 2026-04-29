@@ -81,9 +81,8 @@
 - Agent calls `aide_recall`, receives the stored guideline, then writes a `parseISO`-based helper.
 
 **Presenter notes:**
-- Per memory #325: Claude Code's Grep matcher is sometimes deferred, in which case the agent uses Bash+grep. We don't hook Bash+grep. Don't claim "we hook every search."
-- Cursor's `codebase_search` is a built-in semantic search, not exposed as an MCP-style matcher in Cursor's hook vocabulary. We genuinely cannot hook it. If asked, answer honestly: "Cursor doesn't expose codebase_search to hooks; we cover Grep, Read, Write, and Edit instead, and the rules file tells the agent to prefer aide_search anyway."
-- No "Cursor is better" or "Claude Code is better" framing.
+- Don't claim "we hook every search." We hook Read, Write, and Grep. Bash+grep and Cursor's built-in `codebase_search` aren't hook-covered today; the rules file tells the agent to prefer `aide_search` anyway.
+- No "Cursor is better" or "Claude Code is better" framing. Both are first-class for the capabilities we ship.
 
 ---
 
@@ -130,7 +129,7 @@
 ## Section 5, What we ship today (~45 to 60s)
 
 **Voiceover:**
-> A note on what aide-memory ships today. Claude Code is the reference adapter; every capability in our matrix is verified end-to-end against the validation suite. Cursor ships at strong parity with five capabilities tracked against upstream Cursor work: soft-fire chrome lives in the Hooks Output panel rather than inline, sessionStart context arrives through a regenerated rules file (Cursor staff's endorsed approach), sessionStart doesn't re-fire after compaction, correction reminders arrive one turn later, and Glob isn't in Cursor's matcher vocabulary so it's skipped. Codex, Copilot, and Windsurf currently ship a rules template only; `aide-memory init` does not yet generate hooks or MCP config for those editors. Full adapters are next.
+> A note on what aide-memory ships today. Claude Code and Cursor both get full hook plus MCP wiring at init; the seven MCP tools and the same memory store work in either. Some details of how hook output renders in the editor differ between the two; the agent receives the same context payload and the same recall behavior. Codex, Copilot, and Windsurf get a curated rules template today; full hook adapters may come depending on user demand. aide-memory's free to use; more may be added in the future based on user feedback. Telemetry is anonymized usage counts on by default; disable any time with `AIDE_TELEMETRY=off`.
 
 **Screen actions:**
 - Briefly display the capability matrix from `docs/user/supported-editors.md` (screenshot or scroll).

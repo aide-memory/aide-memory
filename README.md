@@ -185,7 +185,7 @@ Full comparison table: https://aide-memory.dev/docs/comparison.
 
 ## Requirements
 
-- **Node.js 18+**
+- **Node.js 20+** (current LTS; Node 18 reached end-of-life April 2026)
 - **npm or npx**
 - **Claude Code or Cursor** (for hook + MCP integration)
 
