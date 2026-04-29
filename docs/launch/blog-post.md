@@ -6,7 +6,7 @@
 
 We always want the best models, the best tools, a better workflow. But the bottleneck I keep hitting isn't any of those. It's context. What lives in your head, your team's domain knowledge, what isn't captured in documentation or rules files, what lives and dies inside sessions.
 
-AI agents have made developers significantly more productive. But they've created a new kind of friction. You explain how the feature you're building ties into the rest of the system, the way you like to structure your code, the patterns to follow in this area. The agent gets it. You ship great work together. In a new session, it re-reads files it already read, re-explores areas it explored yesterday. You re-explain the same things.
+Coding with agents has made developers significantly more productive. But it's created a new kind of friction. You explain how the feature you're building ties into the rest of the system, the way you like to structure your code, the patterns to follow in this area. The agent gets it. You ship great work together. Next session, it's a blank slate. You re-explain the same things.
 
 Critical decisions being made during conversations aren't being captured. Preferences, corrections, area knowledge, guidelines. So much valuable context doesn't persist, doesn't flow to the next session, to a different tool, or to a teammate's agent when they pick up work in the same area.
 
