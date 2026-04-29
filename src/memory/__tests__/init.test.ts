@@ -264,4 +264,61 @@ describe('initProject', () => {
     expect(content).toContain('echo "existing hook"');
     expect(content).toContain('aide-memory post-checkout hook');
   });
+
+  it('installs post-checkout hook in parent .git when in monorepo subdirectory', async () => {
+    // Create a parent repo with a subdirectory project
+    const monorepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-monorepo-'));
+    const { execSync } = require('child_process');
+    execSync('git init', { cwd: monorepoRoot, stdio: 'pipe' });
+    execSync('git config user.name "Test User"', { cwd: monorepoRoot, stdio: 'pipe' });
+    execSync('git config user.email "test@example.com"', { cwd: monorepoRoot, stdio: 'pipe' });
+
+    const subProject = path.join(monorepoRoot, 'packages', 'webapp');
+    fs.mkdirSync(subProject, { recursive: true });
+
+    try {
+      const result = await initProject(subProject);
+      const hookPath = path.join(monorepoRoot, '.git', 'hooks', 'post-checkout');
+      expect(fs.existsSync(hookPath)).toBe(true);
+      expect(fs.readFileSync(hookPath, 'utf8')).toContain('aide-memory post-checkout hook');
+      expect(result.created).toContain('.git/hooks/post-checkout');
+    } finally {
+      fs.rmSync(monorepoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('does not walk past a directory with its own .aide/', async () => {
+    const outerRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-outer-'));
+    const { execSync } = require('child_process');
+    execSync('git init', { cwd: outerRepo, stdio: 'pipe' });
+    execSync('git config user.name "Test User"', { cwd: outerRepo, stdio: 'pipe' });
+    execSync('git config user.email "test@example.com"', { cwd: outerRepo, stdio: 'pipe' });
+
+    // Create an inner directory with its own .aide/ (different project)
+    const innerDir = path.join(outerRepo, 'inner');
+    fs.mkdirSync(innerDir, { recursive: true });
+    fs.mkdirSync(path.join(innerDir, '.aide'), { recursive: true });
+
+    // Create a deep subdirectory inside inner that has NO .git
+    const deepDir = path.join(innerDir, 'deep', 'sub');
+    fs.mkdirSync(deepDir, { recursive: true });
+
+    try {
+      const result = await initProject(deepDir);
+      // Should NOT find the outer .git because inner/.aide/ is a boundary
+      expect(result.warnings.some(w => w.includes('No git repository found'))).toBe(true);
+    } finally {
+      fs.rmSync(outerRepo, { recursive: true, force: true });
+    }
+  });
+
+  it('skips post-checkout hook when no git repo exists', async () => {
+    const noGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-nogit-'));
+    try {
+      const result = await initProject(noGitDir);
+      expect(result.warnings.some(w => w.includes('No git repository found'))).toBe(true);
+    } finally {
+      fs.rmSync(noGitDir, { recursive: true, force: true });
+    }
+  });
 });
