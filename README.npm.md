@@ -2,9 +2,11 @@
 
 **Auto-captured, auto-recalled, path-scoped memory for AI coding agents and teams.**
 
-> **Website:** https://aide-memory.dev
-> **Docs:** https://aide-memory.dev/docs
-> **Install:** `npm install -g aide-memory && aide-memory init`
+**Website:** https://aide-memory.dev
+
+**Docs:** https://aide-memory.dev/docs
+
+**Install:** `npm install -g aide-memory && aide-memory init`
 
 ---
 
