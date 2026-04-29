@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.9 — 2026-04-29
+
+- **Version update notice is visible to the user directly.** The `aide-memory · update available: vX.Y.Z` line now shows in the chat alongside the injection message, not just in the agent's context.
+
 ## 0.5.8 — 2026-04-29
 
 - **Version update notification surfaces via the agent.** SessionStart hook checks cached npm registry result and tells the agent if a newer version is available, so the agent can inform the user.
