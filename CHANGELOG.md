@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.13 — 2026-04-29
+
+- **Privacy fix: disable PostHog GeoIP enrichment.** PostHog was auto-enriching events with location data (city, lat/long, postal code) from sender IP. Added `$ip: null` to the event payload to prevent this. Also disable GeoIP in your PostHog project settings.
+
 ## 0.5.12 — 2026-04-29
 
 - **Fix: version notice + Cursor rules work on empty projects.** Both SessionStart and Cursor rules file now show the update notice even when no memories exist.

@@ -118,7 +118,7 @@ export class Analytics {
       api_key: POSTHOG_KEY,
       batch: batch.map(e => ({
         event: e.event,
-        properties: { ...e.properties, distinct_id: this.distinctId },
+        properties: { ...e.properties, distinct_id: this.distinctId, $ip: null },
         timestamp: e.timestamp,
       })),
     });
