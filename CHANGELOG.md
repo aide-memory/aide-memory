@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.10 — 2026-04-29
+
+- **Cursor: version update notice in rules file.** When a newer version is cached, the dynamically regenerated `.cursor/rules/aide-memory.mdc` includes an "Update available" section so the Cursor agent tells the user.
+
 ## 0.5.9 — 2026-04-29
 
 - **Version update notice is visible to the user directly.** The `aide-memory · update available: vX.Y.Z` line now shows in the chat alongside the injection message, not just in the agent's context.
