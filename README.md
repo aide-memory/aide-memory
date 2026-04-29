@@ -175,9 +175,9 @@ aide-memory, [claude-mem](https://github.com/thedotmack/claude-mem), and [engram
 
 **aide-memory** combines layered + path-scoped recall, hook-driven auto-capture, file-per-memory storage with personal/shared split, git-as-sync for teams, cross-tool support, and uses-your-existing-agent (no LLM calls of its own).
 
-**claude-mem** injects context from recent sessions at session start and exposes a 3-layer MCP search workflow (search → timeline → get_observations) for on-demand detail. Folder Context Files give per-folder activity timelines. Storage: Chroma + Bun-managed worker. License: AGPL-3.0.
+**claude-mem** (the established project in the space, ~70k stars, multi-editor support across Claude Code / Cursor / Gemini CLI / OpenCode / OpenClaw): continuous capture via PostToolUse hook + session-summary at Stop; SessionStart injection of compressed recent-sessions context; 3-tool MCP search workflow for on-demand detail. Storage is SQLite (FTS5) primary with optional Chroma for semantic search; runtime uses a Bun-managed worker. Per-folder timelines via Folder Context Files are opt-in (`CLAUDE_MEM_FOLDER_CLAUDEMD_ENABLED`), default-off. License: AGPL-3.0.
 
-**engram** models three memory types (Episodic, Semantic, Procedural) with a knowledge graph for the semantic layer and namespace isolation per project or agent. License: MIT.
+**engram** is a cognitive-architecture-style memory system: three typed memory types (Episodic, Semantic, Procedural) on a knowledge graph, with graph-expansion at recall and contradiction detection. Storage is SQLite or Postgres + HNSW vector index; surface is MCP-first plus REST / CLI / webhooks / Ollama proxy. License: MIT.
 
 Full comparison table: https://aide-memory.dev/docs/comparison.
 
