@@ -1,161 +1,106 @@
 # aide-memory: persistent memory for AI coding agents and teams
 
-## The problem
+*April 29, 2026*
 
-You spent thirty minutes yesterday explaining to the agent why your codebase uses libsql instead of better-sqlite3, why error responses use a flat shape instead of nested envelopes, and why `src/auth/middleware.ts` does its own JWT parsing instead of leaning on the framework helper.
+## The bottleneck isn't the models, the compute, or the agents. It's context.
 
-Today you open a new session and ask the agent to add a refresh-token endpoint. It suggests better-sqlite3. It nests the error envelope. It rips out your custom JWT parser in favor of the framework helper "for simplicity."
+We always want the best models, the best tools, a better workflow. But the bottleneck I keep hitting isn't any of those. It's context. What lives in your head, your team's domain knowledge, what isn't captured in documentation or rules files, what lives and dies inside sessions.
 
-You correct it again. Tomorrow you'll correct it again. And so will your teammate, separately, in their session, against their own copy of the same agent.
+AI agents have made developers significantly more productive. But they've created a new kind of friction. You explain how the feature you're building ties into the rest of the system, the way you like to structure your code, the patterns to follow in this area. The agent gets it. You ship great work together. In a new session, it re-reads files it already read, re-explores areas it explored yesterday. You re-explain the same things.
 
-This is the shape of working with stateless agents on a real codebase. The model is fine. The codebase is fine. What's missing is the layer in between: a place to write down the conventions, corrections, and decisions that make this codebase *this codebase*, in a form the agent picks up automatically when it touches the relevant files, and your teammates' agents pick up when they touch them too.
+Critical decisions being made during conversations aren't being captured. Preferences, corrections, area knowledge, guidelines. So much valuable context doesn't persist, doesn't flow to the next session, to a different tool, or to a teammate's agent when they pick up work in the same area.
 
-That's what aide-memory is.
+The agents are capable. The models are good. What's missing is the layer in between: a way to capture the corrections, decisions, and area knowledge that come up in conversation, scope them to where they apply, and share them across sessions, tools, and teammates.
 
-## Why static rules files aren't enough
+## Why rules files aren't enough
 
-The starting point most teams reach for is `CLAUDE.md` or `.cursorrules`. These are real and useful, but they have known limits:
+Rules files (CLAUDE.md, .cursorrules) help with part of this. But they have real limits:
 
-- **They drift.** One flat file, no scoping, manual to update. The agent can read stale guidance when reality moves and the file doesn't.
-- **No layered structure.** A team-wide guideline, a personal preference, a decision-for-this-area, and a fact about the stack all blur into a 200-line wall of text.
-- **No team handoff for live knowledge.** What you teach Claude Code in your session is gone the moment your teammate opens their session. Domain knowledge stays trapped in your conversation history.
-- **Tool lock-in.** What you teach Claude Code doesn't carry to Cursor. Switch tools, lose the lesson. "Works on my agent" is the new "works on my machine."
-- **Capture without auto-recall.** Even if you do capture corrections in a rules file, nothing prompts the agent to recall the relevant subset when it opens a file. Everything gets injected globally on every turn, even when most of it isn't relevant to the file the agent is touching.
+- **Corrections don't make it back.** You correct the agent in conversation. The lesson works for that session. Unless someone manually edits the rules file afterwards, it doesn't persist.
+- **Area-specific knowledge isn't always documented.** How a feature ties into the larger system, the architectural decisions in a specific module, the reasons certain things are built the way they are. Not all of that fits in a project-wide rules file, and there's no way to scope it to a code area.
+- **The whole file gets injected on every turn.** Whether the agent is working in auth, the dashboard, or the settings panel, it gets the same block of text. Relevant context competes with non-relevant context for space in the window.
+- **Team handoff is manual.** The corrections and decisions from your sessions don't flow to your teammate's agent automatically.
 
-aide-memory does not replace your rules files. They coexist. aide-memory adds the scoped, layered, auto-captured, git-synced layer on top.
+aide-memory adds the layer rules files don't do. It sits alongside them, not above or below. Rules files for static, always-on guidance. aide-memory for the dynamic, scoped knowledge that grows with the codebase.
 
-## What aide-memory does
+## How capture works
 
-aide-memory is an MCP server, a hook layer, and a typed file-per-memory store that runs locally alongside your editor. It gives agents (and your team's agents) persistent memory across sessions, scoped to the code they're touching, captured automatically by editor hooks, and synced via git.
+Six hooks fire across the session lifecycle, installed by `aide-memory init`. You don't manage them.
 
-### Layered + path-scoped recall
+**Correction detection.** When you correct the agent ("no, we don't do it that way", "use composition instead"), the UserPromptSubmit hook detects the correction and prompts the agent to store it, scoped to the code area you're working in.
 
-Every memory attaches to a scope: a glob pattern like `src/auth/**`, `packages/api/server/**`, or no scope at all (project-wide). When the agent reads or edits a file, aide-memory matches the file path against stored scopes and surfaces the relevant memories before the agent acts.
+**Periodic reflection.** At the end of turns, the Stop hook prompts "anything worth remembering?" on a tunable schedule (frequent early in the session, less frequent in long sessions). Area decisions and technical context get captured here.
 
-Memories live in four layers:
+**Session start.** When a session begins, the SessionStart hook injects your top preferences, team guidelines, and priority-always memories so the agent starts with context rather than a blank slate.
 
-- **preferences.** How a contributor likes to work (e.g. "When refactoring shared types, prefer `type` aliases over `interface` for union shapes").
-- **technical.** Facts about the stack not obvious from code (e.g. "Apollo client uses persisted query hashes; raw queries 404 in prod").
-- **area_context.** Decisions tied to specific code areas (e.g. "Checkout uses Stripe Payment Element, not the legacy Card Element. Migration landed sprint 38.").
-- **guidelines.** Team-wide principles (e.g. "Public REST endpoints return errors as `{error: {code, message}}`, never bare strings").
+**Pre-read prompting.** Before the agent reads or edits a file, the PreToolUse hook checks if relevant memories exist for that path. If they haven't been recalled yet this session, it prompts the agent to recall them first.
 
-Recall is layered: `area_context` ranks first (most specific), then `technical`, then `preferences`, then `guidelines`. Within a layer, scoped memories beat project-wide ones, deeper scopes beat shallower ones.
+Capture happens because the editor fires the hook, not because someone remembers to call a tool.
 
-### Personal vs team-shared
+## How recall works
 
-Preferences split into two folders: `preferences/personal/` (gitignored, yours alone) and `preferences/shared/` (committed, team-visible). The other three layers are team-visible by default. So personal style stays personal, but team conventions, decisions, and stack facts travel with the repo.
+Memories attach to code areas via glob scopes (`src/components/dashboard/**`, `packages/api/**`). When the agent opens a file, aide-memory matches the path against stored scopes and surfaces what's relevant to that area.
 
-### Hook-driven capture
+Four layers organize the knowledge:
 
-Six hooks fire across the session lifecycle. You don't manage them; they're installed by `aide-memory init`.
+| Layer | What it captures | Example |
+|---|---|---|
+| **preferences** | How a contributor likes to work | "Prefer modular component structure, separate concerns into smaller files" |
+| **technical** | Facts not obvious from code | "Dashboard data fetching uses React Query with stale-while-revalidate" |
+| **area_context** | Decisions tied to code areas | "Settings panel uses progressive disclosure; new sections follow the expand/collapse pattern" |
+| **guidelines** | Team-wide principles | "Mock external calls at the network boundary in tests, not at the function boundary" |
 
-- **SessionStart** injects top-N preferences, guidelines, and any priority-always memories into the agent's starting context (capped at 1200 characters by default; tunable).
-- **PreToolUse** intercepts file reads, edits, and grep calls. When scoped memories exist for the target path, the hook hard-blocks the first read or edit per session and tells the agent to call `aide_recall`. After recall, subsequent reads of the same path are silent or soft-nudged. Configurable: flip to `0` to disable, or `block` mode for grep too.
-- **UserPromptSubmit** detects correction patterns ("no, use X instead", "actually...") and prompts the agent to call `aide_remember` with the correction stored against the relevant scope.
-- **Stop** prompts a reflection nudge ("anything worth remembering?") on a configurable schedule (default ramps every 3 turns through turn 9, every 5 through turn 29, every 10 afterwards) so noise stays low on long sessions.
-- **PreCompact** clears session tracking before context compaction so post-compact reads re-prompt cleanly. The rules file written at init also nudges the agent to call `aide_remember` for any active decisions worth keeping.
-- **PostToolUse** records which memory IDs were recalled so the same path doesn't re-prompt within a session.
+Recall ranks `area_context` first (most specific to the area), then `technical`, then `preferences`, then `guidelines`. Scoped memories rank above project-wide ones.
 
-The result: capture happens because the editor invokes the hook, not because anyone remembers to call a tool. Studies put voluntary "remember this" adoption near zero; hooks bring it to one hundred percent of the moments that matter.
+The agent gets what applies to where it's working, not a global dump of non-relevant text.
 
-### Git-synced for teams
+## Git-synced for teams
 
-Memories are JSON files. Commit them, push them, pull them. A `post-checkout` git hook (installed at init) rebuilds the local SQLite cache after `git pull` or branch switch so your teammates' agents see the same context yours does on their next file read.
+Memories are JSON files under `.aide/memories/`. Commit, push, pull.
 
 ```bash
-# You captured a decision worth keeping
-git add .aide/memories/area_context/
-git commit -m "Capture skeleton-loading decision for dashboard"
+git add .aide/memories/
+git commit -m "Capture dashboard patterns and settings panel decisions"
 git push
-
-# Your teammate pulls
-git pull
-# Their agent's next read of src/components/dashboard/ surfaces:
-# "1 memory exists for src/components/dashboard/. Call aide_recall."
 ```
 
-No sync service, no auth, no daemons. Files are the substrate; git is the sync.
+When your teammate pulls, a `post-checkout` git hook rebuilds the local cache. Their agent's next read in the area you've been working in picks up the context you stored.
 
-### Cross-tool out of the box
+Personal preferences (`preferences/personal/`) are gitignored. Team conventions travel with the repo. Context starts flowing between teammates and their agents without anyone editing the same flat file.
 
-Claude Code and Cursor both read the same `.aide/memories/` directory. Switch tools mid-task and your context follows. More editor adapters are in flight: Codex, Copilot, and Windsurf get a curated rules template at launch, with full hook + MCP adapters being onboarded next.
+## Cross-tool
 
-### Search-first nudge before grep dumps
+Claude Code and Cursor read the same `.aide/memories/` directory. A memory captured in one tool is available in the other. Switch tools and the context comes with you.
 
-When the agent reaches for grep on a concept-level query ("where do we handle auth tokens?", "what's the API response convention?"), a soft hook points it at `aide_search` first. The agent decides whether the lookup is worth a separate call. If a stored memory already answers the question, it surfaces before a thousand lines of grep output do.
+Codex, Copilot, and Windsurf get a rules template at launch; deeper integration may come based on user feedback.
 
-### Local-first storage, opt-in telemetry
+## Tunable
 
-Memories live as JSON files under `.aide/memories/` in your repo, organized by layer (preferences, technical, area_context, guidelines), with a local SQLite cache at `~/.aide/projects/<hash>/memory.db` (WAL mode) for fast lookups. The JSON files are the source of truth; the cache rebuilds from them.
+aide-memory ships with defaults you can adjust:
 
-Anonymized usage counts ship to PostHog by default so we can see which features are used: event type, a SHA256-hashed `hostname:username` for deduplication, platform, Node version. Memory content, file paths, code, query strings, and the number of memories you have are never sent. Disable any time with `export AIDE_TELEMETRY=off`.
+- **How often the agent gets prompted** to reflect and store context (frequent early in a session, rare in long ones, or set your own schedule)
+- **How specific a scope needs to be** before a memory surfaces per-file vs only at session start
+- **How much context gets injected** at session start (character cap, per-layer toggles)
+- **Which hooks are active** (disable per-file blocking, turn off correction detection, adjust the reflection schedule)
+- **Personal vs shared** preferences (gitignored or committed, configurable per-project)
 
-### Search backends
+`aide-memory init` seeds `.aide/config.json` with all public settings so you can see and edit them in one place. Full config reference: https://aide-memory.dev/docs/configuration
 
-`aide_search` runs FTS5 keyword search against the local SQLite cache by default. For semantic-similarity search, aide-memory ships with two optional backends:
+## Privacy
 
-- `@huggingface/transformers` is listed under `optionalDependencies`. Default `npm install -g aide-memory` will attempt to install it (npm continues if it fails). When present, semantic search runs locally with no network calls; the model itself downloads from Hugging Face on first use.
-- A local Ollama server (default `http://localhost:11434`) with an embedding model loaded. Configure with `aide-memory config embeddings.backend ollama`.
-
-If neither backend is available, semantic search degrades to keyword-only and aide-memory continues to work.
-
-### Uses your existing agent
-
-aide-memory is a typed store + hook dispatcher + MCP server. It does no LLM calls of its own. The agent in the editor you already use does all the reasoning, so there's no extra inference cost: aide-memory's surface is just the tools the agent calls and the hooks the editor fires.
-
-### Configurable
-
-Defaults aim at a common-case workflow. Many parts are tunable: hook modes, the scope-depth dial, recall caps, injection budgets, the Stop schedule, contributor identity, embedding backend. `aide-memory init` seeds `.aide/config.json` with every public setting in one place so you can see and edit each knob with your normal editor.
-
-## Editor support today
-
-aide-memory's core (the MCP server, the seven tools, the hook dispatcher) is editor-agnostic. Each editor integration is an adapter that translates aide-memory's canonical events into that editor's config shape and hook I/O contract.
-
-**Claude Code** is the reference adapter. Every capability (hard-block on read or edit, soft re-read nudges, native session-start injection, in-turn correction detection, branded inline status lines, post-compaction context re-injection) works as designed. New aide-memory features validate against Claude Code first.
-
-**Cursor** ships with full hook and MCP wiring. `aide-memory init` writes `.cursor/hooks.json`, `.cursor/mcp.json`, and a dynamically regenerated `.cursor/rules/aide-memory.mdc` that carries the same content Claude Code gets via SessionStart. Hard blocks render branded chrome inline; soft nudges reach the agent through Cursor's `agent_message` channel; corrections are detected via `beforeSubmitPrompt`.
-
-A handful of capabilities are tracked against upstream Cursor threads and will upgrade as Cursor ships the corresponding platform changes:
-
-- The native `sessionStart.additional_context` channel isn't yet wired by Cursor itself. We deliver the same content via the regenerated rules file (Cursor staff's endorsed approach).
-- Inline visible chrome on soft fires lives in the Hooks Output panel rather than chat; agent-side context still arrives on every fire.
-- The per-Read hook does not fire when the file is already open in Cursor's editor pane. The per-Edit safety net is unaffected, and the rules-file guidance instructs agents to call `aide_recall` on editor-cached reads.
-- Correction reminders surface one turn later via the next Stop hook's `followup_message`, since `beforeSubmitPrompt` has no context-injection channel.
-- SessionStart does not re-fire after compaction; the always-applied rules file partially covers it, but the dedicated post-compact pipeline isn't available.
-
-Each item maps to a public Cursor thread (linked at https://aide-memory.dev/docs/editors/cursor). When Cursor ships the fix, the adapter upgrades and the workaround retires.
-
-**Codex, Copilot, Windsurf** ship a curated rules template today: same canonical body as Claude Code and Cursor, plus editor-specific frontmatter. Hooks and MCP config aren't yet generated by `aide-memory init` for these editors. Full adapters are next on the roadmap.
-
-Both Claude Code and Cursor require **a one-time editor restart** after `aide-memory init` so the MCP server registers (both editors load MCP config at session start, not live). Cursor adds a second step: toggle the aide-memory MCP server ON in Settings → MCP, since Cursor disables newly-discovered MCP servers by default.
+Memories are JSON files on your disk plus a local SQLite cache. Memory content stays on your machine. Anonymized usage counts (event type, hashed machine ID, platform, Node version) ship to PostHog by default so we can see which features are used. Disable with `AIDE_TELEMETRY=off`.
 
 ## Try it
 
 ```bash
-npm install -g aide-memory
-cd your-project
-aide-memory init
+npx aide-memory init
 ```
 
-`init` writes the config files for the editors aide-memory supports today (Claude Code and Cursor get hooks, MCP config, rules; Codex, Copilot, Windsurf get a rules template), creates `.aide/config.json` and `.aide/memories/`, and adds the right `.gitignore` entries.
+Creates `.aide/`, installs hooks, configures the MCP server, writes rules files for Claude Code and Cursor. Start a fresh editor session after init so the MCP server registers.
 
-What to expect on your first session:
+Free to use.
 
-1. The agent gets your top preferences and guidelines injected at session start (or the rules file equivalent in Cursor).
-2. The first time it reads a file with scoped memories, the hook prompts it to call `aide_recall` first.
-3. When you correct it, the correction stores against the relevant scope automatically.
-4. Next session, those memories are still there. So is the next teammate's agent that pulls your commits.
-
-Full docs at https://aide-memory.dev. Per-editor capability matrix at https://aide-memory.dev/docs/supported-editors.
-
-## Honest disclosure
-
-A few coverage caveats worth flagging up front:
-
-- aide-memory's pre-search hook fires on the editor's `Grep` matcher. `Bash+grep` (shell-routed) and Cursor's built-in `codebase_search` are not hook-covered today. The agent should still call `aide_search` first on concept queries; the rules file reminds it to.
-- Cursor `@-file` attachments and Tab context bypass `preToolUse` hooks entirely. aide-memory's nudge is about agent-planned reads, not user-provided context.
-- Most of the manual end-to-end testing on this release exercised the FTS5 keyword path. The semantic-search path is contract-tested at unit level, has a smoke test against a real Ollama backend wired into `npm run test:smoke`, and works empirically against simple queries. Deeper coverage across embedding models, larger memory tables, and combined keyword + semantic queries is open work, not in flight. If you hit a semantic-search edge case, please file an issue.
-
-aide-memory is **proprietary freeware**: free to use today; source not public; not open source, not FSL, not MIT. Free for individuals today. Future enhancements may stay free, or some may ship as separate tiers as the project grows.
-
-Counts at launch: 7 MCP tools, 13 CLI commands, 6 hooks. The website docs at https://aide-memory.dev are the canonical reference; the GitHub repo's `docs/user/` tree carries short pointers to each canonical page.
+- Docs: https://aide-memory.dev
+- Quick start: https://aide-memory.dev/docs/quick-start
+- GitHub: https://github.com/aide-memory/aide-memory
+- Issues / feature requests: https://github.com/aide-memory/aide-memory/issues

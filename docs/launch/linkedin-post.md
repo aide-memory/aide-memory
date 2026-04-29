@@ -1,31 +1,32 @@
-# LinkedIn announcement (zero em-dashes)
+# LinkedIn launch post
 
-Launching aide-memory: layered, path-scoped, auto-captured memory for AI coding agents AND teams.
+We always want the best models, the best tools, a better workflow. But the bottleneck I keep hitting isn't any of those. It's context. What lives in your head, your team's domain knowledge, what isn't captured in documentation or rules files, what lives and dies inside sessions.
 
-The problem: every new session, your agent re-learns what you taught yesterday. Your teammates' agents re-learn the things your agent already learned. Switch from Claude Code to Cursor and the lesson is gone. CLAUDE.md and .cursorrules help, but they're flat files; they drift; they don't scope to areas; they don't auto-capture.
+AI agents have made me so much more productive. But they've also made me repeat myself. I explain how the feature I'm building ties into the rest of the system, the way I like to structure my code, the patterns to follow in this area. The agent gets it. We ship great work together. In a new session, it re-reads files it already read, re-explores areas it explored yesterday. I re-explain the same things.
 
-aide-memory closes those gaps. It's the layer between your editor's hooks, your agent's MCP tools, and the persistent knowledge of your codebase.
+Critical decisions being made during conversations aren't being captured. Preferences, corrections, area knowledge, guidelines. So much valuable context doesn't persist, doesn't flow to the next session, to a different tool, or to a teammate's agent when they pick up work in the same area.
 
-What's unique is the combination:
+Rules files help, but corrections and area knowledge from conversations don't make it back into the file on their own. And the whole file gets injected globally, even when most of it might not be relevant to the area the agent is working in.
 
-- **Layered + path-scoped recall.** Glob scopes (`src/auth/**`, `packages/api/**`) AND four typed layers (preferences, technical, area_context, guidelines). The agent gets only what's relevant for the file it's touching.
+I built aide-memory to close that gap, and I'm proud to announce it today.
 
-- **Hook-driven auto-capture.** Six hooks fire across the session lifecycle. When you correct the agent, it stores the correction. When a turn ends with a real decision, it offers to save it. When a session starts, top preferences and guidelines inject automatically.
+aide-memory (https://aide-memory.dev) is auto-captured, auto-recalled, path-scoped memory for AI coding agents and teams.
 
-- **Git-synced for teams.** Memories are JSON files in `.aide/memories/`. Commit them, push them, your teammates pull them. Their agents pick up the lessons you stored, on the next file read in the relevant area. Personal preferences stay gitignored; team conventions travel with the repo.
+**Capture happens automatically.** When you correct the agent, a hook detects it and prompts the agent to store the correction scoped to that code area. Periodic reflections pick up decisions and area knowledge. You don't have to remember to save context.
 
-- **Cross-tool.** Claude Code and Cursor read the same store. More editor adapters in flight.
+**Recall is scoped.** Memories attach to code areas across four typed layers (preferences, technical context, area decisions, team guidelines). When the agent opens a file, it gets prompted to recall what applies to that area, not a dump of non-relevant text.
 
-- **Uses your existing agent.** aide-memory is a typed store + dispatcher, no LLM calls of its own. The model in the editor you already pay for does all the reasoning. No extra inference cost.
+**Your team's agents learn from yours.** Memories are JSON files in your repo. Commit, push, pull. When your teammate's agent opens the area you've been working in, it picks up the context. Personal preferences stay gitignored.
 
-- **Local-first.** Memories live as JSON files on your disk plus a local SQLite cache. Anonymized usage counts ship to PostHog by default so we can see which features are used; disable any time with `AIDE_TELEMETRY=off`. Memory content, code, file paths, and queries never leave your machine.
+**Works across tools.** Claude Code and Cursor read the same memory store. Switch tools and the context comes with you.
 
-7 MCP tools, 13 CLI commands, 6 hooks, plus FTS5 keyword search and optional semantic search via Transformers.js or Ollama.
+**Tunable.** Control how often the agent gets prompted, how specific a memory's scope needs to be before it surfaces, how much context gets injected at session start, which hooks are active. Shape it to fit your workflow.
 
-License: proprietary freeware. Free to use today; potentially paid team / pro features later.
+**Local-first.** Memories stay on your machine. Free to use.
 
-Install: `npx aide-memory init`
-Docs: https://aide-memory.dev
-Demo: [video link]
+```
+npx aide-memory init
+```
 
-Per-editor capability matrix: https://aide-memory.dev/docs/supported-editors
+Docs + quick start: https://aide-memory.dev
+GitHub: https://github.com/aide-memory/aide-memory
