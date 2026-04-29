@@ -44,6 +44,7 @@ import { buildSessionStartContent } from './sessionStartContent';
 import { buildRules } from './editors/rules';
 import { EditorAdapter } from './editors/types';
 import { detectContributor, MCP_TOOLS_LIST } from './init';
+import { findPackageRoot } from './internal/paths';
 
 /**
  * Community soft cap on cumulative `alwaysApply: true` rule content — Cursor
@@ -97,7 +98,29 @@ export function renderRulesWithDynamic(
     '',
   ].join('\n');
 
-  return staticContent + autogenHeader + dynamicContent + '\n';
+  // Append version update notice if a newer version is cached.
+  let versionNotice = '';
+  try {
+    const os = require('os');
+    const pkgPath = path.join(findPackageRoot(), 'package.json');
+    const currentVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
+    const cachePath = path.join(os.homedir(), '.aide', 'update-check.json');
+    if (fs.existsSync(cachePath)) {
+      const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+      if (cache.latestVersion && cache.latestVersion !== currentVersion) {
+        const cv = currentVersion.replace(/^v/, '').split('.').map(Number);
+        const lv = cache.latestVersion.replace(/^v/, '').split('.').map(Number);
+        const isNewer = lv[0] > cv[0] || (lv[0] === cv[0] && lv[1] > cv[1]) || (lv[0] === cv[0] && lv[1] === cv[1] && lv[2] > cv[2]);
+        if (isNewer) {
+          versionNotice = `\n## Update available\naide-memory v${cache.latestVersion} is available (current: v${currentVersion}). Tell the user to run \`npm update -g aide-memory\` to upgrade.\n`;
+        }
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  return staticContent + autogenHeader + dynamicContent + versionNotice + '\n';
 }
 
 /**
