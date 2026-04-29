@@ -625,6 +625,27 @@ export async function sessionStart(input: HookInput): Promise<void> {
   const aideDir = path.join(projectRoot, '.aide');
   if (!fs.existsSync(aideDir)) return;
 
+  // Health check: verify hook scripts + MCP server binary still exist at
+  // the paths written by init. Catches broken npx cache, Node version
+  // switches, or cleaned global installs.
+  try {
+    const mcpConfigPath = path.join(projectRoot, '.mcp.json');
+    if (fs.existsSync(mcpConfigPath)) {
+      const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8'));
+      const serverPath = mcpConfig?.mcpServers?.['aide-memory']?.args?.[0];
+      if (serverPath && !fs.existsSync(serverPath)) {
+        const msg = `aide-memory: MCP server path not found (${serverPath}). ` +
+          'This can happen after a Node version change or cache clean. ' +
+          'Fix: run "npx aide-memory init" or "npm install -g aide-memory && aide-memory init"';
+        process.stderr.write(`[AIDE_HEALTH] ${msg}\n`);
+        emitAdditionalContext('SessionStart', msg);
+        return;
+      }
+    }
+  } catch {
+    // Non-fatal — don't break session start over a health check.
+  }
+
   // Cleanup: clear/compact/resume → drop THIS session's tracking. start → no-op.
   const source = input.source;
   if (source === 'clear' || source === 'compact' || source === 'resume') {

@@ -72,6 +72,17 @@ function getPackageRoot(): string {
 }
 
 /**
+ * Detect if aide-memory is running from the npx cache (ephemeral).
+ * npx downloads packages to ~/.npm/_npx/<hash>/node_modules/.
+ * Paths generated from this location break if the cache is cleaned,
+ * Node version changes, or aide-memory is upgraded.
+ */
+function isRunningFromNpxCache(): boolean {
+  const root = getPackageRoot();
+  return root.includes('/_npx/') || root.includes('\\_npx\\');
+}
+
+/**
  * Write an editor adapter's hook config file. Handles three scenarios:
  *   1. File doesn't exist → write fresh content with version stamp.
  *   2. File exists, no aide-memory hooks yet → merge (preserve user's other
@@ -777,6 +788,15 @@ export async function initProject(
       result.warnings.push(`rulesGen: ${(err as Error).message}`);
     }
     return result;
+  }
+
+  // 0. Detect npx cache and warn
+  if (isRunningFromNpxCache()) {
+    result.warnings.push(
+      'aide-memory is running from the npx cache. Hook and MCP paths may break if ' +
+      'the cache is cleaned, Node version changes, or aide-memory is upgraded. ' +
+      'For a stable install, run: npm install -g aide-memory && aide-memory init'
+    );
   }
 
   // Detect contributor
