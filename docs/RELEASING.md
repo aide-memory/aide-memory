@@ -144,12 +144,23 @@ The `.github/workflows/release.yml` workflow will:
 2. `npm run build` (tsc)
 3. `npm run build:dist` (esbuild bundles)
 4. `npm test` (all tests must pass)
-5. `cp package.aide-memory.json package.json` (swap manifest)
+5. `cp package.aide-memory.json package.json && cp README.npm.md README.md` (swap manifest + README)
 6. `./scripts/verify-package.sh` (final check before publish)
 7. `npm publish --access public` (using `NPM_TOKEN` secret)
-8. Create a GitHub Release with auto-generated notes
+8. Create a GitHub Release on aide-v0 (private, auto-generated notes)
+9. Create a GitHub Release on aide-memory/aide-memory (public, using `PUBLIC_REPO_SECRET`)
+10. Sync CHANGELOG.md to aide-memory/aide-memory (public)
 
-If the workflow fails, the publish did not happen. Check the GitHub Actions log, fix, re-tag, re-push.
+**Required secrets on ahmedmmeky/aide-v0:**
+- `NPM_TOKEN` — npm publish token (automation type, bypasses 2FA)
+- `PUBLIC_REPO_SECRET` — GitHub PAT with `repo` scope, must have write access to `aide-memory/aide-memory`. Needed for steps 9-10. If this secret lacks permission, npm publish still succeeds but the public repo release/changelog sync fails. Fix the token scope and manually create the release.
+
+**After the workflow completes**, mark previous versions as pre-release on the public repo:
+```bash
+gh release edit v<previous> --repo aide-memory/aide-memory --prerelease
+```
+
+If the workflow fails, check whether npm publish succeeded (steps 1-7) separately from the public repo sync (steps 8-10). The publish may have succeeded even if the workflow shows failure.
 
 ### Option B: manual (fallback, if CI unavailable)
 

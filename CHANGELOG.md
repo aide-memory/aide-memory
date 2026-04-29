@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7 — 2026-04-29
+
+- **Fix: post-checkout hook installs correctly in monorepo subdirectories.** Init now walks up to find `.git/` instead of only looking in the project root.
+- Updated RELEASING.md with dual-repo release process and token requirements.
+
 ## 0.5.6 — 2026-04-29
 
 - **Fix: `telemetry.enabled: false` in config.json now disables PostHog remote telemetry too.** Previously only stopped local SQLite logging while PostHog kept sending. Now both are controlled by the config key. `AIDE_TELEMETRY=off` env var still works as an override.

@@ -700,9 +700,21 @@ function installPostCheckoutHook(
   const skipped: string[] = [];
   const warnings: string[] = [];
 
-  const gitDir = path.join(projectRoot, '.git');
-  if (!fs.existsSync(gitDir) || !fs.statSync(gitDir).isDirectory()) {
-    warnings.push('Not a git repository — skipping post-checkout hook');
+  // Walk up to find .git/ (handles monorepo subdirectories)
+  let gitDir = '';
+  let searchDir = projectRoot;
+  for (let i = 0; i < 20; i++) {
+    const candidate = path.join(searchDir, '.git');
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      gitDir = candidate;
+      break;
+    }
+    const parent = path.dirname(searchDir);
+    if (parent === searchDir) break;
+    searchDir = parent;
+  }
+  if (!gitDir) {
+    warnings.push('No git repository found — skipping post-checkout hook');
     return { created, skipped, warnings };
   }
 
