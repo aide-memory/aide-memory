@@ -1,6 +1,6 @@
 {
   "name": "aide-memory",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Persistent memory layer for AI coding agents — your agent remembers what you taught it",
   "main": "dist/memory/index.js",
   "bin": {

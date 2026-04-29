@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 — 2026-04-29
+
+- Init detects when running from the npx cache and warns that paths may break on Node version changes or cache cleans. Recommends `npm install -g aide-memory`.
+- SessionStart hook checks that the MCP server binary still exists at the path written by init. If broken, surfaces a clear error with fix instructions instead of failing silently.
+- Quick start docs updated to recommend global install with npx as a quick-try alternative.
+
 ## 0.5.1 — 2026-04-29
 
 Patch: ship the correct README to npm. The 0.5.0 tarball included the dev monorepo README instead of the public-facing one. Also fixes the CI workflow to copy README.npm.md at publish time.
