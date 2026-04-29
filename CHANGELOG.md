@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-04-29
+
+Patch: ship the correct README to npm. The 0.5.0 tarball included the dev monorepo README instead of the public-facing one. Also fixes the CI workflow to copy README.npm.md at publish time.
+
 ## 0.5.0 — 2026-04-29
 
 First public release. Full Cursor support, libsql migration, editor adapter architecture, and content/docs overhaul.

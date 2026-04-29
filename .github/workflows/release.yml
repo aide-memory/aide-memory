@@ -41,7 +41,9 @@ jobs:
         run: npm test
 
       - name: Prepare package for npm
-        run: cp package.aide-memory.json package.json
+        run: |
+          cp package.aide-memory.json package.json
+          cp README.npm.md README.md
 
       - name: Verify tarball contents (fail if source/maps leak)
         run: ./scripts/verify-package.sh
