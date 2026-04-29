@@ -1,0 +1,21 @@
+{
+  "id": 357,
+  "uuid": "a75da552-a492-4649-9f65-4eedd9dc32f8",
+  "layer": "technical",
+  "what": "Editor `clear` semantics relative to session_id and aide-memory tracking files (researched 2026-04-27, EMPIRICALLY VERIFIED).\n\n**Claude Code `/clear` — VERIFIED creates a new session_id.** Per GitHub issues anthropics/claude-code#37451, #32871, #31220: `/clear` \"actually creates a new session with a new UUID, identical to /new.\" Multiple users complain this is semantically wrong (clear should reset in-place, not abandon-and-create-new), but that's the current behavior. **Implication for aide-memory:** Claude Code's /clear automatically gives us fresh tracking by construction — the new session_id means a new (empty) `recalled-paths-<id>.txt` file. The current session's tracking file becomes orphaned but harmless until cleanup. No special handling needed.\n\n**Cursor \"Clear\" button — VERIFIED 2026-04-27 (user empirical test): IT DOES NOT CHANGE session_id.** User reports: \"on clear it just keeps same session_id, and opens new tab gets a new session — clear doesn't actually reset the conversation, just hides it.\" Same shape as Claude Code's VS Code extension bug #53401 (visual-only clear). **Cmd+N (new tab/chat) → new session_id.** Clear button → same session_id retained.\n\n**REAL GAP for aide-memory tracking on Cursor:**\n- User clicks Clear → chat appears empty but session_id persists\n- Agent's context is reset (no prior turns)\n- Our tracking file `.aide/cache/recalled-paths-<session_id>.txt` PERSISTS with prior reads\n- Next read of an already-tracked file → preToolUse:Read sees coveredCount === scoped_ids.length → **silent** when it should hard-block (agent forgot, but tracking thinks files covered)\n- Result: post-Clear the agent reads files without recalling memories\n\n**Mitigation options (pending user decision, all imperfect):**\n1. **Document, tell users to use Cmd+N for fresh state.** Cheapest. Cursor's Clear is broken (per Cursor's own UX); we surface that aide-memory's safety net only resets on Cmd+N.\n2. **Provide an `aide-memory clear` CLI** that removes the current session's tracking files. User runs it manually after Clear. Explicit, low-magic.\n3. **Add a TTL on tracking files** (e.g. 30 min idle → treat stale). Defensive but doesn't help \"user clicks Clear and immediately re-reads.\"\n4. **Hash the first prompt of each \"session-instance\"** and switch tracking files when it changes. Complex; risks false-positives.\n5. **File a Cursor FR** for a clear event (or fix the Clear-doesn't-actually-clear behavior). Long-term.\n\n**For 0.5.0:** option 1 (document) is the pragmatic call. Add to docs/user/editors/cursor.md: \"Use Cmd+N (new chat tab) to get fresh memory-tracking state. The 'Clear' button visually resets the chat but preserves the session — aide-memory's safety net stays in 'already-recalled' state.\" Track options 2-5 as Phase 1 follow-ups.\n\n**Why this matters cross-session:** any future work on tracking-file lifecycle (Phase 2 cleanup TTLs, multi-session coordination, scope-tracking ideas from memory #324) needs to know which editor actions reset session_id and which don't. Claude Code: /clear and /new are equivalent (new session). Cursor: Clear ≠ Cmd+N — Clear preserves session_id, Cmd+N creates new.",
+  "why": "User empirically tested Cursor's Clear behavior 2026-04-27 and confirmed it preserves session_id (matches the Claude Code VS Code extension bug pattern). Updating from \"UNVERIFIED\" to \"VERIFIED + real gap exists.\" Adding mitigation options + lean recommendation for 0.5.0 so future doc-update sessions can act on it directly without re-deriving.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "integration",
+    "testing"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T14:45:27.876Z",
+  "updated_at": "2026-04-27T14:49:00.532Z"
+}

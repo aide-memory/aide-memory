@@ -1,0 +1,57 @@
+{
+  "hooks": {
+    "read": {
+      "maxBlocks": 1
+    },
+    "edit": {
+      "maxBlocks": 1
+    },
+    "stop": {
+      "schedule": [
+        {
+          "until": 9,
+          "every": 3
+        },
+        {
+          "until": 29,
+          "every": 5
+        },
+        {
+          "every": 10
+        }
+      ]
+    },
+    "search": {
+      "mode": "soft"
+    },
+    "correction": {
+      "enabled": true
+    },
+    "precompact": {
+      "mode": "cleanup"
+    },
+    "visible": true
+  },
+  "recall": {
+    "limit": 20,
+    "ensureLayerDiversity": true,
+    "layerDiversityMinLimit": 5,
+    "minScopeDepth": 1
+  },
+  "injection": {
+    "enabled": true,
+    "preferences": 15,
+    "excludeScopedPreferences": false,
+    "technical": false,
+    "area_context": false,
+    "guidelines": "all",
+    "priorityAlwaysOverride": true,
+    "maxChars": 1200
+  },
+  "memories": {
+    "hideFromGrep": true,
+    "softening": {
+      "threshold": 10
+    }
+  }
+}

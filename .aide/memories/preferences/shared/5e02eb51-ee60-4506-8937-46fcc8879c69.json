@@ -1,0 +1,18 @@
+{
+  "id": 401,
+  "uuid": "5e02eb51-ee60-4506-8937-46fcc8879c69",
+  "layer": "preferences",
+  "what": "User wants validation done as an ACTUAL end user: npx aide-memory init from scratch, not using the local dev version. The demo project should simulate a real user flow (ask agent to build something, get corrected, see recall), not just CLI commands. Follow the post-deploy validation steps from RELEASING.md Step 7 exactly.",
+  "why": null,
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T17:38:15.344Z",
+  "updated_at": "2026-04-29T17:38:15.344Z"
+}

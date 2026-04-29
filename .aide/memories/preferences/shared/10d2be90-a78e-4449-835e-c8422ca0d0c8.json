@@ -1,0 +1,18 @@
+{
+  "id": 391,
+  "uuid": "10d2be90-a78e-4449-835e-c8422ca0d0c8",
+  "layer": "preferences",
+  "what": "LinkedIn/blog launch content preferences (2026-04-29):\n\n**Opening hook FINAL:** \"We always want the best models, the best tools, a better workflow. But the bottleneck I keep hitting isn't any of those. It's context.\" User approved this line. But needs to be clearer it's about AI/agents without literally saying \"AI agents\" (nobody talks like that naturally). Work it in organically.\n\n**Newsletter:** User wants NO third-party service. Explore self-hosted or no-dependency options (mailto link, simple JS that saves to a file, or just skip the form until Buttondown is approved).",
+  "why": "Final approvals on hook line + newsletter constraint.",
+  "scope": "docs/launch/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T14:55:33.092Z",
+  "updated_at": "2026-04-29T16:05:20.348Z"
+}

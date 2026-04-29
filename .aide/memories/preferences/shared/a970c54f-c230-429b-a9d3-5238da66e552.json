@@ -1,0 +1,18 @@
+{
+  "id": 395,
+  "uuid": "a970c54f-c230-429b-a9d3-5238da66e552",
+  "layer": "preferences",
+  "what": "External content consistency rule: ALL external-facing content (website, blog, LinkedIn, README.md, README.npm.md, aide-memory public repo README) must be kept in sync with the same content rules. If feedback is given on the website or blog post content, apply the same fixes to READMEs and all other external surfaces. User discovered the public aide-memory README hadn't been updated in 3 weeks despite extensive content feedback this session. Also: mention AI/agents organically in the LinkedIn hook so it's visible before \"read more\". Cursor rules and CLAUDE.md framing should be \"no unified convention or structure\" not \"flat files with no structure.\"",
+  "why": null,
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T16:18:55.689Z",
+  "updated_at": "2026-04-29T16:18:55.689Z"
+}

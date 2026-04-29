@@ -1,0 +1,21 @@
+{
+  "id": 341,
+  "uuid": "ab27303c-92e7-432d-b90b-151564120978",
+  "layer": "guidelines",
+  "what": "Validation-methodology correction (2026-04-26): when testing whether content is being INJECTED into agent context (vs available via tool calls), do NOT test in the same chat where tools were already called — prior tool-call results carry forward in conversation history and confound the test. Use a FRESH chat/session in the same project, and ask about content UNIQUELY in the injection source (e.g. rules-file body) and NOT in any seeded memory. The \"Do NOT store: obvious facts, temporary state, secrets, trivial observations\" line in shared/body.md is a good isolation probe — it appears only in rules content, never as a memory. Same-session \"write a function\" tests are weak signals because the agent may apply guidelines from earlier tool-call results, not from injection. This applies to validating any session-start-injection workaround (Cursor C4 rules-file regen, future similar workarounds for other editors) and any test of \"does agent's context include X\" claims.",
+  "why": "User pushed back on my proposed \"write a getUser function\" test (2026-04-26): it wouldn't isolate rules-file injection from prior-turn tool-call context, since the agent already had memories in conversation history from the previous Scenario N call. Real test needs fresh session + content unique to the injection source. Storing as a project-wide guideline scoped to validation work so future validation runs (other editors, future workarounds) start from the right methodology rather than re-discovering the confound.",
+  "scope": "docs/validation/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "architecture"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-26T16:29:54.711Z",
+  "updated_at": "2026-04-26T16:29:54.711Z"
+}

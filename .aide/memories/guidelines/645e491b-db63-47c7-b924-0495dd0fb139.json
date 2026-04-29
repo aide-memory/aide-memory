@@ -1,0 +1,21 @@
+{
+  "id": 342,
+  "uuid": "645e491b-db63-47c7-b924-0495dd0fb139",
+  "layer": "guidelines",
+  "what": "Validation-methodology preference (2026-04-26): when testing a TRIGGER path that real users hit through the agent (e.g. memory writes triggering rules-file regen, correction detection triggering Stop reminders), prefer testing through the AGENT-FACING channel (have agent call the MCP tool naturally) over the DEVELOPER-FACING channel (CLI command directly). Reason: real users invoke triggers through agent conversation, not shell commands. Testing the agent path validates the FULL chain (UI → MCP → handler → side effect) rather than just the side-effect half. Concrete: for Cursor C4 regen-trigger validation, prompt the agent \"remember X as a guideline\" rather than running `aide-memory remember X --layer guidelines`. Keep CLI shell-checks as OPTIONAL fallback when the agent test fails — useful for narrowing whether the regression is in trigger firing or in editor reload behavior. Complements memory #341 (test isolation via fresh session). Together: fresh-session + agent-facing path = closest to real-user experience.",
+  "why": "User pivoted my Scenario N-regen test (2026-04-26) from a shell-CLI-driven approach (\"node aide-memory.js remember X\") to an agent-driven approach (\"ask the agent: remember X\"). Their reasoning: testing through the agent path is what real users do; the CLI path is a developer convenience. Better validation. Storing so future trigger-path validations (new editors, new MCP tools, future workarounds) start from the agent-facing test by default rather than reaching for the CLI shortcut. Complements #341 on test isolation.",
+  "scope": "docs/validation/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "architecture"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-26T16:41:55.330Z",
+  "updated_at": "2026-04-26T16:41:55.330Z"
+}

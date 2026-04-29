@@ -1,0 +1,21 @@
+{
+  "id": 343,
+  "uuid": "ab78e47a-3193-4c02-bb27-6d6e2b9c7cc4",
+  "layer": "technical",
+  "what": "Cursor Scenario A1 FAILED on first live test (2026-04-26): hard-block did NOT fire when agent ran `read src/api/routes.ts` in fresh Cursor chat against /tmp/aide-cursor-val fixture (11 memories seeded, src/api/** scoped memories present). Agent acknowledged \"let me start by checking if there are any cached memories\" (rules-file content visible) but then read the file directly — NO `permission: deny` user_message rendered, NO `aide_recall` tool call. Two possible root causes (DIAGNOSIS PENDING): (a) Cursor hooks not firing at all — registration/enablement issue similar to MCP toggle gate; check Cursor → View → Output → Hooks panel, OR (b) hook fires but Cursor ignores `permission: deny` — known Cursor bug forum #154377 (\"hooks-returning-deny do not seem to block tool execution\"). Implication if (b): C3's routing decision (preToolUse:Read over beforeReadFile) didn't actually solve the deny-not-honored problem — both events have similar bugs. This would be a 0.5.0 BLOCKER for the \"first-read hard-block\" experience or downgrade to \"best-effort, may not block\" gap. User checking Cursor Hooks output panel next to narrow root cause. If hook never fires, fixable on our end (likely registration toggle or hook config format issue). If hook fires but deny ignored, must accept gap + document + rely on rules-file \"When to call aide_recall\" guidance.",
+  "why": "First live failure during Cursor validation walk. Critical to capture immediately because: (1) potentially a 0.5.0 BLOCKER if deny-ignored bug is what we're hitting, (2) C3's routing rationale (preToolUse:Read instead of beforeReadFile) may have been based on incorrect assumption that preToolUse:Read deny works reliably, (3) future Cursor work needs this context to avoid re-litigating the routing decision, (4) onboarding new editors should test deny-honoring early to detect platform-bug-vs-our-bug. Storing now even though diagnosis is pending — when user returns with Hooks panel result, will aide_update with definitive root cause + remediation.",
+  "scope": "src/memory/editors/cursor.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "api-contract",
+    "testing"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-26T16:48:21.959Z",
+  "updated_at": "2026-04-26T16:48:21.959Z"
+}

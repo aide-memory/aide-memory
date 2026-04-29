@@ -1,0 +1,20 @@
+{
+  "id": 389,
+  "uuid": "e6b43463-fa58-48c7-827c-906b086bc96c",
+  "layer": "guidelines",
+  "what": "**Content rules locked from 2026-04-28 audit (apply across HomePage, docs, READMEs, launch content):**\n\n1. **Don't mention competitor star counts.**\n\n2. **MCP schema cost figure: ~2,900 tokens combined.** Always explain what the number means: \"~2,900 tokens for the seven MCP tool definitions, loaded once per session.\" Don't drop the number without context.\n\n3. **Plain English over jargon.** Don't ship conversational technical terms in user-facing copy.\n\n4. **Layer-table column header: \"What it captures\"** not \"Use when\" or \"Purpose.\"\n\n5. **\"Per-editor table\" not \"Capability matrix.\"**\n\n6. **Don't claim things we don't actually do.** PreCompact only clears tracking. Verify handler before describing hook behavior.\n\n7. **Don't expose internal source paths.** No \"per LAYER_ORDER in src/memory/recall.ts\" in user-facing docs.\n\n8. **Soft-nudge wording: \"if some scoped memories haven't been recalled yet\"** not just \"if new memories arrive.\"\n\n9. **Other editor support: \"Deeper integration may come based on user feedback\"** not \"in flight\" or \"tracked as ongoing work.\"\n\n10. **Don't explain Cursor's internal defaults.** Just give the setup step.\n\n11. **Branch-protection workflow:** `gh pr merge --admin` needed for owner self-merges.\n\n12. **No absolutes.** Don't say \"every\", \"always\", \"never\", \"none\", \"all\" unless literally, provably true. User is a literalist. \"Most workflows\" is also a claim we can't back up. Prefer neutral framing (\"defaults you can tune\").\n\n13. **\"built different\" not \"built differently\"** for the homepage heading. User prefers casual, confident tone in marketing copy.\n\n14. **Blog/LinkedIn: no demo references for initial launch.** Demo posts come later as a separate thing. Initial launch post introduces the product only.",
+  "why": "Round-12 added items 12-14 from user corrections this turn.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T14:11:18.422Z",
+  "updated_at": "2026-04-29T14:45:54.172Z"
+}

@@ -1,0 +1,22 @@
+{
+  "id": 354,
+  "uuid": "5af304e5-3a6d-403c-97b3-9aa1343d1eb3",
+  "layer": "technical",
+  "what": "libsql migration spike result (2026-04-27, branch spike/libsql at .claude/worktrees/spike-libsql/): drop-in compatible after 1.5h spike. **750/750 tests pass.** TypeScript build clean (libsql ships better-sqlite3-compatible types literally — d.ts file even comments \"Type definitions for better-sqlite3 7.6\"). N-API ABI stability proven empirically: same `.node` binary loaded successfully under Node 22 (ABI 127) AND Node 18 (ABI 108), no rebuild — closes the bug class from memory #348.\n\n**Required patches when migrating:**\n1. **6 import sites** — `from 'better-sqlite3'` → `from 'libsql'`. Type signatures `Database.Database` work unchanged.\n2. **bufferToVector polyfill** in `src/memory/embeddings.ts` — libsql QUIRK: `prepare().get()` returns BLOB as Buffer (compatible), but `prepare().all()` returns BLOB as ArrayBuffer. Patch: accept `Buffer | ArrayBuffer | Uint8Array`, branch on `instanceof ArrayBuffer`.\n3. **Test cleanup helpers (10 test files)** — libsql doesn't auto-truncate `.db-wal`/`.db-shm` on `db.close()` like better-sqlite3 does. Tests using `fs.rmdirSync(dir)` after `db.close()` fail with ENOTEMPTY. Fix: `fs.rmSync(dir, { recursive: true, force: true })`. Production has zero impact (we never delete .db files in production).\n4. **package.json** — replace `better-sqlite3` dep with `libsql`, update esbuild `--external:better-sqlite3` flags (3 in build:dist scripts), update assertion in `src/__tests__/package.test.ts` (also fix incorrect comment that calls better-sqlite3 \"an N-API addon\" — it isn't).\n\n**Other libsql quirks to know:**\n- `_metadata: { duration }` field on every returned row from prepare().get()/all() — libsql adds query timing. Doesn't break our `as any` cast pattern but would break `toEqual()` on full row shapes. We don't use those.\n- `pragma()` IS supported at runtime (libsql docs page at deepwiki/api.md says \"currently unsupported\" but that's stale — it works fine, returns same shape as better-sqlite3).\n- FTS5 supported (verified by spike).\n- libsql package ships platform-specific prebuilds via @libsql/[platform] sub-packages (npm pulls only the one matching host platform/arch).\n\n**Perf delta vs better-sqlite3 (Node 22, real MemoryStore + recall path, after warm-up):**\n- 500 memories: recall hot path ~2.55ms → ~2.95ms (+0.40ms / +16%). Sub-millisecond.\n- 1000 memories: recall hot path ~4.14ms → ~5.24ms (+1.10ms / +27%). Still imperceptible vs hook latency budget (100s of ms).\n- Search FTS5: 0.5-1ms range either way.\n- Write path: ~0-0.5ms delta.\n- Acceptable for 0.5.0 ship. better-sqlite3 IS the fastest SQLite driver in Node, so any swap costs perf — but absolute numbers stay in the imperceptible range.",
+  "why": "The spike succeeded — we now know migration is viable AND know exactly what to patch. Storing the specific patches + quirks so the actual migration session (whenever it happens) doesn't re-discover the bufferToVector ArrayBuffer issue or the WAL/SHM cleanup issue under time pressure. Also captures empirical perf delta so future debates about \"is this fast enough\" have data instead of speculation. Complements #348 (root cause), #349 (just-works principle), #353 (N-API research framework) — this is the empirical proof point for those.",
+  "scope": "src/memory/store.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "performance",
+    "migration"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T13:16:54.218Z",
+  "updated_at": "2026-04-27T13:16:54.218Z"
+}

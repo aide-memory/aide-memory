@@ -1,0 +1,18 @@
+{
+  "id": 386,
+  "uuid": "6ec48efd-c21e-47bd-9ff5-92c951ed6743",
+  "layer": "guidelines",
+  "what": "**Round-8 directives (user 2026-04-28):**\n\n1. **Edit-this-page links open in new tab.** `target=\"_blank\"` on the docs-edit link in `theme.config.jsx`. (User reaffirmed: \"Duh thats why I said open in new tab.\")\n\n2. **GitHub branch protection on aide-memory-web `main`:**\n   - People CAN open PRs (and are required to, for any change to main)\n   - Cannot push directly to main\n   - Cannot delete main branch\n   - Cannot delete the repo\n   - Require PR review before merge\n   - No force-push to main\n   - Apply equivalent rules to any other public-facing repo (e.g. `aide-memory/aide-memory` if it exists)\n\n3. **Competitor claims need a fresh research pass.** Don't assume the existing comparison-page claims (claude-mem, engram, possibly others) are still accurate; the prior audit was 2026-04-27 and may have drifted. User explicitly: \"dont assume what we had was correct the first time.\"\n\n4. **Node version is too restrictive at 20+.** User wants earlier-version support if the code can actually run on it. Default move: lower to the lowest version the deps actually require, not the latest LTS. Verify via `npm ls --all`-style check against each transitive dep's `engines` field, plus actual smoke against Node 18 if reasonable. Don't keep `>=20.0.0` just because \"Node 18 is EOL.\"\n\n5. **CRITICAL meta-feedback: don't be literal-only.** When user gives feedback on a specific line/example, apply the SPIRIT to all similar content, not just the literal line. Examples from this audit:\n   - User pointed out \"you spoke in absolutes\" → went and fixed one absolute, missed others. Should have done a global sweep for \"always\", \"every\", \"100%\", \"must\", and softened where appropriate.\n   - User pointed out \"preference example was generic\" → fixed one example, missed similar genericness in technical / area_context examples on other pages.\n   - User pointed out one place where I was over-explaining → fixed that paragraph, missed equivalent over-explanation elsewhere.\n   - User pointed out \"PreCompact claim is wrong\" → fixed in two places, may have missed elsewhere if the same fabricated claim leaked into blog / launch / FAQ.\n\n   **Apply at the pattern level always.** When a correction lands, grep the entire content tree for the same anti-pattern + fix all instances. Don't wait for the user to point to each one.\n\n6. **Buttondown setup instructions** are needed; user is doing this themselves. (Send instructions, not changes to code.)\n\nThese are durable directives that apply across this audit and any future content work. Branch-protection setup is one-time but the mental model \"apply spirit of feedback project-wide\" is permanent. (from ahmedmmeky)",
+  "why": "User dropped four explicit directives + one critical meta-correction in one turn. The meta-correction (don't be literal-only) is the most important: I keep applying their feedback to the exact line they pointed at and missing the broader pattern. That shows up multiple times in this audit (telemetry phrasing, absolutes, examples, over-explanation, PreCompact accuracy). Storing as priority:always so every future doc / content session auto-injects this guardrail.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T13:25:34.470Z",
+  "updated_at": "2026-04-29T13:25:34.470Z"
+}

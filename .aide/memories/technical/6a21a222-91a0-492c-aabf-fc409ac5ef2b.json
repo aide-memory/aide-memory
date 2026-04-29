@@ -1,0 +1,21 @@
+{
+  "id": 369,
+  "uuid": "6a21a222-91a0-492c-aabf-fc409ac5ef2b",
+  "layer": "technical",
+  "what": "Cursor 3.2.11 stop-hook UX behavior (verified empirically 2026-04-27, conv 89f5d173 in /private/tmp/aide-cursor-val):\n\n**Cursor auto-submits `followup_message` as the next user prompt.** When our stop hook returns `{followup_message: \"<text>\"}`, Cursor doesn't just display it — it submits the text as if the user typed it, triggering a fresh agent turn. Observable in hook logs as: stop fires at T → beforeSubmitPrompt fires at T+5ms with `prompt: \"<the followup_message text>\"`.\n\n**Implications:**\n1. **Stop-hook reflection loop works on Cursor end-to-end** — the agent receives the followup as a real prompt, considers it, and acts (e.g., calls aide_remember if there's something to persist, otherwise concludes \"nothing to remember\"). Validates Scenario O Phase 1 + the correction-pending one-turn-delay UX (memory #336).\n\n2. **Subtle risk: detect-correction.sh runs on the auto-submitted followup_message.** The chrome we emit (`\"aide-memory · checkpoint — prompting aide_remember...\"`) is currently SAFE because the regex requires a `no[, ]+(don't|use|instead|...)` format that our chrome doesn't match. But future stop-hook chrome additions MUST avoid correction-pattern triggers (no leading `\"no, ...\"` phrases) or we'd create a feedback loop where the stop-hook chrome itself triggers a false-positive correction-pending flag → next stop reprompts the correction → infinite loop bounded only by Cursor's loop_limit (default 5).\n\n3. **Schedule cadence verified for Cursor:** stop-count file = 15 at session end + chrome-fires observed at counts ~3, 6, 9 in the logs → Phase 1 (every 3, until count 9) confirmed. Phase 2 (10-29 every 5) would fire at 14 — visible in log if we had captured around that count. Phase 3 (30+ every 10) untested but mechanism is editor-agnostic.\n\n**Code reference:** `src/memory/editors/cursor.ts` translateOutput case 'block' event 'stop' — emits `{followup_message: \"<chrome> — <reason>\"}` chrome-prefixed inline because Cursor only accepts one field on stop. Verified working as designed.",
+  "why": "Memory #328 documents Cursor's stop hook accepts `followup_message` but doesn't note the auto-submit-as-next-prompt behavior. That's a real product-relevant detail — it means our stop chrome runs through detect-correction.sh on every fire, which is a subtle interaction worth being aware of when adding new stop-hook content. Also captures the empirical Phase-1 schedule verification on Cursor that wasn't previously confirmed.",
+  "scope": "src/memory/editors/cursor.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "integration",
+    "api-contract"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T19:54:24.201Z",
+  "updated_at": "2026-04-27T19:54:24.201Z"
+}

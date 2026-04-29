@@ -1,0 +1,18 @@
+{
+  "id": 398,
+  "uuid": "cac6d3f4-b6a5-4658-a33f-df9f9e3d7324",
+  "layer": "technical",
+  "what": "User frustrated: I claimed the README.md on aide-v0 and the public GitHub repo README were the same content, but they aren't. The public repo (aide-memory/aide-memory) got the unified README.npm.md content. But aide-v0/README.md still has the old content with stale framing (\"What aide-memory closes that rules files don't\", absolutes, etc.). The npm tarball shipped with aide-v0/README.md (the dev one), NOT README.npm.md. Must verify what actually shipped rather than assuming. Also: all external surfaces must use consistent language matching the website and blog posts.",
+  "why": null,
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T16:42:11.579Z",
+  "updated_at": "2026-04-29T16:42:11.579Z"
+}

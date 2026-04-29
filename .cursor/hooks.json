@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/session-start-clear.sh",
+        "timeout": 10
+      }
+    ],
+    "preCompact": [
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-compact-save.sh",
+        "timeout": 30
+      }
+    ],
+    "stop": [
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/stop-remember.sh",
+        "timeout": 30
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/detect-correction.sh",
+        "timeout": 5
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-read-recall.sh",
+        "timeout": 10,
+        "matcher": "Read"
+      },
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-edit-recall.sh",
+        "timeout": 10,
+        "matcher": "Write"
+      },
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/pre-search-nudge.sh",
+        "timeout": 10,
+        "matcher": "Grep"
+      },
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-recall.sh",
+        "timeout": 5,
+        "matcher": "MCP:aide_recall"
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-recall-post.sh",
+        "timeout": 5,
+        "matcher": "MCP:aide_recall"
+      },
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-remember.sh",
+        "timeout": 5,
+        "matcher": "MCP:aide_remember"
+      },
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-remember.sh",
+        "timeout": 5,
+        "matcher": "MCP:aide_update"
+      },
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-remember.sh",
+        "timeout": 5,
+        "matcher": "MCP:aide_forget"
+      },
+      {
+        "type": "command",
+        "command": "bash /Users/meky/code/aide-v0/scripts/hooks/track-search.sh",
+        "timeout": 5,
+        "matcher": "MCP:aide_search"
+      }
+    ]
+  },
+  "_aideMemoryVersion": "0.2.0"
+}

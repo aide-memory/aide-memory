@@ -1,0 +1,22 @@
+{
+  "id": 358,
+  "uuid": "77d41dc0-081d-441d-bbc5-7658b2d9150e",
+  "layer": "preferences",
+  "what": "User directive 2026-04-27 (HIGH-IMPORTANCE — strong correction): STOP defaulting to \"this other editor is more limited than Claude Code\" framing. I have a documented bias toward treating Cursor (and presumably other editors) as having narrower capabilities than Claude Code, even when their official docs expose more functionality than I claim.\n\n**Concrete pattern caught 2026-04-27:** I repeatedly framed Cursor's preToolUse soft-nudge channel as a \"documented platform gap\" / \"no additionalContext channel\" / \"drop silently\" across multiple turns and validation matrix entries — without checking Cursor's actual hooks docs. When forced to research (after the user pushed back), I found Cursor's preToolUse explicitly supports `agent_message` (their equivalent of additionalContext) AND `user_message`. The \"gap\" was OUR adapter dropping the message to empty, not Cursor's API lacking the channel. Memory #336 contained the same wrong assertion (\"additionalContext/systemMessage→'' (no Cursor channel)\"). Earlier #345 had a similar shape (auto-attach hypothesis) that proved wrong on empirical test.\n\n**Rule going forward — apply to ALL editors (Cursor, Windsurf, Codex, Copilot, future):**\n1. **Default position:** assume the editor exposes equivalent capability until docs prove otherwise. Don't carry over assumptions from prior knowledge or prior memories.\n2. **Verify by fetching the actual editor docs** before claiming a gap, limitation, or \"platform issue.\"\n3. **Distinguish three cases EXPLICITLY in any doc claim or analysis:**\n   (a) Editor docs prove the field/event is ABSENT → genuine platform gap (cite the docs).\n   (b) Editor docs prove the field/event EXISTS but our adapter doesn't use it → OUR bug, fix the adapter.\n   (c) Untested / undocumented either way → say \"unverified,\" not \"missing.\"\n4. **No \"Cursor lacks X\" or \"Cursor doesn't support Y\"** without a citation to Cursor docs that prove the negative.\n5. **Re-audit periodically.** Editors add capabilities (e.g., Cursor 1.7 added agent-lifecycle hooks). Memories about editor limitations have an expiration date.\n6. **Apply to Claude Code too** — don't default-assume Claude Code is the most-capable. Current pattern was Cursor-biased but symmetrical bias toward any editor is the same problem.\n\n**Practical consequence for the 0.5.0 work in progress:** every assertion in the cursor adapter, in CURSOR_ONBOARDING.md, in editor docs, in the validation matrix that says \"Cursor doesn't have X\" or \"Cursor's Y is dropped silently\" needs to be re-verified against current Cursor docs. Likely several more \"gaps\" we documented are actually solvable adapter-level fixes. Same for any other editor docs we generate.",
+  "why": "User direct quote 2026-04-27: \"This makes me think we view other tools as limited and have a bias towards thinking they dont have support or dont do as much as the current native tool. Again it is critical you remove all biases in your analysis and be completely neutral and only look at verified facts!! why did you claim before repeatedly this was a limitation when there is something for it!\" This is a strong cross-cutting directive that affects every editor adapter, every external doc, every validation claim. priority:always so the next session/doc-edit doesn't repeat the same pattern. Complements #347 (no product pitching) and #351 (evidence before docs) but more specific: bias-check on capability assertions, not just promotional framing.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style",
+    "integration",
+    "api-contract"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T14:55:41.175Z",
+  "updated_at": "2026-04-27T14:55:41.175Z"
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "aide-memory": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/meky/code/aide-v0/dist/memory/cli.js",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}

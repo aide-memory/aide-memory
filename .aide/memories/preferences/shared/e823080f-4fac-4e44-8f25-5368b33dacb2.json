@@ -1,0 +1,20 @@
+{
+  "id": 346,
+  "uuid": "e823080f-4fac-4e44-8f25-5368b33dacb2",
+  "layer": "preferences",
+  "what": "User communication preference (2026-04-27): no preemptive hype on test setups or \"cleanest test possible\" framing before something is actually verified. Do NOT use phrases like \"this is great\", \"the cleanest test possible\", \"now we're set up perfectly\" when describing test conditions or expected outcomes. Reserve enthusiastic framing ONLY for results that have been concretely demonstrated as working. Failed tests, ambiguous tests, and unproven setups should be reported neutrally — describe what we did, what we observed, what remains unknown. Calibration matters because over-promising on validation language erodes trust when results turn out worse than the framing suggested. Concrete: don't write \"🎯 we're now ready to definitively test X\" or similar setup-celebration. Do write \"running this; expect Y; will tell us Z.\" Distinct from memory #340 (don't over-claim anti-pattern framing) — that was about content claims; this is about emotional/celebratory tone calibration.",
+  "why": "User direct correction during 2026-04-27 Cursor validation: \"Can you stop with unwarranted/unnecessary hype 'This is the cleanest A1 test possible' we are literally unable to prove that block is working rn so stop with the false hype, can get hyped if we prove something actually works.\" Calibrate language to match actual evidence. Storing as cross-session preference so future tone follows the same rule rather than re-litigating per session.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T11:41:03.244Z",
+  "updated_at": "2026-04-27T11:41:03.244Z"
+}

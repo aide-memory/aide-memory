@@ -1,0 +1,21 @@
+{
+  "id": 365,
+  "uuid": "6f944b18-aecb-40ec-88ec-f279bb583464",
+  "layer": "guidelines",
+  "what": "Rules-file injection (alwaysApply:true / equivalent) is an empirically-verified mitigation pattern for editor hook coverage gaps. When an editor's hook surface can't fire for a specific code path (e.g., Cursor 3.2.11 preToolUse:Read silent on editor-open files), adding a directive bullet to src/templates/rules/shared/body.md instructs the agent to take the action manually. Verified 2026-04-27 via 4-cell matrix: the bullet \"Even when a file's content is already visible to you, call aide_recall for that path — UNLESS already recalled this session\" successfully made the agent call aide_recall proactively in 100% of file-open reads under typical prompts (cell F-fo-3). Floor of coverage is the adversarial case (gap × prompt-suppression — F-fo-4) where rules-file guidance is overridden. Pattern for future editor onboarding: (1) identify the hook-coverage gap empirically, (2) add a directive bullet to the shared body, (3) verify via a 2-axis matrix that crosses the gap with prompt-suppression, (4) ship with the realistic-workflow cell PASSing — adversarial cell documented as known floor.",
+  "why": "Generalizes the Cursor per-Read editor-open verification (memory #364) into a reusable pattern for onboarding new editors. Without this, future editor-onboarding work might over-document gaps as ship-blockers when they could be functionally closed via rules-file injection. Marked priority:always so it auto-injects on editor-onboarding sessions.",
+  "scope": "src/memory/editors/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "integration"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T19:15:09.089Z",
+  "updated_at": "2026-04-27T19:15:09.089Z"
+}

@@ -1,0 +1,21 @@
+{
+  "id": 355,
+  "uuid": "6f561219-5337-4e57-97d6-3fcd1b33cc59",
+  "layer": "technical",
+  "what": "Diagnostic surface implementation decisions (2026-04-27, shipped on feature/phase-1-cursor-support alongside libsql migration). Three non-obvious choices captured here so future maintenance doesn't re-litigate them:\n\n**1. binding-loader uses a `createDatabase()` factory, NOT a default-export passthrough.** Initial attempt was `import Database from './internal/binding-loader'` re-exporting the libsql constructor as default. TS could not propagate the `Database.Database` (instance type, from libsql's `declare namespace Database { ... }`) through a default re-export — store.ts hit `TS2503: Cannot find namespace 'Database'` on every `private db: Database.Database` field. Fix: binding-loader exports `createDatabase(filename, options?)` factory; callers use `import type Database from 'libsql'` (type-only, namespace works) + `import { createDatabase } from './internal/binding-loader'` (value). Two imports per consumer, clean type pass-through. If anyone tries to \"simplify\" back to a default re-export, they will hit TS2503 again.\n\n**2. debug.ts re-reads process.env on EVERY call.** A natural-looking optimization is \"parse env once at module load, cache the result.\" Don't do that — vitest tests mutate `process.env.AIDE_DEBUG` in beforeEach, and a cached set never updates. Either cache + add a `_resetForTesting()` escape hatch (more API surface) OR re-read every call (simpler, ~50ns per call cost which is irrelevant compared to anything we'd be logging). We chose the latter. The 13-test internal-debug.test.ts asserts mid-run env mutation works.\n\n**3. Hook dispatcher classifies swallowed errors before catch absorbs them.** Per memory #352 calibration (\"fail loud\" = stderr line, NOT break agent flow), the top-level `try/catch` in `dispatch()` stays. What's new: BEFORE absorbing, it pattern-matches err.message against NODE_MODULE_VERSION / dlopen / MODULE_NOT_FOUND / ENOENT and emits a class-specific loudError with an actionable hint. Generic uncategorized errors still get a single line `[AIDE_ERROR] aide-memory hook=<name> threw: <msg>`. This is what makes future ABI-class bugs (or any other class we haven't seen) immediately diagnosable instead of silent.\n\n**Verification surface:** 13 unit tests (`src/memory/__tests__/internal-debug.test.ts`) + 15-check bash smoke (`scripts/hooks/__tests__/debug-output-smoke.test.sh`) + observable dev script (`scripts/dev/show-debug-output.sh`). All three should be kept in sync if categories or output shape evolve.",
+  "why": "These three implementation choices look weird at a glance and a future maintainer is likely to ask \"why?\" or attempt to \"clean up\" each one. (1) The two-import factory pattern looks redundant compared to a passthrough — but TS namespace propagation through default re-exports of `export = X` modules is broken and the workaround is the factory. (2) The \"re-read env on every call\" looks like a minor perf concern — but it's a deliberate testability choice with negligible cost. (3) The error-class regex matching in the dispatcher looks like ad-hoc string parsing — but it's the load-bearing piece that turns silent failures into diagnosable ones (the original 0.5.0 bug class from #348). Storing scoped to internal/** so future work in that dir surfaces the rationale.",
+  "scope": "src/memory/internal/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "testing"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T13:55:37.699Z",
+  "updated_at": "2026-04-27T13:55:37.699Z"
+}

@@ -1,0 +1,20 @@
+{
+  "id": 351,
+  "uuid": "d16bb73a-b59f-40e5-8a73-e2d0d8da85b5",
+  "layer": "preferences",
+  "what": "User communication directive 2026-04-27 (extends #346): external docs (cursor.md, supported-editors.md, troubleshooting.md, README.md, validation matrix) MUST reflect what we have CONCRETELY OBSERVED to be true, not conjecture or carry-over from earlier draft framing. Sequence: (1) restart Read-flow testing with clean state after binding bug is properly handled, (2) gather actual observations across editor flows, (3) THEN update docs with the verified behavior. Specifically forbidden in external docs at this moment: (a) claiming Cursor auto-attaches user-mentioned paths and bypasses preToolUse:Read (per #345 — unverified), (b) framing any \"Cursor gap\" without a reproducible test backing it, (c) telling users \"if hooks silent, run npm rebuild\" as the canonical fix (per just-stored just-works principle). Acceptable: stating verified behavior with the date verified, listing genuinely-known platform constraints with forum/issue references. This directive supersedes the order in the handoff doc which had docs-update on the same level as fix-implementation — docs come AFTER proof, not in parallel.",
+  "why": "User direct quote 2026-04-27: \"after these findigns and all above, then we can look into updating docs with the most accurate of what we proved to observe not conejcture.\" The handoff doc placed Decision C (docs updates) alongside Decision A (loud-error fix) — user is reordering: prove first, write second. Storing as priority:always preference so future doc-update sessions don't reach for conjecture-driven framing before validation.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T12:30:27.184Z",
+  "updated_at": "2026-04-27T12:30:27.184Z"
+}

@@ -1,0 +1,22 @@
+{
+  "id": 373,
+  "uuid": "3d5b0d74-ddea-4bbd-bf6a-3c9371ee23a7",
+  "layer": "preferences",
+  "what": "**0.5.0 launch decisions (user direction 2026-04-27, ahmedmmeky), telemetry decision SUPERSEDED by memory #383 (2026-04-28 round-4):**\n\n**1. Telemetry — SUPERSEDED. See memory #383.** Round-4 user direction (2026-04-28): telemetry default is ON. The opt-in flip captured here originally was reverted in round-4. Code state: ship POSTHOG_KEY unconditionally, short-circuit on AIDE_TELEMETRY=off. Docs say telemetry is on by default; disable via env var.\n\n**2. Semantic search rules guidance (still valid):**\n- Rules should explain BOTH keyword search (Grep + aide_search) AND semantic search (codebase_search) as options\n- Agent uses judgment on which to apply per query intent\n- Default behavior: keyword first, semantic as fallback\n- Hook coverage: aide-memory hooks Grep ONLY (not codebase_search) — explicit in docs\n- Don't overfit the rules — keep agent autonomy\n\n**3. Shared/personal default — add project-level config (still valid, landed):**\n- Memory #379 + memory #380 capture this. `memories.defaultShared` config landed in commit 8.\n\n**4. License framing — proprietary freeware (still valid; round-4 simplified the prose):**\n- Free to use today\n- Round-4: drop \"for solo developers\" / \"core engine stays free\" / \"free forever\" qualifiers; just \"Free. More features coming.\" for HomePage, fuller framing in license section only.\n\n**5. Counts/CLI/MCP — use actual numbers (still valid):**\n- 7 MCP tools, 13 CLI commands, 6 hooks, 782 vitest tests\n\n**6. \"We chased this for hours\" tone (still valid):**\n- Clinical not self-deprecating; root cause was Node ABI mismatch, fixed in 0.5.0 by libsql N-API migration.",
+  "why": "Round-4 user direction (2026-04-28) flipped telemetry default back to ON. Memory #373's original telemetry decision is no longer accurate; updating the memory in place rather than letting the discrepancy persist. New memory #383 captures the round-4 corrections in detail; this memory now points there for the telemetry decision. Other launch decisions in this memory remain valid.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "integration",
+    "api-contract"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T23:03:24.357Z",
+  "updated_at": "2026-04-29T01:35:09.154Z"
+}

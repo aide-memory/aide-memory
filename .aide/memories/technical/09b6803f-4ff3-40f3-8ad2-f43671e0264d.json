@@ -1,0 +1,21 @@
+{
+  "id": 345,
+  "uuid": "09b6803f-4ff3-40f3-8ad2-f43671e0264d",
+  "layer": "technical",
+  "what": "Cursor preToolUse:Read behavior on user-mentioned paths — VERIFIED 2026-04-27. **The auto-attach-bypasses-hook hypothesis was WRONG.** Cursor's Read tool fires the preToolUse:Read hook for user-mentioned paths, the hook returns `permission:deny`, Cursor honors it, and the agent recovers via `aide_recall`.\n\n**Evidence (post-libsql migration, fresh Cursor session, /private/tmp/aide-cursor-val fixture, Cursor 3.2.11):**\n\nUser typed exactly: `read src/utils/dates.ts` (a path-mentioning prompt — the case my earlier #345 framing said might bypass Read).\n\nWhat actually happened in the hooks panel:\n- beforeSubmitPrompt fired (detect-correction, no match, empty output) ✓\n- preToolUse fired with `tool_name: \"Read\", tool_input: {file_path: \"/private/tmp/aide-cursor-val/src/utils/dates.ts\"}` ✓\n- pre-read-recall.sh emitted `{\"permission\":\"deny\",\"user_message\":\"1 memories for ... (1 technical) — topics: timezone-aware. Call aide_recall({paths: [...]}).\"}`\n- Cursor honored the deny — agent stopped\n- Agent called `aide_recall({paths:[...]})` per the user_message\n- Read retried, succeeded\n\n**So the actual Cursor flow for user-mentioned paths is: prompt → beforeSubmitPrompt → Read tool invoked → preToolUse:Read fires → permission:deny works.** Indistinguishable from autonomous Read flow (A1).\n\n**What I previously hypothesized incorrectly:** that Cursor inlines path-mentioned file content as a \"preview\" and the agent answers from that without invoking Read. The earlier \"OUTPUT empty\" symptoms that led me to that hypothesis were the Node ABI mismatch silent-failure (memory #348), NOT auto-attach behavior.\n\n**Partial nuance observed in same session:** A second-read prompt (\"read it again\") on an already-recalled file in the SAME chat did NOT invoke a fresh Read tool call — agent answered from prior-turn content. This is single-session context-reuse, not auto-attach. Different file = Read tool fires fresh; same file in same chat = may answer from history. Doesn't affect first-time-read-of-file safety net.\n\n**Verified end-to-end on 2026-04-27 Cursor 3.2.11:** A1 (autonomous Read with hard-block) PASS, A1-edit (autonomous Write with hard-block) PASS, A0 (user-mentioned path) PASS — all three gate identically through preToolUse + permission:deny.\n\n**External docs framing (per #347 + #351):** state factually that Cursor's preToolUse:Read fires for both autonomous and user-mentioned reads; deny is honored; recovery flow works. Do NOT carry over the \"auto-attach may bypass\" caveat — that was wrong. No product pitching either way.",
+  "why": "User ran the A0 scenario on 2026-04-27 in Cursor 3.2.11 against the post-libsql-migration build. The hooks panel logs they captured show the Read tool firing and the hook returning permission:deny — empirical contradiction of the earlier \"auto-attach may bypass\" hypothesis. Updating to the verified state so future doc work reflects truth, not legacy caution.",
+  "scope": "src/memory/editors/cursor.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "api-contract",
+    "testing"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T11:40:27.270Z",
+  "updated_at": "2026-04-27T14:09:34.633Z"
+}

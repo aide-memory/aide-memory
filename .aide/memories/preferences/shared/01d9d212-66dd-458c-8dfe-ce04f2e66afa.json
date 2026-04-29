@@ -1,0 +1,21 @@
+{
+  "id": 340,
+  "uuid": "01d9d212-66dd-458c-8dfe-ce04f2e66afa",
+  "layer": "preferences",
+  "what": "User correction (2026-04-26) on aide_import framing: do NOT call it a hard \"anti-pattern\" that violates memory #335. The tool has legitimate use cases — (1) one-time seed from a legacy doc that's being DELETED (doc goes away, memory is new home, not a duplicate); (2) external material not in repo docs (Notion, ADR templates, ChatGPT output snippets); (3) import-then-curate (bring in raw, prune to essentials). The anti-pattern is REPEATED import of a maintained repo doc — that's where duplication + drift kicks in. Calibrate framing: aide_import is not \"broken vs principle #335\"; it's \"needs sharpened docstring on appropriate use.\" Specific recommendation: option 1 (sharpen docs) for 0.5.1, option 2 (idempotency on (what, layer, scope)) if real-world usage shows repeated re-import as dominant.",
+  "why": "User pushed back on my too-strong \"anti-pattern\" framing during Cursor validation walk. Important durable correction — when I assess a feature against a principle, I should look at the FULL space of legitimate use cases before declaring it anti-pattern. aide_import has real workflows (legacy migration, external material, raw-then-curate) that are NOT duplication. Anti-pattern framing only fits ONE specific misuse (repeated re-import of live docs). Storing this so future framing of similar tools/features starts more nuanced rather than reaching for \"deprecate\" prematurely.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "api-contract",
+    "style"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-26T16:26:08.119Z",
+  "updated_at": "2026-04-26T16:26:08.119Z"
+}

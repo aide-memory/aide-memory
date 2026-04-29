@@ -1,0 +1,20 @@
+{
+  "id": 347,
+  "uuid": "0267710c-d730-4f23-99d4-0bc6dbef2a6d",
+  "layer": "preferences",
+  "what": "User directive 2026-04-27: NEVER pitch one product over another. Applies to: (a) chat responses comparing editors (Claude Code vs Cursor vs others), (b) external docs (cursor.md, claude-code.md, supported-editors.md, README.md, PUBLIC_README.md, LANDING_PAGE_CONTENT.md), (c) any marketing/positioning content. Concrete: do NOT write phrases like \"for stronger blocking use Claude Code\", \"Claude Code's experience is more polished\", \"Cursor lacks X that Claude Code has so use Claude Code\". Instead: describe each editor's behavior factually + neutrally, document gaps as platform reality (not as a reason to switch tools). aide-memory is editor-agnostic; recommending one editor over another undermines that positioning + alienates users on the editor we're not pitching. Honest gap framing example (replacing earlier draft): \"When you mention a file path in your prompt, Cursor auto-attaches the content; agent typically recalls memories first per the rules-file guidance, then references the auto-attached content. The preToolUse:Read hard-block fires only on autonomous reads where the agent reads a path you didn't mention — rare in practice given the guidance.\"",
+  "why": "User explicit correction during 2026-04-27 Cursor validation: \"never pitch one product over the other to me or in external docs.\" Earlier draft cursor.md and supported-editors.md included phrases steering users toward Claude Code for tighter blocking. That undermines aide-memory's editor-agnostic positioning + alienates Cursor users. Storing as cross-session communication rule so future doc edits + chat responses default to neutral framing rather than re-litigating the rule per interaction.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T11:44:55.235Z",
+  "updated_at": "2026-04-27T11:44:55.235Z"
+}

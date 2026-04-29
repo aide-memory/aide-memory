@@ -1,0 +1,18 @@
+{
+  "id": 399,
+  "uuid": "c040c6b9-6836-4d6a-a2dd-bb38140ec624",
+  "layer": "preferences",
+  "what": "Don't dismiss user concerns with \"it's probably cached.\" If the user sees wrong content, investigate why rather than assuming cache. Also: user asked about newsletter/email solution (no third party) and npm login status multiple times. Address questions when asked, don't skip them.",
+  "why": null,
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T16:52:05.867Z",
+  "updated_at": "2026-04-29T16:52:05.867Z"
+}

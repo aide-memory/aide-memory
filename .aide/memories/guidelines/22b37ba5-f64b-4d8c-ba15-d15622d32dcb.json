@@ -1,0 +1,21 @@
+{
+  "id": 377,
+  "uuid": "22b37ba5-f64b-4d8c-ba15-d15622d32dcb",
+  "layer": "guidelines",
+  "what": "Fast-follow (post-0.5.0): contributors should be able to override `priority: \"always\"` LOCALLY without affecting what lives on main / shared with the team. User direction 2026-04-27.\n\n**The problem:** today, `priority: \"always\"` is a memory-level field stored in the JSON file. If a contributor wants a memory to auto-inject for their workflow but not necessarily push that prominence to the team, they have to either (a) commit `priority: \"always\"` (which makes it always-inject for everyone on a clean clone) or (b) skip priority and lose the personal benefit. There's no per-contributor override.\n\n**Proposed pattern (rough — needs design):**\n- A per-contributor / per-machine override file (e.g. `.aide/local/priority-overrides.json`, gitignored) that flips `priority: \"always\"` for specific memory IDs only on this machine\n- OR a contributor-scoped attribute on the memory itself (e.g. `priority_overrides: { \"alice\": \"always\", \"bob\": \"normal\" }`)\n- OR a separate \"personal priority\" file that lives alongside `.aide/memories/preferences/personal/` (gitignored) and gets merged into recall at runtime per contributor\n\n**Considerations:**\n- The mechanism must integrate with SessionStart injection logic (handlers.ts loadLayer + buildSessionStartContent) so personal overrides propagate to the actual injection\n- Must not affect repository state (other contributors don't see it)\n- Should support both raising priority (normal → always) AND lowering (always → normal) so contributors can quiet the team's noisier always-memories on their machine\n- CLI: `aide-memory priority <id> always --personal` or `aide-memory config priority.<id> always --local`\n\n**Why this matters:** without it, \"priority:always\" is a forced team-wide decision. Some contributors may want to elevate certain memories for personal flow without lobbying the team to change the shared metadata. Symmetrically, some may find the team's always-injects noisy and want to demote without affecting others.",
+  "why": "User dropped this as a Phase 1 fast-follow during 2026-04-27 launch prep. Without capturing, the design intent (personal/local override of priority that doesn't affect main/shared) gets lost. Stored at guidelines layer + src/memory/** scope so future SessionStart-injection or rulesGen work surfaces it.",
+  "scope": "src/memory/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "config"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-28T01:20:36.008Z",
+  "updated_at": "2026-04-28T01:20:36.008Z"
+}

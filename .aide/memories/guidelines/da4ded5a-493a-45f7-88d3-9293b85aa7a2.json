@@ -1,0 +1,20 @@
+{
+  "id": 380,
+  "uuid": "da4ded5a-493a-45f7-88d3-9293b85aa7a2",
+  "layer": "guidelines",
+  "what": "**Telemetry direction LOCKED 2026-04-28 (REVERSED from memory #373):**\n\nUser confirmed in audit 2026-04-28: telemetry is **default ON, opt-out**. Anonymized event tallies ship by default. Users disable with `AIDE_TELEMETRY=off`. This REVERSES the earlier \"opt-in default\" decision in memory #373.\n\n**Reason for reversal:** the previous \"opt-in\" framing was confusing (I had been saying \"opt-in is the default\" which the user reads as \"default is to have it on\"). User's mental model uses \"opt-in\" to mean \"we opt users in by default; they can opt out.\" So the launch direction is default ON, with a clear opt-out path.\n\n**Code state (post-fix):**\n\n```ts\n// src/memory/analytics.ts\nconst POSTHOG_KEY = process.env.AIDE_TELEMETRY === 'off' ? '' : 'phc_ztrzpvb...';\n```\n\n**Doc phrasing convention (use exactly this pattern across all surfaces):**\n\n> \"Anonymized usage counts ship to PostHog by default so we can see which features are used: event type, hashed `hostname:username` for deduplication, platform, Node version. Memory content, file paths, query strings, and any other user-identifying data are never sent. To disable: `export AIDE_TELEMETRY=off`.\"\n\n**Avoid these confusing patterns:**\n- \"Telemetry is opt-in\" (user reads \"opt-in\" as \"users are opted in\")\n- \"Default off / opt-in via AIDE_TELEMETRY=on\"\n- Stacking \"opt-in\" + \"default\" in the same sentence\n\n**API key disclosure (separate item, still applies):** the PostHog write key in the bundle is industry-standard for client-side analytics SDKs (Sentry, Mixpanel, PostHog itself). Write keys identify a project, don't authorize sensitive ops.\n\n**Apply across:** HomePage.jsx, configuration.mdx, faq.mdx, supported-editors.mdx, README.md, README.npm.md, docs/launch/*. The user has already manually edited README.md and README.npm.md to this framing; the rest must match.\n\n**Memory #373's \"telemetry opt-in default\" item is now stale.** Its other 5 items (semantic search rules, shared default, license framing, counts, \"we chased this\" tone) are still active.",
+  "why": "User confirmed in 2026-04-28 audit they want telemetry default ON. The earlier \"opt-in by default\" framing in memory #373 + my downstream docs caused real confusion across multiple turns of this audit. User had to reverse-clarify three times. Updating this memory (rather than creating a new one) so the convention is in one place; flagging memory #373 as superseded on this specific item.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-28T23:10:17.026Z",
+  "updated_at": "2026-04-29T13:03:02.163Z"
+}

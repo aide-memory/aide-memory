@@ -1,0 +1,20 @@
+{
+  "id": 371,
+  "uuid": "6f62d2bc-38ba-4c8f-8355-6ea4ac6a4f05",
+  "layer": "preferences",
+  "what": "User preference (corrected twice in 2026-04-27 session, ahmedmmeky): when validating something that's verifiable via shell command (cat/ls/stat/grep), I should run the command myself via Bash tool instead of asking the user to do it.\n\nPattern of corrections this session:\n1. First correction: I asked user to run `cat /private/tmp/aide-cursor-val/.aide/cache/recalled-paths-<sid>.txt` to verify the tool_output→tool_response fix tracked IDs. They ran it (after I gave wrong path) and pasted contents. Should have run myself.\n2. Second correction (explicit): \"for commnd slike these you can easily verify, you can do it, can you do it for the last big hook output i sent to veirfy as needed?\" — directly telling me to do verification myself.\n3. Third corrective context: \"you can check cat yourself\" — same point, restated.\n\nApply to:\n- Tracking-file inspection (.aide/cache/recalled-paths-<sid>.txt, correction-pending-<sid>.txt, etc.)\n- Memory state verification (`node dist/cli/aide-memory.js list`)\n- Rules-file content (grep/cat .cursor/rules/aide-memory.mdc)\n- Build artifact mtimes (stat)\n- Anything else where I have file access + know the path\n\nAnti-pattern to avoid: writing pass/fail criteria for the user to verify when I could do the file-system verification myself. Those criteria are still useful for the parts that require the live agent + Cursor UI (hook OUTPUT blocks, agent behavior), but file-system state should be self-verified.\n\nBias correction in scope here too: don't shift verification work to the user when the Bash tool is available — even if the verification is \"obvious\" or seemingly trivial.",
+  "why": "User explicitly corrected this twice in the same session. Without capturing as priority:always preference, the same pattern (asking user to run cat instead of doing it myself) will likely recur in future validation sessions across all projects. Marked priority:always so it auto-injects on session start; scoped project-wide because it's a behavioral preference, not file-specific.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T21:44:54.867Z",
+  "updated_at": "2026-04-27T21:44:54.867Z"
+}

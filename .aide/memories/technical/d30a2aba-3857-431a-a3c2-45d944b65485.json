@@ -1,0 +1,20 @@
+{
+  "id": 400,
+  "uuid": "d30a2aba-3857-431a-a3c2-45d944b65485",
+  "layer": "technical",
+  "what": "CI workflow (release.yml) bug: it does cp package.aide-memory.json package.json but does NOT copy README.npm.md to README.md before publish. So npm tarball ships with aide-v0's dev README instead of the unified public README. Fix: add cp README.npm.md README.md step to workflow. Shipping 0.5.1 patch to fix this.",
+  "why": "0.5.0 shipped with wrong README. User confirmed fix it now.",
+  "scope": "\".github/workflows/**\"",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "migration"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T16:52:35.993Z",
+  "updated_at": "2026-04-29T16:54:12.983Z"
+}

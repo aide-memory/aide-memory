@@ -1,0 +1,20 @@
+{
+  "id": 362,
+  "uuid": "be3b6121-1b17-443e-b64d-6417400b2b44",
+  "layer": "guidelines",
+  "what": "Validation-fixture gotcha (2026-04-27, complements #295 + #322): SessionStart auto-injects project-wide preferences + guidelines IDs into `recalled-paths-<sid>.txt` as an `ids|<list>` entry on every new chat session — even a \"fresh\" Cmd+N chat. This populates tracking BEFORE the user runs any prompts, so a Read on a file whose scoped_ids partially overlap with the injected set gets either soft (encountered + missing) or silent (all covered) instead of hard-block.\n\n**Concrete pattern in /private/tmp/aide-cursor-val on 2026-04-27:**\n- SessionStart injects ~10 IDs (project-wide prefs/guidelines + some scoped guidelines like `src/api/** camelCase` (#2), `Unix epoch ms` (#5), `X-RateLimit headers` (#15)).\n- Reading `src/api/routes.ts` in a fresh chat: scoped_ids = [2, 5, 6, 7, 14, 15]. Of these, [2, 5, 15] are auto-tracked from SessionStart → only [6, 7, 14] missing. Plus agent likely calls aide_recall proactively per rules-file guidance, which tracks the file path AND covers the remaining IDs → preToolUse:Read fires silently.\n- Reading `src/auth/middleware.ts` in same chat: scoped_ids = [1, 4]. Neither is in the injected set. Agent's proactive recall might still cover them, but even without that, the hard-block path is guaranteed to fire on first read.\n\n**Rule for hard-block validation in fresh-fixture testing:**\n1. Pick a target file whose scoped memories are ALL technical (technical layer is generally not auto-injected by SessionStart — only preferences + guidelines are by default per #297).\n2. AND whose scoped memories' IDs don't overlap with the priority:always or guideline IDs that get injected.\n3. AND test in a TRULY fresh Cmd+N chat (Cursor) or new session (Claude Code) — NOT just \"Clear\" in Cursor (per #357, Clear keeps session_id and tracking persists).\n4. The adversarial prompt \"without calling aide-memory tools first\" doesn't reliably suppress proactive recall — agents often recall anyway per rules-file guidance. So even a \"good\" target may go soft if agent preempts. To truly force hard-block, also temporarily disable the rules file (mv `.cursor/rules/aide-memory.mdc` aside per #295) OR use a file the agent has no reason to think needs recall yet.\n\n**Diagnostic signal in tracking files:**\n- `recalled-paths-<sid>.txt` containing `ids|<list>` entry only → SessionStart fired but no path-Read tracked yet\n- Same file additionally containing `file|<absolute-path>` entries → those paths have been encountered (tracked by track-recall.sh on aide_recall calls OR self-track-on-fire by preRead)\n- coveredCount > 0 + encountered=true + missing IDs → soft path\n- coveredCount = scoped_ids.length → silent path (everything covered)\n- coveredCount = 0 + encountered=false → hard block path-based message\n- coveredCount > 0 + encountered=false (rare — scoped_ids covered without file being read) → hard block ID-based message\n\n**Pattern for `recalled-paths-<sid>.txt` content shape:** lines are key-prefixed, each line either `ids|<comma-list>` (one such entry total) or `file|<absolute-path>` (one per encountered file). This is the canonical tracking format.",
+  "why": "User confused by \"no chrome on fresh-chat hard-block test\" — the actual cause was SessionStart auto-injection populating tracking with overlapping IDs, plus agent's proactive recall. Future validation sessions will hit the same shape if they don't account for the injection-tracking interplay. Captures the file-selection rule (pick technical-only scoped memories with no overlap with injected) so future fixture designs and ad-hoc tests get reliable hard-block triggers. Also documents the diagnostic signals in the tracking file so future log analysis is faster.",
+  "scope": "docs/validation/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T17:23:28.143Z",
+  "updated_at": "2026-04-27T17:23:28.143Z"
+}

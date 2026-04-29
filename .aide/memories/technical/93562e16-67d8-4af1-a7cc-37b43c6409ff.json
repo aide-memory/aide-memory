@@ -2,8 +2,8 @@
   "id": 263,
   "uuid": "93562e16-67d8-4af1-a7cc-37b43c6409ff",
   "layer": "technical",
-  "what": "Analytics infrastructure exists (src/memory/analytics.ts, stats CLI command, telemetry config) but logEvent() is never called in production code — analytics table stays empty. telemetry.enabled config key is defined but never checked. Needs wiring up: add logEvent() calls in memory store/recall/search/delete operations and check telemetry.enabled before logging.",
-  "why": "Discovered during Phase 1 audit — analytics appears implemented but is actually dead code. Critical gap for understanding user usage.",
+  "what": "Analytics infrastructure (src/memory/analytics.ts + stats CLI command) is FULLY WIRED in production code as of 2026-04-27 verification. Earlier note that \"logEvent() is never called in production code\" is STALE and now corrected.\n\n**Verified call sites in src/memory/store.ts:**\n- L533: `this.logEvent('memory_stored', input.layer)` — fires on aide_remember\n- L649: `this.logEvent('memory_updated', updated.layer)` — fires on aide_update\n- L688: `this.logEvent('memory_deleted', existing.layer)` — fires on aide_forget\n- L727: `this.logEvent('memory_recalled', String(ids.length))` — fires on aide_recall\n- L788: `this.logEvent('search_performed', searchType)` — fires on aide_search (FTS5/LIKE)\n- L882: `this.logEvent('search_performed', 'semantic')` — fires on aide_search (semantic backend)\n\n**PostHog wiring (src/memory/analytics.ts):**\n- Hardcoded API key `phc_ztrzpvb...` baked into npm package (per memory #281)\n- POSTHOG_HOST = `https://us.i.posthog.com`\n- flush() sends batch via fire-and-forget HTTP POST every 30s OR on flush() trigger\n- distinct_id derived per-machine for anonymization\n- Failure non-fatal (catches and ignores)\n\n**Opt-out:** `AIDE_TELEMETRY=off` env var (per #281). NOT yet via config.json setting (the `telemetry.enabled` key checking is documented in configuration.md but verify against current code before relying on it).\n\n**Implications for 0.5.0 docs honesty (CRITICAL — found via 2026-04-27 external docs audit):**\n- README.md L192-203 + README.npm.md L20: CORRECTLY say PostHog telemetry ships ✓\n- docs/user/configuration.md L371: CLAIMS \"no phone-home channel\" → FACTUALLY WRONG, must fix\n- aide-memory-web/components/HomePage.jsx L80-82: CLAIMS \"no data leaving your device\" → FACTUALLY WRONG, must fix\n- aide-memory-web/pages/docs/faq.mdx: implies local-only → FACTUALLY WRONG, must fix\n\nThree options to reconcile: (A) keep PostHog default-on + fix docs to be honest, (B) remove PostHog entirely, (C) flip to opt-in default. Pending user decision.",
+  "why": "Memory #263 had stale claim \"logEvent is never called in production.\" Verified 2026-04-27 via grep: logEvent IS called from 6 call sites in store.ts. The PostHog phone-home is FULLY ACTIVE and shipping. This contradicts user-facing privacy claims in 3 docs (configuration.md, HomePage.jsx, faq.mdx) — those need correction or telemetry needs removal/opt-in. Critical for 0.5.0 launch honesty per user's \"honesty is most critical\" constraint (#372).",
   "scope": "src/memory/analytics.ts",
   "context_label": null,
   "contributor": "ahmedmmeky",
@@ -14,5 +14,5 @@
   "generated_by": null,
   "derived_from": null,
   "created_at": "2026-04-09T16:00:05.669Z",
-  "updated_at": "2026-04-09T16:00:05.669Z"
+  "updated_at": "2026-04-27T22:57:54.770Z"
 }

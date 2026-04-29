@@ -1,0 +1,18 @@
+{
+  "id": 403,
+  "uuid": "db19e404-d938-4a04-9126-40b9e2ff180b",
+  "layer": "preferences",
+  "what": "DO NOT install aide-memory globally when user explicitly wants npx testing. The whole point of the demo project is to simulate a real user running npx aide-memory init for the first time. npx cache path in .mcp.json IS what a real npx user gets. Stop overriding user intent.",
+  "why": null,
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T17:51:31.076Z",
+  "updated_at": "2026-04-29T17:51:31.076Z"
+}

@@ -1,0 +1,21 @@
+{
+  "id": 353,
+  "uuid": "09b852be-1ce4-4986-907f-e971007d31a4",
+  "layer": "technical",
+  "what": "Native-module ABI strategy reference (research 2026-04-27, supports memories #348/#349): the bug class behind #348 is GENERIC to any V8-coupled native module in Node — not specific to better-sqlite3 or SQLite. Same failure shape would occur with bcrypt v4, canvas, sharp (older), node-pty, any module using NAN or direct V8 bindings. Standard ecosystem fixes, ranked by typicality for our shape (npm-distributed CLI/MCP server):\n\n1. **N-API (Node-API) bindings** — single binary works across Node versions ≥ minimum N-API version. ABI guaranteed stable by Node itself. Examples: sqlite3 v5+, bcrypt v5+, libsql, sse4_crc32 (post-N-API migration). For SQLite specifically, **libsql (Turso) advertises drop-in better-sqlite3-compatible API + N-API**; sqlite3 v5+ also N-API but async-only.\n\n2. **prebuildify + node-gyp-build** — ships ALL platform-specific prebuilts inside the npm package; no postinstall network call. Replaces the older prebuild-install (now unmaintained per its own README).\n\n3. **Single Executable Applications (SEA)** — bundle Node runtime with script into one binary. Node 19+, maturing in 2026. Future option for aide-memory if we want zero-Node-dep distribution; not for 0.5.0.\n\n4. **Electron-style runtime bundling** — desktop apps (Cursor, Claude Desktop, VS Code, Slack) bundle their own Node + use electron-rebuild. Doesn't apply to us (we're a CLI/MCP server, not a desktop app).\n\n5. **Auto-rebuild on detected mismatch** — what I originally proposed. Novel, no clear prior art. Becomes a fallback only.\n\nPure-JS / WASM (sql.js) is positioned as the BROWSER/edge solution, not the CLI solution — explicitly recommended only \"for browser-side SQLite\" by 2026 surveys.\n\n**Implication for aide-memory packaging decisions:** the modern ecosystem-standard answer to \"how do we make a native-dep CLI work across user Node versions\" is \"use N-API bindings + ship prebuilts via prebuildify-style packaging.\" Switching from better-sqlite3 to libsql is not a lib-swap-and-pray — it's adopting the standard ABI-stability mechanism. Future native-dep choices (if we ever add another native module) should default to N-API bindings.",
+  "why": "User pushed back (\"is this really a lib issue?\") and forced research into how production apps actually handle this class of bug. Findings are durable architectural knowledge: the bug class is Node-native-modules-generic, the ecosystem-standard answer is N-API, and the bucket of pseudo-solutions (auto-rebuild novelty, sql.js wrong-tool, SEA-future) are all ranked. Storing scoped to store.ts so future packaging/binding decisions can recall the framework without re-doing the research.",
+  "scope": "src/memory/store.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "integration"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T12:45:11.717Z",
+  "updated_at": "2026-04-27T12:45:11.717Z"
+}

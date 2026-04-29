@@ -1,0 +1,21 @@
+{
+  "id": 366,
+  "uuid": "c7e5084c-c169-46e0-b724-ca43a360965a",
+  "layer": "guidelines",
+  "what": "Editor adapter completeness audit pattern (process-improvement after the 2026-04-27 cursor tool_output→tool_response miss). Apply when onboarding any new editor adapter (windsurf, codex, copilot, cline, aider) OR re-auditing an existing one.\n\n**Rule 1 — symmetric audit, not just output-direction.** Both `translateInput` and `translateOutput` must be audited against the canonical HookInput / HookEmit shapes. Output got attention via #358 (audience-mapping bias). Input got missed because the obvious renames (session_id, cwd) were called out but the less-obvious ones (tool_output→tool_response) weren't. Audit method: enumerate every field accessed in `src/memory/hooks/handlers.ts` (currently: tool_name, tool_input.{file_path,pattern,paths,keyword}, tool_response, prompt, session_id, cwd, source, stop_hook_active) and verify each is reachable from the editor's actual envelope shape.\n\n**Rule 2 — defensive early-returns must emit observable signals.** `if (!responseText) return;` in trackRecallPost was correct safety but became silent failure on Cursor. Going forward, defensive early-returns in handlers should call `debug('hooks', 'trackRecallPost: empty responseText (input.tool_response missing or unparseable)')` so AIDE_DEBUG=hooks reveals the silent-no-op. Bias: errors are preferable to silent skips when fields the handler \"needs\" are missing.\n\n**Rule 3 — empirical validation includes tracking-file inspection.** Don't trust \"agent recalled correctly\" as proof IDs were tracked. Always `cat .aide/cache/recalled-{ids,paths,searched-queries}-<sid>.txt` after operations that should write tracking. Agent behavior masks tracking-write failures because the agent has the memories in its own context from the recall response — but the next per-Read fire reads from the file, not the agent's context, and a missed write surfaces as redundant nudges.\n\n**Rule 4 — adapter unit tests assert handler-field reachability.** Add test \"translateInput preserves every field HookInput might read\" — iterate through {tool_response, prompt, session_id, cwd, source, stop_hook_active, tool_input.*} and assert each is either present in the output OR documented as not-applicable to that editor. Prevents future field-name drift.\n\n**The bug that motivated this:** cursor adapter translateInput remapped conversation_id→session_id and workspace_roots[0]→cwd but missed tool_output→tool_response. trackRecallPost (handlers.ts:499) reads input.tool_response → undefined on Cursor → IDs from aide_recall response never written to tracking. User-visible symptom: redundant soft nudges after agent recalled. Found 2026-04-27 via 4-cell file-open validation when user questioned an unexpected soft-fire (memory #364). Fix: 3-line addition to translateInput. Lesson: bug surface was narrow but had been silent in production for the entire C3-C8 window because nothing ever asserted IDs landed in tracking.",
+  "why": "Codifies the four process gaps that let the cursor tool_output→tool_response remap miss survive C3 implementation, C6 unit tests, C8 docs, AND the post-C8 bias-correction audit (#358). Without this, the next editor adapter (Windsurf, Codex, etc.) is highly likely to repeat one or more of these gaps. Marked priority:always so it auto-injects on editor-onboarding sessions alongside the rules-file mitigation pattern (#365). The retrospective captures real evidence: bug went undetected through 5 audit layers because nobody checked input-direction or tracking-file contents — only agent behavior, which masked the failure.",
+  "scope": "src/memory/editors/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "architecture"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T19:33:19.550Z",
+  "updated_at": "2026-04-27T19:33:19.550Z"
+}

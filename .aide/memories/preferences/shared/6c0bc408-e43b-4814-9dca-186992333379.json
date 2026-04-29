@@ -1,0 +1,21 @@
+{
+  "id": 372,
+  "uuid": "6c0bc408-e43b-4814-9dca-186992333379",
+  "layer": "preferences",
+  "what": "0.5.0 launch plan + constraints (user direction 2026-04-27, ahmedmmeky):\n\n**Sequence (today → early tomorrow):**\n1. Push cursor-support commits (greenlit)\n2. Get demo content ready (video script + LinkedIn + blog) — DON'T post yet\n3. External docs honesty audit (aide-memory + aide-memory-web + website)\n4. READMEs accuracy review (aide-memory repo + aide-memory-web)\n5. Get user feedback on all of above\n6. Publish 0.5.0\n7. Unpublish older versions (per HANDOFF_MINIFIED_PUBLISH.md protocol)\n8. Test as real user: install in FRESH project, run smoke tests on Claude Code + Cursor\n9. Start publishing campaign — research best day-of-week / time before posting\n\n**Demo content structure:**\n- One general overview video (5-7 min) — Claude Code + Cursor integration, individual + team workflows\n- One LinkedIn post with video attached\n- Blog post with video + details — extendable to per-feature posts later\n- Same demo source can be cut into voice snippets for home page, social, marketing\n\n**Hard constraints (CRITICAL):**\n1. **Honesty is the most critical point.** No marketing inflation.\n2. Don't overdo em dashes (—). They're being overused in current docs.\n3. Don't claim things we didn't do.\n4. Don't conflate roadmap from current state — what's shipped vs what's planned must be unambiguous.\n\n**Workflow:** Spin off parallel agents (opus 4.7 max) for each of: external docs audit, READMEs review, demo script, LinkedIn/blog drafts. Review their output thoroughly. Spawn follow-up agents as needed to iterate.\n\n**Open questions to address at this turn (separate from launch):**\n- aide_search organic flow trade-offs (vs literal-string flow)\n- Semantic search rule clarity (do we prompt for codebase_search or only Grep?)\n- Verify semantic search empirically — not yet done\n- Memory `shared` default — why are mems always shared, configurable?\n\n**Don't post anything publicly until user explicitly approves all content + feedback rounds complete + 0.5.0 install verified by fresh-user test.**",
+  "why": "User dropped the full 0.5.0 launch plan + constraints in this turn. Storing as priority:always so future sessions auto-injecting on launch-related work see the constraints — especially the \"honesty is most critical\" + \"don't overdo em dashes\" + \"don't conflate roadmap with current\" rules. Without this stored, future iterations on docs/marketing may slip into marketing-tone or roadmap-language. Also captures the explicit sequence (publish only after test as real user).",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "integration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T22:45:32.758Z",
+  "updated_at": "2026-04-27T22:45:32.758Z"
+}

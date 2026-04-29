@@ -1,0 +1,18 @@
+{
+  "id": 396,
+  "uuid": "9d6d3453-31fd-440a-9a47-c96e0d9fad6e",
+  "layer": "technical",
+  "what": "README strategy: ONE README for both npm and GitHub public repo (aide-memory/aide-memory). No duplication. The README that ships in the npm tarball should be the same one on the public GitHub repo. All content feedback from this session and previous sessions for external-facing docs must be reflected in it. Use existing updated content (website, blog, linkedin) as the reference point. README.npm.md can be eliminated if we use one unified README.",
+  "why": "User doesn't want to maintain two separate READMEs. Single source of truth.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T16:27:57.626Z",
+  "updated_at": "2026-04-29T16:30:49.514Z"
+}

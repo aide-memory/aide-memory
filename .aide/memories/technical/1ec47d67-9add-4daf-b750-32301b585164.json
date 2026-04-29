@@ -1,0 +1,21 @@
+{
+  "id": 367,
+  "uuid": "1ec47d67-9add-4daf-b750-32301b585164",
+  "layer": "technical",
+  "what": "MCP `aide_remember` field-name UX paper-cut: agents reach for `content` field first, fail with zod error, then introspect tool descriptor and retry with `what`. Empirically observed in Cursor 3.2.11 validation 2026-04-27 (memory #364, conv 89f5d173). Sequence: agent called aide_remember({layer, content:\"...\", scope, contributor, generated_by}) → MCP -32602 zod error \"Invalid input: expected string, received undefined at path: [what]\" → agent read /Users/.cursor/projects/.../mcps/.../tools/aide_remember.json descriptor → retried with {what, layer, scope, contributor, why} → succeeded. Root cause hypothesis: `content` is the OpenAI/Anthropic tool-call convention + matches CLI's --what flag history (auto-corrected from --content) + most LLM training data uses `content` as the field name for \"the thing being stored.\" Our `what` was chosen for \"remember THE WHAT\" semantic clarity but creates friction. Fast-follow options for 0.5.x or 0.6: (a) rename `what` → `content` (breaking change for any external integrations — schema migration concern), (b) accept `content` as zod alias preprocessed to `what` server-side (non-breaking, server.ts ~5 lines via z.preprocess or .or()), (c) document `what` more prominently in tool description so first-call gets it right (least effective per validation evidence — agent hallucinated despite docs). Recommendation: option (b) — alias `content` → `what` in zod schema. Preserves semantic intent, eliminates first-call friction, no breaking change, ~5 LoC. Files to touch: src/memory/server.ts MCP tool schema definition for aide_remember + aide_update + add unit test for the alias. NOT a 0.5.0 blocker — agents recover via descriptor introspection — but a real friction point for fresh-agent first-use.",
+  "why": "Captures a real UX observation from 2026-04-27 Cursor validation that's fixable but not a 0.5.0 blocker. Without this memory, future sessions touching MCP tool schemas may not realize the `content` vs `what` paper-cut is a known friction point with empirical evidence, and may either (a) re-discover it under similar validation, wasting time, or (b) accidentally rename in the wrong direction (breaking change). The recommendation (zod alias) is captured so the fix can be scoped quickly when it's prioritized. Cross-references memory #364 for the validation evidence chain.",
+  "scope": "src/memory/server.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "api-contract",
+    "integration"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T19:44:24.350Z",
+  "updated_at": "2026-04-27T19:44:24.350Z"
+}

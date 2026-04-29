@@ -1,0 +1,22 @@
+{
+  "id": 349,
+  "uuid": "45be0b1b-53f3-47e1-9622-60a644d6bdc3",
+  "layer": "preferences",
+  "what": "User directive 2026-04-27 (after binding-bug fix in #348): aide-memory MUST work out-of-the-box across Node versions and environments — no user-facing rebuild guidance. Concrete principles: (1) when `aide-memory init` runs in a project, the binding must match the project's Node + the binding we ship; (2) global installs use whatever Node is globally available — same constraint applies; (3) for the MCP server case, surface a clear message but DON'T fail the rest (graceful degradation); (4) for hooks, surface the error then ideally self-heal. Documenting \"run npm rebuild better-sqlite3\" in troubleshooting is a band-aid, not a solution. The product promise is \"install + go\" regardless of Node version drift, nvm switches, or terminal-vs-editor Node mismatches. Open design question: what does auto-rebuild on detected mismatch look like? Options to evaluate: (a) verify our published package's prebuild-install path actually fetches the right binary for the user's host Node ABI on `npm install`; (b) detect mismatch on first hook/MCP load and trigger background rebuild with sentinel-file gating to avoid retry loops; (c) switch to pure-JS / WASM SQLite (sql.js) to eliminate the native binding entirely (perf cost ~5-10x but full env independence); (d) bundle multiple prebuilt ABIs (108/115/120/127) and runtime-pick. NOT acceptable: shipping with a \"if hooks silent, run npm rebuild\" troubleshooting entry as the primary fix.",
+  "why": "User correction during 2026-04-27 Cursor validation post-mortem: \"why is guidance on rebudilging dep, aide should just work out of the box follwoignc orrect node version of users.\" The handoff doc proposed surfacing better errors + troubleshooting docs as the 0.5.0 fix. User rightly pushed back: errors-only is the floor, not the ceiling. Storing as priority:always preference because every install/release/packaging decision needs to be evaluated against this principle.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "config",
+    "integration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T12:29:47.257Z",
+  "updated_at": "2026-04-27T12:29:47.257Z"
+}

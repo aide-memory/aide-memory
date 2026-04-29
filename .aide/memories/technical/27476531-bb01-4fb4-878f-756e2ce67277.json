@@ -1,0 +1,20 @@
+{
+  "id": 397,
+  "uuid": "27476531-bb01-4fb4-878f-756e2ce67277",
+  "layer": "technical",
+  "what": "npm 2FA: user has security key (phone Face ID) set up for npm, not TOTP/authenticator app. Previous publishes used git tag push triggering GitHub Actions workflow with NPM_TOKEN secret, which bypasses 2FA. Should use the CI workflow (Option A in RELEASING.md) not manual publish. User rightfully asked why we aren't using the existing tag-based CI flow.",
+  "why": null,
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "migration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T16:35:11.636Z",
+  "updated_at": "2026-04-29T16:35:11.636Z"
+}

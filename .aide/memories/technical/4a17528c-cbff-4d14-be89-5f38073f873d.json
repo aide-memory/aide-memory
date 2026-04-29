@@ -1,0 +1,20 @@
+{
+  "id": 393,
+  "uuid": "4a17528c-cbff-4d14-be89-5f38073f873d",
+  "layer": "technical",
+  "what": "CRITICAL publish workflow: aide-v0 is the dev monorepo containing both legacy project and aide-memory. Publishing means ONLY aide-memory-related files ship, minified and bundled. The publish manifest is package.aide-memory.json (not package.json which is the dev monorepo manifest). Must follow docs/RELEASING.md explicitly step by step. The verify script (scripts/verify-package.sh) gates this. Never rush the publish flow. Understand the project structure fully before touching anything.",
+  "why": null,
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "migration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T16:09:33.812Z",
+  "updated_at": "2026-04-29T16:09:33.812Z"
+}

@@ -1,0 +1,18 @@
+{
+  "id": 390,
+  "uuid": "1bb013f1-93f6-48e9-9133-f0584f37c6e9",
+  "layer": "preferences",
+  "what": "User wants \"built different\" as slang/casual tone for the homepage heading, not \"built differently\" (grammatically correct but stiff). User prefers casual, confident tone in marketing-facing copy.",
+  "why": null,
+  "scope": "aide-memory-web/components/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T14:41:58.870Z",
+  "updated_at": "2026-04-29T14:41:58.870Z"
+}

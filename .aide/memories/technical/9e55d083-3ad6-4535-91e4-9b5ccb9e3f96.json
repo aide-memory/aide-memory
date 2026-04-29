@@ -1,0 +1,22 @@
+{
+  "id": 359,
+  "uuid": "9e55d083-3ad6-4535-91e4-9b5ccb9e3f96",
+  "layer": "technical",
+  "what": "Cursor adapter audience-mapping pattern (decided 2026-04-27 — REVISED with empirical constraint discovered in same-day testing).\n\n**Verified mapping (Claude Code → Cursor):**\n- Claude Code `systemMessage` (user-visible chrome) ↔ Cursor `user_message` ONLY when paired with `permission:\"deny\"` or `continue:false`. **Empirical 2026-04-27: under `permission:\"allow\"` or in events without permission (stop, beforeSubmitPrompt without continue:false), Cursor accepts user_message in the hook JSON but does NOT render it in chat.** ANSI-stripping doesn't fix this — the field is ignored regardless.\n- Claude Code `additionalContext` / `decision:block.reason` ↔ Cursor `agent_message`. Reaches agent context regardless of permission value. ✅ verified empirically (agent acted on stored conventions returned via agent_message).\n\n**REVISED scenario shapes (post-empirical 2026-04-27):**\n\n| Scenario | Cursor shape (verified working) | Notes |\n|---|---|---|\n| Hard block (preToolUse deny) | `{permission:\"deny\", user_message:<chrome>, agent_message:<agent-instruction>}` | Both fields render ✅ |\n| Soft nudge (preToolUse allow) | `{permission:\"allow\", agent_message:<agent-instruction>}` | user_message accepted but **not rendered** under allow → drop it. Chrome cannot surface to user on soft preToolUse in Cursor 3.2.11. |\n| Stop reprompt | `{followup_message:\"<chrome-prefix> — <agent-instruction>\"}` | user_message accepted but **not rendered** on stop → prefix chrome into followup_message instead. |\n| beforeSubmitPrompt block | `{continue:false, user_message:\"<chrome> — <reason>\"}` | Use prefix pattern OR rely on user_message rendering with continue:false (untested; default to prefix for safety). |\n| Standalone systemMessage | empty (no user-visible channel for non-deny chrome) | Could prefix into surrounding event instead — or drop. |\n\n**Key constraint to remember:** Cursor's `user_message` is bound to permission:\"deny\" / continue:false rendering. It's not a general-purpose chat-channel under \"allow.\" This is a verified Cursor 3.2.11 behavior — not documented in cursor.com/docs/hooks but empirically confirmed. Track as forum FR if desired.\n\n**Implication for soft preToolUse user-visibility:**\n- Cursor users do NOT see \"aide-memory · prompting aide_search\" chrome on soft nudges\n- Claude Code users DO see it (systemMessage renders inline)\n- This is a genuine Cursor platform gap that survives the audience-mapping fix\n- Mitigation: rules-file injection (`alwaysApply:true`) covers static guidance; per-event chrome on soft paths is uncovered. Could prefix chrome into agent_message so agent surfaces it organically in its response — explore as fast-follow if user-visibility on soft turns out to matter.\n\n**Why the prior version of this memory was wrong:** I claimed \"user_message=chrome works under allow\" based on Cursor docs listing user_message as a preToolUse field without restriction. The docs don't specify the allow-vs-deny rendering rule. Per directive #358: docs-listing-the-field ≠ field renders in all cases. Need empirical verification, which we now have.\n\n**Stop hook prefix pattern (per the revised mapping):**\n- Current emit (post-this-fix): `{followup_message:<reason>, user_message:<chrome>}` — user_message ignored\n- Revised emit: `{followup_message:\"<chrome> — <reason>\"}` — chrome prepended into the only-rendered field\n- Still feels less polished than Claude Code's separate systemMessage but is the actual user-visible path on Cursor.",
+  "why": "User empirically tested both the soft preToolUse (B+ adversarial) and stop hook with chrome — Cursor renders user_message under deny but NOT under allow or stop, even though the JSON is accepted without error. Updating the design memory to reflect the verified constraint. The bias-correction directive (#358) was right that we should default to capability parity, but verified absence is verified absence — Cursor genuinely doesn't render user_message in non-deny paths in 3.2.11.",
+  "scope": "src/memory/editors/cursor.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "api-contract",
+    "integration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T15:09:14.076Z",
+  "updated_at": "2026-04-27T16:03:00.347Z"
+}

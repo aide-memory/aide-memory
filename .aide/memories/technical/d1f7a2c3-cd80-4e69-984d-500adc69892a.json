@@ -1,0 +1,22 @@
+{
+  "id": 348,
+  "uuid": "d1f7a2c3-cd80-4e69-984d-500adc69892a",
+  "layer": "technical",
+  "what": "Critical production issue (2026-04-27): better-sqlite3 native module ABI mismatch silently breaks ALL aide-memory hooks. Root cause: better-sqlite3 ships a compiled `.node` binary linked to Node's V8 ABI (NODE_MODULE_VERSION). Node 18 = ABI 108, Node 22 = ABI 127. Mismatch throws on `require('better-sqlite3')`. Our dispatcher's top-level try/catch (intentional, \"hooks must never break the agent\") absorbs the throw silently → exit 0 → empty stdout → host editor sees no hook response. User-visible symptom: hooks appear to run (`exit code: 0`) but produce no output, no nudge, no block. **Triggered by:** (a) user installs aide-memory under Node X then upgrades to Node Y; (b) nvm-driven version changes; (c) user's terminal node version != editor's hook-execution node version (Cursor uses its own Node 22 even when nvm default is Node 18). Fix priorities for 0.5.1: (1) detect binding mismatch in dispatcher → emit clear stderr message (\"aide-memory: better-sqlite3 ABI mismatch — run `npm rebuild better-sqlite3` in your aide-memory install\"); (2) `aide-memory doctor` diagnostic command; (3) auto-rebuild on `aide-memory init` when mismatch detected; (4) MCP server startup also needs the same check + clear error. **Verified working after fix:** rebuilt against Node 22 → preEdit hard-block fires correctly in Cursor → `permission: deny` honored by Cursor → agent stopped + asked user how to proceed. Forum #154377 (\"Cursor ignores deny\") does NOT apply — Cursor honors deny when we actually emit it.",
+  "why": "This is the root cause of every \"Cursor doesn't honor our hook\" hypothesis we chased over multiple test rounds. The hook code is correct. The issue was an environmental ABI mismatch absorbed silently by our defensive try/catch. Critical to document because: (a) any user upgrading Node hits this same silent failure, (b) every prior \"Cursor platform issue\" speculation needs re-evaluating in light of this finding, (c) the fix is a 10-line dispatcher change to detect+report the specific error. Storing scoped to hooks/** so future debugging starts from this knowledge rather than re-deriving it.",
+  "scope": "src/memory/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "api-contract",
+    "testing",
+    "config"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T12:04:49.614Z",
+  "updated_at": "2026-04-27T12:04:49.614Z"
+}

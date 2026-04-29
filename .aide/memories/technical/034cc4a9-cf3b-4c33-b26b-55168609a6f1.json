@@ -1,0 +1,21 @@
+{
+  "id": 374,
+  "uuid": "034cc4a9-cf3b-4c33-b26b-55168609a6f1",
+  "layer": "technical",
+  "what": "Memory file storage layout — factual correction (verified empirically 2026-04-27 via `ls .aide/memories/*/` + `cat <uuid>.json`):\n\n**Files are JSON, NOT markdown.** Each memory is a `.json` file under `.aide/memories/<layer>/`, structured like:\n```json\n{\n  \"id\": 169,\n  \"uuid\": \"214dc5a2-...\",\n  \"layer\": \"guidelines\",\n  \"what\": \"<the memory text>\",\n  \"why\": \"<context>\",\n  \"scope\": \"<glob>\",\n  \"contributor\": \"...\",\n  \"tags\": [...],\n  \"generated_by\": {...},\n  ...\n}\n```\nNot markdown with YAML frontmatter. **Common confusion in marketing/demo content — has now regressed TWICE in 2026-04-27 launch prep:**\n1. Demo script revision agent claimed \"memories live as plain markdown files... markdown file with YAML frontmatter\" → caught + corrected\n2. LinkedIn/blog reframe agent ALSO claimed \"plain markdown files in .aide/memories/\" → caught + corrected\n\n**Process implication:** when spawning an agent to write content describing storage format, INCLUDE the explicit \"memories are JSON not markdown, no YAML frontmatter\" line in the agent prompt. Agents skim source docs and default to \"markdown with frontmatter\" because that's the typical Obsidian-style memory tool pattern. We're different. Future content-writing agent prompts must call this out explicitly.\n\n**Shared/personal folder split is PREFERENCES-ONLY, not all layers.** Verified via ls:\n```\n.aide/memories/area_context/        — flat (no shared/personal subdirs)\n.aide/memories/guidelines/          — flat\n.aide/memories/technical/           — flat\n.aide/memories/preferences/\n.aide/memories/preferences/personal/    — gitignored\n.aide/memories/preferences/shared/      — committed\n```\nSource: `src/memory/store.ts` `getMemoryDir()` line ~269: `path.join(memoriesDir, 'preferences', shared ? 'shared' : 'personal')` — only the preferences path is per-shared-flag; other layers go directly into the layer folder regardless of the JSON `shared` field.\n\n**Implication for the new memories.defaultShared config (commit 8, memory #373):** the knob only meaningfully changes folder location for PREFERENCES memories. For technical/area_context/guidelines memories, flipping the default still flips the JSON `shared` flag but the file lands in the same place either way (the layer folder). The JSON flag is metadata; the folder structure is preferences-specific.\n\n**Honest doc framing (use everywhere this is described):**\n- \"Memories live as JSON files in `.aide/memories/<layer>/`, organized by layer (preferences, technical, area_context, guidelines).\"\n- \"Personal preferences go under `preferences/personal/` and are gitignored. Shared preferences and all other layers live in the layer folder and are committed.\"\n- Don't say \"memories are markdown\" or \"shared/personal split applies to all memories\" — both are wrong.\n\n**Agent-prompt template line to include:** *\"IMPORTANT: aide-memory storage format — memories are JSON files under .aide/memories/<layer>/, NOT markdown files. There is NO YAML frontmatter. The structure is a JSON object with fields: id, uuid, layer, what, why, scope, contributor, tags, generated_by, created_at, updated_at. If you write 'markdown' or 'frontmatter' anywhere in your output, that's a regression of memory #374.\"*",
+  "why": "Memory #374 was capturing the JSON-not-markdown truth + first regression. Updating to record the SECOND regression (LinkedIn/blog agent same bug) + adding an explicit agent-prompt template line so future content-writing tasks bake the correct framing in upfront. The pattern is sticky enough that just having the truth in the source files isn't enough — agent prompts must call it out explicitly.",
+  "scope": "src/memory/store.ts",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture",
+    "api-contract"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T23:14:07.633Z",
+  "updated_at": "2026-04-28T01:26:58.343Z"
+}

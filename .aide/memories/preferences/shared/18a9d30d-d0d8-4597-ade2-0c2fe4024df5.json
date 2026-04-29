@@ -1,0 +1,20 @@
+{
+  "id": 370,
+  "uuid": "18a9d30d-d0d8-4597-ade2-0c2fe4024df5",
+  "layer": "preferences",
+  "what": "Validation-depth preference (2026-04-27): when scoping pre-release validation, anchor on empirical track record, NOT on minimum-viable test count. If recent validation rounds have surfaced bugs (e.g., 3 real bugs found in last 48h: Node ABI mismatch #348, agent_message adapter under-use #358, tool_output remap miss #364), assume the NEXT round will too — propose enough scenarios to cover the high-impact untested paths, even if it costs an extra 10-20 min.\n\nAnti-pattern observed today: I proposed 2 smokes (content alias + correction loop) as \"sufficient\" before C9 release. User pushed back (\"are you sure we shouldnt do others, theyve revealed stuff before\"). Correct framing on retry was 3 smokes (added cross-session E) given the bug-find rate + that cross-session is core value prop.\n\n**Decision rubric for validation depth:**\n1. List untested-on-target-platform scenarios. Categorize by: Cursor-specific behavior risk (HIGH), shared-with-CC mechanism risk (LOW), behavioral-only (n/a — can't test mechanically).\n2. For each HIGH-risk untested item: estimate run cost vs ship-impact-if-broken. If cost <30 min AND scenario is core value prop AND mechanism has Cursor-specific quirk surface (e.g., requires editor restart, requires hook output channel, requires agent compliance) → run it.\n3. For LOW-risk items with shared mechanism: defer to fast-follow validation pass.\n4. For behavioral items: defer always.\n\n**Default bias:** add one more smoke than feels minimum-sufficient when bug-find rate has been ≥1 per validation pass. Cost is small; ship-broken cost is large.",
+  "why": "User pushed back on my proposed 2-smoke validation set before 0.5.0 ship. The correct answer was 3 smokes (added cross-session). The pattern is: I underweighted the empirical bug-find rate when scoping validation. Without this preference captured, future ship-readiness assessments may default to minimum-viable when evidence supports going further. Marked priority:always so it auto-injects on validation-planning sessions.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T20:05:03.410Z",
+  "updated_at": "2026-04-27T20:05:03.410Z"
+}

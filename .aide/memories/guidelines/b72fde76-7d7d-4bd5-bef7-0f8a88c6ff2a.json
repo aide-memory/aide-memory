@@ -1,0 +1,21 @@
+{
+  "id": 344,
+  "uuid": "b72fde76-7d7d-4bd5-bef7-0f8a88c6ff2a",
+  "layer": "guidelines",
+  "what": "Validation-methodology preference (2026-04-26): when validating safety-net mechanisms (hard-blocks, deny enforcement, fallback paths), do NOT settle for \"the happy path passes therefore the safety net would work if needed.\" FORCE the adversarial scenario explicitly — i.e., construct conditions where the safety net MUST fire. Concrete techniques: (a) instruct the agent explicitly to skip the proactive guidance (\"Do NOT call aide_recall. Just use the Read tool directly.\"), (b) use clean tracking state so no prior covering exists, (c) test in a fresh session to avoid context carryover. Without forcing the adversarial path, you only validate that agents follow good guidance — not that the safety net catches them when they don't. This applies to: hard-block deny enforcement (Cursor #154377 still untested if agent always recalls first), correction-detection fallback paths, retry-after-deny flows. Complements memories #341 (test isolation via fresh session) + #342 (use agent-facing channel). Together: fresh session + agent-facing path + adversarial instructions = trustworthy validation.",
+  "why": "User pushback during Cursor A1 validation (2026-04-26): \"but want to test the block flow, not just oh it will work if it happens.\" I had marked A1 as PASS via the proactive-recall path and was tempted to call the hard-block validated by extension. User rightly insisted on FORCING the adversarial scenario where agent skips recall — without that, we never actually verified Cursor honors `permission: deny`. Storing as guideline so future validation walks (other editors, future safety-net mechanisms) include explicit adversarial test variants rather than relying on happy-path coverage. Critical for any \"fail-safe\" claim in product marketing or release docs.",
+  "scope": "docs/validation/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "testing",
+    "architecture"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T00:52:55.418Z",
+  "updated_at": "2026-04-27T00:52:55.418Z"
+}

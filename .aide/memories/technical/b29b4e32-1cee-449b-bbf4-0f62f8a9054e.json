@@ -1,0 +1,20 @@
+{
+  "id": 352,
+  "uuid": "b29b4e32-1cee-449b-bbf4-0f62f8a9054e",
+  "layer": "technical",
+  "what": "Calibration of \"fail loud\" directive (2026-04-27, scoped to memory #348/#349 work): \"fail loud\" on binding-mismatch / hook-load failures means **add clear stderr error logs that surface to editor hook output panels**, NOT interrupt the agent's main flow. The dispatcher's top-level swallow stays — its purpose (\"hooks must never break the agent\") is correct. What changes: BEFORE the catch absorbs the error, write a structured stderr line identifying the failure class (ABI mismatch, missing dist/, malformed input). User gets visibility; agent keeps running. Same shape for the MCP server: log clearly, degrade tool-call responses gracefully, but don't crash the server. This rules out implementations like `process.exit(1)` on hook failure or unhandled-throw to the parent process.",
+  "why": "User clarification 2026-04-27: \"failiing loudly here means mroee so adding err logs right? not interruiptign main flow?\" — pinning down the implementation contract for the loud-error change so a future session (or me re-reading) doesn't over-correct into hook-breaking-the-agent territory. Scoped to hooks/** since that's where the implementation lives.",
+  "scope": "src/memory/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "architecture"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T12:36:36.173Z",
+  "updated_at": "2026-04-27T12:36:36.173Z"
+}

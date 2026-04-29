@@ -1,0 +1,20 @@
+{
+  "id": 392,
+  "uuid": "53595114-3ddf-4f20-818f-46ae5999a861",
+  "layer": "technical",
+  "what": "0.5.0 publish flow: user wants previous versions COMPLETELY UNPUBLISHED (npm unpublish), not just deprecated. Test project should have a real name (not aide-test-project). Need to create a pre-seeded test project with memories already stored so user can simulate full flow: session start injection, recall on file read, correction detection, stop reflection. Run scenario on Claude Code first, then reset and repeat on Cursor. Must follow C9 from cursor onboarding and the launch guide (HANDOFF_MINIFIED_PUBLISH.md) for the publish steps including verifying the bundled/compiled output as an end user.",
+  "why": null,
+  "scope": "docs/launch/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "migration"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "normal",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-29T16:00:34.318Z",
+  "updated_at": "2026-04-29T16:00:34.318Z"
+}

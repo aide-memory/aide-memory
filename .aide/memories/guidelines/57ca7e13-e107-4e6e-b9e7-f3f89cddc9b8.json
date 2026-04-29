@@ -1,0 +1,22 @@
+{
+  "id": 375,
+  "uuid": "57ca7e13-e107-4e6e-b9e7-f3f89cddc9b8",
+  "layer": "guidelines",
+  "what": "**Config-key onboarding checklist.** When adding a new entry to `scripts/hooks/defaults.json`, every new key MUST land in ALL of these places before the PR is shippable:\n\n1. **scripts/hooks/defaults.json** — the entry itself with `value`, `public`, `pro`, `description`. Description must explain what flipping it does + per-call override (if any).\n\n2. **Code that reads it** — at least one of:\n   - `src/memory/hooks/handlers.ts` (`getSetting(projectRoot, key)`) for hook-time settings\n   - `src/memory/store.ts` constructor's `.aide/config.json` parse block for store-time settings\n   - `src/memory/server.ts` for MCP-tool-time settings\n   Failing to wire it leaves a \"dead config\" that users set but does nothing (anti-pattern caught in audit memory #304 — `capture.*`, `embeddings.backend`, `embeddings.model`, `nudge.visible` all had this disease pre-0.4.3).\n\n3. **Unit test** — `src/memory/__tests__/<area>.test.ts`. Verify the config flag changes observable behavior. Cover BOTH paths (default + flipped) AND any per-call override.\n\n4. **Smoke test in all-configs-behavior.test.sh** — add `test_<key_snake>()` function near similar keys + register the call in the runner block at the bottom. The sweep is the source of truth that proves every public key has CI coverage. PR diff that touches defaults.json without touching this file is a red flag.\n\n5. **(Optional but recommended) standalone smoke** — `scripts/hooks/__tests__/<feature>.smoke.test.sh` for behaviors that need a more elaborate end-to-end flow than the all-configs sweep can express. Wire into `npm run test:smoke` in package.json.\n\n6. **Documentation:**\n   - `docs/user/configuration.md` — table row + visual walkthrough (per memory directive: every new config gets a visual walkthrough showing thresholds/defaults)\n   - `docs/user/cli-reference.md` — example invocation (`aide-memory config <key> <value>`)\n   - Per-editor docs (cursor.md, claude-code.md) — if the config affects editor-specific behavior\n\n7. **Roundtrip-only or SKIP if non-observable** — if the new key has no observable runtime effect (network fetch, UI suggestion, etc.), still add a `test_skip_<key>` block in all-configs-behavior.test.sh that uses `roundtrip_only` to validate the get/set CLI path. Document the SKIP reason inline.\n\n**Anti-pattern this prevents:** shipping a config that users discover via docs, set via CLI, but produces zero behavior change because nobody wired it through. Caught audit-style by memory #304.\n\n**Reference for new contributors:** see how `memories.defaultShared` was added in 0.5.0 — defaults.json entry, store.ts ctor read, 5 unit tests in store.test.ts, 3-test standalone smoke (memories-default-shared.smoke.test.sh), test_memories_default_shared in all-configs-behavior.test.sh, configuration.md row, mcp-tools.md schema reference. That's the full onboarding path; mirror it.",
+  "why": "User direction 2026-04-27: every config key addition must hit all 6+ surfaces so we don't ship dead configs again (the anti-pattern caught in #304). Marked priority:always so it auto-injects on any session touching defaults.json, store.ts, handlers.ts, or the configs sweep test. Without this, future PRs will keep dropping pieces (forgot the smoke, forgot the docs, forgot the unit test) and users will hit the \"I set X and nothing happened\" footgun.",
+  "scope": "scripts/hooks/**",
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "config",
+    "testing",
+    "api-contract"
+  ],
+  "source": "conversation",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T23:59:42.684Z",
+  "updated_at": "2026-04-27T23:59:42.684Z"
+}

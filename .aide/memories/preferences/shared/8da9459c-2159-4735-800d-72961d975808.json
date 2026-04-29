@@ -1,0 +1,20 @@
+{
+  "id": 361,
+  "uuid": "8da9459c-2159-4735-800d-72961d975808",
+  "layer": "preferences",
+  "what": "User communication directive 2026-04-27 (extends #346 — no preemptive hype): when explaining UX flows / hook output / cross-editor parity, use **plain language about what the user sees and what the agent sees**, not technical jargon I invent (e.g. \"chrome line,\" \"chrome prefix,\" \"audience-mapping,\" \"audience split\"). The user pushed back: \"your table doesnt make sense, chrome line chrome prefix idk what you are saying ... explain tldr intended behavior we should have !!\"\n\n**Concrete rule for explaining hook/UX behavior:**\n- Lead with the two surfaces the user actually cares about: (a) **what shows up in the chat** (user reads this), (b) **what the agent receives** (agent acts on this; user doesn't see).\n- Don't introduce jargon (\"chrome\", \"audience split\", \"render channel\") in user-facing explanations even if it's correct in code comments.\n- For each scenario (hard block, soft nudge, stop reminder, correction), explicitly say:\n  - \"User sees: <plain text or 'nothing'>\"\n  - \"Agent sees: <plain text>\"\n- If the same content goes to both surfaces, say so directly. If only one surface receives content, say \"user sees nothing\" / \"agent sees nothing\" — don't dance around it.\n\n**Where jargon IS fine:** code comments, internal memory entries (like #359 which uses the technical terms), commit messages. NOT in user-facing chat responses or external docs (cursor.md etc.).\n\n**Pattern to remember:** if the user asks \"TLDR\" or \"explain in plain words,\" that's a signal I've been over-jargonized previously and need to recalibrate the level. Don't just shorten — actually translate the technical concepts into observable user/agent behaviors.",
+  "why": "User direct quote 2026-04-27: \"your table doesnt make sense, chrome line chrome prefix idk what you are saying — explain tldr intended behavior we should have !!\" I had been using internal-jargon terms (chrome, audience-mapping, render channel) in user-facing explanations. The user wants plain \"what user sees / what agent sees\" framing. Storing as priority:always so future cross-editor / UX explanations default to plain-language framing rather than re-introducing the jargon.",
+  "scope": null,
+  "context_label": null,
+  "contributor": "ahmedmmeky",
+  "tags": [
+    "style"
+  ],
+  "source": "hook",
+  "shared": true,
+  "priority": "always",
+  "generated_by": null,
+  "derived_from": null,
+  "created_at": "2026-04-27T16:13:25.388Z",
+  "updated_at": "2026-04-27T16:13:25.388Z"
+}
