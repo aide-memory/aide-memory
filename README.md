@@ -145,7 +145,7 @@ No Docker. No external databases. No API keys. No cloud accounts.
 
 ## License
 
-Free to use. See [LICENSE](LICENSE.md) for terms.
+Free to use. See [LICENSE](LICENSE) for terms.
 
 ---
 
