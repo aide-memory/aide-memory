@@ -1,8 +1,6 @@
 # LinkedIn launch post
 
-AI has changed how we build software. We want the best models, the best tools, the best workflow. But the bottleneck I keep hitting isn't any of those.
-
-It's context.
+AI has changed how we build software, with better models, amazing tools, faster workflows. But the bottleneck I keep hitting isn't any of those. It's context.
 
 What lives in your head. Your team's domain knowledge. What isn't captured in documentation or rules files. What lives and dies inside agent sessions.
 
