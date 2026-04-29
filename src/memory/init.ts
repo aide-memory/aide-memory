@@ -888,20 +888,10 @@ export async function initProject(
     result.warnings.push(`rulesGen: ${(err as Error).message}`);
   }
 
-  // 8. Cursor MCP hot-reload reminder. Cursor has no MCP hot-reload
-  // (github.com/cursor/cursor/issues/3887, forum #55723). Users must
-  // restart Cursor for the aide-memory MCP server to become available
-  // after init. Only emit if the cursor adapter is active (supportsHooks
-  // or supportsMcp true — means we actually wrote Cursor files).
-  const cursorActive = adaptersWithHooks().some((a) => a.id === 'cursor') ||
-                       adaptersWithMcp().some((a) => a.id === 'cursor');
-  if (cursorActive) {
-    result.warnings.push(
-      'Cursor: restart the Cursor app for MCP tools (aide_recall, aide_remember, etc.) to register. ' +
-      'Cursor has no MCP hot-reload (cursor issue #3887). If tools still do not appear after restart, ' +
-      'toggle the aide-memory MCP server off/on in Cursor Settings (forum #122421).',
-    );
-  }
+  // 8. Restart reminder so MCP server registers.
+  result.warnings.push(
+    'Restart your editor (or start a fresh session) to ensure the MCP server is picked up.',
+  );
 
   return result;
 }
