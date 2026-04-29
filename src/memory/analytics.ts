@@ -52,6 +52,7 @@ export class Analytics {
   private distinctId: string;
   private eventBuffer: Array<{ event: string; properties: Record<string, unknown>; timestamp: string }> = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private remoteDisabled: boolean = false;
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -70,6 +71,10 @@ export class Analytics {
     this.db.exec(CREATE_ANALYTICS_TABLE);
   }
 
+  disableRemote(): void {
+    this.remoteDisabled = true;
+  }
+
   logEvent(event: string, value?: string, tool?: string): void {
     const now = new Date().toISOString();
     // Local SQLite logging
@@ -78,7 +83,7 @@ export class Analytics {
     ).run(event, value ?? null, tool ?? null, now);
 
     // Buffer for remote PostHog logging (anonymized — no memory content, just event type + counts)
-    if (POSTHOG_KEY) {
+    if (POSTHOG_KEY && !this.remoteDisabled) {
       this.eventBuffer.push({
         event,
         properties: {

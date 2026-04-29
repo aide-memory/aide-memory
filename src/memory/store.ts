@@ -148,6 +148,7 @@ export class MemoryStore {
           // Telemetry
           if (configData.telemetry?.enabled === false) {
             this.telemetryEnabled = false;
+            this.analytics?.disableRemote();
           }
 
           // memories.defaultShared (added 2026-04-27 per memory #373).
