@@ -24,11 +24,11 @@ After init, restart your editor so the MCP server registers. On Cursor, also ena
 
 ## Privacy
 
-Code and memory content never leave your machine. Telemetry is opt-in: until you set `AIDE_TELEMETRY=on`, no telemetry network calls happen. When opted in, only anonymized event tallies are sent (event type, hashed machine id, platform, Node version). See https://aide-memory.dev/docs/configuration#telemetry-opt-in-nothing-sent-unless-you-turn-it-on for the exact list.
+Code and memory content never leave your machine. Anonymized usage counts (event type, hashed machine id, platform, Node version) ship to PostHog by default so we can see which features are used; disable any time with `AIDE_TELEMETRY=off`. See https://aide-memory.dev/docs/configuration#telemetry for the full breakdown.
 
 ## License
 
-Proprietary freeware: free to use today, source not public, not open source.
+Proprietary freeware: free to use today, source not public, not open source. More features coming.
 
 ## Documentation
 

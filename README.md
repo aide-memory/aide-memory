@@ -121,12 +121,10 @@ For conceptual searches ("where do we handle auth tokens?"), prefer `aide_search
 
 **Code and memory content never leave your machine.** Memories are JSON files on your disk, the SQLite cache is local, and the MCP server runs over stdio.
 
-Telemetry is **opt-in**: until you set `AIDE_TELEMETRY=on` in your environment, aide-memory makes zero telemetry network calls. When you opt in, only anonymized event tallies are sent (event type, a SHA256-hashed `hostname:username` for deduplication, platform, Node version). Memory content, file paths, query strings, and any other user-identifying data are never sent.
+Anonymized usage counts ship to PostHog by default so we can see which features are used: event type, a SHA256-hashed `hostname:username` for deduplication, platform, Node version. Memory content, file paths, query strings, the number of memories you have, and any other user-identifying data are never sent. To disable telemetry entirely:
 
 ```bash
-# Default: nothing is sent
-# To opt in:
-export AIDE_TELEMETRY=on
+export AIDE_TELEMETRY=off
 ```
 
 ---
@@ -197,9 +195,7 @@ No Docker. No external databases. No API keys. No cloud accounts.
 
 ## License
 
-aide-memory is **proprietary freeware**: free to use today; source not public; not open source, not FSL, not MIT. See [LICENSE](LICENSE) for the exact terms.
-
-Free for individuals today. Future enhancements may stay free, or some may ship as separate tiers as the project grows. We're not promising specific things free forever, and we're not gating anything additional today.
+aide-memory is **proprietary freeware**: free to use today, source not public, not open source. See [LICENSE](LICENSE) for the exact terms. More features coming.
 
 ---
 

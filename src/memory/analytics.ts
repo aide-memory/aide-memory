@@ -4,18 +4,19 @@ import os from 'os';
 
 // PostHog project key — hardcoded for anonymous usage telemetry.
 //
-// **Opt-in default (flipped 2026-04-27 per memory #373).** Telemetry is OFF
-// by default. To enable, set `AIDE_TELEMETRY=on` in your environment. When
-// enabled, only anonymized event tallies (event type + machine-hashed
-// distinct_id + platform + node_version) are sent to PostHog. Memory content,
-// code, file paths, and user identifiers are NEVER transmitted.
+// **Default ON (2026-04-28 round-4 user direction, supersedes 2026-04-27 flip).**
+// Telemetry is ON by default. To disable, set `AIDE_TELEMETRY=off` in your
+// environment. When enabled, only anonymized event tallies (event type +
+// machine-hashed distinct_id + platform + node_version) are sent to PostHog.
+// Memory content, code, file paths, query strings, and user identifiers are
+// NEVER transmitted.
 //
 // Local SQLite analytics (the `analytics` table powering `aide-memory stats`)
 // is unaffected by this flag — it always runs locally with no network egress.
 //
 // Future: a `analytics.enabled` config key in `.aide/config.json` is on the
 // fast-follow list. Today the env var is the only knob.
-const POSTHOG_KEY = process.env.AIDE_TELEMETRY === 'on' ? 'phc_ztrzpvbZQTa4ymkGxVdYZnFKiFFLyJMcf5zYUXVAqPzS' : '';
+const POSTHOG_KEY = process.env.AIDE_TELEMETRY === 'off' ? '' : 'phc_ztrzpvbZQTa4ymkGxVdYZnFKiFFLyJMcf5zYUXVAqPzS';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 
 export interface AnalyticsEvent {
