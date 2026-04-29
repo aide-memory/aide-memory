@@ -1,16 +1,33 @@
 # aide-memory
 
-**Layered, path-scoped, automatically-captured memory for AI coding agents and teams.**
+> **Website:** https://aide-memory.dev
+> **Docs:** https://aide-memory.dev/docs
+> **Install:** `npx aide-memory init`
 
-Static rules files (CLAUDE.md, .cursorrules) drift, miss area-specific context, and live as one giant file with no scoping. Every new session, your agent re-learns what you taught yesterday. Your teammates' agents re-learn the things your agent already learned. Switch from Claude Code to Cursor and the lesson is gone.
+## TL;DR
 
-aide-memory closes those gaps. It's a typed, scoped, auto-captured memory store with file-per-memory storage, six editor hooks, an MCP server, and git as the team-sync layer. Memories your agent stores travel with the repo so your teammates' agents pick them up on the next file read.
+aide-memory is a categorized, scoped, auto-captured-and-recalled memory layer for AI coding agents. It runs locally, plugs into Claude Code and Cursor via hooks + an MCP server, and uses git for team sync. It's not a replacement for `CLAUDE.md` or `.cursorrules`; those cover always-on guidance, aide-memory covers the dynamic, area-specific knowledge that should only surface when it's relevant.
+
+What this means in practice: when the agent opens a file in a code area you've taught aide-memory about, it gets prompted to recall what's been learned there. When you correct it or surface a non-obvious finding, hooks prompt it to remember. Memories live as JSON files in `.aide/memories/`, so `git add` / `git push` / `git pull` is the team-sync path. Personal preferences stay gitignored; team-shared memories travel with the repo.
 
 ```bash
 npx aide-memory init
 ```
 
-Free. Local-first. No account required. Full docs at **https://aide-memory.dev**.
+Free. Local-first. No account required.
+
+---
+
+## What aide-memory closes that rules files don't
+
+Static rules files (CLAUDE.md, .cursorrules) and skills are useful for always-on guidance, but they have four real limits:
+
+- **One flat file, no categorization, no scoping.** A team-wide guideline, a personal style preference, an area-specific decision, and a stack fact all blur into one file. The whole file is injected on every turn, even when most of it isn't relevant to the file the agent just opened.
+- **Manual capture.** Capturing a correction means typing it into the file. In practice, almost no one does this consistently.
+- **Tool-specific by default.** Conventions you teach in Claude Code don't carry to Cursor unless you copy the file over manually. Same for teammates on different tools.
+- **No prompting on the way in.** Even when context is captured somewhere, nothing prompts the agent to look it up when it opens a relevant file. Either everything is injected globally (rules-file approach), or nothing is.
+
+aide-memory adds the layer those gaps leave open: scoped, layered, auto-captured-and-recalled memory with git as the team-sync substrate. Coexists with rules files; doesn't replace them.
 
 ---
 
@@ -64,7 +81,7 @@ Full walkthrough: https://aide-memory.dev/docs/quick-start.
 - **4 typed memory layers** with personal/shared split for preferences
 - **Local SQLite cache** rebuildable from JSON files at any time
 - **FTS5 keyword search** plus optional semantic search via Transformers.js or Ollama
-- **Configurable everything**: hook modes, scope-depth dial, recall caps, injection budgets, Stop schedule
+- **Configurable**: hook modes, scope-depth dial, recall caps, injection budgets, Stop schedule
 
 ---
 
@@ -134,7 +151,7 @@ export AIDE_TELEMETRY=off
 | Editor | Status |
 |---|---|
 | **Claude Code** | Reference adapter, every capability works as designed. Restart your session after `init` so the MCP server registers. |
-| **Cursor** | Full hook + MCP wiring. Cmd+Q the app and reopen after `init`, then toggle the aide-memory MCP server ON in Settings → MCP. Some capabilities are tracked against upstream Cursor platform work and will upgrade as Cursor ships fixes. |
+| **Cursor** | Full hook + MCP wiring. Cmd+Q the app and reopen after `init`, then toggle the aide-memory MCP server ON in Settings → MCP. |
 | **Windsurf, Codex, Copilot** | Curated rules template at launch; full hook + MCP adapters in flight. |
 
 Capability matrix: https://aide-memory.dev/docs/supported-editors.
@@ -173,7 +190,7 @@ Full reference: https://aide-memory.dev/docs/configuration.
 
 aide-memory, [claude-mem](https://github.com/thedotmack/claude-mem), and [engram](https://github.com/ayvazyan10/engram) all attempt to give AI coding agents persistent memory, but they take meaningfully different shapes.
 
-**aide-memory** combines layered + path-scoped recall, hook-driven auto-capture, file-per-memory storage with personal/shared split, git-as-sync for teams, cross-tool support, and uses-your-existing-agent (no LLM calls of its own).
+**aide-memory** is the new entrant. It combines layered + scoped recall, hook-driven auto-capture, file-per-memory storage with personal/shared split, a single shared store across Claude Code + Cursor, and git as the team-sync substrate. Uses your existing agent's inference budget; no LLM calls of its own.
 
 **claude-mem** (the established project in the space, ~70k stars, multi-editor support across Claude Code / Cursor / Gemini CLI / OpenCode / OpenClaw): continuous capture via PostToolUse hook + session-summary at Stop; SessionStart injection of compressed recent-sessions context; 3-tool MCP search workflow for on-demand detail. Storage is SQLite (FTS5) primary with optional Chroma for semantic search; runtime uses a Bun-managed worker. Per-folder timelines via Folder Context Files are opt-in (`CLAUDE_MEM_FOLDER_CLAUDEMD_ENABLED`), default-off. License: AGPL-3.0.
 
