@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0 — 2026-04-29
+
+First public release. Full Cursor support, libsql migration, editor adapter architecture, and content/docs overhaul.
+
+### New features
+
+- **Cursor support.** Full hook + MCP wiring. `aide-memory init` writes `.cursor/hooks.json`, `.cursor/mcp.json`, and a dynamically-regenerated `.cursor/rules/aide-memory.mdc`. Hard blocks, soft nudges, correction detection, and Stop reflections all work.
+- **Editor adapter architecture.** Each editor gets its own adapter (`src/memory/editors/`) that translates aide-memory events into that editor's hook I/O contract. Claude Code remains the reference adapter. Codex, Copilot, and Windsurf get a rules template.
+- **`content` alias for `what`** in `aide_remember` and `aide_update`. Some models reach for `content` first.
+- **`memories.defaultShared` config key.** Controls whether new preferences go to `shared/` (committed) or `personal/` (gitignored) by default.
+- **Telemetry on by default.** Anonymized usage counts ship to PostHog. Disable with `AIDE_TELEMETRY=off`.
+- **Pre-search nudge sharpened.** Clearer wording when the hook suggests `aide_search` before grep.
+- **User-facing `aide-memory` status lines** via `systemMessage` channel (Claude Code) and `user_message` (Cursor).
+
+### Fixes
+
+- **libsql migration.** Replaced `better-sqlite3` with `libsql` (N-API binding). Resolves ABI mismatch crashes on Node version upgrades. Diagnostic surface classifies binding errors with actionable hints.
+- **Template resolution.** `aide-memory init` now resolves templates via package.json walk-up, fixing init failures when installed globally.
+- **Embedding persistence.** Embeddings now persist under `memory.uuid` instead of being orphaned.
+- **Bundle leak.** Dev-monorepo name no longer appears as a literal string in published bundles.
+
+### Breaking
+
+- **Node 18 minimum.** `engines` field now requires `>=18.0.0` (was `>=20.0.0` in 0.4.x, but most deps only need 18).
+- **libsql replaces better-sqlite3.** If you have code that imports from aide-memory's internals and references better-sqlite3 types, update to libsql.
+
+### Internal
+
+- 782 tests (up from ~650 in 0.4.3)
+- Editor adapter test suite, cursor envelope tests, hook merge tests, rules generation tests
+- Semantic search smoke test wired into `test:smoke`
+
 ## 0.4.3 — 2026-04-22
 
 Minor release: polish + correctness sweep. Fixes several latent bugs, expands correction-detection coverage, and introduces three configurable knobs for SessionStart injection + scope-matching behavior. Also cleans up dead public-config keys that were listed as valid but had no runtime effect.
