@@ -647,7 +647,10 @@ export async function sessionStart(input: HookInput): Promise<void> {
     // Non-fatal — don't break session start over a health check.
   }
 
-  // Version update check — read cached result synchronously so the agent sees it.
+  // Version update check — read cached result synchronously.
+  // Collected here, appended to the final output so both show in one emit.
+  let versionNotice = '';
+  let versionUserMsg = '';
   try {
     const { findPackageRoot } = require('../internal/paths');
     const pkgPath = path.join(findPackageRoot(), 'package.json');
@@ -660,8 +663,8 @@ export async function sessionStart(input: HookInput): Promise<void> {
         const lv = cache.latestVersion.replace(/^v/, '').split('.').map(Number);
         const isNewer = lv[0] > cv[0] || (lv[0] === cv[0] && lv[1] > cv[1]) || (lv[0] === cv[0] && lv[1] === cv[1] && lv[2] > cv[2]);
         if (isNewer) {
-          const msg = `aide-memory v${cache.latestVersion} is available (current: v${currentVersion}). Run \`npm update -g aide-memory\` to upgrade.`;
-          emitAdditionalContext('SessionStart', msg, `${BRAND}update available: v${cache.latestVersion}`);
+          versionNotice = `aide-memory v${cache.latestVersion} is available (current: v${currentVersion}). Run \`npm update -g aide-memory\` to upgrade.`;
+          versionUserMsg = `${BRAND}update available: v${cache.latestVersion}`;
         }
       }
     }
@@ -704,11 +707,17 @@ export async function sessionStart(input: HookInput): Promise<void> {
   // session-start injection uses the rules-file workaround (Phase C4).
   const visible = isVisible(projectRoot);
   const totalInjected = allInjectedIds.length;
-  const userMessage = visible && totalInjected > 0
-    ? `${BRAND}injected ${totalInjected} ${totalInjected === 1 ? 'memory' : 'memories'} at session start`
-    : undefined;
+  const parts: string[] = [];
+  if (visible && totalInjected > 0) {
+    parts.push(`${BRAND}injected ${totalInjected} ${totalInjected === 1 ? 'memory' : 'memories'} at session start`);
+  }
+  if (versionUserMsg) {
+    parts.push(versionUserMsg);
+  }
+  const userMessage = parts.length > 0 ? parts.join('\n') : undefined;
 
-  emitAdditionalContext('SessionStart', output, userMessage);
+  const finalOutput = versionNotice ? `${versionNotice}\n\n${output}` : output;
+  emitAdditionalContext('SessionStart', finalOutput, userMessage);
 }
 
 // ---------------------------------------------------------------------------
