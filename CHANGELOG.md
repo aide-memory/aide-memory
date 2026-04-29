@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.14 — 2026-04-29
+
+- Added `$geoip_disable: true` alongside `$ip: null` for belt-and-suspenders GeoIP prevention.
+
 ## 0.5.13 — 2026-04-29
 
 - **Privacy fix: disable PostHog GeoIP enrichment.** PostHog was auto-enriching events with location data (city, lat/long, postal code) from sender IP. Added `$ip: null` to the event payload to prevent this. Also disable GeoIP in your PostHog project settings.
