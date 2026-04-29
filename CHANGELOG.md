@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4 — 2026-04-29
+
+- README formatting: website/docs/install each on their own line.
+
 ## 0.5.3 — 2026-04-29
 
 - npm license field now links to the correct LICENSE file on GitHub (was referencing LICENSE.md which doesn't exist on the public repo).
