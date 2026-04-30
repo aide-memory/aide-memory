@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.15 — 2026-04-29
+
+- **Fix: scope dynamic rules-file regen to Cursor only.** The `## Current memory context` section (priority:always memories + injection content + version notice) is now appended only to `.cursor/rules/aide-memory.mdc`. Claude Code's `.claude/rules/aide-memory.md` stays at static teaching content (~111 lines) since its SessionStart hook delivers the same content as `additionalContext` natively. Removes a redundant copy of session-start content from every Claude Code rules-file regen. New `needsDynamicRules` flag on `EditorAdapter` opts each editor in.
+- **New: Cursor-specific init reminder.** Init output now includes `For Cursor: also enable aide-memory in Settings > MCP after restart.` alongside the generic restart line. Cursor users sometimes miss the second-gate MCP toggle in Settings; this surfaces the step at install time.
+- **Docs: 0.5.14 currency sweep across user-facing and internal docs.** Install command (`npm install -g aide-memory && aide-memory init`), telemetry framing (drop opt-in/opt-out terminology, state plainly: on by default; disable via `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`), PreCompact wording (hook clears tracking; rules file separately tells the agent what to save), GeoIP framing simplified, storage-shape diagram corrected, monorepo post-checkout walk-up + version-update notice mechanism documented, marketing duplicates consolidated.
+
 ## 0.5.14 — 2026-04-29
 
 - Added `$geoip_disable: true` alongside `$ip: null` for belt-and-suspenders GeoIP prevention.
