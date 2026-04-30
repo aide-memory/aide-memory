@@ -4,30 +4,24 @@
 
 <video src="https://aide-memory.dev/demo.mp4" autoPlay muted playsInline loop style={{ width: '100%', maxWidth: '800px', borderRadius: '8px', margin: '1.5rem auto', display: 'block' }} />
 
-## The bottleneck isn't the models, the compute, or the agents. It's context.
+What lives in your head doesn't flow across AI sessions, and doesn't always make it to your team. How features fit together in your system, the patterns you follow in an area, the reasoning behind decisions — they're not always captured by CLAUDE.md and .cursorrules.
 
-AI has changed how we build software, with better models, amazing tools, faster workflows. But the bottleneck I keep hitting isn't any of those. It's context. What lives in your head, your team's domain knowledge, what isn't captured in documentation or rules files, what lives and dies inside agent sessions.
+Coding with agents made me more productive, but made me repeat myself. So I built aide-memory — an auto-captured, auto-recalled, path-scoped memory tool for AI coding agents and teams.
 
-Coding with agents has made developers significantly more productive. But it's created a new kind of friction. You explain how the feature you're building ties into the rest of the system, the way you like to structure your code, the patterns to follow in this area. The agent gets it. You ship great work together. Next session, it's a blank slate. You re-explain the same things.
+## Why rules files aren't enough on their own
 
-Critical decisions being made during conversations aren't being captured. Preferences, corrections, area knowledge, guidelines. So much valuable context doesn't persist, doesn't flow to the next session, to a different tool, or to a teammate's agent when they pick up work in the same area.
-
-The agents are capable. The models are good. What's missing is the layer in between: a way to capture the corrections, decisions, and area knowledge that come up in conversation, scope them to where they apply, and share them across sessions, tools, and teammates.
-
-## Why rules files aren't enough
-
-Rules files (CLAUDE.md, .cursorrules) help with part of this. But they have real limits:
+CLAUDE.md and .cursorrules help with part of this. But they have real limits:
 
 - **Corrections don't make it back.** You correct the agent in conversation. The lesson works for that session. Unless someone manually edits the rules file afterwards, it doesn't persist.
 - **Area-specific knowledge isn't always documented.** How a feature ties into the larger system, the architectural decisions in a specific module, the reasons certain things are built the way they are. Not all of that fits in a project-wide rules file, and there's no way to scope it to a code area.
 - **The whole file gets injected on every turn.** Whether the agent is working in auth, the dashboard, or the settings panel, it gets the same block of text. Relevant context competes with non-relevant context for space in the window.
 - **Team handoff is manual.** The corrections and decisions from your sessions don't flow to your teammate's agent automatically.
 
-aide-memory adds the layer rules files don't do. It sits alongside them, not above or below. Rules files for static, always-on guidance. aide-memory for the dynamic, scoped knowledge that grows with the codebase.
+aide-memory sits alongside rules files, not above or below. Rules files for static, always-on guidance. aide-memory for the dynamic, scoped knowledge that grows with the codebase.
 
-## How capture works
+## Capture happens as you work
 
-Six hooks fire across the session lifecycle, installed by `aide-memory init`. You don't manage them.
+You don't have to remember to save anything. The preferences, technical context, area decisions, and team guidelines that come up while you build are captured as you work. Six hooks fire across the session lifecycle, installed by `aide-memory init` — you don't manage them.
 
 **Correction detection.** When you correct the agent ("no, we don't do it that way", "use composition instead"), the UserPromptSubmit hook detects the correction and prompts the agent to store it, scoped to the code area you're working in.
 
@@ -39,9 +33,9 @@ Six hooks fire across the session lifecycle, installed by `aide-memory init`. Yo
 
 Capture happens because the editor fires the hook, not because someone remembers to call a tool.
 
-## How recall works
+## Recall is scoped to where you're working
 
-Memories attach to code areas via glob scopes (`src/components/dashboard/**`, `packages/api/**`). When the agent opens a file, aide-memory matches the path against stored scopes and surfaces what's relevant to that area.
+Instead of dumping global context on every prompt, when the agent opens a file aide-memory matches the path against stored scopes (`src/components/dashboard/**`, `packages/api/**`) and surfaces only what's relevant to that area.
 
 Four layers organize the knowledge:
 
@@ -56,7 +50,7 @@ Recall ranks `area_context` first (most specific to the area), then `technical`,
 
 The agent gets what applies to where it's working, not a global dump of non-relevant text.
 
-## Git-synced for teams
+## Your team's agents learn from yours
 
 Memories are JSON files under `.aide/memories/`. Commit, push, pull.
 
