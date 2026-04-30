@@ -16,7 +16,7 @@ If you are starting this work after a context compaction or a new session, **do 
 
 ---
 
-**Status:** PLAN v2 (2026-04-23). Scoped to what Cursor reliably supports today + documented gaps for what it doesn't. Revised after 3 verification research passes confirmed platform limitations are real.
+**Status:** PRODUCTION (0.5.0–0.5.14, shipped April 2026). All phases C1–C8 complete. Scoped to what Cursor reliably supports today + documented gaps for what it doesn't. Revised after 3 verification research passes confirmed platform limitations are real.
 
 **Phase status (2026-04-27 — 0.5.0 ship-ready):**
 - **C1–C6 COMPLETE** — adapter scaffolding, shared-rules, runtime dispatcher, envelope translation, dynamic rules-file regen, correction one-turn-delay flow, all bash smoke + unit tests green. See memory #336 + handoff `docs/sessions/HANDOFF_APRIL27_AUDIENCE_MAPPING_AND_READ_GAP.md`.

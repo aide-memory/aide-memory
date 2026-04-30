@@ -658,9 +658,9 @@ Each phase develops capabilities across multiple layers -- capture, recall, mana
 | **Domain & landing page** | Establish `aide-memory.dev` or `useaide.dev` (aide.dev is taken by CodeStory IDE). Simple landing page: what it does, install command, waitlist. Do NOT reveal Phase 2/3 roadmap publicly -- just "persistent memory for AI coding agents." |
 | **Legal** | Trademark search for AIDE. License finalized (proprietary freeware EULA). Explore whether registering a company makes sense for liability, expenses, and IP protection. Legal considerations should be revisited at each phase release. |
 | **GitHub repo** | `aide-memory` on GitHub. README, issue tracker, release binaries. No source code (proprietary freeware). Docs and installation instructions. |
-| **npm package** | `aide-memory` reserved and publishable. `npx aide-memory` works. |
-| **Website** | Landing page with copy-paste install command (`npx aide-memory`), feature overview, waitlist. No future phases revealed. |
-| **Telemetry** | Basic anonymous telemetry ON by default (opt-out). Memory count, recall count, tool used. Never content. Needed for Phase 2 go/no-go decision. |
+| **npm package** | `aide-memory` reserved and publishable. `npm install -g aide-memory` works. |
+| **Website** | Landing page with copy-paste install command (`npm install -g aide-memory`), feature overview, waitlist. No future phases revealed. |
+| **Telemetry** | Basic anonymous telemetry on by default. Memory count, recall count, tool used. Never content. Disable: `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`. Needed for Phase 2 go/no-go decision. |
 
 **Estimate:** 1-2 weeks, can overlap with Phase 1 development.
 
@@ -686,7 +686,7 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Area | What ships | Tier |
 |------|-----------|------|
-| **Install** | One-command install: `npx aide-memory init`. Writes rules files for ALL supported tools by default. Sets up hooks, creates `.aide/` directory structure, config defaults, downloads embedding model, configures `.gitignore`. | FREE |
+| **Install** | One-command install: `npm install -g aide-memory && aide-memory init`. Writes rules files for ALL supported tools by default. Sets up hooks, creates `.aide/` directory structure, config defaults, downloads embedding model, configures `.gitignore`. | FREE |
 | **Capture** | 10 hooks on by default: SessionStart (preferences/guidelines/priority:always auto-injection + ID tracking), PreToolUse on Read (ID-based blocking: BLOCK/SOFT/SILENT), PreToolUse on Edit/Write (same ID-based blocking), PreToolUse on Grep/Glob (always soft, never blocks), UserPromptSubmit (soft-only correction detection with negative filters + 3-word minimum), Stop (dynamic interval 3/5/10 with correction override), PreCompact (cleanup-only, clears tracking), PreToolUse on aide_recall (passthrough tracking), PostToolUse on aide_recall (ID parsing + tracking), PostToolUse on aide_remember (passthrough tracking), PostToolUse on aide_search (passthrough tracking). Session-scoped tracking via `session_id` with `ids\|` entries. Source tagging. Hidden nudging via `additionalContext`. Contributor + `generated_by` (tool/model/author_type) stored from day one. | FREE |
 | **Recall** | Smart nudge approach — YOUR memories only. Path-scoped with focused scope matching (immediate parent + one level above only, no grandparent scopes). Scope-first ranking (scoped above project-wide), round-robin layer diversity within limit (min limit=5 for swapping). `aide_recall` supports `ids` parameter for gap-filling specific memories. Memory `priority` field (`always` = auto-injected at session start, `normal` = standard). Scope depth minimum (MIN_SCOPE_DEPTH=2) for blocking decisions. | FREE (your mems) |
 | **Structure** | 4 memory layers with priority ordering. Tags from configurable preset list. Model auto-assigns. | FREE |
@@ -697,7 +697,7 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 | **Storage** | `.aide/memories/<layer>/` directory structure. One JSON file per memory. Local SQLite index. Post-checkout git hook. | FREE |
 | **Config** | `aide config` for customization. Nudge visibility default OFF. Capture defaults ON. Configurable thresholds, tags. | FREE |
 | **Memory editing** | Agent can update/remove existing memories via `aide_update` and `aide_forget` MCP tools. | FREE (your mems) |
-| **Analytics** | Dual architecture: local SQLite analytics table + remote PostHog (anonymized, opt-out via `aide-memory config telemetry.enabled false`). Basic: memory count, last recalled, hook breakdown. Track: installs vs inits, memories stored/recalled, hook trigger source, tool used, retention. | FREE (basic) |
+| **Analytics** | Dual architecture: local SQLite analytics table + remote PostHog (anonymized; disable with `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`). Basic: memory count, last recalled, hook breakdown. Track: installs vs inits, memories stored/recalled, hook trigger source, tool used, retention. | FREE (basic) |
 | **Pre-train scan** | `aide init --scan` scans codebase and pre-populates ~20-30 structural memories (project type, stack, key patterns, existing docs). Agent has context from session 1, not session 5. | FREE |
 
 
@@ -729,12 +729,12 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 
 - FTS5 integration for aide_search
 - Local embedding model integration (sqlite-vec)
-- npm package with `npx aide-memory init` experience (writes rules for all tools, creates `.aide/` structure, downloads model)
+- npm package with `npm install -g aide-memory && aide-memory init` experience (writes rules for all tools, creates `.aide/` structure, downloads model)
 - Cursor MCP config + hooks config
 - `.aide/memories/` file-per-memory architecture (migrate from single SQLite to JSON files + SQLite index)
 - Post-checkout git hook for auto-sync
 - `aide stats` CLI command with analytics
-- Default-on telemetry (opt-out)
+- Default-on telemetry (disable via `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`)
 - `aide init --scan` pre-train mode (codebase scan -> initial memories)
 - Public config settings + pro gating (Phase 2)
 - Polish: error handling, graceful degradation, startup time
@@ -765,7 +765,7 @@ Ship the capture, store, recall loop. This is not just table stakes — it's a c
 
 | Metric | How measured | Why it matters |
 |--------|-------------|----------------|
-| Installs (`npx aide-memory` runs) | Telemetry event | Adoption funnel top |
+| Installs (`npm install -g aide-memory` runs) | Telemetry event | Adoption funnel top |
 | Inits (`aide init` per project) | Telemetry event | Multi-project usage |
 | Active sessions (1+ memories stored) | Local + telemetry | Real usage vs install-and-forget |
 | Memories stored per session | Local analytics table | Hook effectiveness |
@@ -875,7 +875,7 @@ Based on research in `docs/specs/PLUGIN_STATUS.md`, all three major platforms ar
 
 **npm ecosystem (ongoing):**
 - Package already on npm as `aide-memory`
-- Ensure `npx aide-memory` works for zero-install trial
+- Ensure `npm install -g aide-memory` works for zero-friction trial
 - Add keywords for discoverability: `mcp`, `memory`, `ai-agent`, `claude`, `cursor`, `context`
 - Keep README install instructions at the top (2-minute setup)
 
@@ -1278,7 +1278,7 @@ For each supported tool, we write one rules file in that tool's native format du
 ### Install Experience
 
 ```
-npx aide-memory init
+npm install -g aide-memory && aide-memory init
 ```
 
 This single command:
@@ -1486,22 +1486,22 @@ This is a critical test because the rules file IS our interface to the model. If
 
 ### Distribution
 
-**Primary:** `npx aide-memory init` -- zero install, writes rules files for ALL supported tools by default (no detection needed -- if a tool is not installed, the rules file sits unused), sets up hooks, creates `.aide/` directory structure, configures defaults, downloads embedding model, configures `.gitignore`.
+**Primary:** `npm install -g aide-memory && aide-memory init` -- one-command install, writes rules files for ALL supported tools by default (no detection needed -- if a tool is not installed, the rules file sits unused), sets up hooks, creates `.aide/` directory structure, configures defaults, downloads embedding model, configures `.gitignore`.
 
 **Secondary channels:**
 
 
 | Priority | Channel                      | Target                                         |
 | -------- | ---------------------------- | ---------------------------------------------- |
-| 1        | `npx aide-memory init`       | Everyone                                       |
-| 2        | `npm install -g aide-memory` | Power users (pinned version)                   |
+| 1        | `npm install -g aide-memory && aide-memory init` | Everyone                           |
+| 2        | `npm install -g aide-memory@<version>` | Power users (pinned version)                 |
 | 3        | Claude Code plugin           | Claude Code users (marketplace discovery)      |
 | 4        | Cursor adapter               | Cursor users (.cursor/hooks.json + MCP config) |
 | 5        | Smithery registry            | MCP ecosystem discovery                        |
 | 6        | `git clone aide-memory`      | Contributors                                   |
 
 
-No account required at any step. No telemetry unless opted in. Rules files written for all tools by default -- no auto-detection logic needed.
+No account required at any step. Telemetry is on by default (anonymous counts only — disable via `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`). Rules files written for all tools by default -- no auto-detection logic needed.
 
 ### Usage Tracking
 
@@ -1621,8 +1621,8 @@ Ship as `aide-memory` on npm. CLI binary is `aide`. MCP tools are `aide_recall`,
 
 | Priority | Channel                      | Install experience                                              |
 | -------- | ---------------------------- | --------------------------------------------------------------- |
-| 1        | `npx aide-memory init`       | Zero install, writes rules for all tools, sets up hooks + .aide |
-| 2        | `npm install -g aide-memory` | Pinned version, global binary                                   |
+| 1        | `npm install -g aide-memory && aide-memory init` | One-command install, writes rules for all tools, sets up hooks + .aide |
+| 2        | `npm install -g aide-memory@<version>` | Pinned version, global binary                       |
 | 3        | Claude Code plugin           | One-command marketplace install                                  |
 | 4        | Cursor adapter               | .cursor/hooks.json + MCP config                                 |
 | 5        | Smithery registry            | MCP server discovery listing                                    |

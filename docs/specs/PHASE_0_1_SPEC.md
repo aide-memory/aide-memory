@@ -92,9 +92,9 @@ COWORK: Task D in master prompt. CLAUDE CODE: `docs/PUBLIC_README.md` generated,
 #### P0.4 — npm Package Reservation (COWORK Task E)
 Included in MASTER COWORK PROMPT (Task E). Will need your npm credentials when prompted.
 - [x] npm account ready
-- [x] `aide-memory` name reserved on npm (version 0.1.1 published, 0.1.0 unpublished after README fix)
+- [x] `aide-memory` name reserved on npm (currently aide-memory@0.5.14 live; pre-0.5.0 versions unpublished per HANDOFF_MINIFIED_PUBLISH.md)
 - [x] Publish workflow tested
-- [x] Verification step completed (VERIFIED at npmjs.com — aide-memory@0.1.1 live)
+- [x] Verification step completed (VERIFIED at npmjs.com — aide-memory@0.5.14 live)
 
 #### P0.5 — Landing Page (COWORK Task F + CLAUDE CODE ✅)
 COWORK: Task F in master prompt (scaffold Nextra site, deploy to Vercel, connect domain). CLAUDE CODE: `docs/LANDING_PAGE_CONTENT.md` generated. Repo name: `aide-memory-web`.
@@ -171,7 +171,7 @@ You are completing the remaining launch tasks for AIDE Memory — a persistent, 
 Codebase: /Users/meky/code/aide-v0 (branch: feature/phase-1)
 Landing page repo: aide-memory-web/ inside the codebase (separate git repo, remote: aide-memory/aide-memory-web)
 Public GitHub repo: aide-memory/aide-memory
-npm package: aide-memory (version 0.1.1 live)
+npm package: aide-memory (version 0.5.14 live)
 Domain: aide-memory.dev (live on Vercel, connected via Cloudflare CNAME)
 
 IMPORTANT: All sub-agents MUST use Opus 4.6 — never Sonnet or Haiku.
@@ -185,7 +185,7 @@ WHAT'S ALREADY DONE (do NOT redo):
 - Vercel deployment (aide-memory.dev live, SSL provisioned) ✅
 - Legal: trademark search, EULA, Terms & Conditions ✅
 - GitHub: org, repo, README, issue templates, LICENSE, Actions workflow, NPM_TOKEN ✅
-- npm: aide-memory@0.1.1 published and verified ✅
+- npm: aide-memory@0.5.14 published and verified ✅
 - Landing page: Nextra site built with content, pages, dark theme ✅
 - User docs: 8 pages in docs/user/ ✅
 - Marketing content: 5 pieces in docs/marketing/ + publishing guide ✅
@@ -376,7 +376,7 @@ Submit aide-memory to the official MCP server registry.
    - Name: aide-memory
    - Description: "Persistent, path-scoped memory for AI coding agents"
    - npm package: aide-memory
-   - Command: npx aide-memory serve
+   - Command: aide-memory serve
 4. Submit a Pull Request from the fork to the upstream repo
 5. Save the PR URL to /Users/meky/code/aide-v0/docs/specs/PLUGIN_STATUS.md (append under MCP Registry section)
 
@@ -484,7 +484,7 @@ Do this after each task completes, not all at the end.
 - [x] P0.1: Domain registration (COMPLETE — aide-memory.dev + .com registered, DNS/email configured)
 - [x] P0.2: Trademark search, EULA, T&C (COMPLETE)
 - [x] P0.3: GitHub org + repo created (COMPLETE — repo created, PUBLIC_README.md ready for upload, LICENSE verified)
-- [x] P0.4: npm package reserved + published (COMPLETE — version 0.1.1 live, verified on npmjs.com)
+- [x] P0.4: npm package reserved + published (COMPLETE — version 0.5.14 live, verified on npmjs.com)
 - [x] P0.5: Landing page scaffolded (COMPLETE — Nextra site built, content written)
 - [x] P0.5: Vercel deployment (COMPLETE — user deployed, aide-memory.dev live)
 - [x] P0.6: User documentation (COMPLETE — 8 pages in docs/user/)
@@ -1772,7 +1772,7 @@ Phase 0 is business/legal infrastructure with no engineering dependencies. Can r
 | P1.9 | Cursor Support | `.cursor/hooks.json` config for Cursor hooks. MCP server config for Cursor (`~/.cursor/mcp.json` or project-level). | Nothing | S | P1.8 |
 | P1.10 | Sync (Post-checkout + Manual) | Git post-checkout hook for auto-import. ALSO manual commands: `aide-memory sync import` (rebuild SQLite from JSON) and `aide-memory sync export` (ensure all memories have JSON files). Compares by UUID + `updated_at` (newer wins). Sync safety: JSON files are ALWAYS source of truth; SQLite is rebuildable. | Nothing | M | P1.1 |
 | P1.11 | Config System | `.aide/config.json` schema. `aide config` CLI subcommand. Settings: nudge visibility (default OFF), capture (default ON), tag presets, cleanup thresholds. | Nothing | M | P1.7 (CLI framework) |
-| P1.12 | Analytics & Telemetry | Local `analytics` table in SQLite (event, value, tool, timestamp). Default-ON anonymous telemetry (opt-out via `aide config telemetry off`). Events: install, init, memory_stored, memory_recalled, hook_triggered, tool_used. | recalled_count in store | M | P1.1, P1.11 (opt-out config) |
+| P1.12 | Analytics & Telemetry | Local `analytics` table in SQLite (event, value, tool, timestamp). Default-ON anonymous telemetry (disable via `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`). Events: install, init, memory_stored, memory_recalled, hook_triggered, tool_used. | recalled_count in store | M | P1.1, P1.11 (telemetry config) |
 | P1.13 | aide stats | CLI command displaying: memory count by layer, most-recalled, stale candidates, capture source breakdown, hook effectiveness. | Nothing | S | P1.12 (reads analytics) |
 | P1.14 | aide-memory init | One-command setup: creates `.aide/` directory tree, writes rules files for all tools, sets up hooks, **auto-configures MCP server in tool allowlists** (Claude Code settings.json, Cursor mcp.json), creates config.json with defaults, downloads embedding model, configures `.gitignore`, installs post-checkout hook. Also: `aide-memory init --update-rules` to refresh rules without touching config/memories. | Nothing | M | P1.1, P1.4, P1.8, P1.9, P1.10, P1.11 |
 | ~~P1.15~~ | ~~Pre-train Scan~~ | **REMOVED (Apr 2026).** `aide-memory init --scan` was removed because output was too surface-level (package.json + dir inference only). See follow-up "Deferred: Auto-scan for Codebase Pattern Discovery" in PHASE_0_1_VALIDATION_FOLLOWUPS.md. Use `aide_import` against existing CLAUDE.md / README for richer onboarding. | — | — | — |
@@ -1866,7 +1866,7 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 | ~~15~~ | ~~P1.15 Pre-train Scan~~ | — | Removed Apr 2026 (see PHASE_0_1_VALIDATION_FOLLOWUPS.md). |
 | 16 | P1.16 npm Package | After all code | Package.json cleanup, build pipeline, npx support. |
 
-**End of Sprint 4 deliverable:** `npx aide-memory init` works end-to-end.
+**End of Sprint 4 deliverable:** `npm install -g aide-memory && aide-memory init` works end-to-end.
 
 #### Sprint 5 — Validation & Polish (Week 5-6)
 
@@ -1908,14 +1908,14 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 ### P0.4 — npm Package Reservation
 
 - [ ] `aide-memory` package reserved on npm
-- [ ] `npx aide-memory` resolves (even if it's a placeholder)
+- [ ] `npm install -g aide-memory` resolves (even if it's a placeholder)
 - [ ] Publish workflow tested (dry-run)
 - [ ] Package metadata: description, keywords, homepage, repository
 
 ### P0.5 — Landing Page
 
 - [ ] Live at registered domain
-- [ ] Content: one-sentence pitch, install command (`npx aide-memory init`), feature bullets, waitlist signup
+- [ ] Content: one-sentence pitch, install command (`npm install -g aide-memory && aide-memory init`), feature bullets, waitlist signup
 - [ ] No Phase 2/3/4 roadmap revealed
 - [ ] Mobile-responsive
 - [ ] Analytics (page views, waitlist signups)
@@ -2342,7 +2342,7 @@ P1.8 (Rules) ──┤                    ├── P1.10 (Post-checkout)│
 
 ### P1.14 — aide-memory init
 
-**Done looks like:** `npx aide-memory init` takes a project from zero to fully configured in under 2 minutes.
+**Done looks like:** `npm install -g aide-memory && aide-memory init` takes a project from zero to fully configured in under 2 minutes.
 
 - [ ] Creates `.aide/` directory structure (memories, config, cache)
 - [ ] Creates `.aide/memories/<layer>/` directories (preferences/personal, preferences/shared, technical, area_context, guidelines)
@@ -2389,7 +2389,7 @@ Removed because output was too surface-level — `package.json` + top-level dire
 - [ ] `package.json` fields: name, version (0.1.0), description, bin (aide), main, files, engines (>=18), keywords, license (proprietary)
 - [ ] `bin` entry: `"aide": "./dist/cli/aide-memory.js"` 
 - [ ] Build: `tsc` → `dist/`, then bundle/minify for distribution
-- [ ] `npx aide-memory init` works (package has `postinstall` or `bin` that handles init flow)
+- [ ] `npm install -g aide-memory && aide-memory init` works (package has `postinstall` or `bin` that handles init flow)
 - [ ] Exclude from package: test files, source maps, old aide-v0 code, docs, .aide/
 - [ ] Dependencies cleaned: only include what aide-memory needs (better-sqlite3, commander, @modelcontextprotocol/sdk, zod, uuid)
 - [ ] Remove old dependencies not needed: axios, express, chokidar, marked, ts-morph, web-tree-sitter, ws
@@ -2431,7 +2431,7 @@ Removed because output was too surface-level — `package.json` + top-level dire
 
 - [ ] Claude Code: plugin listing submitted to marketplace (README, install command, feature description)
 - [ ] Cursor: extension/adapter listing if Cursor marketplace supports MCP tool listings
-- [ ] Both listings point to `npx aide-memory init` as install command
+- [ ] Both listings point to `npm install -g aide-memory && aide-memory init` as install command
 - [ ] Listings include feature screenshots/descriptions from demo assets (P1.19)
 
 ### P1.19 — Demo & Marketing Assets
@@ -3201,7 +3201,7 @@ Write to `<uuid>.json.tmp`, then rename to `<uuid>.json`. Atomic on all modern f
 Standard npm approach. Include only `dist/memory/`, `dist/cli/aide-memory.js`, `scripts/hooks/`, templates. No repo restructuring needed.
 
 **Q10: CLI binary naming?** → **DECIDED: `aide` as default binary, `aide-memory` as npm package name and fallback.**
-npm package is `aide-memory`. Binary registered as both `aide` and `aide-memory` in package.json `bin` field. Users use `aide init`, `aide recall`, etc. by default. If a conflict is detected during init (another `aide` binary exists on PATH), warn: "Another `aide` binary found at <path>. Use `aide-memory` instead, or remove the conflicting binary." The `aide-memory` binary always works as a safe fallback. `npx aide-memory init` works for first-time install.
+npm package is `aide-memory`. Binary registered as both `aide` and `aide-memory` in package.json `bin` field. Users use `aide init`, `aide recall`, etc. by default. If a conflict is detected during init (another `aide` binary exists on PATH), warn: "Another `aide` binary found at <path>. Use `aide-memory` instead, or remove the conflicting binary." The `aide-memory` binary always works as a safe fallback. `npm install -g aide-memory && aide-memory init` is the first-time install flow.
 
 ### Testing — DECIDED
 
@@ -3475,7 +3475,7 @@ Source of truth is always the markdown in GitHub. Website auto-deploys from GitH
 **Hosting:** Vercel (free tier, auto-deploy from GitHub, works natively with Next.js/Nextra).
 
 **Landing page content (from P0.5):**
-- Hero: one-sentence pitch + `npx aide-memory init` install command
+- Hero: one-sentence pitch + `npm install -g aide-memory && aide-memory init` install command
 - Feature bullets (6-8, from Phase 1 capabilities)
 - Demo GIF/video (from P1.19)
 - Waitlist signup (simple email form → PostHog or Mailchimp)

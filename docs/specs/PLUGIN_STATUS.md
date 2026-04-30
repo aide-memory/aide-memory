@@ -380,7 +380,7 @@ This field allows the MCP Registry to verify that the npm package owner matches 
    ```bash
    npm run build
    npm test
-   npx aide-memory serve  # Confirm server starts on stdio
+   aide-memory serve  # Confirm server starts on stdio
    ```
 
 2. **Update package.json** with the `mcpName` field shown above
@@ -420,7 +420,7 @@ mcp-publisher init
 # Follow prompts for:
 # - Server name: io.github.aide-memory/aide-memory
 # - Description: Persistent, path-scoped memory for AI coding agents...
-# - Execute command: npx aide-memory serve
+# - Execute command: aide-memory serve
 # - Repository: https://github.com/aide-memory/aide-memory
 
 # Option B: Manual creation
