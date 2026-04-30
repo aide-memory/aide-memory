@@ -17,6 +17,6 @@ aide-memory is configured via `.aide/config.json` and `aide-memory config <key> 
 - `embeddings.backend` / `embeddings.model`, semantic-search backend (`auto` / `transformers` / `ollama` / `none`)
 - `contributor`, default `"auto"` reads `git config user.name`
 
-Telemetry is opt-in via `AIDE_TELEMETRY=on`; default is off. Code and memory content never leave your machine.
+Telemetry is on by default. To turn it off: `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`. Only event types and machine-anonymous counts are sent (event name, hash of `hostname:username` for deduplication, platform, arch, Node version). Code, memory content, file paths, query strings, and the sender IP are never transmitted.
 
 For the full schema, visualized walkthroughs, and per-key examples, see [aide-memory.dev/docs/configuration](https://aide-memory.dev/docs/configuration).

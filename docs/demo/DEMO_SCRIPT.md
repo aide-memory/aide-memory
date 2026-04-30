@@ -23,7 +23,7 @@ $ pwd
 $ ls -la | grep aide
 # (no output — .aide/ doesn't exist yet)
 
-$ npx aide-memory init
+$ npm install -g aide-memory && aide-memory init
 ```
 
 ### Expected Output
@@ -392,7 +392,7 @@ Show the complete AIDE Memory lifecycle in one continuous demo (the most impress
 
 #### Step 1: Initialize (5 seconds)
 ```bash
-$ npx aide-memory init
+$ npm install -g aide-memory && aide-memory init
 ✓ Project initialized for aide-memory.
 ```
 

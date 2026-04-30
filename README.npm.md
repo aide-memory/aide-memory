@@ -40,7 +40,7 @@ Six hooks fire across the session lifecycle, installed by `aide-memory init`:
 - **SessionStart**: injects top preferences, guidelines, and priority-always memories so the agent starts with context
 - **PreToolUse**: before the agent reads or edits a file, checks if relevant memories exist for that path and prompts recall
 - **PostToolUse**: records what was recalled so re-reads don't re-prompt
-- **PreCompact**: clears session tracking before context compaction so post-compact reads re-prompt cleanly
+- **PreCompact**: clears session tracking before context compaction so post-compact reads re-prompt cleanly. The rules file separately tells the agent to save active plans, decisions, and constraints before compaction summarizes the session.
 
 ### Recall is scoped
 
@@ -99,9 +99,10 @@ Full walkthrough: https://aide-memory.dev/docs/quick-start
 
 - **7 MCP tools**: `aide_recall`, `aide_remember`, `aide_update`, `aide_forget`, `aide_search`, `aide_memories`, `aide_import`
 - **13 CLI commands**: `init`, `recall`, `remember`, `update`, `forget`, `search`, `list`, `stats`, `recall-log`, `config`, `sync`, `migrate`, `cleanup`
-- **6 hooks** wired into the editor at `init`
+- **6 hooks** wired into the editor at `init` (SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop, PreCompact)
 - **4 typed memory layers** with personal/shared split for preferences
 - **FTS5 keyword search** plus optional semantic search via Transformers.js or Ollama
+- **Version update notice** on SessionStart (Claude Code) + auto-regenerated Cursor rules file when a newer aide-memory is on npm
 
 ---
 
@@ -121,7 +122,7 @@ aide-memory ships with defaults you can adjust:
 
 ## Privacy
 
-Memory content stays on your machine. Anonymized usage counts (event type, hashed machine ID, platform, Node version) ship to PostHog by default so we can see which features are used. Disable with `AIDE_TELEMETRY=off`.
+Memory content stays on your machine. Telemetry is on by default — only event types and machine-anonymous counts (event name, hash of `hostname:username` for deduplication, platform, arch, Node version) are sent. The sender IP is not transmitted, so location is not derived from events. To turn it off: `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`.
 
 ---
 
@@ -140,7 +141,7 @@ Per-editor details: https://aide-memory.dev/docs/supported-editors
 ## Requirements
 
 - **Node.js 18 or later**
-- **npm or npx**
+- **npm** (global install recommended; `npx` works as a quick try but path resolution can break across Node version upgrades or npx cache cleans)
 
 No Docker. No external databases. No API keys. No cloud accounts.
 

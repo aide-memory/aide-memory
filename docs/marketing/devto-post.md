@@ -44,7 +44,7 @@ AIDE Memory uses hooks that fire at the right moments instead of hoping agents c
 ### Install
 
 ```bash
-npx aide-memory init
+npm install -g aide-memory && aide-memory init
 ```
 
 Two minutes. Creates the directory structure, installs hooks, writes editor rules, configures the MCP server. Zero config.
@@ -175,7 +175,7 @@ It is a file-based memory layer that lives in your repo. Human-readable JSON. Di
 
 ```bash
 # Install and setup
-npx aide-memory init
+npm install -g aide-memory && aide-memory init
 
 # Start working normally -- hooks capture context as you go
 # Next session, your agent remembers
@@ -204,4 +204,4 @@ That is coming. Individual memory is the infrastructure.
 
 GitHub: [aide-memory/aide-memory](https://github.com/aide-memory/aide-memory)
 
-Install: `npx aide-memory init`
+Install: `npm install -g aide-memory && aide-memory init`

@@ -88,7 +88,7 @@ aide-memory ships with defaults you can adjust:
 
 ## Privacy
 
-Memories are JSON files on your disk plus a local SQLite cache. Memory content stays on your machine. Anonymized usage counts (event type, hashed machine ID, platform, Node version) ship to PostHog by default so we can see which features are used. Disable with `AIDE_TELEMETRY=off`.
+Memories are JSON files on your disk plus a local SQLite cache. Memory content stays on your machine. Telemetry is on by default — only event types and machine-anonymous counts (event name, hash of `hostname:username`, platform, arch, Node version) are sent. The sender IP is not transmitted, so location is not derived from events. To turn it off: `AIDE_TELEMETRY=off` or `aide-memory config telemetry.enabled false`.
 
 ## Try it
 

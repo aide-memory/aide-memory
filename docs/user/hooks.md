@@ -11,6 +11,6 @@ Six hooks fire at key lifecycle events:
 | SessionStart | SessionStart | Cleans up stale tracking; injects top-N preferences + guidelines |
 | Stop | Stop | Prompts: "Anything worth remembering?" |
 | UserPromptSubmit | UserPromptSubmit | Detects corrections, decisions, preferences |
-| PreCompact | PreCompact | Saves planning decisions before context loss |
+| PreCompact | PreCompact | Clears session tracking so post-compact re-reads re-prompt cleanly. The rules file separately tells the agent to save active plans, decisions, and constraints via `aide_remember` / `aide_update` before compaction summarizes the session. |
 
 For each hook's script-by-script breakdown, disable knobs, and Claude Code vs Cursor delivery differences, see [aide-memory.dev/docs/hooks](https://aide-memory.dev/docs/hooks).

@@ -5,7 +5,8 @@
 Install to first recall in 2 minutes:
 
 ```bash
-npx aide-memory init
+npm install -g aide-memory
+aide-memory init
 aide-memory remember "API responses must use camelCase keys" --layer guidelines
 aide-memory recall src/
 ```

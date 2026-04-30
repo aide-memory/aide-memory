@@ -6,7 +6,7 @@ AIDE Memory uses hooks instead. Four hooks fire at the right moments: before fil
 
 Architecture: one JSON file per memory in `.aide/memories/<layer>/`, committed to git. No separate sync -- git IS the sync. Local SQLite is a cache index that rebuilds from the JSON files. No Docker, no Chroma, no API keys, no cloud dependency. Four structured layers (preferences, technical, area context, guidelines) with path-scoped recall using glob inheritance. BM25 search via FTS5, optional local embeddings.
 
-Install: `npx aide-memory init`. Two minutes. Creates directory structure, installs hooks, writes editor rules, configures MCP server. Works with Claude Code and Cursor today.
+Install: `npm install -g aide-memory && aide-memory init`. Two minutes. Creates directory structure, installs hooks, writes editor rules, configures MCP server. Works with Claude Code and Cursor today.
 
 This is NOT another RAG tool or vector database wrapper. It is a file-based memory layer that lives in your repo. Memories are human-readable JSON, browsable in any editor, diffable in PRs.
 

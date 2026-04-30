@@ -11,6 +11,6 @@ Recall flow:
 
 Search pipeline (three-tier fallback): FTS5 BM25 → LIKE substring → semantic embeddings (cosine similarity, score threshold 0.3) when an embedding backend is installed.
 
-Sync: git is the sync layer. `post-checkout` hook rebuilds the SQLite cache after branch switches. Conflicts resolve by `updated_at` (newer wins).
+Sync: git is the sync layer. `post-checkout` hook rebuilds the SQLite cache after branch switches. Hook installation walks up to find `.git/` (so monorepo subdirectories work), and stops if it crosses into a different project's `.aide/` directory. Conflicts resolve by `updated_at` (newer wins).
 
 For the full design, layer priorities, scope-matching rules, conflict-resolution mechanics, and analytics surface, see [aide-memory.dev/docs/architecture](https://aide-memory.dev/docs/architecture).

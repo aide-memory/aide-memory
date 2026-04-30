@@ -2,7 +2,7 @@
 
 > **Website:** https://aide-memory.dev
 > **Docs:** https://aide-memory.dev/docs
-> **Install:** `npx aide-memory init`
+> **Install:** `npm install -g aide-memory && aide-memory init`
 
 ## TL;DR
 
@@ -11,7 +11,7 @@ aide-memory is an auto-captured, auto-recalled, path-scoped memory layer for AI 
 What this means in practice: when the agent opens a file in a code area you've taught aide-memory about, it gets prompted to recall what's been learned there. When you correct it or surface a non-obvious finding, hooks prompt it to remember. Memories live as JSON files in `.aide/memories/`, so `git add` / `git push` / `git pull` is the team-sync path. Personal preferences stay gitignored; team-shared memories travel with the repo.
 
 ```bash
-npx aide-memory init
+npm install -g aide-memory && aide-memory init
 ```
 
 Free. Local-first. No account required.
@@ -47,8 +47,9 @@ The differentiator is the combination, not any single piece:
 ## Quick Start
 
 ```bash
-# 1. Initialize
-npx aide-memory init
+# 1. Install + initialize
+npm install -g aide-memory
+aide-memory init
 
 # 2. Restart your editor so the MCP server registers
 #    Cursor: Cmd+Q to quit, then reopen, then enable in Settings → MCP
@@ -77,18 +78,19 @@ Full walkthrough: https://aide-memory.dev/docs/quick-start.
 
 - **7 MCP tools** for the agent: `aide_recall`, `aide_remember`, `aide_update`, `aide_forget`, `aide_search`, `aide_memories`, `aide_import`
 - **13 CLI commands** for you: `init`, `recall`, `remember`, `update`, `forget`, `search`, `list`, `stats`, `recall-log`, `config`, `sync`, `migrate`, `cleanup`
-- **6 hooks** wired into the editor at `init`
+- **6 hooks** wired into the editor at `init` (SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop, PreCompact)
 - **4 typed memory layers** with personal/shared split for preferences
 - **Local SQLite cache** rebuildable from JSON files at any time
 - **FTS5 keyword search** plus optional semantic search via Transformers.js or Ollama
 - **Configurable**: hook modes, scope-depth dial, recall caps, injection budgets, Stop schedule
+- **Version update notice**: when a newer version is on npm, the SessionStart hook surfaces an "update available" line in chat (Claude Code) and a matching note in the auto-regenerated Cursor rules file
 
 ---
 
 ## Storage shape
 
 ```
-.aide/
+.aide/                          # in your project (committed; personal prefs gitignored)
 ├── memories/
 │   ├── preferences/
 │   │   ├── personal/          # gitignored, your private prefs
@@ -97,9 +99,10 @@ Full walkthrough: https://aide-memory.dev/docs/quick-start.
 │   ├── area_context/          # tracked, decisions for specific code areas
 │   └── guidelines/            # tracked, team and project principles
 ├── config.json                # local configuration with every public knob
-├── config-reference.md        # auto-generated key/default/description listing
-└── cache/
-    └── memory.db              # SQLite cache (rebuildable, gitignored)
+└── config-reference.md        # auto-generated key/default/description listing
+
+~/.aide/projects/<hash>/        # in your home dir (per-machine, never committed)
+└── memory.db                   # SQLite cache (rebuildable from the JSON above)
 ```
 
 Each memory is a single JSON file:
@@ -117,7 +120,7 @@ Each memory is a single JSON file:
 }
 ```
 
-JSON files are the source of truth. SQLite is a rebuildable cache; delete `.aide/cache/memory.db` and it reconstructs from the JSON on the next run.
+JSON files are the source of truth. SQLite is a rebuildable cache; delete `~/.aide/projects/<hash>/memory.db` and it reconstructs from the JSON on the next run.
 
 ---
 
@@ -138,10 +141,14 @@ For conceptual searches ("where do we handle auth tokens?"), prefer `aide_search
 
 **Code and memory content never leave your machine.** Memories are JSON files on your disk, the SQLite cache is local, and the MCP server runs over stdio.
 
-Anonymized usage counts ship to PostHog by default so we can see which features are used: event type, a SHA256-hashed `hostname:username` for deduplication, platform, Node version. Memory content, file paths, query strings, the number of memories you have, and any other user-identifying data are never sent. To disable telemetry entirely:
+Telemetry is on by default. Only event types and machine-anonymous counts are sent: event name, a SHA256-hashed `hostname:username` for deduplication, platform, arch, Node version. Memory content, file paths, query strings, the number of memories you have, and any other user-identifying data are never sent. The sender IP is not transmitted (`$ip: null`, `$geoip_disable: true`), so location is not derived from events. To turn it off:
 
 ```bash
+# Option 1: env var (per-shell)
 export AIDE_TELEMETRY=off
+
+# Option 2: persistent config (per-project)
+aide-memory config telemetry.enabled false
 ```
 
 ---
@@ -203,7 +210,7 @@ Full comparison table: https://aide-memory.dev/docs/comparison.
 ## Requirements
 
 - **Node.js 18 or later**
-- **npm or npx**
+- **npm** (global install recommended; `npx` works as a quick try but path resolution can break across Node version upgrades or npx cache cleans)
 - **Claude Code or Cursor** (for hook + MCP integration)
 
 No Docker. No external databases. No API keys. No cloud accounts.

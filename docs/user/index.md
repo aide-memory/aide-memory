@@ -3,7 +3,7 @@
 aide-memory is a local, path-scoped memory layer for AI coding agents. It captures decisions, preferences, and technical knowledge via editor hooks, stores them as human-readable JSON files, and surfaces the right bits to the agent through a seven-tool MCP server. The same store works across editors; git is the sync layer.
 
 ```bash
-npx aide-memory init
+npm install -g aide-memory && aide-memory init
 ```
 
 Two minutes. Zero config. No Docker, no cloud, no API keys.
@@ -34,7 +34,7 @@ aide-memory is **proprietary freeware**: free to use today, source not public, n
 
 ## Quick links
 
-- Initialize a project: `npx aide-memory init`
+- Install + initialize: `npm install -g aide-memory && aide-memory init`
 - Store a memory: `aide-memory remember "..." --layer technical`
 - Recall context: `aide-memory recall src/`
 - Search memories: `aide-memory search "authentication"`
