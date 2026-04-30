@@ -1,34 +1,19 @@
 # LinkedIn launch post
 
-AI has changed how we build software, with better models, amazing tools, faster workflows. But the bottleneck I keep hitting isn't any of those. It's context.
+What lives in your head doesn't go across AI sessions, and doesn't always go across your team. The way features tie into the rest of your system, the patterns you follow in this area, the architecture decisions behind your work — your CLAUDE.md or .cursorrules don't quite capture that.
 
-What lives in your head. Your team's domain knowledge. What isn't captured in documentation or rules files. What lives and dies inside agent sessions.
+Coding with agents made me more productive, but made me repeat myself. So I built aide-memory (https://aide-memory.dev) — auto-captured, auto-recalled, path-scoped memory for AI coding agents and teams.
 
-I've been coding with agents for a while now and they've made me so much more productive. But they've also made me repeat myself. I explain how the feature I'm building ties into the rest of the system, the way I like to structure my code, the patterns to follow in this area. The agent gets it. We ship great work together. Next session, it's a blank slate. I re-explain the same things.
+Captured automatically. Corrections, important decisions, area knowledge, things that surface during end-of-turn reflection — stored as you work, without having to remember to save anything.
 
-Critical decisions being made during conversations aren't being captured. Preferences, corrections, area knowledge, guidelines. So much valuable context doesn't persist, doesn't flow to the next session, to a different tool, or to a teammate's agent when they pick up work in the same area.
+Recall is scoped. Memories attach to code areas across four typed layers (preferences, technical context, area decisions, team guidelines). When the agent opens a file, it pulls only what applies to that area — not a global dump.
 
-Rules files help, but corrections and area knowledge from conversations don't make it back into the file on their own. And the whole file gets injected globally, even when most of it might not be relevant to the area the agent is working in.
+Your team's agents learn from yours. Memories are JSON files in your repo. Commit, push, pull. Personal prefs stay gitignored; shared ones travel with the code.
 
-That's why I built aide-memory, and I'm proud to announce it today.
+Works across tools. Claude Code and Cursor read the same store. Switch tools, your context comes with you.
 
-aide-memory (https://aide-memory.dev) is auto-captured, auto-recalled, path-scoped memory for AI coding agents and teams.
+Local-first. Memory content stays on your machine. Free to use.
 
-**Capture happens automatically.** When you correct the agent, a hook detects it and prompts the agent to store the correction scoped to that code area. Periodic reflections pick up decisions and area knowledge. You don't have to remember to save context.
-
-**Recall is scoped.** Memories attach to code areas across four typed layers (preferences, technical context, area decisions, team guidelines). When the agent opens a file, it gets prompted to recall what applies to that area, not a dump of non-relevant text.
-
-**Your team's agents learn from yours.** Memories are JSON files in your repo. Commit, push, pull. When your teammate's agent opens the area you've been working in, it picks up the context. Personal preferences stay gitignored.
-
-**Works across tools.** Claude Code and Cursor read the same memory store. Switch tools and the context comes with you.
-
-**Tunable.** Control how often the agent gets prompted, how specific a memory's scope needs to be before it surfaces, how much context gets injected at session start, which hooks are active. Shape it to fit your workflow.
-
-**Local-first.** Memories stay on your machine. Free to use.
-
-```
 npm install -g aide-memory && aide-memory init
-```
 
-Docs + quick start: https://aide-memory.dev
 GitHub: https://github.com/aide-memory/aide-memory
