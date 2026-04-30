@@ -77,6 +77,16 @@ export function renderRulesWithDynamic(
   vars: { contributor: string; tools_list: string },
 ): string {
   const staticContent = buildRules(adapter, vars);
+
+  // Adapters without `needsDynamicRules` (e.g., Claude Code) get static-only
+  // rules. Their priority:always memories + version notice surface via the
+  // SessionStart hook's `additionalContext` instead — which works natively on
+  // those editors. Cursor has the dynamic block because its sessionStart
+  // additional_context is broken (forum #158452, staff-confirmed).
+  if (!adapter.needsDynamicRules) {
+    return staticContent;
+  }
+
   const { content: dynamicContent } = buildSessionStartContent(projectRoot, store);
 
   // Check version update notice before early return so it shows even on empty projects.

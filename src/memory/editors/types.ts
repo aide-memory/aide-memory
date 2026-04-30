@@ -140,6 +140,20 @@ export interface EditorAdapter {
    *   - codex/copilot/windsurf: false (templates exist but not rendered today)
    */
   supportsRules: boolean;
+  /**
+   * True if this adapter needs the dynamic "## Current memory context"
+   * section (priority:always memories + injection content + version notice)
+   * appended to its rules file on every memory/config write.
+   *
+   * Cursor: true — its `sessionStart.additional_context` is broken
+   * (forum #158452, staff-confirmed), so the rules file with `alwaysApply: true`
+   * is the only viable channel for session-start content.
+   *
+   * Claude Code: false — `SessionStart` hook works, content is injected as
+   * `additionalContext`. Baking the same content into the rules file would
+   * duplicate it (and inflate the static teaching content unnecessarily).
+   */
+  needsDynamicRules?: boolean;
 
   // ── Translation maps ────────────────────────────────────────────────────
   /**

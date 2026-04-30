@@ -800,7 +800,7 @@ export async function initProject(
         tools_list: MCP_TOOLS_LIST,
       });
       for (const r of regenResults) {
-        if (r.written) result.created.push(`${r.dest} (dynamic content regenerated)`);
+        if (r.written) result.created.push(`${r.dest} (rules regenerated)`);
         if (r.budgetWarning) result.warnings.push(r.budgetWarning);
       }
     } catch (err) {
@@ -900,7 +900,7 @@ export async function initProject(
       tools_list: MCP_TOOLS_LIST,
     });
     for (const r of regenResults) {
-      if (r.written) result.created.push(`${r.dest} (dynamic content regenerated)`);
+      if (r.written) result.created.push(`${r.dest} (rules regenerated)`);
       if (r.budgetWarning) result.warnings.push(r.budgetWarning);
     }
   } catch (err) {
@@ -911,6 +911,11 @@ export async function initProject(
   result.warnings.push(
     'Restart your editor (or start a fresh session) to ensure the MCP server is picked up.',
   );
+  if (fs.existsSync(path.join(resolvedRoot, '.cursor'))) {
+    result.warnings.push(
+      'For Cursor: also enable aide-memory in Settings > MCP after restart.',
+    );
+  }
 
   return result;
 }

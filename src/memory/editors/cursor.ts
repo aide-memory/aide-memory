@@ -87,6 +87,7 @@ Note: Cursor uses \`agent_message\` for hook responses rather than \`additionalC
   supportsHooks: true,
   supportsMcp: true,
   supportsRules: true,
+  needsDynamicRules: true,
 
   eventNameMap: {
     'session-start':         'sessionStart',

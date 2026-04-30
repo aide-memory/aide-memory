@@ -216,8 +216,14 @@ describe('regenerateAllRules', () => {
       expect(r.written).toBe(true);
       const destPath = path.join(root, r.dest);
       expect(fs.existsSync(destPath)).toBe(true);
-      expect(fs.readFileSync(destPath, 'utf8')).toContain('shared regen test');
     }
+    // Cursor needs the dynamic memory section baked into its rules file
+    // (sessionStart additional_context is broken upstream). Claude Code does
+    // not — its SessionStart hook injects the same content as additionalContext.
+    const cursorContent = fs.readFileSync(path.join(root, results[1].dest), 'utf8');
+    const claudeContent = fs.readFileSync(path.join(root, results[0].dest), 'utf8');
+    expect(cursorContent).toContain('shared regen test');
+    expect(claudeContent).not.toContain('shared regen test');
   });
 
   it('per-adapter failures dont cascade', () => {
