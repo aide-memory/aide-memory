@@ -2,6 +2,8 @@
 
 *April 29, 2026*
 
+<video src="https://aide-memory.dev/demo.mp4" autoPlay muted playsInline loop style={{ width: '100%', maxWidth: '800px', borderRadius: '8px', margin: '1.5rem auto', display: 'block' }} />
+
 ## The bottleneck isn't the models, the compute, or the agents. It's context.
 
 AI has changed how we build software, with better models, amazing tools, faster workflows. But the bottleneck I keep hitting isn't any of those. It's context. What lives in your head, your team's domain knowledge, what isn't captured in documentation or rules files, what lives and dies inside agent sessions.
