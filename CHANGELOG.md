@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.17 — 2026-05-19
+
+User-facing changes:
+
+- **Softer hook defaults.** Correction detection on `UserPromptSubmit` now emits a quiet in-turn hint via `hookSpecificOutput.additionalContext` + a friendly `aide-memory · possible correction detected — consider aide_remember` chrome line. No more "BEFORE doing anything else, store…" coerce wording. The `Stop` checkpoint reason was also softened to a shorter, more passive prompt ("Anything from this turn worth persisting…? Otherwise stop.").
+- **New config knob: `hooks.correction.escalate`.** Default `"off"` — correction surfaces only as the in-turn UserPromptSubmit hint, no follow-up reminder. Set to `"block"` to opt into a flag-based reminder on the next Stop fire if the correction wasn't stored (the previous 0.5.16-style behavior, now opt-in).
+- **New config knob: `hooks.stop.mode`.** Default `"block"` — scheduled Stop fires emit `decision:"block"` + the softened reason + chrome. Set to `"off"` to silence scheduled Stop fires entirely (correction-pending escalation still works if `escalate=block`).
+- **SessionStart on `source: "resume"` is now a no-op.** Claude Code preserves the prior transcript's `additionalContext` and recall tracking when you resume a session, so re-injecting at resume time was duplicating content + forcing re-blocking on every previously-recalled file. Resume now skips both injection and tracking-clear.
+- **PreToolUse chrome wording differentiated** between the hard-block path (`prompting aide_recall — scoped memories not recalled yet (expected flow)`) and the soft path (`prompting aide_recall — additional scoped memories not yet recalled`). Consecutive deny + soft fires are no longer visually identical.
+- **Correction regex tightened.** Quoted text, fenced code blocks, and meta-references like "the correction prompt" no longer trigger false positives when you're discussing corrections rather than enacting them.
+- **`body.md` capture guidance refreshed.** Layer table replaces the prior quoted-example list. No more "would help in 6 months" / "would the model produce by default" framings.
+
+Engineering / drift defense:
+
+- **New `src/memory/hooks/claude-code-protocol.ts` constants file** is the single source of truth for what fields each Claude Code hook event accepts. Includes a `LAST_VERIFIED` date marker (2026-05-19 against https://code.claude.com/docs/en/hooks).
+- **New layered hook-protocol conformance test suite** (`hook-protocol-conformance.test.ts` + bash smoke) validates every hook's stdout against the schema constants. Catches the class of bug 0.5.17 first attempted to ship — a `Stop` emit using `hookSpecificOutput.additionalContext`, which the platform doesn't permit. Story: the first attempt emitted that shape, Claude Code rejected it at runtime, the empirical discovery forced dropping the planned `hooks.*.escalate = "soft"` and `hooks.stop.mode = "soft"` enum values. The constants + conformance tests are the durable defense against the bug recurring.
+- **`docs/RELEASING.md` Step 0 added:** every release re-fetches the Claude Code hooks docs, diffs against the protocol constants, reconciles any field changes, bumps `LAST_VERIFIED`. Static schemas always go stale; the release-time human gate is the bound on drift.
+
+Existing-user upgrade behavior: defaults apply automatically. The new keys (`hooks.correction.escalate`, `hooks.stop.mode`) are absent from existing user configs, so `getSetting()` falls back to `defaults.json` and gets the new defaults. No migration step. To explicitly restore 0.5.16-style escalation:
+
+```bash
+aide-memory config hooks.correction.escalate block
+```
+
 ## 0.5.16 — 2026-04-30
 
 - **Fix: preserve user edits to rules files.** `aide-memory remember` (and any other memory write or config change) no longer rewrites the entire rules file out from under you.
