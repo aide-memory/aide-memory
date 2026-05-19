@@ -13,8 +13,8 @@ Six hooks fire automatically. Respond to them as described:
 - **SessionStart** -- When a session begins or resumes, the hook may inject preferences + guidelines + priority-always memories as additional context. Read them and let them shape your work.
 - **PreToolUse** -- Before you read/edit/grep a file, the hook may inject: "N memories exist for this path." When you see this nudge, call `aide_recall` with those paths before proceeding.
 - **PostToolUse** -- After you call `aide_recall` / `aide_remember` / `aide_search`, the hook records the recalled IDs so subsequent reads of the same path don't re-block. No agent action required.
-- **UserPromptSubmit** -- Detects correction patterns ("no, use X instead", "don't do that"). When flagged, store the correction with `aide_remember` (or `aide_update` if an existing memory needs revision) scoped to the relevant code area.
-- **Stop** -- On task completion, the hook prompts: "Anything worth remembering?" Review what happened in the session. If a decision was made, a correction was given, or you discovered something non-obvious, call `aide_remember` (or `aide_update` if an existing memory needs revision). Otherwise, do nothing.
+- **UserPromptSubmit** -- Detects when the user's prompt may contain a correction or convention. When flagged, decide whether it applies to future work in this project; if yes, call `aide_remember` (or `aide_update` if an existing memory needs revision) on the matching layer. If not, respond as normal.
+- **Stop** -- On task completion, the hook surfaces a checkpoint asking whether anything from this turn is worth persisting for future sessions. Review the turn. If something fits a layer (preferences, technical, area_context, or guidelines), call `aide_remember` (or `aide_update` if an existing memory needs revision). Otherwise, stop.
 - **PreCompact** -- Before context compaction, the hook prompts you to save important context. Store any active plans, decisions, or constraints via `aide_remember` (or `aide_update` if an existing memory needs revision) immediately -- after compaction you will only have a summary.
 {{editor_notes}}
 ## Proactive saving
@@ -32,13 +32,19 @@ As conversations grow long, proactively call `aide_remember` (or `aide_update` i
 
 ## When to call aide_remember
 
-- The developer corrects your approach or rejects a suggestion
-- A design decision is made during planning or discussion
-- You discover a non-obvious constraint, pattern, or dependency
-- On task completion when the Stop hook prompts you (only if warranted)
-- When the user explicitly asks you to remember something
+If something from the conversation will help in a future session in this project, capture it on the matching layer:
 
-**Do NOT store:** obvious facts readable from the code, temporary/session-specific state, secrets or credentials, trivial observations (e.g., "this file uses TypeScript").
+| Layer | What goes here |
+|---|---|
+| **preferences** | How the user works — explicit choices and patterns visible in how they structure or approach code |
+| **technical** | Non-obvious facts about the stack, workarounds, the reasoning behind a technical choice |
+| **area_context** | Decisions or patterns specific to a particular code area, including the reasoning behind them |
+| **guidelines** | Team or project-wide rules |
+
+## When NOT to call aide_remember
+
+- Information already readable directly from the file
+- Secrets, credentials, or user-identifying data
 
 ## When to call aide_search
 
@@ -75,15 +81,6 @@ Default order for concept queries: `aide_search` → keyword Grep → semantic `
 Note: aide_forget permanently deletes the memory. There is no archive mode.
 
 ## Formatting memories
-
-### Layer selection
-
-| Layer | Use when | Example |
-|-------|----------|---------|
-| `preferences` | How the developer likes to work | "Prefers composition over inheritance" |
-| `technical` | Facts about the stack not obvious from code | "WAL mode required for concurrent SQLite access" |
-| `area_context` | Decisions and context for specific code areas | "Dashboard uses skeleton loading, not spinners" |
-| `guidelines` | Team-wide or project-wide principles | "All API responses use camelCase keys" |
 
 ### Scope
 

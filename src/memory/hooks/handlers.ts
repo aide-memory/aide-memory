@@ -234,16 +234,19 @@ export async function preRead(input: HookInput): Promise<void> {
   // User-facing reassurance lines (gated on hooks.visible). The reason text
   // above stays untouched — it's what Claude acts on. systemMessage is
   // user-only reassurance that this is expected aide-memory behavior.
+  //
+  // Soft vs hard wording differentiated (§2.3): when both fire on consecutive
+  // reads of the same area, identical chrome looked like a duplicate emit. The
+  // soft variant signals "more memories you haven't seen yet" while the hard
+  // variant signals "first-touch enforcement (expected)" alongside the
+  // platform's "blocking error" label (mem #310 — TUI hardcoded, can't
+  // override).
   const visible = isVisible(projectRoot);
   const softMessage = visible
-    ? `${BRAND}prompting aide_recall for scoped memories`
+    ? `${BRAND}prompting aide_recall — additional scoped memories not yet recalled`
     : undefined;
-  // Hard-path message includes "(expected flow)" because the platform renders
-  // a hardcoded "PreToolUse:Read hook returned blocking error" label above
-  // this line — can't override per Claude Code TUI render logic (see aide-
-  // memory mem #310). This reassurance counteracts the alarming label.
   const hardMessage = visible
-    ? `${BRAND}prompting aide_recall for scoped memories (expected flow)`
+    ? `${BRAND}prompting aide_recall — scoped memories not recalled yet (expected flow)`
     : undefined;
 
   if (forceSoft || encountered) {
@@ -312,14 +315,13 @@ export async function preEdit(input: HookInput): Promise<void> {
   }
 
   // User-facing reassurance lines (gated on hooks.visible). See preRead
-  // for rationale — the reason text above stays untouched for agent
-  // consumption; systemMessage is user-only framing.
+  // for rationale + the soft-vs-hard wording differentiation (§2.3).
   const visible = isVisible(projectRoot);
   const softMessage = visible
-    ? `${BRAND}prompting aide_recall for scoped memories`
+    ? `${BRAND}prompting aide_recall — additional scoped memories not yet recalled`
     : undefined;
   const hardMessage = visible
-    ? `${BRAND}prompting aide_recall for scoped memories (expected flow)`
+    ? `${BRAND}prompting aide_recall — scoped memories not recalled yet (expected flow)`
     : undefined;
 
   if (forceSoft || encountered) {
@@ -428,9 +430,37 @@ const FALSE_POSITIVE_PATTERN = new RegExp(
   '^(no I mean (the|that|this|it|a|an|one|those)\\s|no (but|actually I|I think|not sure)|I don\'?t (think|know|get|understand)|what I mean)',
   'i',
 );
+// Meta-references — message is discussing the correction system rather than
+// enacting a correction. e.g. "the correction prompt fired", "we tightened
+// the correction regex". Skip detection on these.
+const META_PATTERN = new RegExp(
+  '(correction (prompt|regex|pattern|hook|flag|detection)|matched correction|hooks?\\.correction|correction[- ]pending)',
+  'i',
+);
 
-const FALLBACK =
-  'If aide_remember / aide_update unavailable, write JSON lines to .aide/pending-memories.jsonl and tell user to start the MCP server.';
+/**
+ * Strip portions of the message that shouldn't drive correction detection:
+ *   - Fenced code blocks (``` ... ```)
+ *   - Inline code (`...`)
+ *   - Lines whose first non-whitespace character is a quote (",',`)
+ *
+ * The resulting string is what we run CORRECTION_PATTERN / DECISION_PATTERN /
+ * PREFERENCE_PATTERN against — keeps quoted/discussed content from triggering
+ * the hook when the user is referencing past corrections rather than making
+ * one (memory #443: regex over-matches when discussing/quoting).
+ */
+function stripQuotedContent(message: string): string {
+  let cleaned = message.replace(/```[\s\S]*?```/g, '');
+  cleaned = cleaned.replace(/`[^`\n]*`/g, '');
+  cleaned = cleaned
+    .split('\n')
+    .filter((line) => !/^\s*["'`]/.test(line))
+    .join('\n');
+  return cleaned;
+}
+
+const SOFT_CORRECTION_PROMPT =
+  'Your prompt may contain a correction or convention worth persisting. If something here applies to future work in this project — across preferences (how you work), technical (stack facts, why-decisions), area_context (decisions for this code area), or guidelines (team rules) — call aide_remember on the matching layer. Otherwise respond as normal.';
 
 export async function detectCorrection(input: HookInput): Promise<void> {
   const message = input.prompt || '';
@@ -440,6 +470,7 @@ export async function detectCorrection(input: HookInput): Promise<void> {
   if (wordCount < 3) return;
 
   if (FALSE_POSITIVE_PATTERN.test(message)) return;
+  if (META_PATTERN.test(message)) return;
 
   const projectRoot = resolveProjectRoot(input);
   const sessionId = resolveSessionId(input);
@@ -447,45 +478,29 @@ export async function detectCorrection(input: HookInput): Promise<void> {
   const enabled = getSetting(projectRoot, 'hooks.correction.enabled');
   if (enabled === false) return;
 
+  // Strip quoted/code content before pattern-matching so messages discussing
+  // past corrections (or quoting them) don't trigger a fresh detection.
+  const cleaned = stripQuotedContent(message);
+
+  let kind: 'correction' | 'decision' | 'preference' | null = null;
+  if (CORRECTION_PATTERN.test(cleaned)) kind = 'correction';
+  else if (DECISION_PATTERN.test(cleaned)) kind = 'decision';
+  else if (PREFERENCE_PATTERN.test(cleaned)) kind = 'preference';
+  if (!kind) return;
+
   const visible = isVisible(projectRoot);
+  const userMessage = visible
+    ? `${BRAND}possible ${kind} detected — consider aide_remember`
+    : undefined;
 
-  if (CORRECTION_PATTERN.test(message)) {
-    const userMessage = visible
-      ? `${BRAND}correction detected — prompting aide_remember`
-      : undefined;
-    emitAdditionalContext(
-      'UserPromptSubmit',
-      `BEFORE doing anything else, store via aide_remember (or aide_update if an existing memory needs revision) — layer: preferences or technical, source: hook. ${FALLBACK}`,
-      userMessage,
-    );
-    writeCorrectionPending(projectRoot, sessionId, 'correction');
-    return;
-  }
+  // Soft + visible by default: agent sees the prompt, no flag written, no
+  // forced re-prompt. Stop reminder for unstored corrections is opt-in via
+  // hooks.correction.escalate.
+  emitAdditionalContext('UserPromptSubmit', SOFT_CORRECTION_PROMPT, userMessage);
 
-  if (DECISION_PATTERN.test(message)) {
-    const userMessage = visible
-      ? `${BRAND}decision detected — prompting aide_remember`
-      : undefined;
-    emitAdditionalContext(
-      'UserPromptSubmit',
-      `BEFORE doing anything else, store via aide_remember (or aide_update if an existing memory needs revision) — layer: area_context or technical, source: hook. ${FALLBACK}`,
-      userMessage,
-    );
-    writeCorrectionPending(projectRoot, sessionId, 'decision');
-    return;
-  }
-
-  if (PREFERENCE_PATTERN.test(message)) {
-    const userMessage = visible
-      ? `${BRAND}preference detected — prompting aide_remember`
-      : undefined;
-    emitAdditionalContext(
-      'UserPromptSubmit',
-      `BEFORE doing anything else, store via aide_remember (or aide_update if an existing memory needs revision) — layer: preferences, source: hook. ${FALLBACK}`,
-      userMessage,
-    );
-    writeCorrectionPending(projectRoot, sessionId, 'preference');
-    return;
+  const escalate = getSetting(projectRoot, 'hooks.correction.escalate');
+  if (escalate === 'soft' || escalate === 'block') {
+    writeCorrectionPending(projectRoot, sessionId, kind);
   }
 }
 
@@ -523,10 +538,10 @@ export async function trackRecallPost(input: HookInput): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_PROMPT =
-  'Any decisions, technical constraints, preferences, or guidelines worth persisting? Call aide_remember (or aide_update if an existing memory needs revision) — cross-session context goes via these tools; plans and decisions go in project docs. If nothing, stop.';
+  'Anything from this turn worth persisting for future sessions in this project? Could touch preferences, technical, area_context, or guidelines. If yes, call aide_remember on the matching layer. Otherwise stop.';
 
 const CORRECTION_PENDING_PROMPT =
-  "A correction from this turn wasn't stored. Call aide_remember (or aide_update if an existing memory needs revision) for it. Also: any decisions, technical constraints, preferences, or guidelines worth persisting? Same tools — aide_remember / aide_update for cross-session context, project docs for plans and decisions. If nothing, stop.";
+  'A correction or convention from this turn was detected but no memory was stored. If it applies to future work — preferences, technical, area_context, or guidelines — call aide_remember on the matching layer. Otherwise stop.';
 
 export async function stop(input: HookInput): Promise<void> {
   if (input.stop_hook_active) return;
@@ -539,30 +554,40 @@ export async function stop(input: HookInput): Promise<void> {
   writeStopCount(projectRoot, sessionId, newCount);
 
   const visible = isVisible(projectRoot);
+  const escalate = getSetting(projectRoot, 'hooks.correction.escalate');
+  const stopMode = getSetting(projectRoot, 'hooks.stop.mode');
 
-  // Correction-pending flag always blocks, regardless of interval. This is
-  // the Cursor correction-delay endpoint: beforeSubmitPrompt detected a
-  // correction last turn, wrote the flag (Cursor dropped the additional_
-  // context channel silently per CURSOR_ONBOARDING.md §1 gap), so this Stop
-  // hook delivers the reminder. Passes event='stop' so Cursor's adapter
-  // renders `{followup_message}` instead of the preToolUse-style
-  // `{permission: "deny"}` shape.
+  // Cross-system precedence (§4.1): correction-pending wins over the
+  // scheduled checkpoint when both fire on the same turn. Only reachable
+  // when hooks.correction.escalate is 'block' — default 'off' never writes
+  // the flag, so this branch is inert. (A 'soft' value existed in spec
+  // drafts but was dropped — Claude Code's Stop hook does not accept
+  // hookSpecificOutput.additionalContext, so soft Stop emit is impossible.)
+  // event='stop' routes Cursor's adapter to followup_message instead of
+  // preToolUse-style deny.
   if (hasCorrectionPending(projectRoot, sessionId)) {
     clearCorrectionPending(projectRoot, sessionId);
-    const userMessage = visible
-      ? `${BRAND}correction from this turn was not saved — prompting aide_remember`
-      : undefined;
-    emitBlockDecision(CORRECTION_PENDING_PROMPT, userMessage, 'stop');
-    return;
+    if (escalate === 'block') {
+      const userMessage = visible
+        ? `${BRAND}correction from this turn not yet stored — prompting aide_remember`
+        : undefined;
+      emitBlockDecision(CORRECTION_PENDING_PROMPT, userMessage, 'stop');
+      return;
+    }
+    // Stale flag (escalate is 'off' but flag was left from a prior session
+    // when escalate was 'block'): clear silently above and fall through to
+    // the scheduled-checkpoint path.
   }
+
+  if (stopMode === 'off') return;
 
   // Dynamic interval from config schedule.
   type Phase = { until?: number; every?: number };
   const schedule = (getSetting(projectRoot, 'hooks.stop.schedule') as Phase[] | undefined) || [];
 
-  let shouldBlock = false;
+  let shouldFire = false;
   if (!Array.isArray(schedule) || schedule.length === 0) {
-    if (newCount % 5 === 0) shouldBlock = true;
+    if (newCount % 5 === 0) shouldFire = true;
   } else {
     let prevUntil = 0;
     let matched = false;
@@ -571,12 +596,12 @@ export async function stop(input: HookInput): Promise<void> {
       if (phase.until === undefined || phase.until === null) {
         if (!matched) {
           const offset = newCount - prevUntil;
-          if (offset % every === 0) shouldBlock = true;
+          if (offset % every === 0) shouldFire = true;
           matched = true;
         }
       } else if (newCount <= phase.until && !matched) {
         const offset = newCount - prevUntil;
-        if (offset % every === 0) shouldBlock = true;
+        if (offset % every === 0) shouldFire = true;
         matched = true;
       }
       if (phase.until !== undefined && phase.until !== null) {
@@ -585,15 +610,16 @@ export async function stop(input: HookInput): Promise<void> {
     }
   }
 
-  if (shouldBlock) {
-    const userMessage = visible
-      ? `${BRAND}checkpoint — prompting aide_remember for anything critical (expected)`
-      : undefined;
-    // Stop-scheduled nudge — same event='stop' routing as correction-pending
-    // branch above so Cursor emits followup_message rather than deny.
-    emitBlockDecision(DEFAULT_PROMPT, userMessage, 'stop');
-  }
-  // Non-block turns: silent (agent has proactive saving rule in rules file).
+  if (!shouldFire) return;
+
+  // Default 'block': decision:block + softened reason + chrome systemMessage.
+  // The TUI collapses the 'Stop hook error:' label behind ctrl+o when
+  // systemMessage is present (memory #310), so the brand chrome is what the
+  // user sees inline.
+  const userMessage = visible
+    ? `${BRAND}checkpoint — anything worth remembering?`
+    : undefined;
+  emitBlockDecision(DEFAULT_PROMPT, userMessage, 'stop');
 }
 
 // ---------------------------------------------------------------------------
@@ -675,9 +701,17 @@ export async function sessionStart(input: HookInput): Promise<void> {
     // Non-fatal
   }
 
-  // Cleanup: clear/compact/resume → drop THIS session's tracking. start → no-op.
+  // Source-specific behavior (§2.2 of 0.5.17 spec):
+  //   - startup        → fresh session; inject as normal.
+  //   - clear / compact → prior transcript wiped or summarized; clear tracking
+  //                      so post-context fires re-block cleanly + inject.
+  //   - resume         → prior transcript restored, including original
+  //                      additionalContext and recalled-paths state. Both
+  //                      injection and tracking-clear would duplicate /
+  //                      regress that state, so skip the rest of the handler.
   const source = input.source;
-  if (source === 'clear' || source === 'compact' || source === 'resume') {
+  if (source === 'resume') return;
+  if (source === 'clear' || source === 'compact') {
     clearSessionTracking(projectRoot, sessionId);
   }
 

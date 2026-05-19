@@ -15,6 +15,33 @@ Canonical internal reference for publishing aide-memory to npm. Every new releas
 
 ---
 
+## Step 0 — Re-verify Claude Code hook protocol (do this every release)
+
+Claude Code's hook output schema is hand-mirrored in
+`src/memory/hooks/claude-code-protocol.ts` with a `LAST_VERIFIED` date.
+Static schema files go stale. Before any release:
+
+1. Open https://code.claude.com/docs/en/hooks in a browser (or `curl`).
+2. Diff the per-event field lists against the constants in
+   `claude-code-protocol.ts`. Pay attention to:
+   - Stop hook output fields (does `hookSpecificOutput` still get rejected?)
+   - Any new `hookSpecificOutput.<event>` shapes
+   - Any new top-level fields (e.g. `decision` enum changes)
+3. If anything changed, update the constants AND the conformance test
+   fixtures so the tests fail until handlers are reconciled. Then bump
+   `LAST_VERIFIED` to today's date.
+4. If nothing changed, bump `LAST_VERIFIED` anyway as proof the check ran.
+5. Run `npm test -- --run src/memory/__tests__/hook-protocol-conformance.test.ts`
+   — must be green.
+
+Why this exists: 0.5.17 first attempted a "soft Stop" emit using
+`hookSpecificOutput.additionalContext` on Stop, which the platform rejects.
+The bug shipped to a real user before `claude --debug` caught it because
+nothing in the test suite asserted against the actual platform schema. This
+step is the human gate that prevents the same class of bug from recurring.
+
+---
+
 ## Step 1 — Survey changes since the last published version
 
 ```bash

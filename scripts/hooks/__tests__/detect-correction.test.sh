@@ -26,20 +26,28 @@ PASS=0
 FAIL=0
 FAILURES=()
 
-# run_hook <prompt> — pipes {"prompt": "..."} into the hook, echoes stdout
+# Use a fresh tempdir as cwd so tests don't read the dev repo's
+# .aide/config.json (e.g. hooks.correction.enabled=false from past debug
+# sessions). Empty config → handler reads defaults from defaults.json.
+CLEAN_CWD=$(mktemp -d -t aide-detect-correction-XXXX)
+trap "rm -rf '$CLEAN_CWD'" EXIT
+
+# run_hook <prompt> — pipes {"prompt": "...", "cwd": "..."} into the hook,
+# echoes stdout
 run_hook() {
   local prompt="$1"
   # Use jq to safely encode the prompt as JSON (handles apostrophes, quotes)
   local payload
-  payload=$(jq -nc --arg p "$prompt" '{prompt: $p}')
+  payload=$(jq -nc --arg p "$prompt" --arg c "$CLEAN_CWD" '{prompt: $p, cwd: $c}')
   echo "$payload" | bash "$HOOK" 2>/dev/null
 }
 
 # assert_contains <label> <prompt> <expected_substring>
-# Expected substring options:
-#   "correction" -- expects nudge with "preferences or technical"
-#   "decision"   -- expects nudge with "area_context or technical"
-#   "preference" -- expects nudge with "preferences, source"
+# Expected substring options (post-0.5.17):
+#   "correction" -- expects soft nudge with "correction or convention" + chrome
+#                   `possible correction detected`
+#   "decision"   -- same prompt, chrome `possible decision detected`
+#   "preference" -- same prompt, chrome `possible preference detected`
 #   "skip"       -- expects empty stdout
 assert_case() {
   local label="$1"
@@ -52,14 +60,16 @@ assert_case() {
   local ok=0
   case "$expect" in
     correction)
-      if echo "$out" | grep -q "preferences or technical"; then ok=1; fi
+      if echo "$out" | grep -q "correction or convention" && \
+         echo "$out" | grep -q "possible correction detected"; then ok=1; fi
       ;;
     decision)
-      if echo "$out" | grep -q "area_context or technical"; then ok=1; fi
+      if echo "$out" | grep -q "correction or convention" && \
+         echo "$out" | grep -q "possible decision detected"; then ok=1; fi
       ;;
     preference)
-      # Preference branch says "layer: preferences, source"
-      if echo "$out" | grep -q "layer: preferences, source"; then ok=1; fi
+      if echo "$out" | grep -q "correction or convention" && \
+         echo "$out" | grep -q "possible preference detected"; then ok=1; fi
       ;;
     skip)
       if [ -z "$out" ]; then ok=1; fi

@@ -169,38 +169,44 @@ describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
     expect(result.stdout).toBe('');
   });
 
-  it('turn 3: blocks (first block point)', () => {
+  it('turn 3: scheduled fire (default mode=block → decision:block)', () => {
     // Simulate turns 1-2
     runHook('stop-remember.sh', { session_id: sid });
     runHook('stop-remember.sh', { session_id: sid });
-    // Turn 3 should block
+    // Turn 3 hits the schedule. 0.5.17 default mode is 'block' (Claude Code
+    // platform doesn't support hookSpecificOutput.additionalContext on Stop —
+    // see claude-code-protocol.ts).
     const result = runHook('stop-remember.sh', { session_id: sid });
+    expect(result.stdout).not.toBe('');
     const parsed = JSON.parse(result.stdout);
     expect(parsed.decision).toBe('block');
     expect(parsed.reason).toContain('aide_remember');
+    expect(parsed.hookSpecificOutput).toBeUndefined();
   });
 
-  it('turn 4: silent again after block', () => {
+  it('turn 4: silent again after fire', () => {
     for (let i = 0; i < 3; i++) runHook('stop-remember.sh', { session_id: sid });
-    // Turn 4 should be silent
+    // Turn 4 should be silent (off-schedule)
     const result = runHook('stop-remember.sh', { session_id: sid });
     expect(result.stdout).toBe('');
   });
 
-  it('turn 6: blocks (second block point)', () => {
+  it('turn 6: scheduled fire (decision:block)', () => {
     for (let i = 0; i < 5; i++) runHook('stop-remember.sh', { session_id: sid });
-    // Turn 6 should block
     const result = runHook('stop-remember.sh', { session_id: sid });
+    expect(result.stdout).not.toBe('');
     const parsed = JSON.parse(result.stdout);
     expect(parsed.decision).toBe('block');
+    expect(parsed.hookSpecificOutput).toBeUndefined();
   });
 
   it('after turn 9: switches to every-5 interval', () => {
     // Run through 9 turns
     for (let i = 0; i < 9; i++) runHook('stop-remember.sh', { session_id: sid });
-    // Turns 10-13 should be soft, turn 14 should block (9 + 5 = 14)
+    // Turns 10-13 should be silent, turn 14 should fire (9 + 5 = 14)
     for (let i = 0; i < 4; i++) runHook('stop-remember.sh', { session_id: sid });
     const result = runHook('stop-remember.sh', { session_id: sid }); // turn 14
+    expect(result.stdout).not.toBe('');
     const parsed = JSON.parse(result.stdout);
     expect(parsed.decision).toBe('block');
   });
@@ -211,19 +217,17 @@ describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
     expect(result.stdout).toBe('');
   });
 
-  it('always blocks when correction-pending flag exists, then clears flag', () => {
-    // Create correction flag
+  it('default escalate=off + stale correction-pending flag: clears flag silently, falls through', () => {
+    // Create correction flag (e.g. left from before escalate was flipped to off)
     fs.mkdirSync(cacheDir, { recursive: true });
     const flagPath = path.join(cacheDir, `correction-pending-${sid}.txt`);
     fs.writeFileSync(flagPath, 'correction');
 
-    // Turn 1 with flag — should block even though interval says soft
+    // Default config: escalate=off → stale flag is cleared, scheduled path runs.
+    // Turn 1 (off-schedule) → silent + flag cleared.
     const result = runHook('stop-remember.sh', { session_id: sid });
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.decision).toBe('block');
-    expect(parsed.reason).toContain('correction');
-
-    // Flag should be cleared — agent got one chance, no infinite nagging
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('');
     expect(fs.existsSync(flagPath)).toBe(false);
   });
 
@@ -242,6 +246,17 @@ describe('Stop hook (stop-remember.sh) — dynamic interval', () => {
 // ─── UserPromptSubmit (detect-correction.sh) ────────────────────────────────
 
 describe('UserPromptSubmit hook (detect-correction.sh)', () => {
+  // Use a fresh temp project so the test doesn't read the dev repo's
+  // .aide/config.json (which may have hooks.correction.enabled=false from
+  // earlier debug sessions). Empty config = full defaults from defaults.json.
+  let cleanCwd: string;
+  beforeEach(() => {
+    cleanCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'aide-detect-test-'));
+  });
+  afterEach(() => {
+    fs.rmSync(cleanCwd, { recursive: true, force: true });
+  });
+
   describe('correction patterns', () => {
     const corrections = [
       "no, don't use that approach",
@@ -257,16 +272,16 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
 
     for (const msg of corrections) {
       it(`detects correction: "${msg}"`, () => {
-        const result = runHook('detect-correction.sh', { prompt: msg });
+        const result = runHook('detect-correction.sh', { prompt: msg, cwd: cleanCwd });
         expect(result.exitCode).toBe(0);
         expect(result.stdout).not.toBe('');
 
         const parsed = JSON.parse(result.stdout);
         expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
-        // Wording changed: now says "BEFORE doing anything else" instead of "correcting"
-        expect(parsed.hookSpecificOutput.additionalContext).toContain('BEFORE doing anything else');
+        // 0.5.17: unified soft prompt mentions "correction or convention" + the four layers.
+        expect(parsed.hookSpecificOutput.additionalContext).toContain('correction or convention');
         expect(parsed.hookSpecificOutput.additionalContext).toContain('aide_remember');
-        expect(parsed.hookSpecificOutput.additionalContext).toContain('hook');
+        expect(parsed.systemMessage).toMatch(/possible correction detected/);
       });
     }
   });
@@ -284,16 +299,16 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
 
     for (const msg of decisions) {
       it(`detects decision: "${msg}"`, () => {
-        const result = runHook('detect-correction.sh', { prompt: msg });
+        const result = runHook('detect-correction.sh', { prompt: msg, cwd: cleanCwd });
         expect(result.exitCode).toBe(0);
         expect(result.stdout).not.toBe('');
 
         const parsed = JSON.parse(result.stdout);
         expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
-        // Wording changed: now says "BEFORE doing anything else" instead of "decision"
-        expect(parsed.hookSpecificOutput.additionalContext).toContain('BEFORE doing anything else');
+        // 0.5.17: same unified soft prompt regardless of kind; systemMessage carries the kind.
+        expect(parsed.hookSpecificOutput.additionalContext).toContain('correction or convention');
         expect(parsed.hookSpecificOutput.additionalContext).toContain('aide_remember');
-        expect(parsed.hookSpecificOutput.additionalContext).toContain('hook');
+        expect(parsed.systemMessage).toMatch(/possible decision detected/);
       });
     }
   });
@@ -313,15 +328,15 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
 
     for (const msg of preferences) {
       it(`detects preference: "${msg}"`, () => {
-        const result = runHook('detect-correction.sh', { prompt: msg });
+        const result = runHook('detect-correction.sh', { prompt: msg, cwd: cleanCwd });
         expect(result.exitCode).toBe(0);
         expect(result.stdout).not.toBe('');
 
         const parsed = JSON.parse(result.stdout);
         expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
-        expect(parsed.hookSpecificOutput.additionalContext).toContain('preference');
+        expect(parsed.hookSpecificOutput.additionalContext).toContain('correction or convention');
         expect(parsed.hookSpecificOutput.additionalContext).toContain('aide_remember');
-        expect(parsed.hookSpecificOutput.additionalContext).toContain('hook');
+        expect(parsed.systemMessage).toMatch(/possible preference detected/);
       });
     }
   });
@@ -336,20 +351,20 @@ describe('UserPromptSubmit hook (detect-correction.sh)', () => {
     ];
 
     for (const msg of benignMessages) {
-      const result = runHook('detect-correction.sh', { prompt: msg });
+      const result = runHook('detect-correction.sh', { prompt: msg, cwd: cleanCwd });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toBe('');
     }
   });
 
   it('exits 0 with empty prompt', () => {
-    const result = runHook('detect-correction.sh', { prompt: '' });
+    const result = runHook('detect-correction.sh', { prompt: '', cwd: cleanCwd });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
   });
 
   it('exits 0 with missing prompt field', () => {
-    const result = runHook('detect-correction.sh', {});
+    const result = runHook('detect-correction.sh', { cwd: cleanCwd });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
   });

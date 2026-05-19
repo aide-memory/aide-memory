@@ -157,17 +157,20 @@ test_hooks_stop_schedule() {
   local key=hooks.stop.schedule
   local dir
   dir=$(new_project)
+  # The schedule controls *when* Stop considers firing; emit shape is
+  # controlled by hooks.stop.mode (default 'soft'). Verify schedule alone
+  # — every:1 → fires every turn (any output); every:100 → silent.
   set_cfg "$dir" $key '[{"every":1}]'
-  local o_block
-  o_block=$(fire_hook stop "{\"session_id\":\"stop1\",\"cwd\":\"$dir\",\"stop_hook_active\":false}")
+  local o_fire
+  o_fire=$(fire_hook stop "{\"session_id\":\"stop1\",\"cwd\":\"$dir\",\"stop_hook_active\":false}")
   set_cfg "$dir" $key '[{"every":100}]'
   local o_silent
   o_silent=$(fire_hook stop "{\"session_id\":\"stop2\",\"cwd\":\"$dir\",\"stop_hook_active\":false}")
   rm -rf "$dir"
-  if echo "$o_block" | grep -q '"block"' && [ -z "$o_silent" ]; then
-    record_pass "$key" "every:1 blocks every turn; every:100 silent"
+  if [ -n "$o_fire" ] && [ -z "$o_silent" ]; then
+    record_pass "$key" "every:1 fires every turn (soft default); every:100 silent"
   else
-    record_fail "$key" "block='${o_block:0:40}' silent='${o_silent:0:40}'"
+    record_fail "$key" "fire='${o_fire:0:40}' silent='${o_silent:0:40}'"
   fi
 }
 
@@ -210,6 +213,82 @@ test_hooks_correction_enabled() {
     record_pass "$key" "false silences correction hook; true re-enables"
   else
     record_fail "$key" "off='${o_off:0:40}' on_len=${#o_on}"
+  fi
+}
+
+# ---- 5a. hooks.correction.escalate (off / block) --------------------------
+# Default 'off' must NOT write the correction-pending flag. 'block' writes the
+# flag, and the next Stop fire emits decision:block with the correction
+# reminder. (A 'soft' value existed in spec drafts but was dropped — Claude
+# Code's Stop hook doesn't support hookSpecificOutput.additionalContext, so
+# soft Stop emit is impossible. See claude-code-protocol.ts.)
+test_hooks_correction_escalate() {
+  local key=hooks.correction.escalate
+  local dir
+  dir=$(new_project)
+  mkdir -p "$dir/.aide/cache"
+
+  # default off — no flag after correction
+  set_cfg "$dir" $key off
+  fire_hook pre-prompt "{\"session_id\":\"esc1\",\"cwd\":\"$dir\",\"prompt\":\"no dont do that use X instead\"}" >/dev/null
+  local off_flag=false
+  [ -f "$dir/.aide/cache/correction-pending-esc1.txt" ] && off_flag=true
+
+  # block — flag is written + Stop fire returns decision:block
+  set_cfg "$dir" $key block
+  fire_hook pre-prompt "{\"session_id\":\"esc2\",\"cwd\":\"$dir\",\"prompt\":\"no dont do that use X instead\"}" >/dev/null
+  local block_flag=false
+  [ -f "$dir/.aide/cache/correction-pending-esc2.txt" ] && block_flag=true
+
+  local o_block_stop
+  o_block_stop=$(fire_hook stop "{\"session_id\":\"esc2\",\"cwd\":\"$dir\",\"stop_hook_active\":false}")
+  local block_blocks=false
+  echo "$o_block_stop" | grep -q '"decision".*"block"' && block_blocks=true
+  local block_no_hso=false
+  ! echo "$o_block_stop" | grep -q '"hookSpecificOutput"' && block_no_hso=true
+
+  rm -rf "$dir"
+
+  if [ "$off_flag" = "false" ] && [ "$block_flag" = "true" ] \
+     && [ "$block_blocks" = "true" ] && [ "$block_no_hso" = "true" ]; then
+    record_pass "$key" "off=no flag; block=flag+blockingStop, no hookSpecificOutput"
+  else
+    record_fail "$key" "off_flag=$off_flag block_flag=$block_flag block_blocks=$block_blocks block_no_hso=$block_no_hso"
+  fi
+}
+
+# ---- 5b. hooks.stop.mode (block / off) ------------------------------------
+# Default 'block' — scheduled fires emit decision:block + reason + chrome.
+# 'off' silences scheduled fires entirely. (A 'soft' value existed in spec
+# drafts but was dropped — Claude Code's Stop doesn't accept
+# hookSpecificOutput.additionalContext. See claude-code-protocol.ts.)
+test_hooks_stop_mode() {
+  local key=hooks.stop.mode
+  local dir
+  dir=$(new_project)
+  set_cfg "$dir" hooks.stop.schedule '[{"every":1}]'
+
+  # mode=block (default): emits decision:block, no hookSpecificOutput
+  set_cfg "$dir" $key block
+  local o_block
+  o_block=$(fire_hook stop "{\"session_id\":\"sm1\",\"cwd\":\"$dir\",\"stop_hook_active\":false}")
+
+  # mode=off: silent
+  set_cfg "$dir" $key off
+  local o_off
+  o_off=$(fire_hook stop "{\"session_id\":\"sm2\",\"cwd\":\"$dir\",\"stop_hook_active\":false}")
+
+  rm -rf "$dir"
+
+  local block_ok=false off_ok=false block_no_hso=false
+  echo "$o_block" | grep -q '"decision".*"block"' && block_ok=true
+  ! echo "$o_block" | grep -q '"hookSpecificOutput"' && block_no_hso=true
+  [ -z "$o_off" ] && off_ok=true
+
+  if [ "$block_ok" = "true" ] && [ "$block_no_hso" = "true" ] && [ "$off_ok" = "true" ]; then
+    record_pass "$key" "block=decision:block (no hookSpecificOutput); off=silent"
+  else
+    record_fail "$key" "block_ok=$block_ok block_no_hso=$block_no_hso off_ok=$off_ok"
   fi
 }
 
@@ -767,6 +846,8 @@ test_hooks_edit_maxBlocks
 test_hooks_stop_schedule
 test_hooks_search_mode
 test_hooks_correction_enabled
+test_hooks_correction_escalate
+test_hooks_stop_mode
 test_hooks_visible
 test_hooks_precompact_mode
 test_recall_limit

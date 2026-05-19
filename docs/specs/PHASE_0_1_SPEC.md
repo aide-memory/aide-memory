@@ -5,6 +5,8 @@
 > **Phase 1 pro-gating update (Apr 21, 2026):** Phase 1 ships with every setting public and no paid tier. The `pro: false` flag in `defaults.json` is kept as a stable schema placeholder only — no gating logic enforces it. Any paid-tier features are deferred to Phase 2+ and will be re-evaluated then.
 > Created: April 6, 2026. Updated: Apr 21, 2026 (all settings ungated, `--scan` removed, `computeScopedForPath` introduced as single source of truth for focused-scope blocking, `resyncDerivedArtifacts` centralizes config → artifact drift-repair).
 >
+> **0.5.17 supersedes specific hook-behavior claims here.** This doc still describes the 0.5.16 default-hard-block behavior in places (Stop hook decision:block, correction-pending always blocks, `BEFORE doing anything else` prompt wording). The 0.5.17 defaults shift to soft + visible — see [`PHASE_1_HOOK_DEFAULTS_0_5_17.md`](./PHASE_1_HOOK_DEFAULTS_0_5_17.md) for the canonical behavior matrix, config knobs (`hooks.stop.mode`, `hooks.correction.escalate`), and the SessionStart resume handling change. Where this doc and that one disagree, the 0.5.17 spec wins.
+>
 > **Living document.** This spec is updated as implementation progresses. Agents mark checkboxes in Section 3 as work completes and add implementation notes inline.
 
 ---

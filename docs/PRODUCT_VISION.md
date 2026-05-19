@@ -2,6 +2,8 @@
 
 > Product thesis: Individual memory as infrastructure, team context as the product.
 > Created: Mar 10, 2026. Refactored: Mar 31, 2026. Rewritten: Apr 2, 2026 (naming finalized, capabilities expanded to 17, storage architecture redesigned, CLI/agent UX model clarified, install experience defined, monorepo support added). Updated: Apr 13, 2026 (hook system updated to 10 hooks with ID-based blocking, dynamic stop interval, settings framework, validation findings from Sessions A-F).
+>
+> **0.5.17 supersedes specific hook-intensity claims here.** The 0.5.17 release shifts hook defaults from "forceful, blocking" to "soft + visible" for UserPromptSubmit (correction) and Stop (scheduled checkpoint). Per [`docs/specs/PHASE_1_HOOK_DEFAULTS_0_5_17.md`](specs/PHASE_1_HOOK_DEFAULTS_0_5_17.md): default Stop emits `additionalContext` + chrome only (no `decision:block`); correction-pending follow-up reminder is opt-in via `hooks.correction.escalate`. PreToolUse:Read/Write hard-block remains unchanged. Where this doc still describes "Stop hook enforces storage / forces an immediate block" or "correction override forces block", read it as 0.5.16 history — current behavior is soft-by-default with config opt-in.
 > Source: DIRECTION_MARCH31.md session findings, DIRECTION_CHAT.txt conversations, Apr 2 strategic session, MVP_IMPLEMENTATION.md, HOOKS_IMPLEMENTATION.md, PROTOTYPE.md, RESEARCH.md.
 
 ---

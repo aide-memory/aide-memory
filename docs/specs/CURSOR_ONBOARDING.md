@@ -78,7 +78,7 @@ If you are starting this work after a context compaction or a new session, **do 
 - Stop-hook reflection nudges via `followup_message`.
 - Passive tracking (postToolUse writes to `.aide/cache/recalled-paths-{sid}.txt` etc.).
 - Dynamic session-start context via **regenerated `.cursor/rules/aide-memory.mdc`** — rules reload every turn with `alwaysApply: true`, so top-N preferences + guidelines bake into the file at init/config-change time and inject on every turn. **This is Cursor staff's officially-endorsed workaround** for the broken `sessionStart.additional_context` bug (forum #157141, #158452).
-- Correction detection via `beforeSubmitPrompt` — detects correction patterns, writes `correction-pending-{sid}.txt` flag, next Stop hook delivers the "correction wasn't stored" prompt. (Detection fires immediately; user-visible nudge arrives one turn later.)
+- Correction detection via `beforeSubmitPrompt` — detects correction patterns; emits soft `agent_message` (post-0.5.17 default) so the agent sees the prompt in-turn. **Optional escalation** (off by default) via `hooks.correction.escalate = "soft" | "block"` writes the `correction-pending-{sid}.txt` flag so the next Stop hook reminds the agent if no memory was stored. With the default `"off"`, no follow-up reminder fires — the soft `agent_message` is the only signal.
 
 ### What Cursor users will NOT get (documented gaps)
 

@@ -1,5 +1,7 @@
 # End-to-End Validation — aide-memory
 
+> **0.5.17 supersedes Stop / correction expectations.** The scenarios below describe 0.5.16 behavior (Stop hook decision:block, correction-pending always blocks). With 0.5.17's soft+visible defaults, scheduled Stop fires emit `additionalContext` + chrome (no block) and correction detection emits soft only — the "correction was not stored" reminder is opt-in via `hooks.correction.escalate = "soft" | "block"`. To validate 0.5.17 default behavior, see [`../specs/PHASE_1_HOOK_DEFAULTS_0_5_17.md`](../specs/PHASE_1_HOOK_DEFAULTS_0_5_17.md) §6.3 + §6.5. The scenarios here remain the canonical reference for `hooks.stop.mode = "block"` + `hooks.correction.escalate = "block"` (the explicit opt-in to 0.5.16 behavior).
+
 Canonical validation matrix for aide-memory 0.5.0. Replaces the pre-consolidation
 trio:
 
