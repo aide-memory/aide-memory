@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.18 — 2026-06-15
+
+Fixes:
+
+- **Fix: Cursor `Stop` checkpoint no longer re-fires on its own follow-up.** On Cursor, the `Stop` hook's `followup_message` is auto-submitted by Cursor as a new prompt, which re-fires the `Stop` hook. Cursor does not send the `stop_hook_active` flag that Claude Code uses to break this loop, so the scheduled "anything worth remembering?" checkpoint could repeat — and inflate the per-session turn counter — most visibly on fire-every-turn schedules, but also as a wasted "nothing to persist" synthetic turn on the default ramped schedule. aide-memory now drops a per-session marker whenever it emits a `Stop` follow-up and consumes it on the next fire, returning early without counting that re-submitted turn as a real turn. This covers both the scheduled checkpoint and the `hooks.correction.escalate = "block"` reminder. Claude Code behavior is unchanged (it keeps relying on `stop_hook_active`; the marker is never set off-Cursor). Verified live on Cursor against both every-1 and every-3 schedules.
+
+Engineering:
+
+- New regression tests in `hooks-soft-default.test.ts` ("Cursor followup re-entry guard") confirm the re-submitted `Stop` turn is suppressed and not counted, with a companion test asserting Claude Code is unaffected.
+- `docs/validation/RESULTS_0_5_17.md` extended with the full live Cursor validation (hook-level + GUI run) and the root-cause/fix write-up for this loop.
+
+Existing-user upgrade behavior: automatic, no migration. The change only affects Cursor's `Stop` re-entry handling.
+
 ## 0.5.17 — 2026-05-19
 
 User-facing changes:
