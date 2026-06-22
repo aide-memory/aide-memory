@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.3 — 2026-06-22
+
+New:
+
+- **`aide-memory mcp` subcommand.** Starts the MCP server over stdio — the same server the `aide-memory-mcp` bin and `aide-memory init`-wired config already launch. This makes `npx aide-memory mcp` a one-command way to run the server, which is what generic MCP clients and the official MCP Registry expect (an npm server launched as `npx <package> <args>`). The CLI's post-command update check is skipped for `mcp` so nothing can write to the server's stdout JSON-RPC stream.
+
+Existing-user upgrade behavior: automatic, no migration, no behavior change. Additive subcommand — `aide`, `aide-memory`, the `aide-memory-mcp` bin, and all `init`-wired configs are unchanged.
+
+## 0.6.2 — 2026-06-22
+
+Internal / distribution (metadata-only):
+
+- **Declared `mcpName` for the official MCP Registry.** The published manifest now carries `"mcpName": "io.github.aide-memory/aide-memory"` — the identity the MCP Registry (`registry.modelcontextprotocol.io`) uses to list the server. No runtime effect; pairs with the `aide-memory-mcp` bin added in 0.6.1.
+- **Canonical homepage is now `https://aide-memory.com`** (was `aide-memory.dev`, which continues to redirect here).
+
+Existing-user upgrade behavior: automatic, no migration, no behavior change. Metadata-only on top of 0.6.1.
+
+## 0.6.1 — 2026-06-22
+
+Internal / distribution:
+
+- **New `aide-memory-mcp` bin.** The MCP server entry (`dist/memory/cli.js`) is now exposed as a third executable, `aide-memory-mcp`, alongside `aide` and `aide-memory`. Previously the server could only be launched via the absolute-path command that `aide-memory init` writes — there was no short, portable command to start just the MCP server. This unblocks one-click / registry-style listings (the MCP Registry, the Cursor "Add to Cursor" deeplink, bundled-MCP plugins) that expect a self-launching server command.
+
+Existing-user upgrade behavior: automatic, no migration, **no behavior change**. `aide`, `aide-memory`, and every `aide-memory init`-generated hook/MCP config are untouched; the new `aide-memory-mcp` command is purely additive and simply becomes available after install/upgrade.
+
 ## 0.6.0 — 2026-06-16
 
 New features:
