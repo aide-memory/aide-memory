@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.0 — 2026-06-16
+
+New features:
+
+- **Devin CLI is now a fully supported editor.** `aide-memory init` wires Devin alongside Claude Code and Cursor. Because Devin's hook system is Claude-Code-compatible, aide-memory runs at near-Claude-Code parity: `aide_recall` nudges before read/edit of a file with scoped memories, session-start memory injection, correction detection, passive recall tracking, the Stop checkpoint, and the full MCP tool surface (`aide_recall`/`aide_remember`/`aide_update`/`aide_forget`/`aide_search`/`aide_memories`/`aide_import`).
+- **Devin config layout (scoped to `.devin/`).** Init writes a single `.devin/config.json` containing both the Claude-format `hooks` and the `aide-memory` `mcpServers` entry, and ships aide-memory's teaching as a Devin **skill** at `.devin/skills/aide-memory/SKILL.md` (Devin's recommended pattern over broad always-on rules — the agent auto-invokes it via `triggers: [user, model]`, or you run `/aide-memory`). A short always-on pointer is injected by the SessionStart hook. Your `AGENTS.md` is never touched.
+
+Devin-specific behavior (handled automatically by the adapter):
+
+- Lowercase tool matchers (`read`/`edit`/`write`/`grep`/`glob`); MCP tools matched as `mcp__aide-memory__aide_*`.
+- Compaction maps to Devin's `PostCompaction` event (fires after compaction) — save context proactively as conversations grow and re-run `aide_recall` after a compaction.
+- Runtime detection via `DEVIN_PROJECT_DIR`; project root and MCP `tool_response` shape are normalized so recall tracking works.
+
+Known Devin nuances (documented in `docs/user/editors/devin.md`):
+
+- Pre-tool nudges are delivered soft (via `additionalContext`) rather than as a hard `decision:"block"`, because a PreToolUse `decision:"block"` is terminal on Devin (it ends the turn instead of letting the agent recall-and-retry; verified live). The Stop checkpoint still uses `decision:"block"` (there it means "don't stop, reflect"). The soft nudge + the SessionStart pointer + the `aide-memory` skill drive recall reliably (validated live, incl. on mature projects).
+- Devin hook payloads carry no session id, so per-session recall tracking uses a single `default` scope (concurrent same-directory sessions share tracking state).
+
+Engineering:
+
+- New `devin` adapter (`src/memory/editors/devin.ts`) + registration; teaching shipped as a `.devin/skills/aide-memory` skill (skill YAML frontmatter via the adapter's rule frontmatter) plus a SessionStart-injected pointer; PreToolUse blocks routed to soft `additionalContext` (Devin aborts `-p` runs on a hard block).
+- Unit tests (`devin-envelope.test.ts`, adapter shape tests) + `scripts/hooks/__tests__/devin-init-smoke.test.sh`. Validated live against `devin 2026.5.26-2` — see `docs/validation/RESULTS_DEVIN.md` and `docs/specs/DEVIN_ONBOARDING.md`.
+
+Existing-user upgrade behavior: automatic, no migration. Claude Code and Cursor behavior is unchanged.
+
 ## 0.5.18 — 2026-06-15
 
 Fixes:
